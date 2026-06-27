@@ -1,0 +1,93 @@
+{
+  "name": "hiveku-vscode",
+  "displayName": "Hiveku",
+  "description": "Work on Hiveku site projects locally in VS Code — full download, commit & branch back to Hiveku (Supabase-backed, no GitHub), deploy, and a native Source Control panel.",
+  "version": "0.1.0",
+  "publisher": "hiveku",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/locus2012/hiveku-vscode.git"
+  },
+  "homepage": "https://hiveku.com",
+  "bugs": {
+    "url": "https://github.com/locus2012/hiveku-vscode/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "hiveku.signIn", "title": "Hiveku: Sign In (add account key)" },
+      { "command": "hiveku.switchAccount", "title": "Hiveku: Switch Account" },
+      { "command": "hiveku.signOut", "title": "Hiveku: Sign Out (remove account)" },
+      { "command": "hiveku.cloneProject", "title": "Hiveku: Download Project…" },
+      { "command": "hiveku.refresh", "title": "Hiveku: Refresh Changes", "icon": "$(refresh)" },
+      { "command": "hiveku.commit", "title": "Hiveku: Commit to Hiveku", "icon": "$(check)" },
+      { "command": "hiveku.showHistory", "title": "Hiveku: Show History", "icon": "$(history)" },
+      { "command": "hiveku.revert", "title": "Hiveku: Revert to a Commit…" },
+      { "command": "hiveku.deploy", "title": "Hiveku: Deploy…", "icon": "$(rocket)" },
+      { "command": "hiveku.pull", "title": "Hiveku: Pull Latest from Hiveku" },
+      { "command": "hiveku.createBranch", "title": "Hiveku: Create Branch…", "icon": "$(git-branch-create)" },
+      { "command": "hiveku.switchBranch", "title": "Hiveku: Switch Branch…", "icon": "$(git-branch)" },
+      { "command": "hiveku.merge", "title": "Hiveku: Merge Branch into main…" },
+      { "command": "hiveku.previewBranch", "title": "Hiveku: Preview Branch on Fly…" },
+      { "command": "hiveku.compare", "title": "Hiveku: Compare Branches…" },
+      { "command": "hiveku.prune", "title": "Hiveku: Prune Branch Storage…" }
+    ],
+    "menus": {
+      "scm/title": [
+        { "command": "hiveku.commit", "group": "navigation", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.refresh", "group": "navigation", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.switchBranch", "group": "navigation", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.deploy", "group": "navigation", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.createBranch", "group": "1_hiveku", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.merge", "group": "1_hiveku", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.compare", "group": "1_hiveku", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.previewBranch", "group": "1_hiveku", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.showHistory", "group": "2_hiveku", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.prune", "group": "2_hiveku", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.revert", "group": "2_hiveku", "when": "scmProvider == hiveku" },
+        { "command": "hiveku.pull", "group": "2_hiveku", "when": "scmProvider == hiveku" }
+      ]
+    },
+    "configuration": {
+      "title": "Hiveku",
+      "properties": {
+        "hiveku.baseUrl": {
+          "type": "string",
+          "default": "https://core.hiveku.com",
+          "description": "Base URL of the Hiveku MCP server (the /mcp endpoint is appended)."
+        },
+        "hiveku.includeAssetsOnDownload": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include binary assets (images, fonts, etc.) when downloading a project."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "tar": "^7.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/tar": "^6.1.13",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}
