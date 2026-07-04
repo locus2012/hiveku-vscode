@@ -57,10 +57,14 @@ export async function listReviewPages(root: string): Promise<string[]> {
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       try {
+        // Only list pages that are fully annotatable (all three capture artifacts),
+        // so the picker never dead-ends on a partial capture.
         await fs.access(path.join(dir, e.name, 'screenshot.png'));
+        await fs.access(path.join(dir, e.name, 'dom.json'));
+        await fs.access(path.join(dir, e.name, 'capture.json'));
         slugs.push(e.name);
       } catch {
-        /* no screenshot — skip */
+        /* incomplete capture — skip */
       }
     }
     return slugs.sort();
@@ -139,11 +143,11 @@ export async function openReviewAnnotator(root: string, projectName: string, slu
 }
 
 async function saveAnnotations(reviewDir: string, slug: string, capture: CaptureMeta, annotations: unknown[]): Promise<void> {
-  const now = new Date().toISOString();
+  const savedAt = new Date().toISOString();
   await writeJson(path.join(reviewDir, slug, 'annotations.json'), {
     version: 1,
     page: { slug, pageUrl: capture.pageUrl ?? '', screenshot: 'screenshot.png', dom: 'dom.json' },
-    capturedAt: now,
+    savedAt,
     annotations,
   });
 
@@ -154,15 +158,20 @@ async function saveAnnotations(reviewDir: string, slug: string, capture: Capture
   let open = 0;
   let resolved = 0;
   for (const a of annotations) ((a as { status?: string })?.status === 'resolved' ? resolved++ : open++);
+  const at = pages.findIndex((p) => p && p.slug === slug);
+  // Preserve the ORIGINAL capture timestamp (set by the capture step); only the
+  // annotate-save time changes on re-save.
+  const prior = at >= 0 ? pages[at] : undefined;
+  const capturedAt = prior && typeof prior.capturedAt === 'string' ? prior.capturedAt : savedAt;
   const row = {
     slug,
     pageUrl: capture.pageUrl ?? '',
-    capturedAt: now,
+    capturedAt,
+    savedAt,
     annotationCount: annotations.length,
     openCount: open,
     resolvedCount: resolved,
   };
-  const at = pages.findIndex((p) => p && p.slug === slug);
   if (at >= 0) pages[at] = { ...pages[at], ...row };
   else pages.push(row);
   await writeJson(idxFile, { ...idx, version: 1, pages });
@@ -246,17 +255,24 @@ function reviewHtml(webview: vscode.Webview): string {
   var drag = null; // {x0,y0,x1,y1} in canvas px while dragging a box
 
   function uuid(){ if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID(); return 'a'+Math.floor(Math.random()*1e9).toString(16)+Date.now().toString(16); }
-  function pageW(){ return (capture.viewport && capture.viewport.width) || img.naturalWidth || 1920; }
-  function fullH(){ return capture.fullPageHeight || (capture.viewport && capture.viewport.height) || img.naturalHeight || 1080; }
-  function vpH(){ return (capture.viewport && capture.viewport.height) || img.naturalHeight || 1080; }
+  function dpr(){ return capture.devicePixelRatio || 1; }
+  // Fallbacks divide the (device-px) natural dims by dpr so they stay in CSS px,
+  // matching the dom.json rects. In practice capture.viewport is always written.
+  function pageW(){ return (capture.viewport && capture.viewport.width) || (img.naturalWidth ? img.naturalWidth / dpr() : 1920); }
+  function vpH(){ return (capture.viewport && capture.viewport.height) || (img.naturalHeight ? img.naturalHeight / dpr() : 1080); }
   function isFull(){ return capture.fullPage !== false && (!capture.scrollY || capture.scrollY === 0); }
+  // Logical page height derived from the PNG's OWN proportions — this keeps X and
+  // Y on one scale (dpr-independent, always consistent with the pixels the user
+  // clicks). We deliberately do NOT trust a hand-written capture.fullPageHeight
+  // for hit-testing; it can disagree with the actual image and mislocate pins.
+  function pageHeightCss(){ return (img.naturalWidth && img.naturalHeight) ? (pageW() * img.naturalHeight / img.naturalWidth) : (capture.fullPageHeight || vpH()); }
 
   function sizeCanvas(){ overlay.width = img.clientWidth; overlay.height = img.clientHeight; overlay.style.width = img.clientWidth+'px'; overlay.style.height = img.clientHeight+'px'; redraw(); }
 
   // Convert a screenshot-percent point to PAGE coords (dpr-independent: use logical dims).
   function pageXY(xPct, yPct){
     var px = xPct * pageW();
-    var py = isFull() ? (yPct * fullH()) : (yPct * vpH() + (capture.scrollY || 0));
+    var py = isFull() ? (yPct * pageHeightCss()) : (yPct * vpH() + (capture.scrollY || 0));
     return { x: px, y: py };
   }
   // Deepest (smallest-area) element whose page-coord rect covers the point.
@@ -302,7 +318,7 @@ function reviewHtml(webview: vscode.Webview): string {
   function renderList(){
     countEl.textContent = annos.length ? (annos.length + ' annotation' + (annos.length===1?'':'s')) : 'No annotations yet';
     while (listEl.firstChild) listEl.removeChild(listEl.firstChild);
-    if (!annos.length){ var m=document.createElement('div'); m.id='empty'; m.textContent='Draw a box or drop a pin to add one.'; listEl.appendChild(m); return; }
+    if (!annos.length){ var m=document.createElement('div'); m.style.cssText='padding:12px;opacity:.6;font-size:12px'; m.textContent='Draw a box or drop a pin to add one.'; listEl.appendChild(m); return; }
     for (var i=0;i<annos.length;i++){ (function(idx){
       var a = annos[idx]; var d = document.createElement('div'); d.className='anno';
       var rm = document.createElement('button'); rm.className='rm'; rm.textContent='remove'; rm.onclick=function(){ annos.splice(idx,1); renderList(); redraw(); }; d.appendChild(rm);
@@ -353,14 +369,17 @@ function reviewHtml(webview: vscode.Webview): string {
   document.getElementById('mRect').addEventListener('click', function(){ MODE='rect'; this.classList.add('active'); document.getElementById('mPin').classList.remove('active'); });
   document.getElementById('mPin').addEventListener('click', function(){ MODE='pin'; this.classList.add('active'); document.getElementById('mRect').classList.remove('active'); });
   document.getElementById('save').addEventListener('click', function(){ closeEditor(); vscode.postMessage({ type:'save', annotations: annos }); });
-  window.addEventListener('resize', sizeCanvas);
+  window.addEventListener('resize', function(){ closeEditor(); sizeCanvas(); });
 
   window.addEventListener('message', function(ev){
     var m = ev.data; if (m.type !== 'init') return;
     capture = m.capture || {}; elements = m.elements || []; annos = Array.isArray(m.annotations) ? m.annotations : [];
-    document.getElementById('empty').style.display = 'none';
+    var emptyEl = document.getElementById('empty');
+    if (!m.imgUri){ emptyEl.textContent = 'This capture has no screenshot — re-run /hiveku-review to recapture the page.'; return; }
+    emptyEl.style.display = 'none';
     container.style.display = 'inline-block';
     img.onload = function(){ sizeCanvas(); renderList(); };
+    img.onerror = function(){ emptyEl.textContent = 'Could not load the screenshot. Re-run /hiveku-review to recapture.'; emptyEl.style.display = ''; container.style.display = 'none'; };
     img.src = m.imgUri;
     if (img.complete && img.naturalWidth) { sizeCanvas(); renderList(); }
   });

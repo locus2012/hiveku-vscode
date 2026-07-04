@@ -541,9 +541,10 @@ STEP 0 — CAPTURE (only if the user asks to "capture <path>", or \`.hiveku/revi
 2. \`browser_navigate({ url: <preview_url + path> })\`, then \`browser_resize({ width: 1920, height: 1080 })\`.
 3. \`browser_take_screenshot({ fullPage: true })\` — save the PNG, then write it to \`.hiveku/review/<slug>/screenshot.png\` (slug: "/" → "home", other "/" → "__").
 4. \`browser_evaluate\` a function that returns \`{ pageMetrics, elements }\` where each element is
-   \`{ selector, rect:{x,y,width,height} in PAGE coords (rect.left+scrollX, rect.top+scrollY), tag, id, classes, text (≤200 chars), hivekuId (from data-hiveku-id), hivekuSource (JSON.parse of data-hiveku-source → {file,line,column}, else null), outerHTMLHead (outerHTML.slice(0,120)), ariaLabel }\`.
-   Walk the DOM, skip zero-size / display:none / visibility:hidden elements. Write it to \`.hiveku/review/<slug>/dom.json\`.
-5. Write \`.hiveku/review/<slug>/capture.json\`: \`{ version:1, pageUrl, previewUrl, projectId:"${pid}", viewport:{width:1920,height:1080}, devicePixelRatio, scrollY:0, fullPage:true, fullPageHeight, capturedAt }\`. Add/replace the page row in \`.hiveku/review/index.json\`.
+   \`{ selector, rect:{x,y,width,height} in LOGICAL/CSS PAGE coords (rect.left+scrollX, rect.top+scrollY — NOT device pixels), tag, id, classes, text (≤200 chars), hivekuId (from data-hiveku-id), hivekuSource (JSON.parse of data-hiveku-source → {file,line,column}, else null), outerHTMLHead (outerHTML.slice(0,120)), ariaLabel }\`.
+   Walk the DOM in DOCUMENT ORDER, skip zero-size / display:none / visibility:hidden elements (the annotator resolves a click to the SMALLEST covering rect, i.e. the deepest element). Write it to \`.hiveku/review/<slug>/dom.json\`.
+5. Write \`.hiveku/review/<slug>/capture.json\`: \`{ version:1, pageUrl, previewUrl, projectId:"${pid}", viewport:{width:1920,height:1080} (LOGICAL CSS px), devicePixelRatio, scrollY:0, fullPage:true, fullPageHeight: document.documentElement.scrollHeight (LOGICAL CSS px — a sanity value; the annotator derives the page height from the PNG itself), capturedAt }\`.
+   Then UPSERT this page into \`.hiveku/review/index.json\`, whose shape is \`{ version:1, projectId:"${pid}", projectName, pages: [ { slug, pageUrl, capturedAt, annotationCount:0, openCount:0, resolvedCount:0 } ] }\` — \`pages\` is an ARRAY; replace the row with the same \`slug\` if present, else append. Never rewrite \`pages\` as an object or you drop other pages.
 6. Tell the user to run "Hiveku: Annotate Review Page" in VS Code (the extension command) to mark it up, then re-run \`/hiveku-review\`.
 
 STEP 1 — LOAD: Read \`.hiveku/review/index.json\`. For every page with \`openCount > 0\`, read its \`annotations.json\`.
