@@ -25,6 +25,7 @@ import { registerFileHistory } from './timeline';
 import * as resources from './resources';
 import { pullEnv, pushEnv } from './env';
 import { openMediaGallery } from './gallery';
+import { openReviewAnnotator } from './reviewAnnotator';
 import { openDashboard } from './dashboard';
 import { openAccountConsole } from './console';
 import { openModulePanel, isEntitled } from './panel';
@@ -277,6 +278,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.refresh', () => withScm((s) => s.refresh())),
     vscode.commands.registerCommand('hiveku.commit', () => withScm((s) => s.commit())),
     vscode.commands.registerCommand('hiveku.pushLocal', () => withScm((s) => s.push())),
+    vscode.commands.registerCommand('hiveku.annotateReview', () => withScm((s) => openReviewAnnotator(s.root, s.link.project_name))),
     vscode.commands.registerCommand('hiveku.showHistory', () => withScm((s) => showHistory(s))),
     vscode.commands.registerCommand('hiveku.revert', () => withScm((s) => revert(s))),
     vscode.commands.registerCommand('hiveku.deploy', () => withScm((s) => deploy(s))),

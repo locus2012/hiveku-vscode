@@ -530,6 +530,40 @@ Steps:
 
 Tip: in VS Code, the Source Control view's "Push Local Changes" button does all of this for you.
 `,
+    'hiveku-review': `---
+description: Resolve a LOCAL visual review — read the on-disk annotations (boxes/pins + comments on a screenshot), fix the code each points at, mark them resolved. Optionally capture a page first.
+allowed-tools: mcp__hiveku__preview_overview, mcp__hiveku__preview_sync, mcp__plugin_playwright_playwright__browser_navigate, mcp__plugin_playwright_playwright__browser_resize, mcp__plugin_playwright_playwright__browser_take_screenshot, mcp__plugin_playwright_playwright__browser_evaluate, mcp__hiveku__project_files_search, mcp__hiveku__verify_typecheck, mcp__hiveku__verify_lint, Read, Write, Edit, Grep, Bash
+---
+Resolve a LOCAL visual review for THIS project. ${idLine} Everything lives on disk under \`.hiveku/review/\` — no app chat, no annotation server, and it is gitignored so it never leaves the machine.
+
+STEP 0 — CAPTURE (only if the user asks to "capture <path>", or \`.hiveku/review/\` has no screenshots yet):
+1. Get the live preview URL: \`preview_overview({ project_id: "${pid}" })\` → \`preview_url\`. If it is not ready, \`preview_sync({ project_id: "${pid}" })\` then re-poll.
+2. \`browser_navigate({ url: <preview_url + path> })\`, then \`browser_resize({ width: 1920, height: 1080 })\`.
+3. \`browser_take_screenshot({ fullPage: true })\` — save the PNG, then write it to \`.hiveku/review/<slug>/screenshot.png\` (slug: "/" → "home", other "/" → "__").
+4. \`browser_evaluate\` a function that returns \`{ pageMetrics, elements }\` where each element is
+   \`{ selector, rect:{x,y,width,height} in PAGE coords (rect.left+scrollX, rect.top+scrollY), tag, id, classes, text (≤200 chars), hivekuId (from data-hiveku-id), hivekuSource (JSON.parse of data-hiveku-source → {file,line,column}, else null), outerHTMLHead (outerHTML.slice(0,120)), ariaLabel }\`.
+   Walk the DOM, skip zero-size / display:none / visibility:hidden elements. Write it to \`.hiveku/review/<slug>/dom.json\`.
+5. Write \`.hiveku/review/<slug>/capture.json\`: \`{ version:1, pageUrl, previewUrl, projectId:"${pid}", viewport:{width:1920,height:1080}, devicePixelRatio, scrollY:0, fullPage:true, fullPageHeight, capturedAt }\`. Add/replace the page row in \`.hiveku/review/index.json\`.
+6. Tell the user to run "Hiveku: Annotate Review Page" in VS Code (the extension command) to mark it up, then re-run \`/hiveku-review\`.
+
+STEP 1 — LOAD: Read \`.hiveku/review/index.json\`. For every page with \`openCount > 0\`, read its \`annotations.json\`.
+
+STEP 2 — SEE each open annotation: Read \`.hiveku/review/<slug>/screenshot.png\` (you can view PNGs). Use \`annotation.region\` (percent coords) for WHERE and \`annotation.comment\` for WHAT.
+
+STEP 3 — LOCATE the source, in priority order:
+  a. \`annotation.element.hivekuSource\` set → open that \`{file, line, column}\` directly.
+  b. else \`annotation.element.hivekuId\` set → grep the project for that id / the rendered text.
+  c. else structural → grep \`element.text\`, narrow by \`element.classes\` + \`element.tag\` + a token from \`element.outerHTMLHead\`. Confirm the match renders the thing in the screenshot region BEFORE editing.
+  Use \`project_files_search\` / Grep over the local working tree (this folder IS the project).
+
+STEP 4 — FIX: make the minimal edit that addresses the comment. One annotation → one located edit. If \`element.matched === false\`, rely on the region + screenshot.
+
+STEP 5 — VERIFY before shipping: \`verify_typecheck\` / \`verify_lint\` (or local tsc/eslint). Do not ship unverified.
+
+STEP 6 — MARK RESOLVED: in each page's \`annotations.json\`, set the fixed annotation's \`status:"resolved"\` and \`resolvedAt:<ISO>\`; recompute \`index.json\` counts (openCount/resolvedCount). Report a summary: per annotation — comment → file changed → status.
+
+STEP 7 — Commit only if asked (branch first, never \`main\` directly), then \`/hiveku-deploy\` on explicit request (commit ≠ live). Use \`trash\` not \`rm\`; no emojis in code/copy.
+`,
     'hiveku-pull': `---
 description: Pull the latest version of this project from Hiveku into the local files.
 allowed-tools: mcp__hiveku__project_vcs_checkout, mcp__hiveku__project_files_status, Read, Write
