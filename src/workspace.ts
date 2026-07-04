@@ -10,7 +10,13 @@ import * as path from 'path';
 
 export const PROJECT_FILE = path.join('.hiveku', 'project.json');
 
-/** Directories we never sync — build output, VCS internals, our own metadata. */
+/**
+ * Names we never sync to Hiveku — build output, VCS internals, and the local-only
+ * files the extension scaffolds. The last group is SECURITY-critical: `.mcp.json`
+ * carries the inlined MCP key and `.env.local` the pulled secrets, so they must
+ * never appear in the change set or get committed into the project's Hiveku files.
+ * (walkFiles tests this against every entry name — files and directories alike.)
+ */
 export const IGNORE_DIRS = new Set([
   'node_modules',
   '.git',
@@ -24,6 +30,12 @@ export const IGNORE_DIRS = new Set([
   '.vercel',
   '.fly',
   '.hiveku',
+  '.claude',
+  '.mcp.json',
+  '.env',
+  '.env.local',
+  '.env.hiveku',
+  'hiveku-data',
 ]);
 
 export interface ProjectLink {
@@ -76,8 +88,14 @@ export async function buildManifest(root: string): Promise<ManifestEntry[]> {
   const manifest: ManifestEntry[] = [];
   for (const rel of files) {
     const buf = await fs.readFile(path.join(root, rel));
-    // Hash the utf-8 view to match how the server hashes stored text content.
-    manifest.push({ path: rel, sha256: sha256(buf.toString('utf8')) });
+    const asUtf8 = buf.toString('utf8');
+    // project_files_status tracks TEXT files only — the server skips binary
+    // (__BINARY_BASE64__) rows. If we included binaries here they'd come back as
+    // phantom "only_local" changes on every clean pull (assets download by
+    // default), so skip them to match the server's text-only diff. Hash the
+    // utf-8 view, exactly how the server hashes stored text content.
+    if (asUtf8.includes('�')) continue;
+    manifest.push({ path: rel, sha256: sha256(asUtf8) });
   }
   return manifest;
 }
@@ -122,6 +140,23 @@ export function treeFileHash(content: string, encoding: 'utf-8' | 'base64'): str
 }
 
 /**
+ * Mirror of the builder's asset-build-bypass.ts (resolveAssetBuildPath +
+ * isCdnServableAsset): a file that resolves into a public/ SUBDIRECTORY is
+ * served from the CDN/asset store on every deploy tier and is NOT bundled into
+ * the build. So CDN-servable BINARY (image/font/video under public/<subdir>/)
+ * belongs in the asset lane (assets_upload → builder_project_assets), NOT
+ * builder_code_versions — otherwise it renders in the Fly preview but goes
+ * missing on deploy. src/ assets and public/ ROOT files stay code-lane.
+ * Keep this identical to the server rule or client/server disagree.
+ */
+export function isCdnServableAssetPath(filePath: string): boolean {
+  const clean = filePath.replace(/^\//, '');
+  const resolved =
+    clean.startsWith('src/') || clean.startsWith('public/') ? clean : `public/${clean.replace(/^public\//, '')}`;
+  return /^public\/[^/]+\//.test(resolved);
+}
+
+/**
  * Make the working tree exactly match a branch tree: write every tree file and
  * delete tracked local files that aren't in the tree. Used when switching
  * branches. Caller should guard against clobbering uncommitted work.
@@ -142,6 +177,35 @@ export async function materializeTree(
       await fs.rm(path.join(root, rel), { force: true }).catch(() => undefined);
     }
   }
+}
+
+// ── Baseline manifest: the remote state at the last pull/commit, used to
+// detect when Hiveku has moved ahead of you (GitHub-style "you're behind"). ──
+const BASE_MANIFEST = path.join('.hiveku', 'base-manifest.json');
+
+export async function writeBaseManifest(root: string, entries: ManifestEntry[]): Promise<void> {
+  await fs.mkdir(path.join(root, '.hiveku'), { recursive: true });
+  await fs.writeFile(
+    path.join(root, BASE_MANIFEST),
+    JSON.stringify({ captured_at: new Date().toISOString(), files: entries }, null, 2),
+    'utf8',
+  );
+}
+
+export async function readBaseManifest(root: string): Promise<ManifestEntry[] | undefined> {
+  try {
+    const raw = JSON.parse(await fs.readFile(path.join(root, BASE_MANIFEST), 'utf8')) as {
+      files?: ManifestEntry[];
+    };
+    return Array.isArray(raw.files) ? raw.files : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Record the current working tree as the baseline (call after pull/clone/commit). */
+export async function captureBaseline(root: string): Promise<void> {
+  await writeBaseManifest(root, await buildManifest(root));
 }
 
 export async function readProjectLink(root: string): Promise<ProjectLink | undefined> {

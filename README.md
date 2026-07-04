@@ -1,45 +1,45 @@
 # Hiveku for VS Code
 
-Work on your Hiveku site projects locally — with a real folder, native VS Code
-Source Control, and AI coding agents (Claude Code) editing files directly — then
-commit and deploy back to Hiveku. Commits and branches live entirely in Hiveku
-(Supabase-backed); **no GitHub required**.
+Run your whole Hiveku account — and every client account — from VS Code, with
+Claude Code scoped per account. Code, departments, operations, and infra in one
+place. Version control lives in Hiveku itself (Supabase-backed); **no GitHub
+required**.
 
-## What it does (Phase 1)
+## Connect
+Click the **Hiveku** icon in the Activity Bar → **Connect Hiveku** (a browser
+flow where you pick accounts + departments), or **Sign in with a key** (paste an
+MCP key from Settings → LLM Connectors). Keys are stored in the OS keychain. Add
+several accounts to manage multiple clients.
 
-- **Connect one or more accounts.** Paste a Hiveku MCP key (Settings → LLM
-  Connectors). Each key is one account; add several to switch between them. Keys
-  are stored in the OS keychain via VS Code SecretStorage — never in plaintext.
-- **Download a project.** `Hiveku: Download Project…` pulls the entire codebase
-  as one tarball into a local folder and writes a small `.hiveku/project.json`
-  link file. The project's `main` branch is initialized on Hiveku automatically.
-- **Edit locally.** Use VS Code, the terminal, ripgrep, your build/test tools,
-  and Claude Code — it's just a normal folder now.
-- **Commit back.** The Source Control panel shows what changed vs Hiveku's
-  current state. Enter a message and commit — files are saved back and a Hiveku
-  commit is recorded (a checkpoint snapshot is the revert point).
-- **History / Revert.** Browse commits; revert the project to any commit's
-  snapshot.
-- **Deploy.** `Hiveku: Deploy…` → development / staging / production.
+## What you can do
 
-## How it works
+**Per account, from the sidebar:**
+- **Dashboard** — agency rollup across *all* connected clients: open/overdue tasks, workflows + runs, CRM, tickets.
+- **Knowledge** — download department memory / skills / rules locally (with sync-drift detection), and **chat** any department (SEO, PPC, Sales, Helpdesk, …) — the server-side agent with full context.
+- **Code Projects** — download a project, edit locally with Claude Code, and use the native **Source Control** panel.
+- **Media Library** — a searchable thumbnail gallery of the account's media; click or **Copy URL** to put a hosted asset URL on the clipboard, **Open** to view.
+- **Tasks** & **Workflows** — open tasks (complete inline) and automations (run / enable / disable).
+- **Operate** — a panel per area: **CRM** (deals, contacts, sequences, activity), **Quotes & Invoices** (estimates → invoices → e-sign contracts), **Helpdesk** (reply / status / priority), **Email**, **SEO**, **PPC**, **Social**, **Content**, **Brand & Creative**, **Voice**, **Calendar**, **Integrations**, **Memory & Skills**, **Knowledge Bases**, **Mission Control**. Each lists records, **drills in** (click a row), **filters**, and **acts** (create / update / send / run).
+- **Open Account as Workspace** — opens the account folder (with `.mcp.json` + `CLAUDE.md`) in a new window so **Claude Code is scoped to that one account** — every department's tools, not just code.
 
-The extension talks to the Hiveku MCP server (`core.hiveku.com/mcp`) using your
-account key. Downloads use `project_files_snapshot`; the diff uses
-`project_files_status`; commits use `project_vcs_commit` (Supabase-backed VCS);
-deploys use `deploy_site`. Nothing here touches GitHub.
+> Every **downloaded project** also gets the account's `.mcp.json` wired in (gitignored), so Claude Code in a project folder can do cross-department work — *"fix this page, update the deal, and schedule the launch email"* — in one session, not just edit code. It also scaffolds **`/hiveku-*` slash commands** (status / commit / pull / verify / deploy / preview) and a permission allowlist so Claude moves fast with fewer prompts.
 
-## Adaptive + non-destructive
+**Code & VCS (Supabase-native, no GitHub):**
+- Download / pull, native **Source Control**: commit, branch, switch, **merge** (line-level 3-way), compare, **history**, **conflict detection** ("you're behind"), per-file **History** (diff + restore), deploy, and Fly **preview** (open / sync / logs / screenshot).
+- **Project Panel** — deploys, checkpoints, database, pages, CMS, crons, domains, redirects, secrets, analytics, Supabase (auth/storage/edge functions/migrations).
+- **Site env** — **Pull Env to `.env.local`** (real secret values, gitignored, `_DEV`/`_PROD` resolved like the Fly preview) and **Push `.env.local` to Hiveku**; or add / update / delete individual secrets from the Project Secrets picker.
 
-Opening a project initializes its `main` branch lazily — projects you never open
-are completely untouched, and the web builder keeps working exactly as before.
-The only write-back into your live project is an explicit commit, which is
-versioned and revertable.
+**Always on:**
+- **Notifications** — the Hiveku icon badges overdue tasks + failed runs across all accounts; **What Needs Attention** lists them.
+
+## A few key commands (Cmd/Ctrl+Shift+P → "Hiveku:")
+`Connect Hiveku` · `Download Project…` · `Operate Account…` · `Agency Dashboard` ·
+`Open Account Console` · `Open Account as Workspace` · `What Needs Attention`
 
 ## Develop
-
 ```bash
-npm install
-npm run compile      # or: npm run watch
-# Press F5 in VS Code to launch an Extension Development Host.
+npm install && npm run compile   # or: npm run watch
+# F5 to launch an Extension Development Host
 ```
+See `MAINTAINERS.md` for architecture and `AUDIT.md` for the full capability map
+and roadmap.

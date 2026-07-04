@@ -49,11 +49,24 @@ export class HivekuMcpClient {
     };
     if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId;
 
-    const res = await fetch(this.endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
-    });
+    // Hard timeout: a single stalled request must never hang a surface forever
+    // (seen live: the Account Console stuck on "Loading…" behind one dead await).
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 60_000);
+    let res: Response;
+    try {
+      res = await fetch(this.endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
+        signal: ctrl.signal,
+      });
+    } catch (err) {
+      if (ctrl.signal.aborted) throw new Error(`MCP request timed out after 60s (${method})`);
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
 
     const sessionHeader = res.headers.get('mcp-session-id');
     if (sessionHeader) this.sessionId = sessionHeader;

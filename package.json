@@ -1,8 +1,8 @@
 {
   "name": "hiveku-vscode",
   "displayName": "Hiveku",
-  "description": "Work on Hiveku site projects locally in VS Code — full download, commit & branch back to Hiveku (Supabase-backed, no GitHub), deploy, and a native Source Control panel.",
-  "version": "0.1.0",
+  "description": "Run entire Hiveku accounts from VS Code with Claude Code — role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
+  "version": "0.66.2",
   "publisher": "hiveku",
   "license": "MIT",
   "icon": "icon.png",
@@ -27,37 +27,825 @@
   ],
   "contributes": {
     "commands": [
-      { "command": "hiveku.signIn", "title": "Hiveku: Sign In (add account key)" },
-      { "command": "hiveku.switchAccount", "title": "Hiveku: Switch Account" },
-      { "command": "hiveku.signOut", "title": "Hiveku: Sign Out (remove account)" },
-      { "command": "hiveku.cloneProject", "title": "Hiveku: Download Project…" },
-      { "command": "hiveku.refresh", "title": "Hiveku: Refresh Changes", "icon": "$(refresh)" },
-      { "command": "hiveku.commit", "title": "Hiveku: Commit to Hiveku", "icon": "$(check)" },
-      { "command": "hiveku.showHistory", "title": "Hiveku: Show History", "icon": "$(history)" },
-      { "command": "hiveku.revert", "title": "Hiveku: Revert to a Commit…" },
-      { "command": "hiveku.deploy", "title": "Hiveku: Deploy…", "icon": "$(rocket)" },
-      { "command": "hiveku.pull", "title": "Hiveku: Pull Latest from Hiveku" },
-      { "command": "hiveku.createBranch", "title": "Hiveku: Create Branch…", "icon": "$(git-branch-create)" },
-      { "command": "hiveku.switchBranch", "title": "Hiveku: Switch Branch…", "icon": "$(git-branch)" },
-      { "command": "hiveku.merge", "title": "Hiveku: Merge Branch into main…" },
-      { "command": "hiveku.previewBranch", "title": "Hiveku: Preview Branch on Fly…" },
-      { "command": "hiveku.compare", "title": "Hiveku: Compare Branches…" },
-      { "command": "hiveku.prune", "title": "Hiveku: Prune Branch Storage…" }
+      {
+        "command": "hiveku.signIn",
+        "title": "Hiveku: Sign In (add account key)"
+      },
+      {
+        "command": "hiveku.setPermissionMode",
+        "title": "Hiveku: Set Claude Code Autonomy…",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "hiveku.switchAccount",
+        "title": "Hiveku: Switch Account"
+      },
+      {
+        "command": "hiveku.setClaudeCodeAccount",
+        "title": "Hiveku: Set Claude Code Account (point AI at an account)"
+      },
+      {
+        "command": "hiveku.downloadData",
+        "title": "Hiveku: Download Department Data (local files for Claude Code)",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "hiveku.copySetupPrompt",
+        "title": "Hiveku: Connect Integration (copy Claude Code setup prompt)",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "hiveku.newAutomation",
+        "title": "Hiveku: New Local Automation (free cron + worker for Claude Code)",
+        "icon": "$(watch)"
+      },
+      {
+        "command": "hiveku.signOut",
+        "title": "Hiveku: Remove Account (stop monitoring / archive / delete)"
+      },
+      {
+        "command": "hiveku.restoreAccount",
+        "title": "Hiveku: Restore Archived Account"
+      },
+      {
+        "command": "hiveku.cloneProject",
+        "title": "Hiveku: Download Project…"
+      },
+      {
+        "command": "hiveku.refresh",
+        "title": "Hiveku: Refresh Changes",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hiveku.commit",
+        "title": "Hiveku: Commit to Hiveku",
+        "icon": "$(check)"
+      },
+      {
+        "command": "hiveku.pushLocal",
+        "title": "Hiveku: Push Local Changes (reliable — assets + code)",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "hiveku.showHistory",
+        "title": "Hiveku: Show History",
+        "icon": "$(history)"
+      },
+      {
+        "command": "hiveku.revert",
+        "title": "Hiveku: Revert to a Commit…"
+      },
+      {
+        "command": "hiveku.deploy",
+        "title": "Hiveku: Deploy…",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "hiveku.pull",
+        "title": "Hiveku: Pull Latest from Hiveku"
+      },
+      {
+        "command": "hiveku.createBranch",
+        "title": "Hiveku: Create Branch…",
+        "icon": "$(git-branch-create)"
+      },
+      {
+        "command": "hiveku.switchBranch",
+        "title": "Hiveku: Switch Branch…",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "hiveku.merge",
+        "title": "Hiveku: Merge Branch into main…"
+      },
+      {
+        "command": "hiveku.previewBranch",
+        "title": "Hiveku: Preview Branch on Fly…"
+      },
+      {
+        "command": "hiveku.compare",
+        "title": "Hiveku: Compare Branches…"
+      },
+      {
+        "command": "hiveku.prune",
+        "title": "Hiveku: Prune Branch Storage…"
+      },
+      {
+        "command": "hiveku.refreshTree",
+        "title": "Hiveku: Refresh Projects",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hiveku.filterAccounts",
+        "title": "Hiveku: Filter Accounts…",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "hiveku.clearAccountFilter",
+        "title": "Hiveku: Clear Account Filter",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "hiveku.cloneProjectItem",
+        "title": "Hiveku: Download Project",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "hiveku.connect",
+        "title": "Hiveku: Connect Hiveku (sign in via browser)",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "hiveku.downloadEverything",
+        "title": "Hiveku: Download Everything",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "hiveku.downloadDepartment",
+        "title": "Hiveku: Download Department Knowledge",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "hiveku.downloadType",
+        "title": "Hiveku: Download Knowledge Type"
+      },
+      {
+        "command": "hiveku.chatDepartment",
+        "title": "Hiveku: Chat with Department",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "hiveku.checkSync",
+        "title": "Hiveku: Check Knowledge Sync",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "hiveku.fileHistory",
+        "title": "Hiveku: File History",
+        "icon": "$(history)"
+      },
+      {
+        "command": "hiveku.openFileVersionDiff",
+        "title": "Hiveku: Compare File Version"
+      },
+      {
+        "command": "hiveku.restoreFileVersion",
+        "title": "Hiveku: Restore This Version",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "hiveku.checkRemote",
+        "title": "Hiveku: Check for Remote Changes",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "hiveku.openPreview",
+        "title": "Hiveku: Open Live Preview",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "hiveku.syncPreview",
+        "title": "Hiveku: Sync to Preview",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "hiveku.previewLogs",
+        "title": "Hiveku: Preview Logs",
+        "icon": "$(output)"
+      },
+      {
+        "command": "hiveku.previewScreenshot",
+        "title": "Hiveku: Preview Screenshot",
+        "icon": "$(device-camera)"
+      },
+      {
+        "command": "hiveku.secrets",
+        "title": "Hiveku: Project Secrets",
+        "icon": "$(key)"
+      },
+      {
+        "command": "hiveku.pullEnv",
+        "title": "Hiveku: Pull Env to .env.local",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "hiveku.pushEnv",
+        "title": "Hiveku: Push .env.local to Hiveku",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "hiveku.database",
+        "title": "Hiveku: Project Database",
+        "icon": "$(database)"
+      },
+      {
+        "command": "hiveku.localSupabase",
+        "title": "Hiveku: Set Up Local Supabase (pull schema + functions)",
+        "icon": "$(database)"
+      },
+      {
+        "command": "hiveku.media",
+        "title": "Hiveku: Project Media",
+        "icon": "$(file-media)"
+      },
+      {
+        "command": "hiveku.mediaGallery",
+        "title": "Hiveku: Media Library (gallery)",
+        "icon": "$(file-media)"
+      },
+      {
+        "command": "hiveku.setup",
+        "title": "Hiveku: Guided Setup",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "hiveku.dashboard",
+        "title": "Hiveku: Agency Dashboard",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "hiveku.newTask",
+        "title": "Hiveku: New Task",
+        "icon": "$(add)"
+      },
+      {
+        "command": "hiveku.completeTask",
+        "title": "Hiveku: Complete Task",
+        "icon": "$(check)"
+      },
+      {
+        "command": "hiveku.runWorkflow",
+        "title": "Hiveku: Run Workflow",
+        "icon": "$(play)"
+      },
+      {
+        "command": "hiveku.toggleWorkflow",
+        "title": "Hiveku: Enable / Disable Workflow",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "hiveku.console",
+        "title": "Hiveku: Open Account Console",
+        "icon": "$(window)"
+      },
+      {
+        "command": "hiveku.helpdesk",
+        "title": "Hiveku: Helpdesk (tickets)",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "hiveku.openTask",
+        "title": "Hiveku: Open Task Details"
+      },
+      {
+        "command": "hiveku.openWorkspace",
+        "title": "Hiveku: Open Account in New Window (dedicated session)",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "hiveku.attention",
+        "title": "Hiveku: What Needs Attention",
+        "icon": "$(bell)"
+      },
+      {
+        "command": "hiveku.operate",
+        "title": "Hiveku: Operate Account (CRM, SEO, Email…)",
+        "icon": "$(layout-panel)"
+      },
+      {
+        "command": "hiveku.projectPanel",
+        "title": "Hiveku: Project Panel (deploys, DB, CMS, domains…)",
+        "icon": "$(server-environment)"
+      },
+      {
+        "command": "hiveku.consoleOpen",
+        "title": "Hiveku: Open in Account Console"
+      },
+      {
+        "command": "hiveku.refreshConsole",
+        "title": "Hiveku: Refresh Account Console",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "hiveku.consoleDownloadDept",
+        "title": "Hiveku: Download This Department",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "hiveku.openSite",
+        "title": "Hiveku: Open Site…",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "hiveku.openSiteEnv",
+        "title": "Hiveku: Open Environment"
+      },
+      {
+        "command": "hiveku.showEnvLogs",
+        "title": "Hiveku: Show Environment Logs",
+        "icon": "$(output)"
+      },
+      {
+        "command": "hiveku.envLogs",
+        "title": "Hiveku: Environment Logs…",
+        "icon": "$(output)"
+      },
+      {
+        "command": "hiveku.setRole",
+        "title": "Hiveku: Set Role (how you run this account)"
+      },
+      {
+        "command": "hiveku.syncCommands",
+        "title": "Hiveku: Sync Account Commands (to Claude Code)"
+      },
+      {
+        "command": "hiveku.consoleShowAll",
+        "title": "Hiveku: Toggle All Departments (Account Console)"
+      },
+      {
+        "command": "hiveku.whichAccount",
+        "title": "Hiveku: Which Account Is This? (session identity check)"
+      },
+      {
+        "command": "hiveku.autoRefresh",
+        "title": "Hiveku: Keep Data Fresh (auto-refresh hiveku-data)"
+      },
+      {
+        "command": "hiveku.installCadence",
+        "title": "Hiveku: Install Agency Cadence (scheduled brief / weekly / report)"
+      },
+      {
+        "command": "hiveku.setRootFolder",
+        "title": "Hiveku: Set Root Folder (where all accounts are stored)",
+        "icon": "$(root-folder)"
+      },
+      {
+        "command": "hiveku.openDeptWindow",
+        "title": "Hiveku: Open Department Session",
+        "icon": "$(empty-window)"
+      },
+      {
+        "command": "hiveku.refreshSetup",
+        "title": "Hiveku: Refresh Setup (commands + CLAUDE.md, no code download)",
+        "icon": "$(sync)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "hiveku",
+          "title": "Hiveku",
+          "icon": "media/hiveku.svg"
+        }
+      ]
+    },
+    "views": {
+      "hiveku": [
+        {
+          "id": "hiveku.projects",
+          "name": "Projects"
+        },
+        {
+          "id": "hiveku.console",
+          "name": "Account Console"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "hiveku.projects",
+        "contents": "Run your Hiveku accounts from the editor — projects, departments, media, and Claude scoped per account.\n[Guided Setup](command:hiveku.setup)\n\n[Connect Hiveku](command:hiveku.connect)\n\nPrefer to paste an API key?\n[Sign in with a key](command:hiveku.signIn)",
+        "when": "!hiveku.signedIn"
+      }
     ],
     "menus": {
       "scm/title": [
-        { "command": "hiveku.commit", "group": "navigation", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.refresh", "group": "navigation", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.switchBranch", "group": "navigation", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.deploy", "group": "navigation", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.createBranch", "group": "1_hiveku", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.merge", "group": "1_hiveku", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.compare", "group": "1_hiveku", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.previewBranch", "group": "1_hiveku", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.showHistory", "group": "2_hiveku", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.prune", "group": "2_hiveku", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.revert", "group": "2_hiveku", "when": "scmProvider == hiveku" },
-        { "command": "hiveku.pull", "group": "2_hiveku", "when": "scmProvider == hiveku" }
+        {
+          "command": "hiveku.commit",
+          "group": "navigation",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.pushLocal",
+          "group": "navigation",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.refresh",
+          "group": "navigation",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.switchBranch",
+          "group": "navigation",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.deploy",
+          "group": "navigation",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.createBranch",
+          "group": "1_hiveku",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.merge",
+          "group": "1_hiveku",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.compare",
+          "group": "1_hiveku",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.previewBranch",
+          "group": "1_hiveku",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.showHistory",
+          "group": "2_hiveku",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.prune",
+          "group": "2_hiveku",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.revert",
+          "group": "2_hiveku",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.pull",
+          "group": "2_hiveku",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.checkRemote",
+          "group": "navigation",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.projectPanel",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.openPreview",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.syncPreview",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.previewLogs",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.previewScreenshot",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.secrets",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.pullEnv",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.pushEnv",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.database",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.media",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.openSite",
+          "group": "1_hiveku",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.envLogs",
+          "group": "1_hiveku",
+          "when": "scmProvider == hiveku"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "hiveku.setPermissionMode",
+          "when": "view == hiveku.projects || view == hiveku.console",
+          "group": "navigation@9"
+        },
+        {
+          "command": "hiveku.filterAccounts",
+          "when": "view == hiveku.projects",
+          "group": "navigation@0"
+        },
+        {
+          "command": "hiveku.clearAccountFilter",
+          "when": "view == hiveku.projects && hiveku.accountFilterActive",
+          "group": "navigation@1"
+        },
+        {
+          "command": "hiveku.dashboard",
+          "when": "view == hiveku.projects",
+          "group": "navigation"
+        },
+        {
+          "command": "hiveku.attention",
+          "when": "view == hiveku.projects",
+          "group": "navigation"
+        },
+        {
+          "command": "hiveku.connect",
+          "when": "view == hiveku.projects",
+          "group": "navigation"
+        },
+        {
+          "command": "hiveku.refreshTree",
+          "when": "view == hiveku.projects",
+          "group": "navigation"
+        },
+        {
+          "command": "hiveku.connect",
+          "when": "view == hiveku.projects",
+          "group": "1_accounts"
+        },
+        {
+          "command": "hiveku.signIn",
+          "when": "view == hiveku.projects",
+          "group": "1_accounts"
+        },
+        {
+          "command": "hiveku.switchAccount",
+          "when": "view == hiveku.projects",
+          "group": "1_accounts"
+        },
+        {
+          "command": "hiveku.signOut",
+          "when": "view == hiveku.projects",
+          "group": "1_accounts"
+        },
+        {
+          "command": "hiveku.cloneProject",
+          "when": "view == hiveku.projects",
+          "group": "1_accounts"
+        },
+        {
+          "command": "hiveku.connect",
+          "when": "view == hiveku.console",
+          "group": "navigation@0"
+        },
+        {
+          "command": "hiveku.attention",
+          "when": "view == hiveku.console",
+          "group": "navigation@1"
+        },
+        {
+          "command": "hiveku.refreshConsole",
+          "when": "view == hiveku.console",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "hiveku.openDeptWindow",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleDept",
+          "group": "inline@0"
+        },
+        {
+          "command": "hiveku.console",
+          "when": "view == hiveku.projects && viewItem == hivekuAccount",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.helpdesk",
+          "when": "view == hiveku.projects && viewItem == hivekuAccount",
+          "group": "1_account"
+        },
+        {
+          "command": "hiveku.operate",
+          "when": "view == hiveku.projects && viewItem == hivekuAccount",
+          "group": "1_account"
+        },
+        {
+          "command": "hiveku.downloadData",
+          "when": "view == hiveku.projects && viewItem == hivekuAccount",
+          "group": "1_account"
+        },
+        {
+          "command": "hiveku.copySetupPrompt",
+          "when": "view == hiveku.projects && viewItem == hivekuAccount",
+          "group": "1_account"
+        },
+        {
+          "command": "hiveku.openWorkspace",
+          "when": "view == hiveku.projects && viewItem == hivekuAccount",
+          "group": "1_account"
+        },
+        {
+          "command": "hiveku.mediaGallery",
+          "when": "view == hiveku.projects && viewItem == hivekuAccount",
+          "group": "1_account"
+        },
+        {
+          "command": "hiveku.downloadEverything",
+          "when": "view == hiveku.projects && viewItem == hivekuAccount",
+          "group": "1_account"
+        },
+        {
+          "command": "hiveku.checkSync",
+          "when": "view == hiveku.projects && viewItem == hivekuAccount",
+          "group": "1_account"
+        },
+        {
+          "command": "hiveku.chatDepartment",
+          "when": "view == hiveku.projects && viewItem == hivekuDepartment",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.downloadDepartment",
+          "when": "view == hiveku.projects && viewItem == hivekuDepartment",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.cloneProjectItem",
+          "when": "view == hiveku.projects && viewItem == hivekuProject",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.newTask",
+          "when": "view == hiveku.projects && viewItem == hivekuTasksGroup",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.completeTask",
+          "when": "view == hiveku.projects && viewItem == hivekuTask",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.runWorkflow",
+          "when": "view == hiveku.projects && viewItem =~ /hivekuWorkflow/",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.toggleWorkflow",
+          "when": "view == hiveku.projects && viewItem =~ /hivekuWorkflow/",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.downloadData",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.consoleDownloadDept",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleDept",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.openSite",
+          "when": "view == hiveku.projects && viewItem == hivekuProject",
+          "group": "inline@0"
+        },
+        {
+          "command": "hiveku.showEnvLogs",
+          "when": "view == hiveku.projects && viewItem == hivekuSiteEnv",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.setRole",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
+          "group": "1_role@0"
+        },
+        {
+          "command": "hiveku.syncCommands",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
+          "group": "1_role@1"
+        },
+        {
+          "command": "hiveku.autoRefresh",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
+          "group": "2_data@0"
+        },
+        {
+          "command": "hiveku.installCadence",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
+          "group": "2_data@1"
+        },
+        {
+          "command": "hiveku.openWorkspace",
+          "when": "view == hiveku.projects && viewItem == hivekuAccount",
+          "group": "inline@0"
+        },
+        {
+          "command": "hiveku.openWorkspace",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
+          "group": "inline@0"
+        },
+        {
+          "command": "hiveku.openWorkspace",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
+          "group": "0_open@0"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "hiveku.fileHistory",
+          "when": "resourceScheme == file",
+          "group": "9_hiveku"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "hiveku.openTask",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.cloneProjectItem",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.refreshTree",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.downloadType",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.downloadDepartment",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.downloadEverything",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.chatDepartment",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.openFileVersionDiff",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.restoreFileVersion",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.completeTask",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.runWorkflow",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.toggleWorkflow",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.consoleOpen",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.consoleDownloadDept",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.openSiteEnv",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.showEnvLogs",
+          "when": "false"
+        },
+        {
+          "command": "hiveku.consoleShowAll",
+          "when": "false"
+        }
       ]
     },
     "configuration": {
@@ -68,13 +856,104 @@
           "default": "https://core.hiveku.com",
           "description": "Base URL of the Hiveku MCP server (the /mcp endpoint is appended)."
         },
+        "hiveku.appUrl": {
+          "type": "string",
+          "default": "https://app.hiveku.com",
+          "description": "Base URL of the Hiveku web app (used by the browser Connect flow)."
+        },
         "hiveku.includeAssetsOnDownload": {
           "type": "boolean",
           "default": true,
           "description": "Include binary assets (images, fonts, etc.) when downloading a project."
+        },
+        "hiveku.workspaceRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Folder where Hiveku keeps your accounts + projects. Each account gets a subfolder, and projects nest under it (<root>/<account>/<project>). Leave blank to be prompted per account. Set via Hiveku: Guided Setup."
+        },
+        "hiveku.rootFolder": {
+          "type": "string",
+          "default": "",
+          "description": "The Hiveku root folder. Every connected account gets its own folder here (sites, data, knowledge, briefs). Set once via \"Hiveku: Set Root Folder\"."
+        },
+        "hiveku.claudeCodePermissionMode": {
+          "type": "string",
+          "enum": [
+            "acceptEdits",
+            "bypassPermissions",
+            "default"
+          ],
+          "enumDescriptions": [
+            "Auto-approve file edits and safe in-folder commands; still ask before deploys, git push, network, and Hiveku writes. Recommended.",
+            "Autonomous — skip permission prompts entirely (Claude Code runs account/site work without asking). Your .env*.local deny rule still blocks secret reads. Use when you trust Claude Code to operate an account end-to-end.",
+            "Ask before every edit and command (most cautious)."
+          ],
+          "default": "acceptEdits",
+          "markdownDescription": "How much autonomy Claude Code gets in Hiveku account/site workspaces. Written into each scaffolded folder's `.claude/settings.json` (`permissions.defaultMode`, for terminal Claude Code) and `.vscode/settings.json` (`claudeCode.initialPermissionMode`, for the Claude Code VS Code extension). Run **Hiveku: Refresh Setup** after changing this to apply it to already-open folders. The `.env*.local` deny rule is always enforced, even in `bypassPermissions`."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "hiveku.gettingStarted",
+        "title": "Run your accounts from VS Code",
+        "description": "Five steps from install to an agency-grade Claude Code session.",
+        "steps": [
+          {
+            "id": "root",
+            "title": "Set your Hiveku root folder",
+            "description": "All accounts and their content live under one folder you choose.\n[Set Root Folder](command:hiveku.setRootFolder)",
+            "media": {
+              "markdown": "media/walkthrough/root.md"
+            },
+            "completionEvents": [
+              "onCommand:hiveku.setRootFolder"
+            ]
+          },
+          {
+            "id": "connect",
+            "title": "Connect an account",
+            "description": "Sign in via the browser and select the account.\n[Connect Hiveku](command:hiveku.connect)",
+            "media": {
+              "markdown": "media/walkthrough/connect.md"
+            },
+            "completionEvents": [
+              "onCommand:hiveku.connect"
+            ]
+          },
+          {
+            "id": "role",
+            "title": "Pick your role",
+            "description": "Tailors the console and generates your Claude Code commands.\n[Set Role](command:hiveku.setRole)",
+            "media": {
+              "markdown": "media/walkthrough/role.md"
+            },
+            "completionEvents": [
+              "onCommand:hiveku.setRole"
+            ]
+          },
+          {
+            "id": "window",
+            "title": "Open a dedicated window",
+            "description": "One window per account - clean parallel sessions.\n[Open Account in New Window](command:hiveku.openWorkspace)",
+            "media": {
+              "markdown": "media/walkthrough/window.md"
+            },
+            "completionEvents": [
+              "onCommand:hiveku.openWorkspace"
+            ]
+          },
+          {
+            "id": "claude",
+            "title": "Work with Claude Code",
+            "description": "Start every session with /hiveku-daily.",
+            "media": {
+              "markdown": "media/walkthrough/claude.md"
+            }
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "compile": "tsc -p ./",

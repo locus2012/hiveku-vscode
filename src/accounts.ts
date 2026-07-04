@@ -12,11 +12,17 @@ import * as vscode from 'vscode';
 import { HivekuMcpClient } from './mcpClient';
 
 const INDEX_KEY = 'hiveku.accounts.index';
+const ARCHIVED_KEY = 'hiveku.accounts.archived';
+const FOLDERS_KEY = 'hiveku.accounts.folders';
+const DEPARTMENTS_KEY = 'hiveku.accounts.departments';
+const ROLES_KEY = 'hiveku.accounts.roles';
 const SECRET_PREFIX = 'hiveku.key.';
 
 export interface AccountRecord {
   accountId: string;
   label: string;
+  /** Email of the user who connected this account (from the Connect flow). */
+  connectedAs?: string;
 }
 
 function secretKey(accountId: string): string {
@@ -79,9 +85,93 @@ export class AccountStore {
     return { accountId, label: String(name) };
   }
 
+  /**
+   * Store an account whose key we ALREADY hold (e.g. from the Connect OAuth
+   * flow) without re-validating via get_account_info.
+   */
+  async addAccount(accountId: string, label: string, key: string, connectedAs?: string): Promise<AccountRecord> {
+    await this.ctx.secrets.store(secretKey(accountId), key.trim());
+    const records = this.list().filter((r) => r.accountId !== accountId);
+    const record: AccountRecord = { accountId, label, ...(connectedAs ? { connectedAs } : {}) };
+    records.push(record);
+    await this.setIndex(records);
+    return record;
+  }
+
+  /** Follow account renames from Hiveku (label is display-only; the id is identity). */
+  async updateLabel(accountId: string, label: string): Promise<void> {
+    const records = this.list();
+    const rec = records.find((r) => r.accountId === accountId);
+    if (!rec || rec.label === label) return;
+    rec.label = label;
+    await this.setIndex(records);
+  }
+
   async signOut(accountId: string): Promise<void> {
     await this.ctx.secrets.delete(secretKey(accountId));
     await this.setIndex(this.list().filter((r) => r.accountId !== accountId));
+    // Clean per-account side maps (were previously leaked on removal).
+    for (const key of [FOLDERS_KEY, DEPARTMENTS_KEY, ROLES_KEY]) {
+      const map = this.ctx.globalState.get<Record<string, unknown>>(key, {});
+      if (accountId in map) {
+        delete map[accountId];
+        await this.ctx.globalState.update(key, map);
+      }
+    }
+  }
+
+  // ── Archive: hide from the active list but keep the key + record for instant restore ──
+  listArchived(): AccountRecord[] {
+    return this.ctx.globalState.get<AccountRecord[]>(ARCHIVED_KEY, []);
+  }
+  async archive(accountId: string): Promise<void> {
+    const rec = this.list().find((r) => r.accountId === accountId);
+    if (!rec) return;
+    const archived = this.listArchived().filter((r) => r.accountId !== accountId);
+    archived.push(rec);
+    await this.ctx.globalState.update(ARCHIVED_KEY, archived);
+    await this.setIndex(this.list().filter((r) => r.accountId !== accountId));
+  }
+  async restore(accountId: string): Promise<void> {
+    const rec = this.listArchived().find((r) => r.accountId === accountId);
+    if (!rec) return;
+    await this.ctx.globalState.update(ARCHIVED_KEY, this.listArchived().filter((r) => r.accountId !== accountId));
+    const active = this.list().filter((r) => r.accountId !== accountId);
+    active.push(rec);
+    await this.setIndex(active);
+  }
+
+  // ── Per-account local folder (where downloads land) ──────────────────────
+  getFolder(accountId: string): string | undefined {
+    const map = this.ctx.globalState.get<Record<string, string>>(FOLDERS_KEY, {});
+    return map[accountId];
+  }
+  async setFolder(accountId: string, folder: string): Promise<void> {
+    const map = this.ctx.globalState.get<Record<string, string>>(FOLDERS_KEY, {});
+    map[accountId] = folder;
+    await this.ctx.globalState.update(FOLDERS_KEY, map);
+  }
+
+  // ── Per-account selected departments (from the Connect flow) ──────────────
+  getDepartments(accountId: string): string[] {
+    const map = this.ctx.globalState.get<Record<string, string[]>>(DEPARTMENTS_KEY, {});
+    return map[accountId] ?? [];
+  }
+  async setDepartments(accountId: string, departments: string[]): Promise<void> {
+    const map = this.ctx.globalState.get<Record<string, string[]>>(DEPARTMENTS_KEY, {});
+    map[accountId] = departments;
+    await this.ctx.globalState.update(DEPARTMENTS_KEY, map);
+  }
+
+  // ── Per-account role (how this user runs the account here) ────────────────
+  getRole(accountId: string): string | undefined {
+    const map = this.ctx.globalState.get<Record<string, string>>(ROLES_KEY, {});
+    return map[accountId];
+  }
+  async setRole(accountId: string, role: string): Promise<void> {
+    const map = this.ctx.globalState.get<Record<string, string>>(ROLES_KEY, {});
+    map[accountId] = role;
+    await this.ctx.globalState.update(ROLES_KEY, map);
   }
 
   /** Pick an account interactively; auto-selects when only one exists. */

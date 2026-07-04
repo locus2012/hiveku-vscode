@@ -91,10 +91,69 @@ function unwrap<T>(payload: unknown): T {
   return payload as T;
 }
 
+/** PM (project-management) projects — tasks/owners, NOT buildable sites. */
 export async function listProjects(client: HivekuMcpClient): Promise<ProjectSummary[]> {
   const res = await client.callToolJson<unknown>('list_projects', {});
   const list = unwrap<ProjectSummary[]>(res);
   return Array.isArray(list) ? list : [];
+}
+
+/** A buildable website project from sites_list — id is the WEBSITE project id
+ *  (what snapshots/commits/deploys expect), with env URLs resolved server-side. */
+export interface SiteSummary extends ProjectSummary {
+  subdomain?: string;
+  custom_domain?: string | null;
+  live_preview?: { url?: string; container_status?: string };
+  environments?: {
+    development?: { url?: string | null };
+    staging?: { enabled?: boolean; url?: string | null };
+    production?: { url?: string | null; status?: string | null };
+  };
+}
+
+/**
+ * The account's WEBSITE projects (code you can download/commit/deploy) — this,
+ * not list_projects (PM records), must feed every code-project surface. One
+ * call also carries the Fly preview URL + container status and all deployed
+ * environment URLs, so no per-project fan-out is needed.
+ */
+export async function sitesList(client: HivekuMcpClient): Promise<SiteSummary[]> {
+  const res = await client.callToolJson<unknown>('sites_list', { limit: 100 });
+  const list = unwrap<SiteSummary[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+
+/** Environment link descriptors straight from a sites_list row (no extra calls). */
+export function envDescriptorsFromSite(site: SiteSummary): EnvDescriptor[] {
+  const envs: EnvDescriptor[] = [
+    {
+      env: 'preview',
+      label: 'Live Preview',
+      url: site.live_preview?.url || flyPreviewUrl(site.id),
+      status: site.live_preview?.container_status || undefined,
+    },
+    {
+      env: 'development',
+      label: 'Development',
+      url: site.environments?.development?.url || undefined,
+      status: site.environments?.development?.url ? undefined : 'not deployed',
+    },
+  ];
+  if (site.environments?.staging?.enabled) {
+    envs.push({
+      env: 'staging',
+      label: 'Staging',
+      url: site.environments.staging.url || undefined,
+      status: site.environments.staging.url ? undefined : 'not deployed',
+    });
+  }
+  envs.push({
+    env: 'production',
+    label: 'Production',
+    url: site.environments?.production?.url || (site.custom_domain ? `https://${site.custom_domain}` : undefined),
+    status: site.environments?.production?.status || (site.environments?.production?.url ? undefined : 'not deployed'),
+  });
+  return envs;
 }
 
 /** Returns a short-lived signed S3 URL for the project's tarball. */
@@ -145,6 +204,85 @@ export async function vcsCommit(
     ...(branch && branch !== 'main' ? { branch } : {}),
   });
   return unwrap<CommitSummary>(res);
+}
+
+export interface BulkSaveSummary {
+  total: number;
+  succeeded: number;
+  failed: number;
+  created: number;
+  updated: number;
+  soft_deleted: number;
+  duplicates_dropped: number;
+}
+export interface BulkSaveResult {
+  summary: BulkSaveSummary;
+  results: Array<{ path: string; ok: boolean; error?: string; version?: number }>;
+}
+
+/**
+ * Write a batch of files to the project's CURRENT files (builder_code_versions,
+ * is_current) — the layer the build, preview, and deploy actually read. Unlike
+ * project_vcs_commit this has NO GitHub hand-off, so it's the right primitive
+ * for a DB-canonical mirror. The server caps a single call at 500 files / 20MB;
+ * keep batches well under that for reliability over the MCP transport. Verify a
+ * batch landed via the returned summary/results — do NOT rely on
+ * project_files_status for binary (that diff is text-only).
+ */
+export async function filesBulkSave(
+  client: HivekuMcpClient,
+  projectId: string,
+  files: CommitFile[],
+  message?: string,
+): Promise<BulkSaveResult> {
+  const res = await client.callToolJson<unknown>('project_files_bulk_save', {
+    project_id: projectId,
+    files: files.map((f) => ({ path: f.path, content: f.content, encoding: f.encoding })),
+    ...(message ? { commit_message: message } : {}),
+  });
+  const data = unwrap<Partial<BulkSaveResult>>(res);
+  const s = (data.summary ?? {}) as Partial<BulkSaveSummary>;
+  return {
+    summary: {
+      total: s.total ?? files.length,
+      succeeded: s.succeeded ?? 0,
+      failed: s.failed ?? 0,
+      created: s.created ?? 0,
+      updated: s.updated ?? 0,
+      soft_deleted: s.soft_deleted ?? 0,
+      duplicates_dropped: s.duplicates_dropped ?? 0,
+    },
+    results: Array.isArray(data.results) ? data.results : [],
+  };
+}
+
+/** Soft-delete a single file (tombstone — is_current flipped to false). */
+export async function fileDelete(client: HivekuMcpClient, projectId: string, filePath: string): Promise<void> {
+  await client.callToolJson<unknown>('project_file_delete', { project_id: projectId, file_path: filePath });
+}
+
+/**
+ * Upload one binary asset to the project's S3-backed asset store
+ * (builder_project_assets + CDN) via assets_upload. This is the lane the DEPLOY
+ * actually serves public/ images from — unlike filesBulkSave, which writes
+ * builder_code_versions (shows in the Fly preview but is dropped from the deploy
+ * bundle by asset-build-bypass, so images pushed there go missing on deploy).
+ * Server cap: 25MB after base64-decode per file.
+ */
+export async function assetsUpload(
+  client: HivekuMcpClient,
+  projectId: string,
+  filePath: string,
+  base64Content: string,
+  mimeType?: string,
+): Promise<void> {
+  await client.callToolJson<unknown>('assets_upload', {
+    project_id: projectId,
+    file_path: filePath,
+    content: base64Content,
+    ...(mimeType ? { mime_type: mimeType } : {}),
+    source_type: 'vscode_push',
+  });
 }
 
 export async function vcsBranchCreate(
@@ -258,6 +396,131 @@ export async function deploySite(
   return unwrap(res);
 }
 
+// ── Environments (deployed tiers) — URLs + per-env build/deploy logs ──────────
+
+export type EnvId = 'development' | 'staging' | 'production';
+
+export interface ProjectTier {
+  url?: string;
+  enabled?: boolean;
+  status?: string;
+  latest_deployment?: Record<string, unknown>;
+}
+export interface ProjectDetail {
+  id?: string;
+  name?: string;
+  tiers?: { development?: ProjectTier; staging?: ProjectTier; production?: ProjectTier };
+  [k: string]: unknown;
+}
+
+/** Full project record — carries per-tier deploy URLs + enabled flags in `tiers`. */
+export async function projectGet(client: HivekuMcpClient, projectId: string): Promise<ProjectDetail> {
+  const res = await client.callToolJson<unknown>('project_get', { project_id: projectId });
+  return (unwrap<ProjectDetail>(res) as ProjectDetail) ?? {};
+}
+
+export interface DeployRecord {
+  deployment_id?: string;
+  id?: string;
+  environment?: string;
+  status?: string;
+  url?: string;
+  error?: string;
+  build_logs?: string;
+  created_at?: string;
+}
+
+/** Latest deployment for a tier. Defensive against `{data:{...}}` vs `{most_recent,data:[]}`. */
+export async function deployStatus(
+  client: HivekuMcpClient,
+  projectId: string,
+  environment: EnvId | undefined,
+): Promise<{ most_recent?: DeployRecord; history: DeployRecord[] }> {
+  const res = await client.callToolJson<unknown>(
+    'deploy_status',
+    environment ? { project_id: projectId, environment } : { project_id: projectId },
+  );
+  const root = (res && typeof res === 'object' ? (res as Record<string, unknown>) : {}) as Record<string, unknown>;
+  const body =
+    root.data && typeof root.data === 'object' && !Array.isArray(root.data)
+      ? (root.data as Record<string, unknown>)
+      : root;
+  const history = Array.isArray(body.data)
+    ? (body.data as DeployRecord[])
+    : Array.isArray(body.deployments)
+      ? (body.deployments as DeployRecord[])
+      : Array.isArray(root.data)
+        ? (root.data as DeployRecord[])
+        : [];
+  const most_recent = (body.most_recent as DeployRecord) || history[0];
+  return { most_recent, history };
+}
+
+/** A single deployment, including its full `build_logs` (DB-backed, not S3). */
+export async function deployGet(
+  client: HivekuMcpClient,
+  projectId: string,
+  deploymentId: string,
+): Promise<DeployRecord> {
+  const res = await client.callToolJson<unknown>('deploy_get', { project_id: projectId, deployment_id: deploymentId });
+  return (unwrap<DeployRecord>(res) as DeployRecord) ?? {};
+}
+
+export interface BuildError {
+  error_summary?: string;
+  last_log_lines?: string[];
+  full_logs?: string;
+}
+
+/** The extracted real error region for the latest failed build (best-effort). */
+export async function projectBuildErrorGet(
+  client: HivekuMcpClient,
+  projectId: string,
+): Promise<BuildError | undefined> {
+  try {
+    const res = await client.callToolJson<unknown>('project_build_error_get', { project_id: projectId });
+    return unwrap<BuildError>(res);
+  } catch {
+    return undefined;
+  }
+}
+
+export type EnvSlot = 'preview' | EnvId;
+export interface EnvDescriptor {
+  env: EnvSlot;
+  label: string;
+  /** Resolved URL, or undefined when not deployed/enabled. */
+  url?: string;
+  status?: string;
+}
+
+/** Fly live-preview URL synthesized from a project UUID (fallback when preview_overview has none). */
+export function flyPreviewUrl(projectId: string): string {
+  const hex = projectId.replace(/-/g, '').slice(0, 12).toLowerCase();
+  return `https://hvk-${hex}.preview.hiveku.com`;
+}
+
+/** The four environment descriptors for a project — Live Preview (Fly) + dev/staging/prod tiers. */
+export async function resolveEnvironments(client: HivekuMcpClient, projectId: string): Promise<EnvDescriptor[]> {
+  const [detail, preview] = await Promise.allSettled([projectGet(client, projectId), previewOverview(client, projectId)]);
+  const tiers = detail.status === 'fulfilled' ? detail.value.tiers : undefined;
+  const prev = preview.status === 'fulfilled' ? preview.value : undefined;
+  const tier = (env: EnvId, label: string, t?: ProjectTier): EnvDescriptor => {
+    const url = t && t.enabled !== false ? t.url : undefined;
+    const status = !t ? 'not deployed' : t.enabled === false ? 'not enabled' : t.url ? undefined : 'not deployed';
+    return { env, label, url, status };
+  };
+  const envs: EnvDescriptor[] = [
+    { env: 'preview', label: 'Live Preview', url: prev?.preview_url || flyPreviewUrl(projectId), status: prev?.status },
+    tier('development', 'Development', tiers?.development),
+  ];
+  // Staging is per-project (disabled by default) — only surface it when THIS project has it enabled,
+  // so projects without staging don't show a dead link.
+  if (tiers?.staging && tiers.staging.enabled !== false) envs.push(tier('staging', 'Staging', tiers.staging));
+  envs.push(tier('production', 'Production', tiers?.production));
+  return envs;
+}
+
 export async function checkpointRestore(
   client: HivekuMcpClient,
   projectId: string,
@@ -267,4 +530,452 @@ export async function checkpointRestore(
     project_id: projectId,
     checkpoint_hash: checkpointHash,
   });
+}
+
+export interface FileVersion {
+  version_number: number;
+  is_current?: boolean;
+  commit_message?: string;
+  git_branch?: string;
+  created_at: string;
+  file_size?: number;
+}
+
+export async function fileVersions(
+  client: HivekuMcpClient,
+  projectId: string,
+  filePath: string,
+  limit = 100,
+): Promise<FileVersion[]> {
+  const res = await client.callToolJson<unknown>('project_file_versions', {
+    project_id: projectId,
+    file_path: filePath,
+    limit,
+  });
+  const list = unwrap<FileVersion[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+
+/** Unified diff of a past version vs the current version. */
+export async function fileDiff(
+  client: HivekuMcpClient,
+  projectId: string,
+  filePath: string,
+  fromVersion: number,
+): Promise<string> {
+  const result = await client.callTool('project_file_diff', {
+    project_id: projectId,
+    file_path: filePath,
+    from: fromVersion,
+    format: 'unified',
+  });
+  const text = result?.content?.[0]?.text;
+  if (typeof text !== 'string') return '(no diff)';
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    const data = (parsed.data && typeof parsed.data === 'object' ? parsed.data : parsed) as Record<string, unknown>;
+    if (typeof data.diff === 'string') return data.diff;
+    if (typeof data.unified === 'string') return data.unified;
+    return text;
+  } catch {
+    return text;
+  }
+}
+
+export async function fileRestore(
+  client: HivekuMcpClient,
+  projectId: string,
+  filePath: string,
+  versionNumber: number,
+): Promise<unknown> {
+  return client.callToolJson<unknown>('project_file_restore', {
+    project_id: projectId,
+    file_path: filePath,
+    version_number: versionNumber,
+  });
+}
+
+// ── Account operations: PM tasks, workflows, CRM, helpdesk (account-level) ────
+
+export interface PmTask {
+  id: string;
+  title?: string;
+  name?: string;
+  status?: string;
+  due_date?: string;
+  priority?: string;
+  task_number?: number;
+  task_type?: string;
+  created_at?: string;
+  /** List rows join the assignee in ({ id, name, email }); null when unassigned. */
+  assigned_to?: { id?: string; name?: string | null; email?: string | null } | null;
+  /**
+   * The PM project the task lives in. `website_project_id` (nullable) is the only
+   * surface linking a task to a code project — it matches sites_list ids for
+   * annotation-feedback projects; manually created PM projects carry null (the
+   * Olympus project routes drop the field on create and never return it).
+   */
+  project?: { id?: string; name?: string; website_project_id?: string | null } | null;
+  /** Legacy flat fields from older server shapes — prefer `project`. */
+  project_id?: string;
+  project_name?: string;
+}
+export async function pmTasksList(client: HivekuMcpClient, limit = 200): Promise<PmTask[]> {
+  const res = await client.callToolJson<unknown>('pm_tasks_list', { limit });
+  const list = unwrap<PmTask[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+/**
+ * The tasks route hard-caps at 200 rows newest-first with NO pagination, so on
+ * busy accounts the oldest OPEN tasks fall off behind completed noise. Merge the
+ * newest 200 of everything with up to 200 open-status rows (status filter is a
+ * comma list the route honors) so open work is never silently hidden. Custom
+ * statuses outside the canonical set still surface via the unfiltered fetch.
+ */
+const OPEN_STATUSES = 'todo,queued,in_progress,qa,ready_for_review,blocked';
+export async function pmTasksAll(client: HivekuMcpClient): Promise<PmTask[]> {
+  const [recent, open] = await Promise.all([
+    pmTasksList(client),
+    client
+      .callToolJson<unknown>('pm_tasks_list', { limit: 200, status: OPEN_STATUSES })
+      .then((res) => {
+        const list = unwrap<PmTask[]>(res);
+        return Array.isArray(list) ? list : [];
+      })
+      .catch(() => [] as PmTask[]),
+  ]);
+  const seen = new Set(recent.map((t) => t.id));
+  return [...recent, ...open.filter((t) => !seen.has(t.id))];
+}
+export async function pmTaskComplete(client: HivekuMcpClient, id: string, summary?: string): Promise<unknown> {
+  return client.callToolJson<unknown>('pm_tasks_complete', { id, ...(summary ? { summary } : {}) });
+}
+export interface PmProject {
+  id: string;
+  name?: string;
+  status?: string;
+}
+export async function pmProjectsList(client: HivekuMcpClient): Promise<PmProject[]> {
+  const res = await client.callToolJson<unknown>('pm_projects_list', {});
+  const list = unwrap<PmProject[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+export async function pmTaskCreate(
+  client: HivekuMcpClient,
+  title: string,
+  projectId: string,
+): Promise<unknown> {
+  return client.callToolJson<unknown>('pm_tasks_create', { title, project_id: projectId });
+}
+
+export interface Workflow {
+  id: string;
+  name?: string;
+  /** Canonical field is `is_enabled`; `enabled` kept as a tolerant fallback. */
+  is_enabled?: boolean;
+  enabled?: boolean;
+  run_count?: number;
+  description?: string;
+}
+
+/** Workflow-run status vocab: queued|pending|running|completed|failed|cancelled. */
+export function isFailedRunStatus(status: unknown): boolean {
+  const s = String(status ?? '').toLowerCase();
+  return s === 'failed' || s === 'error';
+}
+export function isWorkflowEnabled(w: { is_enabled?: boolean; enabled?: boolean }): boolean {
+  return w.is_enabled ?? w.enabled ?? false;
+}
+export async function workflowList(client: HivekuMcpClient): Promise<Workflow[]> {
+  const res = await client.callToolJson<unknown>('workflow_list', {});
+  const list = unwrap<Workflow[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+export async function workflowRun(client: HivekuMcpClient, id: string): Promise<unknown> {
+  return client.callToolJson<unknown>('workflow_run', { id });
+}
+export async function workflowSetEnabled(client: HivekuMcpClient, id: string, enabled: boolean): Promise<unknown> {
+  return client.callToolJson<unknown>(enabled ? 'workflow_enable' : 'workflow_disable', { id });
+}
+export interface WorkflowRun {
+  workflow_id?: string;
+  workflow_name?: string;
+  status?: string;
+  started_at?: string;
+  created_at?: string;
+}
+export async function workflowRunsRecent(client: HivekuMcpClient): Promise<WorkflowRun[]> {
+  const res = await client.callToolJson<unknown>('workflow_runs_recent', {});
+  const list = unwrap<WorkflowRun[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+
+export interface CrmDeal {
+  id?: string;
+  name?: string;
+  title?: string;
+  value?: number;
+  amount?: number;
+  stage_name?: string;
+  status?: string;
+}
+export async function crmListDeals(
+  client: HivekuMcpClient,
+  opts: { pipeline_id?: string; status?: string; limit?: number } = {},
+): Promise<CrmDeal[]> {
+  const res = await client.callToolJson<unknown>('crm_list_deals', { limit: opts.limit ?? 25, ...opts });
+  const list = unwrap<CrmDeal[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+export interface CrmContact {
+  id?: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  lifecycle_stage?: string;
+}
+export async function crmListContacts(client: HivekuMcpClient, limit = 25): Promise<CrmContact[]> {
+  const res = await client.callToolJson<unknown>('crm_list_contacts', { limit });
+  const list = unwrap<CrmContact[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+export async function crmListPipelines(client: HivekuMcpClient): Promise<Array<{ id?: string; name?: string }>> {
+  const res = await client.callToolJson<unknown>('crm_list_pipelines', {});
+  const list = unwrap<Array<{ id?: string; name?: string }>>(res);
+  return Array.isArray(list) ? list : [];
+}
+
+export async function crmAccountSummary(client: HivekuMcpClient): Promise<Record<string, unknown>> {
+  const res = await client.callToolJson<unknown>('crm_account_summary', {});
+  return unwrap<Record<string, unknown>>(res) ?? {};
+}
+
+// ── Account entitlements (plan + per-page access) — gates what the extension shows ──
+export interface AccountEntitlements {
+  plan: string;
+  page_access: Record<string, boolean>;
+  entitled_features: string[];
+}
+
+/**
+ * The account's plan + per-page access map (plan ∩ release-tier), via the
+ * `account_entitlements` tool. Returns undefined if the tool isn't available
+ * (older server) — callers should then show everything (graceful fallback).
+ */
+export async function accountEntitlements(client: HivekuMcpClient): Promise<AccountEntitlements | undefined> {
+  try {
+    const res = await client.callToolJson<unknown>('account_entitlements', {});
+    const d = unwrap<Record<string, unknown>>(res) ?? {};
+    const pa = (d.page_access && typeof d.page_access === 'object' ? d.page_access : null) as Record<string, boolean> | null;
+    if (!pa) return undefined;
+    return {
+      plan: String(d.plan ?? ''),
+      page_access: pa,
+      entitled_features: Array.isArray(d.entitled_features) ? (d.entitled_features as string[]) : [],
+    };
+  } catch {
+    return undefined;
+  }
+}
+export async function helpdeskTickets(client: HivekuMcpClient, status?: string): Promise<Array<Record<string, unknown>>> {
+  const res = await client.callToolJson<unknown>('helpdesk_ticket_list', status ? { status } : {});
+  const list = unwrap<Array<Record<string, unknown>>>(res);
+  return Array.isArray(list) ? list : [];
+}
+export async function helpdeskOverdue(client: HivekuMcpClient): Promise<Array<Record<string, unknown>>> {
+  const res = await client.callToolJson<unknown>('helpdesk_tickets_overdue', {});
+  const list = unwrap<Array<Record<string, unknown>>>(res);
+  return Array.isArray(list) ? list : [];
+}
+
+// ── Project resources (command center): preview / secrets / database / media ──
+
+export async function previewOverview(
+  client: HivekuMcpClient,
+  projectId: string,
+): Promise<{ preview_url?: string; status?: string }> {
+  const res = await client.callToolJson<unknown>('preview_overview', { project_id: projectId });
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  return {
+    preview_url: (d.preview_url as string) || (d.url as string) || undefined,
+    status: (d.status as string) || undefined,
+  };
+}
+
+export async function previewSync(client: HivekuMcpClient, projectId: string): Promise<unknown> {
+  return client.callToolJson<unknown>('preview_sync', { project_id: projectId });
+}
+
+export async function previewLogs(client: HivekuMcpClient, projectId: string, limit = 200): Promise<string> {
+  const res = await client.callToolJson<unknown>('preview_logs', { project_id: projectId, limit });
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  if (Array.isArray(d.logs)) return (d.logs as unknown[]).join('\n');
+  if (Array.isArray(d.lines)) return (d.lines as unknown[]).join('\n');
+  if (typeof d.logs === 'string') return d.logs;
+  return JSON.stringify(d, null, 2);
+}
+
+export async function previewScreenshot(
+  client: HivekuMcpClient,
+  projectId: string,
+  pathInside = '/',
+): Promise<string | undefined> {
+  const res = await client.callToolJson<unknown>('preview_screenshot', { project_id: projectId, path: pathInside });
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  return (d.image_url as string) || (d.url as string) || undefined;
+}
+
+export interface SecretEntry {
+  key: string;
+  preview: string;
+}
+
+/** Mask a secret value for display — never render plaintext in the UI. */
+export function maskSecret(v: string): string {
+  if (!v) return '(empty)';
+  return v.length <= 4 ? '••••' : `••••${v.slice(-4)}`;
+}
+
+/**
+ * Raw KEY→value map from project_secrets_list. The tool returns
+ * `{ secrets: { KEY: value }, metadata }` (values are real, from AWS Secrets
+ * Manager) — NOT an array, so we read the `secrets` object directly.
+ */
+export async function secretsMap(client: HivekuMcpClient, projectId: string): Promise<Record<string, string>> {
+  const res = await client.callToolJson<unknown>('project_secrets_list', { project_id: projectId });
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  const secrets = (d.secrets && typeof d.secrets === 'object' ? d.secrets : {}) as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(secrets)) out[k] = v == null ? '' : String(v);
+  return out;
+}
+
+/** Display list: keys with masked values, sorted. */
+export async function secretsList(client: HivekuMcpClient, projectId: string): Promise<SecretEntry[]> {
+  const map = await secretsMap(client, projectId);
+  return Object.keys(map)
+    .sort()
+    .map((key) => ({ key, preview: maskSecret(map[key]) }));
+}
+
+/** Upsert one or more secrets. The tool requires a `{ secrets: {KEY:value} }` map. */
+export async function secretSet(
+  client: HivekuMcpClient,
+  projectId: string,
+  secrets: Record<string, string>,
+  applyToPreview = true,
+): Promise<unknown> {
+  return client.callToolJson<unknown>('project_secrets_set', {
+    project_id: projectId,
+    secrets,
+    apply_to_preview: applyToPreview,
+  });
+}
+
+export async function secretDelete(client: HivekuMcpClient, projectId: string, key: string): Promise<unknown> {
+  return client.callToolJson<unknown>('project_secrets_delete', { project_id: projectId, key });
+}
+
+export async function databaseStatus(client: HivekuMcpClient, projectId: string): Promise<Record<string, unknown>> {
+  const res = await client.callToolJson<unknown>('database_status', { project_id: projectId });
+  return unwrap<Record<string, unknown>>(res) ?? {};
+}
+export async function databaseTables(client: HivekuMcpClient, projectId: string): Promise<string[]> {
+  const res = await client.callToolJson<unknown>('database_tables', { project_id: projectId });
+  const d = unwrap<unknown>(res);
+  if (Array.isArray(d)) {
+    return d.map((t) => (typeof t === 'string' ? t : ((t as Record<string, unknown>).table_name as string) || (t as Record<string, unknown>).name as string)).filter(Boolean);
+  }
+  return [];
+}
+
+export interface MediaItem {
+  file_path?: string;
+  name?: string;
+  url?: string;
+  cdn_url?: string;
+  mime_type?: string;
+  file_size_bytes?: number;
+}
+export async function mediaList(client: HivekuMcpClient, projectId: string): Promise<MediaItem[]> {
+  // assets_list is the project-scoped media listing.
+  const res = await client.callToolJson<unknown>('assets_list', { project_id: projectId });
+  const list = unwrap<MediaItem[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+
+/** One row of the account-wide media library (media_assets). */
+export interface MediaAsset {
+  id?: string;
+  title?: string;
+  original_filename?: string;
+  filename?: string;
+  file_url?: string;
+  external_url?: string;
+  file_path?: string;
+  mime_type?: string;
+  media_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  source_type?: string;
+  created_at?: string;
+}
+
+/** The account-wide media library (shared across all projects), with server-side search. */
+export async function mediaLibraryList(
+  client: HivekuMcpClient,
+  opts: { search?: string; media_type?: string; limit?: number } = {},
+): Promise<MediaAsset[]> {
+  const args: Record<string, unknown> = { limit: opts.limit ?? 300 };
+  if (opts.search) args.search = opts.search;
+  if (opts.media_type) args.media_type = opts.media_type;
+  const res = await client.callToolJson<unknown>('media_library_list', args);
+  const list = unwrap<MediaAsset[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+
+export interface MemoryEntry {
+  id?: string;
+  name?: string;
+  domain?: string;
+  content?: string;
+  project_id?: string;
+  version?: number | string;
+  updated_at?: string;
+}
+
+/** List account knowledge entries of one type (memory|rule|skill|command|agent|identity). */
+export async function listMemory(client: HivekuMcpClient, type: string): Promise<MemoryEntry[]> {
+  const res = await client.callToolJson<unknown>('memory_list', { type });
+  const list = unwrap<MemoryEntry[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+
+/** Send a message to a department agent and return its reply text. */
+export async function talkToDepartment(
+  client: HivekuMcpClient,
+  domain: string,
+  message: string,
+): Promise<string> {
+  // talk_to_department returns brand-aligned content; surface its text. We read
+  // the raw tool result so we can fall back to the first text block if the
+  // payload isn't a tidy { data } envelope.
+  const result = await client.callTool('talk_to_department', { domain, message });
+  const text = result?.content?.[0]?.text;
+  if (typeof text !== 'string') return '(no response)';
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    const data = (parsed.data && typeof parsed.data === 'object' ? parsed.data : parsed) as Record<string, unknown>;
+    const reply =
+      (typeof data.reply === 'string' && data.reply) ||
+      (typeof data.message === 'string' && data.message) ||
+      (typeof data.response === 'string' && data.response) ||
+      (typeof data.text === 'string' && data.text) ||
+      (typeof data.output === 'string' && data.output);
+    return reply || text;
+  } catch {
+    return text; // already plain text
+  }
 }
