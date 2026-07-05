@@ -21,6 +21,11 @@ interface CaptureMeta {
   fullPage?: boolean;
   fullPageHeight?: number;
   pageUrl?: string;
+  devicePixelRatio?: number;
+  previewUrl?: string;
+  projectId?: string;
+  version?: number;
+  capturedAt?: string;
 }
 interface DomFile {
   pageMetrics?: Record<string, unknown>;
@@ -267,7 +272,7 @@ function reviewHtml(webview: vscode.Webview): string {
   // for hit-testing; it can disagree with the actual image and mislocate pins.
   function pageHeightCss(){ return (img.naturalWidth && img.naturalHeight) ? (pageW() * img.naturalHeight / img.naturalWidth) : (capture.fullPageHeight || vpH()); }
 
-  function sizeCanvas(){ overlay.width = img.clientWidth; overlay.height = img.clientHeight; overlay.style.width = img.clientWidth+'px'; overlay.style.height = img.clientHeight+'px'; redraw(); }
+  function sizeCanvas(){ if(!img.clientWidth || !img.clientHeight) return; overlay.width = img.clientWidth; overlay.height = img.clientHeight; overlay.style.width = img.clientWidth+'px'; overlay.style.height = img.clientHeight+'px'; redraw(); }
 
   // Convert a screenshot-percent point to PAGE coords (dpr-independent: use logical dims).
   function pageXY(xPct, yPct){
@@ -381,7 +386,7 @@ function reviewHtml(webview: vscode.Webview): string {
     img.onload = function(){ sizeCanvas(); renderList(); };
     img.onerror = function(){ emptyEl.textContent = 'Could not load the screenshot. Re-run /hiveku-review to recapture.'; emptyEl.style.display = ''; container.style.display = 'none'; };
     img.src = m.imgUri;
-    if (img.complete && img.naturalWidth) { sizeCanvas(); renderList(); }
+    if (img.complete && img.naturalWidth) { img.onload = null; sizeCanvas(); renderList(); }
   });
 
   vscode.postMessage({ type: 'ready' });
