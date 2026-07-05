@@ -42,6 +42,7 @@ import {
   computeSyncStatus,
   hivekuMcpServer,
   setPermissionMode,
+  setConnectedAsMap,
   type PermissionMode,
 } from './knowledge';
 import { setLocalHivekuServer, hasLocalHivekuServer, hasUserHivekuServer } from './claudeMcp';
@@ -229,6 +230,12 @@ function syncPermissionMode(): void {
   refreshPermStatusBar();
 }
 
+/** Push accountId -> connected user email into the scaffold layer so it attributes
+ *  PM tasks/comments to the authenticated user. Call on activate + account changes. */
+function syncConnectedAs(): void {
+  setConnectedAsMap(Object.fromEntries(accounts.list().map((a) => [a.accountId, a.connectedAs])));
+}
+
 /** UI toggle for Claude Code autonomy — status bar / console button / palette. */
 async function choosePermissionMode(): Promise<void> {
   const current = currentPermMode();
@@ -255,6 +262,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   extensionContext = context;
   syncPermissionMode();
   accounts = new AccountStore(context);
+  syncConnectedAs();
   log = vscode.window.createOutputChannel('Hiveku');
   siteLogs = vscode.window.createOutputChannel('Hiveku — Site Logs');
   statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -364,6 +372,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   refresher = new DataRefresher(context, accounts, clientForAccount, (id) => getEntitlements(id), () => consoleTree.refresh());
 
   connect = new ConnectFlow(accounts, appUrl, (newAccountIds) => {
+    syncConnectedAs(); // new accounts carry connectedAs — refresh before their scaffold runs
     refreshStatusBar();
     updateSignedInContext();
     // A (re)connect can carry a new plan/key — never keep a stale entitlements
@@ -514,6 +523,7 @@ async function signIn(): Promise<void> {
     { location: vscode.ProgressLocation.Notification, title: 'Validating Hiveku key…' },
     async () => {
       const record = await accounts.signIn(key, baseUrl());
+      syncConnectedAs();
       vscode.window.showInformationMessage(`Connected Hiveku account: ${record.label}`);
     },
   );
@@ -656,6 +666,7 @@ async function signOut(node?: { record: AccountRecord }): Promise<void> {
   const revoked = await revokeAccountKey(record);
 
   await accounts.signOut(record.accountId);
+  syncConnectedAs();
   accountSnapshots.delete(record.accountId);
   const verb = choice.value === 'delete' ? 'Deleted' : 'Stopped monitoring';
   vscode.window.showInformationMessage(

@@ -324,6 +324,8 @@ export interface ScaffoldOptions {
   accountId?: string;
   /** Claude Code autonomy in this workspace (hiveku.claudeCodePermissionMode). Default 'acceptEdits'. */
   permissionMode?: PermissionMode;
+  /** Email of the user who connected this account — injected so Claude Code attributes PM tasks/comments to them. */
+  connectedAs?: string;
 }
 
 export type PermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
@@ -338,6 +340,15 @@ export function setPermissionMode(mode: PermissionMode): void {
 }
 export function getPermissionMode(): PermissionMode {
   return configuredPermissionMode;
+}
+
+// accountId -> email of the user who connected it (AccountRecord.connectedAs).
+// extension.ts pushes this on activation + whenever accounts change, so scaffolds
+// can inject "who to attribute PM tasks to" without threading it through every
+// call site. A scaffold's opts.connectedAs still wins when explicitly set.
+let connectedAsByAccount: Record<string, string | undefined> = {};
+export function setConnectedAsMap(map: Record<string, string | undefined>): void {
+  connectedAsByAccount = map;
 }
 
 // MCP read/inspect + safe-bash rules auto-approved for Claude Code in a project,
@@ -1006,7 +1017,13 @@ const HIVEKU_CLAUDE_MARKER = '<!-- hiveku:account-tools -->';
 
 /** Append (or create) a CLAUDE.md section telling Claude it has the full account
  *  toolset here — non-destructive (preserves the site's own CLAUDE.md) + idempotent. */
-async function appendHivekuSection(baseDir: string, accountLabel: string, mcpUrl: string, role?: string): Promise<void> {
+async function appendHivekuSection(
+  baseDir: string,
+  accountLabel: string,
+  mcpUrl: string,
+  role?: string,
+  connectedAs?: string,
+): Promise<void> {
   const file = path.join(baseDir, 'CLAUDE.md');
   let existing = '';
   try {
@@ -1066,11 +1083,22 @@ department and the dashboard agents stay current — don't let what you learned 
   matters, how to apply next time). It returns 409 if it already exists → \`memory_update\` instead; check
   first with \`memory_list\`. The local \`memory/<dept>/*.md\` files are a MIRROR — persisting to Hiveku is
   what keeps all departments up to speed. \`/hiveku-remember\` wraps this.
-- **Project management:** treat Hiveku PM as authoritative — always CRUD it, never track work only in your
-  head or a local file. Projects: \`pm_projects_create({ name, project_type })\` / \`pm_projects_update\`
-  (list \`pm_projects_list\`). Tasks: \`pm_tasks_create({ project_id, title })\` / \`pm_tasks_update\` /
-  \`pm_tasks_complete\` (list \`pm_tasks_list\`). When you START work reflect it as a task; when you FINISH,
-  complete it in Hiveku. That keeps PM the single source of truth for the whole team.
+### Work tracking — PM tasks are REQUIRED, and attributed to YOU (the authenticated user)
+**If the work isn't documented in a PM task, it didn't happen.** This applies to EVERY department
+(SEO, PPC, content, CRM, email, social, helpdesk, dev, bookkeeping, voice — everything), not just code.
+Hiveku PM — not your head, this chat, or a local file — is the single source of truth for the team.
+
+1. **You act on behalf of the authenticated user${connectedAs ? ` — \`${connectedAs}\`` : ''}.** Resolve them ONCE:
+   call \`crm_list_users\`, take the member whose \`email\`${connectedAs ? ` is \`${connectedAs}\`` : ' matches the connected account owner'},
+   and keep their \`id\` (USER_ID) and \`name\` (USER_NAME).${connectedAs ? '' : ' If you cannot tell who connected, ask the user before creating tasks.'}
+   Tasks and comments are attributed to THEM — never to "olympus".
+2. **CREATE a task when you START work:** \`pm_tasks_create({ project_id, title, description, assigned_to_id: USER_ID })\`
+   — \`project_id\` from \`pm_projects_list\` (make one with \`pm_projects_create({ name, project_type })\` if the
+   work has no home). The assignee MUST be USER_ID — never leave it blank.
+3. **COMMENT as you go — comments are essential:** log the plan, decisions, progress, blockers, and the
+   outcome with \`pm_tasks_comment({ id: <task_id>, content, author_codename: USER_NAME })\`. A task with no
+   comments is NOT documented work; \`author_codename\` MUST be USER_NAME so the trail reads as that person.
+4. **COMPLETE it when done:** \`pm_tasks_complete\`. Update status/priority via \`pm_tasks_update\`; list with \`pm_tasks_list\`.
 
 ### Diagrams (Mermaid)
 When you explain a multi-step process, flow, or architecture, include a **Mermaid** diagram in a
@@ -1194,6 +1222,7 @@ ${MULTI_SESSION_BLOCK}${roleClaudeMdBlock(role)}`;
  * `.mcp.json` / `.gitignore` / `CLAUDE.md` rather than overwriting the site's files.
  */
 export async function writeProjectScaffold(opts: ScaffoldOptions): Promise<void> {
+  if (!opts.connectedAs && opts.accountId) opts.connectedAs = connectedAsByAccount[opts.accountId];
   const mcpUrl = `${opts.baseUrl.replace(/\/+$/, '')}/mcp`;
 
   // 1) .mcp.json — merge the `hiveku` server in, preserving any servers already there.
@@ -1215,7 +1244,7 @@ export async function writeProjectScaffold(opts: ScaffoldOptions): Promise<void>
   await appendGitignore(opts.baseDir, ['.mcp.json', '.env.local', '.env.hiveku', '.hiveku/', 'hiveku-data/']);
 
   // 3) CLAUDE.md — tell Claude it has the full account toolset (+ the user's role loop).
-  await appendHivekuSection(opts.baseDir, opts.accountLabel, mcpUrl, opts.role);
+  await appendHivekuSection(opts.baseDir, opts.accountLabel, mcpUrl, opts.role, opts.connectedAs);
 
   // 4) Claude Code accelerators: a read-tool/safe-bash allowlist (fewer prompts +
   //    acceptEdits) and /hiveku-* slash commands for the common loop.
@@ -1233,6 +1262,7 @@ async function writeAutomationGuide(baseDir: string): Promise<void> {
 }
 
 export async function writeScaffold(opts: ScaffoldOptions): Promise<void> {
+  if (!opts.connectedAs && opts.accountId) opts.connectedAs = connectedAsByAccount[opts.accountId];
   const mcpUrl = `${opts.baseUrl.replace(/\/+$/, '')}/mcp`;
   const mcpJson = JSON.stringify({ mcpServers: { hiveku: hivekuMcpServer(opts.apiKey, opts.baseUrl) } }, null, 2) + '\n';
 
@@ -1296,6 +1326,22 @@ Center, Google Ads only) / MICROSOFT_ADS_CLIENT_ID / MICROSOFT_ADS_CLIENT_SECRET
 A dead connection ("Token refresh failed" / "Account has been deleted") = re-auth in place; it keeps the
 campaign/keyword history. #1 stumble is \`redirect_uri_mismatch\` — the redirect URI is not on the exact
 client in the setup_url (or landed in JavaScript origins, or was not Saved).
+
+## Work tracking — PM tasks are REQUIRED, attributed to YOU (the authenticated user)
+**If the work isn't documented in a PM task, it didn't happen.** This applies to EVERY department you
+operate here (SEO, PPC, content, CRM, email, social, helpdesk, PM, voice, bookkeeping — everything).
+Hiveku PM is the single source of truth for the whole team; never track work only in your head, this chat, or a file.
+
+1. **You act on behalf of the authenticated user${opts.connectedAs ? ` — \`${opts.connectedAs}\`` : ''}.** Resolve them ONCE per
+   session: \`crm_list_users\` → the member whose \`email\`${opts.connectedAs ? ` is \`${opts.connectedAs}\`` : ' matches the connected owner'} → keep their \`id\` (USER_ID) and \`name\`
+   (USER_NAME).${opts.connectedAs ? '' : ' If you cannot tell who connected, ask the user before creating tasks.'} Tasks and comments are attributed to THEM, never to "olympus".
+2. **CREATE a task when you START work:** \`pm_tasks_create({ project_id, title, description, assigned_to_id: USER_ID })\`
+   — \`project_id\` from \`pm_projects_list\` (\`pm_projects_create({ name, project_type })\` if none fits). The
+   assignee MUST be USER_ID — never leave it blank.
+3. **COMMENT as you go — comments are essential:** log the plan, decisions, progress, blockers, and the
+   outcome with \`pm_tasks_comment({ id: <task_id>, content, author_codename: USER_NAME })\`. A task with no
+   comments is NOT documented work; \`author_codename\` MUST be USER_NAME so the trail reads as that person.
+4. **COMPLETE it when done:** \`pm_tasks_complete\` (\`pm_tasks_update\` for status/priority; \`pm_tasks_list\` to see them).
 
 ## ⚠️ Sync awareness (check before trusting local files)
 Read \`.hiveku/knowledge-status.json\` (written by "Hiveku: Check Knowledge Sync").
