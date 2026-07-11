@@ -57,6 +57,7 @@ import { setupLocalSupabase } from './localSupabase';
 import { scaffoldLocalAutomations, installAgencyCadence } from './localAutomations';
 import { captureBaseline, writeProjectLink, readProjectLink, type ProjectLink } from './workspace';
 import { registerHivekuFs, envUri } from './platformFs';
+import { openDatabasePanel } from './databasePanel';
 
 let accounts: AccountStore;
 let log: vscode.OutputChannel;
@@ -1575,49 +1576,12 @@ async function openProjectEnv(node: { record: AccountRecord; project: api.SiteSu
   }
 }
 
-/** Browse the project's database: table pick → live row preview (database_query). */
-async function openProjectDatabase(node: { record: AccountRecord; project: api.SiteSummary } | undefined): Promise<void> {
+/** The Database tree node → the Project Database panel. Every state is
+ * friendly: no database yet renders a skeleton browser with provision +
+ * AI-setup instructions instead of an error toast. */
+function openProjectDatabase(node: { record: AccountRecord; project: api.SiteSummary } | undefined): void {
   if (!node?.record || !node.project?.id) return;
-  try {
-    const client = await clientForAccount(node.record.accountId);
-    const projectId = node.project.id;
-    const tables = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Window, title: 'Hiveku: loading database…' },
-      () => api.databaseTables(client, projectId),
-    );
-    if (tables.length === 0) {
-      const provision = await vscode.window.showInformationMessage(
-        'No database tables (or not provisioned yet). Provision a Hiveku-managed database for this project?',
-        'Provision',
-        'Cancel',
-      );
-      if (provision === 'Provision') {
-        await vscode.window.withProgress(
-          { location: vscode.ProgressLocation.Notification, title: 'Provisioning database…' },
-          () => client.callToolJson('database_provision', { project_id: projectId }),
-        );
-        vscode.window.showInformationMessage('Database provisioned.');
-        tree.refresh();
-      }
-      return;
-    }
-    const table = await vscode.window.showQuickPick(tables, {
-      placeHolder: `${tables.length} table(s) — pick one to preview rows`,
-    });
-    if (!table) return;
-    const rowsRaw = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Window, title: `Hiveku: reading ${table}…` },
-      () => client.callToolJson<unknown>('database_query', { project_id: projectId, sql: `SELECT * FROM "${table}" LIMIT 50` }),
-    );
-    // Render the preview as a JSON doc — grep-able, copy-able, Claude-readable.
-    const doc = await vscode.workspace.openTextDocument({
-      language: 'json',
-      content: JSON.stringify(rowsRaw, null, 2),
-    });
-    await vscode.window.showTextDocument(doc, { preview: true });
-  } catch (err) {
-    vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
-  }
+  openDatabasePanel(node.record, node.project, clientForAccount);
 }
 
 /** Open the Account Console (Tasks board + CRM + Automations) for an account. */

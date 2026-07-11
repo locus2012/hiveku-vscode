@@ -966,6 +966,41 @@ export async function databaseStatus(client: HivekuMcpClient, projectId: string)
   const res = await client.callToolJson<unknown>('database_status', { project_id: projectId });
   return unwrap<Record<string, unknown>>(res) ?? {};
 }
+export interface DbColumn {
+  column_name?: string;
+  data_type?: string;
+  is_nullable?: string;
+  column_default?: string | null;
+}
+export async function databaseDescribe(client: HivekuMcpClient, projectId: string, table: string): Promise<DbColumn[]> {
+  const res = await client.callToolJson<unknown>('database_describe', { project_id: projectId, table });
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  return Array.isArray(d.columns) ? (d.columns as DbColumn[]) : [];
+}
+
+export async function databaseQuery(
+  client: HivekuMcpClient,
+  projectId: string,
+  sql: string,
+): Promise<{ rows: Array<Record<string, unknown>>; rowCount: number }> {
+  const res = await client.callToolJson<unknown>('database_query', { project_id: projectId, sql });
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  return {
+    rows: Array.isArray(d.rows) ? (d.rows as Array<Record<string, unknown>>) : [],
+    rowCount: typeof d.row_count === 'number' ? d.row_count : Array.isArray(d.rows) ? d.rows.length : 0,
+  };
+}
+
+export async function databaseProvision(client: HivekuMcpClient, projectId: string): Promise<unknown> {
+  return client.callToolJson<unknown>('database_provision', { project_id: projectId });
+}
+
+/** True when an error means "this project simply has no database yet". */
+export function isNoDatabaseError(err: unknown): boolean {
+  const m = err instanceof Error ? err.message : String(err);
+  return /no_connection|no database connection/i.test(m);
+}
+
 export async function databaseTables(client: HivekuMcpClient, projectId: string): Promise<string[]> {
   const res = await client.callToolJson<unknown>('database_tables', { project_id: projectId });
   const d = unwrap<unknown>(res);

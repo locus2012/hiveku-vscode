@@ -488,7 +488,7 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
         item.command = { command: 'hiveku.projectDatabase', title: 'Open Database', arguments: [node] };
         item.tooltip =
           node.count === undefined
-            ? 'Project database — click to inspect (provisions on first use)'
+            ? 'Project database — none yet. Click for the setup view (one-click provision, or let Claude Code / Codex design the schema).'
             : `Project database — ${node.count} table(s). Click to browse.`;
         return item;
       }
