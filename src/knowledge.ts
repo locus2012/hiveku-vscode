@@ -1099,6 +1099,17 @@ Hiveku PM — not your head, this chat, or a local file — is the single source
    outcome with \`pm_tasks_comment({ id: <task_id>, content, author_codename: USER_NAME })\`. A task with no
    comments is NOT documented work; \`author_codename\` MUST be USER_NAME so the trail reads as that person.
 4. **COMPLETE it when done:** \`pm_tasks_complete\`. Update status/priority via \`pm_tasks_update\`; list with \`pm_tasks_list\`.
+5. **OWNER UPDATE — every completed task ends with one.** Post a final comment starting with
+   \`**Owner update:**\` (via \`pm_tasks_comment\`, author_codename USER_NAME) AND print the same text in
+   chat so the user can forward it. Write it for a busy owner who skims:
+   - 2–4 short sentences. Lead with the benefit in plain words ("Your contact form now reaches you
+     instantly"), then what changed, then the one thing you need from them (if anything) with a link.
+   - Calm, confident wording — no alarm vocabulary (never "critical", "broken", "crash", "failure",
+     "vulnerable", "data loss", "emergency", "risk") and no self-blaming engineering narration
+     ("we broke", "our bug caused") — describe outcomes and improvements ("tightened", "improved",
+     "resolved", "now works reliably"), not incidents.
+   - Stay accurate: calm wording is a tone choice, not an omission — anything the owner must know or
+     act on goes in, phrased as a simple next step rather than a warning.
 
 ### Diagrams (Mermaid)
 When you explain a multi-step process, flow, or architecture, include a **Mermaid** diagram in a
@@ -1123,6 +1134,28 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   then commit the resolution.
 - **Commit ≠ live.** Deploy with \`deploy_site({ project_id, environment: "development" | "staging" | "production" })\`.
   Saving/committing reaches the instant Fly preview, but the Lambda environments update ONLY on \`deploy_site\`.
+- **Converted the framework (e.g. Vite → Next.js)? Run \`site_reanalyze({ project_id })\` after pushing
+  the new code.** Deploys auto-detect the framework from files (a stale label won't break the build),
+  but Hiveku's stored labels (project_type / detected_project_type — the latter drives redirect rewrites
+  on static-origin tiers) only heal via this tool or the next preview start. It also returns
+  \`leftovers[]\` — old-framework artifacts to delete (a lingering \`vite.config.ts\`, stale \`vite\`/\`next\`
+  deps in package.json) so the build analyzers never see mixed signals. Clean those up in the same push.
+- **Whole-tree / large / byte-exact pushes: use the TARBALL IMPORT LANE — never re-emit file bodies
+  through yourself** (that's how \`&\` becomes \`&amp;\`, trailing newlines vanish, and big files
+  truncate). Flow: \`project_import_presign({ project_id })\` →
+  \`tar czf /tmp/site.tar.gz --exclude node_modules --exclude .git --exclude .next -C <dir> .\` →
+  \`curl -T /tmp/site.tar.gz "<upload_url>" -H "Content-Type: application/gzip"\` →
+  \`project_import_finalize({ project_id, key })\` → **verify** the returned per-file sha256 manifest
+  against local hashes (\`shasum -a 256\`). Binaries auto-route to the CDN asset lane. Tree-replace via
+  \`delete_missing: true\` (ALWAYS \`dry_run: true\` first). Importing a brand-new app? Create the project
+  with \`site_create({ creation_mode: "import" })\` so the starter kit never contaminates it. Bulk
+  removals: \`project_files_bulk_delete({ paths })\` — one call, not N rate-limited singles.
+- **Preview debugging order (all work without escalation):** \`preview_runtime_errors\` (parsed SSR
+  stacks from the dev server) → \`preview_http_get\` (exact dev-server response, incl. 500 bodies) →
+  \`preview_read_file\` (any container file) → \`preview_logs\`. \`preview_exec\` honors \`cwd\` (default
+  \`/app\`) and quoted metacharacters are fine (\`grep -E "a|b"\`, \`node -e 'x => x'\`). After editing
+  package.json or \`preview_force_recompile({ refresh_image: true })\`, run \`preview_reinstall_deps\` —
+  a recreated machine boots with the scaffold's baked node_modules, not yours.
 
 **Pull (get the latest — do this before editing, and any time it may have changed remotely):**
 - Check drift first: \`project_files_status({ project_id, local: [{ path, sha256 }] })\` → returns
@@ -1254,11 +1287,38 @@ export async function writeProjectScaffold(opts: ScaffoldOptions): Promise<void>
   await writeAgencySkills(opts.baseDir, opts.role).catch(() => undefined);
   await writeAutomationGuide(opts.baseDir).catch(() => undefined);
   if (opts.accountId) await writeWindowIdentity(opts.baseDir, opts.accountLabel, opts.accountId, opts.projectName, opts.permissionMode).catch(() => undefined);
+  await maybeWriteCodex(opts, 'project');
 }
 
 /** Write the scheduling/loops/background playbook so Claude Code automates the right way. */
 async function writeAutomationGuide(baseDir: string): Promise<void> {
   await writeAtomic(path.join(baseDir, '.claude', 'AUTOMATION.md'), AUTOMATION_GUIDE);
+}
+
+// ── Codex (OpenAI) support — opt-in mirror of the Claude artifacts ──────────
+// Toggled from extension.ts off the hiveku.codexSupport setting (same pattern
+// as the permission mode). Scaffolds AGENTS.md + .codex/config.toml +
+// .agents/skills/* alongside the Claude files. Always non-fatal: Codex support
+// must never break a Claude scaffold.
+let codexSupport = false;
+export function setCodexSupport(enabled: boolean): void {
+  codexSupport = enabled;
+}
+export function codexSupportEnabled(): boolean {
+  return codexSupport;
+}
+async function maybeWriteCodex(opts: ScaffoldOptions, kind: 'account' | 'project'): Promise<void> {
+  if (!codexSupport || !opts.accountId) return;
+  const { writeCodexScaffold } = await import('./codex');
+  await writeCodexScaffold({
+    baseDir: opts.baseDir,
+    apiKey: opts.apiKey,
+    baseUrl: opts.baseUrl,
+    accountLabel: opts.accountLabel,
+    accountId: opts.accountId,
+    kind,
+    projectName: opts.projectName,
+  }).catch(() => undefined);
 }
 
 export async function writeScaffold(opts: ScaffoldOptions): Promise<void> {
@@ -1313,19 +1373,46 @@ these local files.
   runs that department's agent with full memory/brand/skills — or use the Chat
   button in the Hiveku sidebar.
 
-### Connecting integrations (Google Ads, GSC, GA, Bing) — use \`/hiveku-connect\`
-Ad/SEO platforms are BYOK OAuth: one agency OAuth client (created once in Google Cloud / Azure) is
-reused for EVERY account. \`/hiveku-connect [google-ads|gsc|ga|bing|all]\` runs the whole Hiveku side —
-diagnose what is dead, register/reuse the shared OAuth app, mint the consent link, poll, sync, verify,
-re-pull. You handle everything except the two things Google/Microsoft reserve for a human: the one-time
-cloud app (redirect URI \`https://app.hiveku.com/api/oauth/google/callback\` in *Authorized redirect URIs*,
-not JavaScript origins) and one consent click per account.
+### Connecting integrations (Ads, Social, SEO) — use \`/hiveku-connect\`
+**Pre-flight rule: before ANY Paid Ads / Social / SEO / email work, check what's connected**
+(\`ppc_connection_list\`, \`social_list_accounts\`, \`seo_connections_list\`, \`email_connections_list\`).
+If a platform the work needs is missing or dead, do NOT stall or improvise — give the user the exact
+clickable link to connect it, then continue with what IS connected. Which link:
+- **Google products** (Google Ads, GSC, GA, GBP): you can MINT the auth link yourself —
+  \`integration_oauth_initiate({ provider_slug, oauth_app_id })\` returns a \`setup_url\` the user clicks
+  (on 412 \`integration_not_configured\`, register the shared client first with \`oauth_app_create\`).
+- **Social** (Meta/Instagram, LinkedIn, X, TikTok, GBP posting): dashboard only —
+  \`https://app.hiveku.com/<accountId>/dashboard/marketing/social/accounts\` (Quick connect appears for
+  platforms with a Hiveku-native app; others get a guided wizard).
+- **Meta Ads / Amazon Ads / TikTok Ads / Bing Ads**: dashboard only —
+  \`https://app.hiveku.com/<accountId>/dashboard/marketing/ppc\`. Meta Ads is a SEPARATE app from social
+  Meta (a social connect does not grant ads) and has no refresh token — a dead one is reconnected with
+  the same click.
+Always the ACCOUNT-SCOPED \`/<accountId>/dashboard/...\` form — never a bare \`/dashboard\` link.
+\`/hiveku-connect [google-ads|meta-ads|amazon-ads|gsc|ga|gbp|bing|social|meta|linkedin|x|tiktok|all]\`
+runs the whole flow — diagnose what is dead, register/reuse the shared OAuth app, mint or hand off the
+link, poll, sync, verify, re-pull. For Google/Microsoft BYOK the human's only jobs are the one-time
+cloud app (redirect URI \`https://app.hiveku.com/api/oauth/google/callback\` in *Authorized redirect
+URIs*, not JavaScript origins) and one consent click per account.
 The shared client lives in \`../.env.locus.wide-access\` (fleet root) or this folder — keys:
 GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET / GOOGLE_ADS_DEVELOPER_TOKEN (from your agency MCC API
 Center, Google Ads only) / MICROSOFT_ADS_CLIENT_ID / MICROSOFT_ADS_CLIENT_SECRET.
 A dead connection ("Token refresh failed" / "Account has been deleted") = re-auth in place; it keeps the
 campaign/keyword history. #1 stumble is \`redirect_uri_mismatch\` — the redirect URI is not on the exact
 client in the setup_url (or landed in JavaScript origins, or was not Saved).
+
+### Creating images + video (ads, social, pages) — use \`/hiveku-media\`
+Generated media registers in the Media Library and attaches to posts/ads via its asset id.
+- **Images are cheap — iterate freely:** \`generate_image\` (brand-aware, auto-registered) /
+  \`generate_image_set\` (up to 10 consistent variants — load \`account_context_get\` first) /
+  \`stock_photos_search\`. Prefer the user's real photos when they exist (\`marketing_media_list\`).
+- **Video is EXPENSIVE — generate deliberately:** \`marketing_generate_video\` makes a ~10s AI clip
+  (9:16 or 16:9). **Always \`dry_run: true\` first** — it returns \`{ allowed, used, limit }\` (Premium
+  plan, 20 clips/month, ~$1/clip). Never re-generate a clip that succeeded. Image-to-video: pass a
+  library still as \`reference_media_asset_id\` ("animate this"). Text-heavy/branded promo motion is the
+  FREE lane instead: \`marketing_design_export_mp4\` renders an existing Creative Studio design.
+- The marketing Media Library and website-project assets (\`assets_upload\`) are SEPARATE stores —
+  move files between them explicitly.
 
 ## Work tracking — PM tasks are REQUIRED, attributed to YOU (the authenticated user)
 **If the work isn't documented in a PM task, it didn't happen.** This applies to EVERY department you
@@ -1342,6 +1429,15 @@ Hiveku PM is the single source of truth for the whole team; never track work onl
    outcome with \`pm_tasks_comment({ id: <task_id>, content, author_codename: USER_NAME })\`. A task with no
    comments is NOT documented work; \`author_codename\` MUST be USER_NAME so the trail reads as that person.
 4. **COMPLETE it when done:** \`pm_tasks_complete\` (\`pm_tasks_update\` for status/priority; \`pm_tasks_list\` to see them).
+5. **OWNER UPDATE — every completed task ends with one.** Post a final comment starting with
+   \`**Owner update:**\` (via \`pm_tasks_comment\`, author_codename USER_NAME) AND print the same text in
+   chat so the user can forward it. Write it for a busy owner who skims: 2–4 short sentences, benefit
+   first ("Your contact form now reaches you instantly"), then what changed, then the one thing you need
+   from them (if anything) with a link. Calm, confident wording — no alarm vocabulary (never "critical",
+   "broken", "crash", "failure", "vulnerable", "data loss", "emergency", "risk") and no self-blaming
+   engineering narration ("we broke", "our bug caused"); describe outcomes ("tightened", "improved",
+   "resolved", "now works reliably"), not incidents. Stay accurate: calm tone is a wording choice, not an
+   omission — anything the owner must act on goes in, phrased as a simple next step, never a warning.
 
 ## ⚠️ Sync awareness (check before trusting local files)
 Read \`.hiveku/knowledge-status.json\` (written by "Hiveku: Check Knowledge Sync").
@@ -1427,6 +1523,7 @@ ${MULTI_SESSION_BLOCK}${roleClaudeMdBlock(opts.role)}`;
   // refresh hiveku-data/ itself (no extension, no tokens on row data).
   await writeDataRunner(opts.baseDir, roleById(opts.role)?.deptIds).catch(() => undefined);
   if (opts.accountId) await writeWindowIdentity(opts.baseDir, opts.accountLabel, opts.accountId, undefined, opts.permissionMode).catch(() => undefined);
+  await maybeWriteCodex(opts, 'account');
 }
 
 /** Account-workspace slash commands — operating departments (no code here). */

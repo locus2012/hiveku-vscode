@@ -203,8 +203,10 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
   private readonly _onDidChange = new vscode.EventEmitter<HivekuNode | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChange.event;
   private readonly knowledgeCache = new Map<string, KnowledgeIndex>();
-  /** ALL statuses (open + done) — done-ness is split at render time. */
-  private readonly tasksCache = new Map<string, api.PmTask[]>();
+  /** ALL statuses (open + done) — done-ness is split at render time.
+   *  Timestamped so tasks go STALE (Claude Code creates tasks/comments mid-session;
+   *  a fetch-once snapshot never showed them until a manual refresh). */
+  private readonly tasksCache = new Map<string, { tasks: api.PmTask[]; fetchedAt: number }>();
   private readonly sitesCache = new Map<string, api.SiteSummary[]>();
   private readonly workflowsCache = new Map<string, api.Workflow[]>();
   private accountFilter = '';
@@ -232,6 +234,31 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
     this._onDidChange.fire();
   }
 
+  /** Tasks are considered fresh for this long; past it, the next repaint refetches. */
+  private static readonly TASKS_TTL_MS = 90_000;
+
+  /**
+   * Tasks-only freshness. force=true (the refresh button) drops the cache and
+   * repaints immediately. force=false (focus/interval ticks) repaints ONLY when
+   * some loaded account's tasks are past TTL — for expanded groups that repaint
+   * triggers a refetch via ensureTasks; for collapsed groups it costs nothing.
+   */
+  refreshTasks(force = false): void {
+    if (force) {
+      this.tasksCache.clear();
+      this._onDidChange.fire();
+      return;
+    }
+    if (this.tasksCache.size === 0) return; // never loaded — nothing to keep fresh
+    const now = Date.now();
+    for (const entry of this.tasksCache.values()) {
+      if (now - entry.fetchedAt > HivekuTreeProvider.TASKS_TTL_MS) {
+        this._onDidChange.fire();
+        return;
+      }
+    }
+  }
+
   private async ensureIndex(accountId: string): Promise<KnowledgeIndex> {
     const cached = this.knowledgeCache.get(accountId);
     if (cached) return cached;
@@ -243,11 +270,20 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
 
   private async ensureTasks(accountId: string): Promise<api.PmTask[]> {
     const cached = this.tasksCache.get(accountId);
-    if (cached) return cached;
-    const client = await this.clientFor(accountId);
-    const tasks = await api.pmTasksAll(client);
-    this.tasksCache.set(accountId, tasks);
-    return tasks;
+    if (cached && Date.now() - cached.fetchedAt <= HivekuTreeProvider.TASKS_TTL_MS) {
+      return cached.tasks;
+    }
+    try {
+      const client = await this.clientFor(accountId);
+      const tasks = await api.pmTasksAll(client);
+      this.tasksCache.set(accountId, { tasks, fetchedAt: Date.now() });
+      return tasks;
+    } catch (err) {
+      // Refetch failed (offline, key rotated mid-session) — serve the stale
+      // snapshot rather than blanking the tree; next tick retries.
+      if (cached) return cached.tasks;
+      throw err;
+    }
   }
 
   private async ensureSites(accountId: string): Promise<api.SiteSummary[]> {

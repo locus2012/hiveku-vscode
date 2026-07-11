@@ -43,6 +43,7 @@ import {
   hivekuMcpServer,
   setPermissionMode,
   setConnectedAsMap,
+  setCodexSupport,
   type PermissionMode,
 } from './knowledge';
 import { setLocalHivekuServer, hasLocalHivekuServer, hasUserHivekuServer } from './claudeMcp';
@@ -261,6 +262,7 @@ async function choosePermissionMode(): Promise<void> {
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   extensionContext = context;
   syncPermissionMode();
+  setCodexSupport(vscode.workspace.getConfiguration('hiveku').get<boolean>('codexSupport', false));
   accounts = new AccountStore(context);
   syncConnectedAs();
   log = vscode.window.createOutputChannel('Hiveku');
@@ -301,6 +303,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       invalidateEntitlements();
       tree.refresh();
     }),
+    vscode.commands.registerCommand('hiveku.refreshTasks', () => tree.refreshTasks(true)),
     vscode.commands.registerCommand('hiveku.filterAccounts', () => filterAccounts()),
     vscode.commands.registerCommand('hiveku.clearAccountFilter', () => tree.setAccountFilter('')),
     vscode.commands.registerCommand('hiveku.cloneProjectItem', (node) => cloneProjectItem(node)),
@@ -355,6 +358,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     ),
     vscode.commands.registerCommand('hiveku.openWorkspace', (node) => openWorkspace(node)),
     vscode.commands.registerCommand('hiveku.refreshSetup', () => refreshSetup()),
+    vscode.commands.registerCommand('hiveku.setupCodex', () => setupCodexSupport()),
     vscode.commands.registerCommand('hiveku.openDeptWindow', (node) => openDepartmentWindow(node)),
     vscode.commands.registerCommand('hiveku.attention', () => attention()),
     vscode.commands.registerCommand('hiveku.operate', (node) => openOperate(node)),
@@ -419,6 +423,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           )
           .then((c) => c === 'Refresh Setup' && vscode.commands.executeCommand('hiveku.refreshSetup'));
       }
+      if (e.affectsConfiguration('hiveku.codexSupport')) {
+        setCodexSupport(vscode.workspace.getConfiguration('hiveku').get<boolean>('codexSupport', false));
+      }
     }),
   );
   if (!hivekuRoot() && accounts.list().length > 0) {
@@ -430,6 +437,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   void updateNotifications();
   const notifTimer = setInterval(() => void updateNotifications(), 5 * 60 * 1000);
   context.subscriptions.push(new vscode.Disposable(() => clearInterval(notifTimer)));
+  // Tasks freshness: Claude Code creates tasks/subtasks/comments mid-session, so
+  // the tree can't be a fetch-once snapshot. A 60s tick + window-refocus both run
+  // the CHEAP staleness check (repaint only when past TTL; refetch only for
+  // expanded groups) — see HivekuTreeProvider.refreshTasks.
+  const tasksTimer = setInterval(() => tree.refreshTasks(false), 60 * 1000);
+  context.subscriptions.push(new vscode.Disposable(() => clearInterval(tasksTimer)));
+  context.subscriptions.push(
+    vscode.window.onDidChangeWindowState((e) => {
+      if (e.focused) tree.refreshTasks(false);
+    }),
+  );
   void refresher.tick();
   const refreshTimer = setInterval(() => void refresher.tick(), 30 * 60 * 1000);
   context.subscriptions.push(new vscode.Disposable(() => clearInterval(refreshTimer)));
@@ -1920,6 +1938,46 @@ async function refreshSetup(): Promise<void> {
   } else {
     vscode.window.showInformationMessage('No Hiveku project or account folder found in this workspace to refresh.');
   }
+}
+
+/**
+ * "Hiveku: Set Up Codex Support" — enable the Codex lane (AGENTS.md +
+ * .codex/config.toml with this folder's account MCP key + .agents/skills
+ * mirrors of the /hiveku-* commands), rewrite the scaffolds in open folders,
+ * and (with explicit consent — it crosses Codex's security boundary) pre-trust
+ * the account folders in ~/.codex/config.toml so the project-level MCP config
+ * loads without Codex's first-run prompt.
+ */
+async function setupCodexSupport(): Promise<void> {
+  const cfg = vscode.workspace.getConfiguration('hiveku');
+  await cfg.update('codexSupport', true, vscode.ConfigurationTarget.Global);
+  setCodexSupport(true);
+  await refreshSetup();
+  const consent = await vscode.window.showInformationMessage(
+    'Codex support is on: AGENTS.md, .codex/config.toml (Hiveku MCP with each folder\'s account key) and .agents/skills were written alongside the Claude Code files. ' +
+      'Codex only loads project config for folders you trust — it prompts once per folder. Pre-trust your Hiveku account folders now (adds trust entries to ~/.codex/config.toml)?',
+    'Pre-trust Hiveku folders',
+    "I'll accept Codex's prompts myself",
+  );
+  if (consent !== 'Pre-trust Hiveku folders') return;
+  const { preTrustFolder } = await import('./codex');
+  let added = 0;
+  let already = 0;
+  for (const rec of accounts.list()) {
+    const folder = accounts.getFolder(rec.accountId);
+    if (!folder) continue;
+    try {
+      await fs.access(folder);
+      const result = await preTrustFolder(folder);
+      if (result === 'added') added++;
+      else already++;
+    } catch {
+      /* folder missing or unreadable — skip */
+    }
+  }
+  vscode.window.showInformationMessage(
+    `Codex trust: ${added} folder(s) pre-trusted${already ? `, ${already} already trusted` : ''}. Open any Hiveku folder in Codex (CLI or the OpenAI VS Code extension) and it has the account's tools.`,
+  );
 }
 
 async function openWorkspace(node: { record: AccountRecord } | undefined): Promise<void> {

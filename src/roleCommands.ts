@@ -138,11 +138,13 @@ Persist what you find to department memory (\`memory_create\`) and, for SEO/cont
 `;
 
 const CONNECT_COMMAND = `---
-description: Connect or re-connect this account's ad/SEO integrations (Google Ads, GSC, GA, Bing) end-to-end.
-argument-hint: "[what to connect: google-ads | gsc | ga | bing | all]"
+description: Connect or re-connect this account's integrations end-to-end — Ads (Google, Meta, Amazon, Bing, TikTok), Social (Meta/IG, LinkedIn, X, TikTok, GBP), SEO (GSC, Bing, GBP).
+argument-hint: "[what to connect: google-ads | meta-ads | amazon-ads | gsc | ga | gbp | bing | social | meta | linkedin | x | tiktok | all]"
 ---
 Be the integration operator for THIS account$ARGUMENTS. You do the whole Hiveku side; the human does
-exactly TWO things — a one-time cloud app, and one consent click. Never ask them to run MCP tools.
+at most TWO things — a one-time cloud app (Google/Microsoft only), and one click in the browser.
+Never ask them to run MCP tools. When a platform connects only in the dashboard, your job is to hand
+them the exact ACCOUNT-SCOPED link and verify afterward — that link IS the deliverable.
 
 SHARED CREDENTIALS (BYOK, reused across every account): read the agency OAuth client from
 \`../.env.locus.wide-access\` (fleet root) or \`./.env.locus.wide-access\` (this folder). It holds
@@ -150,8 +152,10 @@ GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET / GOOGLE_ADS_DEVELOPER_TOKEN / M
 MICROSOFT_ADS_CLIENT_SECRET. If it is missing, tell the user to create it (format is in the account
 CLAUDE.md) — one client serves every account, so this is a one-time paste.
 
-STEP 1 — DIAGNOSE (always first). Call \`ppc_connection_list\` (Google/Bing Ads), \`seo_connections_list\`
-(GSC, GBP, Bing Webmaster) and \`integration_list\`. For each, report status + last_error:
+STEP 1 — DIAGNOSE (always first). Call \`ppc_connection_list\` (Google/Meta/Amazon/Bing/TikTok Ads),
+\`seo_connections_list\` (GSC, GBP, Bing Webmaster), \`social_list_accounts\` (Meta/IG, LinkedIn, X,
+TikTok, GBP posting — read \`connection_status\` + \`last_error\` per account) and \`integration_list\`.
+For each, report status + last_error:
 "Token refresh failed" / "Account has been deleted" = DEAD TOKEN → re-auth IN PLACE (keeps the
 connection's history + binding). "must have gbp_account_id/location" = a binding fix, not auth. Capture
 each connection's \`id\` (you need it as target_connection_id).
@@ -162,10 +166,11 @@ client (provider "google" for google_* ; "microsoft" for microsoft_ads). One Goo
 google_ads + google_search_console + google_analytics — one app per product slug is fine.
 
 STEP 3 — INITIATE. This SPLITS by provider — the paths are NOT the same:
-  A) GOOGLE (google_ads, google_search_console, google_analytics, google_gmail, google_calendar) — CLI
-     OAuth works: \`integration_oauth_initiate({ provider_slug, target_connection_id: <id>, oauth_app_id })\`
-     (re-auth in place keeps data) → returns a \`setup_url\` the human clicks. First Google Ads connect:
-     add customer_id / manager_id / developer_token from the shared file.
+  A) GOOGLE (google_ads, google_search_console, google_analytics, google_business_profile, google_gmail,
+     google_calendar) — CLI OAuth works: \`integration_oauth_initiate({ provider_slug,
+     target_connection_id: <id>, oauth_app_id })\` (re-auth in place keeps data) → returns a \`setup_url\`
+     the human clicks. First Google Ads connect: add customer_id / manager_id / developer_token from the
+     shared file. This is the ONLY family where you can mint a clickable auth link yourself.
   B) BING WEBMASTER (organic search — the GSC equivalent) — NO OAuth. It's an SEO connection with just an
      API key: \`seo_connection_create({ platform: "bing_webmaster", site_url, api_key })\` (key from
      bing.com/webmasters → Settings → API access; the site can be one-click "Import from Google Search
@@ -177,6 +182,19 @@ STEP 3 — INITIATE. This SPLITS by provider — the paths are NOT the same:
      \`https://app.hiveku.com/<accountId>/dashboard/marketing/ppc\` (the account-scoped URL — never a bare
      /dashboard/ path). After they connect, you pick it up with ppc_connection_list. Bing Ads writes are
      limited to pause/enable/budget (\`ppc_platform_*\`); no keyword/RSA/asset writes; ad-groups/ads don't sync.
+  D) SOCIAL (Meta/Instagram, LinkedIn, X, TikTok, GBP posting) — DASHBOARD ONLY. The OAuth start routes
+     need the user's browser session, so you cannot mint a link. Hand them:
+     \`https://app.hiveku.com/<accountId>/dashboard/marketing/social/accounts\` and say which platform to
+     click Connect on. Platforms with a Hiveku-native app show a one-click "Quick connect" (no app setup
+     at all); others walk a guided bring-your-own-app wizard. TikTok connects as inbox-DRAFT posting
+     (the user publishes from the TikTok app); X posting is Premium-plan, usage-capped. Verify after with
+     \`social_list_accounts\` — the new row should be is_active with connection_status "connected".
+  E) META ADS / AMAZON ADS / TIKTOK ADS — DASHBOARD ONLY, same reason:
+     \`https://app.hiveku.com/<accountId>/dashboard/marketing/ppc\` → Connect on the platform card.
+     Meta Ads uses its OWN Meta app (separate from social Meta — a social connect does NOT grant ads).
+     Meta Ads has NO refresh token: when it dies (~60 days), reconnect = the same dashboard click.
+     Amazon covers Sponsored Products/Brands/Display + Streaming TV under the one connection. Verify with
+     \`ppc_connection_list\` + \`ppc_connection_test\`.
 
 STEP 4 — HAND THE HUMAN THE ONE CLICK. Print the setup_url and say: open it in the browser signed into
 the account that has access (the MCC login for Ads, the Search Console owner for GSC) and click Allow.
@@ -207,6 +225,45 @@ command for a fresh link. If Ads already connected on this client, GSC/GA reuse 
 GOTCHA: Testing-mode external apps expire refresh tokens after 7 days (why connections silently die) —
 Internal (Workspace) apps do not. Bing WEBMASTER = seo_connection_create (API key, no OAuth); Bing ADS =
 Azure app + dashboard connect at /<accountId>/dashboard/marketing/ppc (CLI OAuth is Google-only).
+`;
+
+const MEDIA_COMMAND = `---
+description: Create images and AI video for ads, social posts, and pages — brand-aware, registered to the Media Library, ready to attach.
+argument-hint: "[what to create, e.g. 'a 9:16 reel clip for the spring promo' or '4 ad images for the roofing campaign']"
+---
+Create the media$ARGUMENTS. Everything you generate lands in the account's Media Library and attaches
+to posts/ads via its asset id — never paste raw URLs into content when an asset id exists.
+
+REUSE FIRST. \`marketing_media_list\` / \`stock_photos_search\` before generating — the user's real photos
+beat AI for authenticity (products, team, location shots), and generation costs money.
+
+IMAGES — cheap, iterate freely:
+- One image: \`generate_image({ prompt, ... })\` — brand-aware by default, auto-registers a media_asset.
+- A SET that must look consistent (ad variations, hero + before/after, carousel):
+  \`generate_image_set\` (up to 10 prompts, one shared brand context). Load \`account_context_get\` first
+  and write all prompts from the same visual language.
+- Stock: \`stock_photos_search\` → \`stock_photos_download\` (registers to the library).
+
+VIDEO — EXPENSIVE, generate deliberately:
+- \`marketing_generate_video({ prompt, aspect_ratio })\` — ~10s clip, 720p. **ALWAYS call with
+  \`dry_run: true\` first**: it returns \`{ allowed, used, limit }\` (Premium plan, 20 clips/month). Tell
+  the user the remaining quota before spending. Each clip is paid work — one good prompt beats three
+  retries; NEVER re-generate a clip that succeeded (the asset is already in the library).
+- "Animate this": generate or pick a still, then pass it as \`reference_media_asset_id\` for
+  image-to-video. Keep the motion prompt gentle (subtle camera drift, ambient motion).
+- Shape by destination: 9:16 → Stories/Reels/TikTok/Shorts; 16:9 → YouTube/X/LinkedIn/site heroes.
+  Duration ceilings at post time: Shorts 60s, Reels 90s, X 140s.
+- 429 \`video_quota_exhausted\` = platform capacity, resets overnight — schedule and move on, don't spin.
+- Animated DESIGNS (text/layout/branded cards) are a different lane: \`marketing_design_export_mp4\`
+  renders an existing Creative Studio design — no generation cost. Prefer it for text-heavy promos.
+
+USE THE RESULT:
+- Social post: attach via \`media_asset_ids\` on the post-create call; check the platform's media rules
+  first (TikTok posts land as inbox drafts; X posting is Premium-gated).
+- Ads: image sets sized per placement; note ad platforms re-crop — keep the subject centered.
+- Site: for website projects use \`assets_upload\` (the S3/CDN lane) — the marketing Media Library and
+  website-project assets are SEPARATE stores; download + re-upload when moving between them.
+- Close the loop in the PM task (what was created, asset ids, where it was used) + owner update.
 `;
 
 const PULL_DATA_COMMAND = `---
@@ -575,8 +632,9 @@ export async function writeRoleSlashCommands(baseDir: string, roleId: string | u
   await writeCmd(baseDir, 'hiveku-connect', CONNECT_COMMAND);
   await writeCmd(baseDir, 'hiveku-new-site', NEW_SITE_COMMAND);
   await writeCmd(baseDir, 'hiveku-research', RESEARCH_COMMAND);
+  await writeCmd(baseDir, 'hiveku-media', MEDIA_COMMAND);
   const role = roleById(roleId);
-  if (!role) return ['hiveku-pull-data', 'hiveku-connect', 'hiveku-new-site', 'hiveku-research'];
+  if (!role) return ['hiveku-pull-data', 'hiveku-connect', 'hiveku-new-site', 'hiveku-research', 'hiveku-media'];
   const loops = { ...roleLoops(role), ...cadenceCommands(role) };
   // Clean up loop commands from a previous role.
   const mine = new Set(Object.keys(loops));
@@ -593,6 +651,7 @@ export async function writeRoleSlashCommands(baseDir: string, roleId: string | u
   names.push('hiveku-connect');
   names.push('hiveku-new-site');
   names.push('hiveku-research');
+  names.push('hiveku-media');
   await writeCmd(baseDir, 'hiveku-onboard', ONBOARD_COMMAND);
   names.push('hiveku-onboard');
   for (const [name, body] of Object.entries(loops)) {
