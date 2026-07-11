@@ -49,7 +49,11 @@ export async function exportDepartment(
   const dir = path.join(baseDir, DATA_DIR, dept.id);
   const results: DatasetResult[] = [];
 
+  let dsIndex = 0;
   for (const ds of dept.datasets) {
+    // Gentle pacing: the background export shares the account's MCP rate
+    // budget with live agent sessions — never burst.
+    if (dsIndex++ > 0) await new Promise((r) => setTimeout(r, 250));
     onProgress?.(`${dept.label} · ${ds.label}`);
     const { rows, error, parents, total, truncated } = await fetchDataset(client, ds);
     if (truncated) onProgress?.(`${dept.label} · ${ds.label}: TRUNCATED at ${rows.length}${total ? ` of ${total}` : ''} rows`);
@@ -76,7 +80,7 @@ export async function exportDepartment(
     if (ds.detail && rows.length) {
       const det = ds.detail;
       const subdir = path.join(dir, det.dir ?? ds.id);
-      const written = await mapLimit(rows, 5, async (r): Promise<boolean> => {
+      const written = await mapLimit(rows, 2, async (r): Promise<boolean> => {
         const id = r[det.idKey ?? 'id'];
         if (id == null) return false;
         const { data, error: derr } = await fetchReference(client, det.detailTool, { [det.argKey ?? 'id']: id });

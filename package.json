@@ -2,7 +2,7 @@
   "name": "hiveku-vscode",
   "displayName": "Hiveku",
   "description": "Run entire Hiveku accounts from VS Code with Claude Code — role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
-  "version": "0.70.0",
+  "version": "0.70.1",
   "publisher": "hiveku",
   "license": "MIT",
   "icon": "icon.png",

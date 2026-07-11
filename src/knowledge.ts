@@ -1156,6 +1156,19 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   \`/app\`) and quoted metacharacters are fine (\`grep -E "a|b"\`, \`node -e 'x => x'\`). After editing
   package.json or \`preview_force_recompile({ refresh_image: true })\`, run \`preview_reinstall_deps\` —
   a recreated machine boots with the scaffold's baked node_modules, not yours.
+- **SEE the preview, don't guess:** \`preview_screenshot({ project_id, path })\` returns the rendered
+  page AS AN IMAGE in your thread (plus full-res URLs in the metadata). Use it to visually verify
+  layout/branding changes before deploying — one call replaces a blind "did it render?" loop.
+- **MCP RATE BUDGET (100 weighted req/60s per key — spend it on work, not loops):**
+  1. NEVER sleep-and-poll a job: \`job_status_get({ job_id, wait_seconds: 20 })\` long-polls
+     server-side and returns the moment the job finishes (and poll tools cost a fraction of a
+     normal call).
+  2. Prefer ONE bulk call over N singles: \`project_files_bulk_save\` / \`project_files_bulk_delete\` /
+     the tarball import lane / \`cms_bulk_import\` / \`memory_bulk_create\`.
+  3. Reads are trimmed for you (file reads carry \`file_content\` once; \`preview_http_get\` returns
+     parsed \`http_status\` + capped body) — don't re-fetch what you already hold.
+  4. If you DO get a 429, the error's \`data.retry_after_seconds\` says exactly how long to wait —
+     wait that once; do not hammer or invent workarounds.
 
 **Pull (get the latest — do this before editing, and any time it may have changed remotely):**
 - Check drift first: \`project_files_status({ project_id, local: [{ path, sha256 }] })\` → returns

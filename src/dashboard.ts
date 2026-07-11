@@ -10,6 +10,7 @@ import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
+import { mapLimit } from './deptData';
 import type { AccountRecord } from './accounts';
 
 type ClientFor = (accountId: string) => Promise<HivekuMcpClient>;
@@ -63,7 +64,9 @@ export function openDashboard(
 async function refresh(accounts: AccountRecord[], clientFor: ClientFor, appUrl: () => string): Promise<void> {
   if (!panel) return;
   panel.webview.postMessage({ type: 'loading' });
-  const rows = await Promise.all(accounts.map((a) => fetchKpi(a, clientFor, appUrl)));
+  // 3 accounts at a time (7 concurrent calls each) — an unthrottled map
+  // across N accounts was the single worst rate-limit burst in the extension.
+  const rows = await mapLimit(accounts, 3, (a) => fetchKpi(a, clientFor, appUrl));
   // Agency triage order: most neglected clients first (server drift score).
   rows.sort((a, b) => (b.driftScore ?? -1) - (a.driftScore ?? -1));
   panel.webview.postMessage({ type: 'data', rows });

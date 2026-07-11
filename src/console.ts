@@ -272,7 +272,9 @@ async function loadIntegrations(client: HivekuMcpClient): Promise<Record<string,
  */
 async function loadCmsTab(client: HivekuMcpClient): Promise<Record<string, unknown>> {
   const sitesRaw = await client.callToolJson<unknown>('sites_list', { limit: 50 }).catch(() => ({}));
-  const sites = extractRows(sitesRaw).filter((s) => s.project_type !== 'external').slice(0, 10);
+  // Caps keep the fan-out inside the shared MCP rate budget (worst case
+  // 1 + 6 + 60 calls, memoized for 60s).
+  const sites = extractRows(sitesRaw).filter((s) => s.project_type !== 'external').slice(0, 6);
   const out = await mapLimit(sites, 3, async (site) => {
     const projectId = String(site.id ?? '');
     let collections: api.CmsCollection[] = [];
@@ -282,11 +284,11 @@ async function loadCmsTab(client: HivekuMcpClient): Promise<Record<string, unkno
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
     }
-    const cols = await mapLimit(collections.slice(0, 15), 4, async (c) => {
+    const cols = await mapLimit(collections.slice(0, 10), 4, async (c) => {
       const collectionId = String(c.id ?? c.name ?? '');
       let entries: api.CmsEntry[] = [];
       try {
-        entries = await api.cmsEntries(client, projectId, collectionId, 100);
+        entries = await api.cmsEntries(client, projectId, collectionId, 50);
       } catch {
         /* collection without a readable index — render header only */
       }
@@ -741,48 +743,59 @@ export function openAccountConsole(
     })();
   };
 
+  // Tab payload memo: flipping between tabs within 60s replays the last
+  // payload instead of re-firing the tab's whole MCP fan-out (the CMS tab
+  // alone can be dozens of calls). Mutation handlers call load() directly,
+  // which always fetches fresh and refreshes the memo.
+  const tabMemo = new Map<string, { data: unknown; at: number }>();
+  const TAB_MEMO_TTL_MS = 60_000;
+
   const load = async (tab: string, raw = false) => {
     const client = await clientFor(account.accountId);
+    const post = (payload: unknown) => {
+      if (!raw) tabMemo.set(tab, { data: payload, at: Date.now() });
+      panel.webview.postMessage({ type: 'tab', tab, data: payload });
+    };
     let data: unknown = {};
     try {
       if (tab === 'integrations') {
         data = await loadIntegrations(client);
-        panel.webview.postMessage({ type: 'tab', tab, data });
+        post(data);
         return;
       }
       if (!raw && tab === 'email') {
         data = await loadEmailDashboard(client);
-        panel.webview.postMessage({ type: 'tab', tab, data });
+        post(data);
         return;
       }
       if (!raw && tab === 'analytics') {
         data = await loadAnalyticsDashboard(client);
-        panel.webview.postMessage({ type: 'tab', tab, data });
+        post(data);
         return;
       }
       if (!raw && tab === 'ppc') {
         data = await loadPpcDashboard(client);
-        panel.webview.postMessage({ type: 'tab', tab, data });
+        post(data);
         return;
       }
       if (!raw && tab === 'seo') {
         data = await loadSeoDashboard(client);
-        panel.webview.postMessage({ type: 'tab', tab, data });
+        post(data);
         return;
       }
       if (!raw && tab === 'cms') {
         data = await loadCmsTab(client);
-        panel.webview.postMessage({ type: 'tab', tab, data });
+        post(data);
         return;
       }
       if (!raw && tab === 'media') {
         data = await loadMediaTab(client);
-        panel.webview.postMessage({ type: 'tab', tab, data });
+        post(data);
         return;
       }
       if (!raw && tab === 'knowledge') {
         data = await loadKnowledgeTab(client);
-        panel.webview.postMessage({ type: 'tab', tab, data });
+        post(data);
         return;
       }
       if (tab === 'tasks') {
@@ -818,7 +831,7 @@ export function openAccountConsole(
     } catch (err) {
       data = { error: err instanceof Error ? err.message : String(err) };
     }
-    panel.webview.postMessage({ type: 'tab', tab, data });
+    post(data);
   };
 
   panel.webview.onDidReceiveMessage(
@@ -844,7 +857,12 @@ export function openAccountConsole(
         if (msg.type === 'ready') {
           await initTabs();
         } else if (msg.type === 'load' && msg.tab) {
-          await load(msg.tab);
+          const hit = tabMemo.get(msg.tab);
+          if (hit && Date.now() - hit.at < TAB_MEMO_TTL_MS) {
+            panel.webview.postMessage({ type: 'tab', tab: msg.tab, data: hit.data });
+          } else {
+            await load(msg.tab);
+          }
         } else if (msg.type === 'jserror') {
           diag(`WEBVIEW JS ERROR: ${msg.tab}`);
         } else if (msg.type === 'loadraw' && msg.tab) {

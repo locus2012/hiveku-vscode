@@ -11,6 +11,39 @@
 
 const PROTOCOL_VERSION = '2024-11-05';
 
+/**
+ * Global request gate shared by every client instance. The extension shares
+ * its rate-limit bucket per account key (the server also gives the
+ * X-Hiveku-Client class its own bucket) — but an uncapped burst (dashboard
+ * over N accounts, dept expands) can still trip 429s. Cap concurrent
+ * in-flight MCP requests extension-wide and retry ONCE on a rate-limit
+ * rejection after the server-advertised delay.
+ */
+const MAX_CONCURRENT = 6;
+let inFlight = 0;
+const waiters: Array<() => void> = [];
+async function acquireSlot(): Promise<void> {
+  if (inFlight < MAX_CONCURRENT) {
+    inFlight++;
+    return;
+  }
+  await new Promise<void>((resolve) => waiters.push(resolve));
+  inFlight++;
+}
+function releaseSlot(): void {
+  inFlight--;
+  const next = waiters.shift();
+  if (next) next();
+}
+
+/** Parse the retry delay from a rate-limit rejection (error.data or prose). */
+function rateLimitRetrySeconds(message: string): number | null {
+  if (!/rate limit/i.test(message)) return null;
+  const m = message.match(/retry[_ ]after[_ :]*(\d+)/i);
+  const n = m ? Number(m[1]) : 15;
+  return Math.min(Math.max(n, 1), 30);
+}
+
 export interface McpToolResult {
   content?: Array<{ type: string; text?: string }>;
   isError?: boolean;
@@ -41,11 +74,30 @@ export class HivekuMcpClient {
   }
 
   private async request<T = unknown>(method: string, params: unknown): Promise<T> {
+    await acquireSlot();
+    try {
+      return await this.requestOnce<T>(method, params);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const retryAfter = rateLimitRetrySeconds(msg);
+      if (retryAfter === null) throw err;
+      // One polite retry after the advertised window — background UI surfaces
+      // should self-heal a 429 instead of surfacing red toasts.
+      await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+      return await this.requestOnce<T>(method, params);
+    } finally {
+      releaseSlot();
+    }
+  }
+
+  private async requestOnce<T = unknown>(method: string, params: unknown): Promise<T> {
     const id = this.nextId++;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      // Server buckets extension traffic separately from agent sessions.
+      'X-Hiveku-Client': 'vscode-extension',
     };
     if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId;
 

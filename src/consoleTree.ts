@@ -20,7 +20,7 @@ import * as vscode from 'vscode';
 import { AccountStore, type AccountRecord } from './accounts';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
-import { departmentById, fetchDataset } from './deptData';
+import { mapLimit, departmentById, fetchDataset } from './deptData';
 import { effectiveDepartments, roleById } from './roles';
 
 interface AccountNode { kind: 'account'; record: AccountRecord; }
@@ -188,18 +188,20 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         try {
           const client = await this.clientFor(node.record.accountId);
           // Only count cheap (non-scoped) datasets — scoped ones fan out per
-          // project/connection and would stall the expand.
-          await Promise.all(
-            dept.datasets
-              .filter((ds) => !ds.scope)
-              .map(async (ds) => {
-                try {
-                  const { rows } = await fetchDataset(client, ds);
-                  counts!.set(ds.id, rows.length);
-                } catch {
-                  /* leave this dataset countless */
-                }
-              }),
+          // project/connection and would stall the expand. Capped at 4
+          // concurrent and ONE page (a count badge never needs the 40-page
+          // pagination walk); 200+ shows as "200".
+          await mapLimit(
+            dept.datasets.filter((ds) => !ds.scope),
+            4,
+            async (ds) => {
+              try {
+                const { rows } = await fetchDataset(client, ds, 200);
+                counts!.set(ds.id, rows.length);
+              } catch {
+                /* leave this dataset countless */
+              }
+            },
           );
           this.countCache.set(cacheKey, counts);
         } catch {
