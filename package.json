@@ -2,7 +2,7 @@
   "name": "hiveku-vscode",
   "displayName": "Hiveku",
   "description": "Run entire Hiveku accounts from VS Code with Claude Code — role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
-  "version": "0.69.1",
+  "version": "0.70.0",
   "publisher": "hiveku",
   "license": "MIT",
   "icon": "icon.png",
@@ -402,6 +402,16 @@
       {
         "command": "hiveku.setupCodex",
         "title": "Hiveku: Set Up Codex Support (AGENTS.md + MCP for OpenAI Codex)"
+      },
+      {
+        "command": "hiveku.openProjectEnv",
+        "title": "Hiveku: Open Project .env",
+        "icon": "$(key)"
+      },
+      {
+        "command": "hiveku.projectDatabase",
+        "title": "Hiveku: Browse Project Database",
+        "icon": "$(database)"
       }
     ],
     "viewsContainers": {
@@ -699,43 +709,13 @@
           "group": "1_account"
         },
         {
-          "command": "hiveku.chatDepartment",
-          "when": "view == hiveku.projects && viewItem == hivekuDepartment",
-          "group": "inline"
-        },
-        {
-          "command": "hiveku.downloadDepartment",
-          "when": "view == hiveku.projects && viewItem == hivekuDepartment",
-          "group": "inline"
-        },
-        {
           "command": "hiveku.cloneProjectItem",
           "when": "view == hiveku.projects && viewItem == hivekuProject",
           "group": "inline"
         },
         {
-          "command": "hiveku.newTask",
-          "when": "view == hiveku.projects && viewItem == hivekuTasksGroup",
-          "group": "inline"
-        },
-        {
-          "command": "hiveku.refreshTasks",
-          "when": "view == hiveku.projects && viewItem == hivekuTasksGroup",
-          "group": "inline"
-        },
-        {
           "command": "hiveku.completeTask",
           "when": "view == hiveku.projects && viewItem == hivekuTask",
-          "group": "inline"
-        },
-        {
-          "command": "hiveku.runWorkflow",
-          "when": "view == hiveku.projects && viewItem =~ /hivekuWorkflow/",
-          "group": "inline"
-        },
-        {
-          "command": "hiveku.toggleWorkflow",
-          "when": "view == hiveku.projects && viewItem =~ /hivekuWorkflow/",
           "group": "inline"
         },
         {
@@ -792,6 +772,11 @@
           "command": "hiveku.openWorkspace",
           "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
           "group": "0_open@0"
+        },
+        {
+          "command": "hiveku.newTask",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleSection.tasks",
+          "group": "inline"
         }
       ],
       "editor/context": [
@@ -828,7 +813,7 @@
         },
         {
           "command": "hiveku.chatDepartment",
-          "when": "false"
+          "when": "hiveku.signedIn"
         },
         {
           "command": "hiveku.openFileVersionDiff",

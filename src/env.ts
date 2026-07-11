@@ -33,7 +33,7 @@ export function resolveLocalEnv(secrets: Record<string, string>): Record<string,
   return out;
 }
 
-function quote(v: string): string {
+export function quote(v: string): string {
   if (v === '') return '';
   if (/[\s#"'`$\\]/.test(v) || /[\r\n]/.test(v)) {
     return `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '').replace(/\n/g, '\\n')}"`;
@@ -50,7 +50,7 @@ function toEnvFile(env: Record<string, string>): string {
   return `${header}${body}\n`;
 }
 
-function parseEnvFile(text: string): Record<string, string> {
+export function parseEnvFile(text: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();

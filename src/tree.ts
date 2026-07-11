@@ -2,18 +2,17 @@
  * Activity-bar tree — the Hiveku Explorer.
  *
  *   Account
- *   ├─ Knowledge
- *   │   ├─ Sales        (12)   ← department; expand to types
- *   │   │   ├─ Memory   (8)    ← download this type
- *   │   │   ├─ Skills   (3)
- *   │   │   └─ Rules    (1)
- *   │   ├─ SEO …  PPC …  Outbound …  Helpdesk …  Marketing …
- *   └─ Code Projects
- *       └─ acme-site (nextjs)  ← download
+ *   └─ Code Projects            ← expanded by default; the tree's sole focus
+ *       └─ acme-site (nextjs)   ← download via the cloud icon
+ *           ├─ Live Preview / Development / Production   ← open in browser
+ *           ├─ Database   (4)   ← table count; opens the DB browser
+ *           ├─ .env       (12)  ← secrets as an editable virtual .env
+ *           └─ Tasks             ← this project's linked tasks
  *
- * Departments come from a canonical list (so empty ones still show, ready to
- * chat) merged with any found in the account's knowledge. Knowledge is fetched
- * lazily per account (memory_list × types) and cached.
+ * Everything else that used to live here (Dashboard, Helpdesk, Brand Knowledge,
+ * Tasks, Workflows) moved to the Account Console view below, which is the
+ * richer operating surface (2026-07-11). The knowledge index helpers are kept:
+ * downloads and workspace scaffolds still use them.
  */
 
 import * as vscode from 'vscode';
@@ -46,6 +45,20 @@ interface SiteEnvNode {
   /** Resolved URL, or undefined when the env isn't deployed / enabled. */
   url?: string;
   status?: string;
+}
+interface ProjectDbNode {
+  kind: 'projectdb';
+  record: AccountRecord;
+  project: api.SiteSummary;
+  /** Table count; undefined = count unavailable (not provisioned / fetch failed). */
+  count?: number;
+}
+interface ProjectEnvFileNode {
+  kind: 'projectenvfile';
+  record: AccountRecord;
+  project: api.SiteSummary;
+  /** Secret count; undefined = count unavailable. */
+  count?: number;
 }
 interface TaskNode { kind: 'task'; record: AccountRecord; task: api.PmTask; }
 interface TaskProjectNode {
@@ -99,6 +112,8 @@ export type HivekuNode =
   | KTypeNode
   | ProjectNode
   | SiteEnvNode
+  | ProjectDbNode
+  | ProjectEnvFileNode
   | TaskNode
   | TaskProjectNode
   | TaskDoneNode
@@ -231,6 +246,8 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
     this.tasksCache.clear();
     this.sitesCache.clear();
     this.workflowsCache.clear();
+    this.dbCountCache.clear();
+    this.secretCountCache.clear();
     this._onDidChange.fire();
   }
 
@@ -295,6 +312,38 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
     return sites;
   }
 
+  /** projectId → table count; null = fetched but unavailable (shown badge-less). */
+  private readonly dbCountCache = new Map<string, number | null>();
+  private readonly secretCountCache = new Map<string, number | null>();
+
+  private async ensureDbCount(accountId: string, projectId: string): Promise<number | undefined> {
+    const hit = this.dbCountCache.get(projectId);
+    if (hit !== undefined) return hit ?? undefined;
+    let count: number | null = null;
+    try {
+      const client = await this.clientFor(accountId);
+      count = (await api.databaseTables(client, projectId)).length;
+    } catch {
+      /* not provisioned / transient — render without a badge */
+    }
+    this.dbCountCache.set(projectId, count);
+    return count ?? undefined;
+  }
+
+  private async ensureSecretCount(accountId: string, projectId: string): Promise<number | undefined> {
+    const hit = this.secretCountCache.get(projectId);
+    if (hit !== undefined) return hit ?? undefined;
+    let count: number | null = null;
+    try {
+      const client = await this.clientFor(accountId);
+      count = (await api.secretsCount(client, projectId)) ?? null;
+    } catch {
+      /* render without a badge */
+    }
+    this.secretCountCache.set(projectId, count);
+    return count ?? undefined;
+  }
+
   getTreeItem(node: HivekuNode): vscode.TreeItem {
     switch (node.kind) {
       case 'account': {
@@ -324,7 +373,11 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
       }
       case 'group': {
         const meta = GROUP_META[node.group];
-        const item = new vscode.TreeItem(meta.label, vscode.TreeItemCollapsibleState.Collapsed);
+        // Code Projects opens ready to use — it is the tree's whole purpose now.
+        const item = new vscode.TreeItem(
+          meta.label,
+          node.group === 'projects' ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+        );
         item.iconPath = new vscode.ThemeIcon(meta.icon);
         item.contextValue = meta.context;
         if (meta.description) item.description = meta.description;
@@ -427,6 +480,29 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
         }
         return item;
       }
+      case 'projectdb': {
+        const item = new vscode.TreeItem('Database', vscode.TreeItemCollapsibleState.None);
+        item.description = node.count !== undefined ? `(${node.count})` : '';
+        item.iconPath = new vscode.ThemeIcon('database');
+        item.contextValue = 'hivekuProjectDb';
+        item.command = { command: 'hiveku.projectDatabase', title: 'Open Database', arguments: [node] };
+        item.tooltip =
+          node.count === undefined
+            ? 'Project database — click to inspect (provisions on first use)'
+            : `Project database — ${node.count} table(s). Click to browse.`;
+        return item;
+      }
+      case 'projectenvfile': {
+        const item = new vscode.TreeItem('.env', vscode.TreeItemCollapsibleState.None);
+        item.description = node.count !== undefined ? `(${node.count})` : '';
+        item.iconPath = new vscode.ThemeIcon('key');
+        item.contextValue = 'hivekuProjectEnvFile';
+        item.command = { command: 'hiveku.openProjectEnv', title: 'Open .env', arguments: [node] };
+        item.tooltip =
+          'Project secrets (AWS-backed) as an editable .env — save pushes changes to Hiveku ' +
+          '(deployed envs sync; the live preview restarts).';
+        return item;
+      }
       case 'siteEnv': {
         const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.None);
         const host = node.url ? node.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : '';
@@ -482,14 +558,11 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
       return nodes;
     }
     if (node.kind === 'account') {
-      return [
-        { kind: 'dashboard', record: node.record },
-        { kind: 'helpdesk', record: node.record },
-        { kind: 'group', record: node.record, group: 'knowledge' },
-        { kind: 'group', record: node.record, group: 'projects' },
-        { kind: 'group', record: node.record, group: 'tasks' },
-        { kind: 'group', record: node.record, group: 'workflows' },
-      ];
+      // Code Projects only. Dashboard/Helpdesk/Brand Knowledge/Tasks/Workflows
+      // were removed 2026-07-11 (Abe: redundant with the richer Account Console
+      // below) — their commands stay reachable via the account context menu,
+      // the console tabs, and the palette.
+      return [{ kind: 'group', record: node.record, group: 'projects' }];
     }
     if (node.kind === 'group' && node.group === 'knowledge') {
       let index: KnowledgeIndex;
@@ -604,6 +677,22 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
         url: d.url,
         status: d.status,
       }));
+      // Database + .env ride every project. Counts are best-effort AND
+      // non-blocking: the expand renders instantly from cache (or badge-less),
+      // and a background fetch repaints this node once the counts land — two
+      // live round-trips must never gate the env links.
+      const dbHit = this.dbCountCache.get(node.project.id);
+      const secretHit = this.secretCountCache.get(node.project.id);
+      children.push(
+        { kind: 'projectdb', record: node.record, project: node.project, count: dbHit ?? undefined },
+        { kind: 'projectenvfile', record: node.record, project: node.project, count: secretHit ?? undefined },
+      );
+      if (dbHit === undefined || secretHit === undefined) {
+        void Promise.all([
+          this.ensureDbCount(node.record.accountId, node.project.id),
+          this.ensureSecretCount(node.record.accountId, node.project.id),
+        ]).then(() => this._onDidChange.fire(node));
+      }
       try {
         // This code project's own tasks (annotation feedback etc.), nested here
         // so the work lives with the project it belongs to.

@@ -80,7 +80,8 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
       case 'section': {
         const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.None);
         item.iconPath = new vscode.ThemeIcon(node.icon);
-        item.contextValue = 'hivekuConsoleSection';
+        // Per-tab context so menus can target one section (e.g. New Task on Tasks only).
+        item.contextValue = `hivekuConsoleSection.${node.tab}`;
         item.command = { command: 'hiveku.consoleOpen', title: 'Open', arguments: [{ record: node.record, tab: node.tab }] };
         return item;
       }
@@ -143,7 +144,10 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         /* show all departments if entitlements are unavailable */
       }
       // Role-ordered departments: the account's role leads, the rest behind a toggle.
-      // (`workflows` dept excluded — the Automations section covers cloud workflows.)
+      // Excluded: `workflows` (the Automations section covers cloud workflows) and
+      // `pages` (redundant — Code Projects in the tree above carries the sites;
+      // page data still ships in the local data export).
+      const HIDDEN_DEPTS = new Set(['workflows', 'pages']);
       const { primary, other } = effectiveDepartments(
         this.accounts.getRole(node.record.accountId),
         this.accounts.getDepartments(node.record.accountId),
@@ -155,8 +159,8 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         deptId: d.id,
         label: d.label,
       });
-      const primaryNodes = primary.filter((d) => d.id !== 'workflows').map(toNode);
-      const otherDepts = other.filter((d) => d.id !== 'workflows');
+      const primaryNodes = primary.filter((d) => !HIDDEN_DEPTS.has(d.id)).map(toNode);
+      const otherDepts = other.filter((d) => !HIDDEN_DEPTS.has(d.id));
       const tail: ConsoleNode[] = [];
       if (otherDepts.length > 0) {
         if (this.showAll) {

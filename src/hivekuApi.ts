@@ -664,8 +664,80 @@ export async function pmTaskCreate(
   client: HivekuMcpClient,
   title: string,
   projectId: string,
+  extras: { description?: string; priority?: string; due_date?: string; assigned_to_id?: string } = {},
 ): Promise<unknown> {
-  return client.callToolJson<unknown>('pm_tasks_create', { title, project_id: projectId });
+  const args: Record<string, unknown> = { title, project_id: projectId };
+  for (const [k, v] of Object.entries(extras)) if (v !== undefined && v !== '') args[k] = v;
+  return client.callToolJson<unknown>('pm_tasks_create', args);
+}
+
+/** PATCH one PM task. Allow-listed fields only (status/priority/assignee/due/title/description…). */
+export async function pmTaskUpdate(
+  client: HivekuMcpClient,
+  id: string,
+  patch: Record<string, unknown>,
+): Promise<unknown> {
+  return client.callToolJson<unknown>('pm_tasks_update', { id, ...patch });
+}
+
+export async function pmTaskDelete(client: HivekuMcpClient, id: string): Promise<unknown> {
+  return client.callToolJson<unknown>('pm_tasks_delete', { id });
+}
+
+export interface PmTaskComment {
+  id?: string;
+  content?: string;
+  created_at?: string;
+  /** Agent-authored comments carry a codename; humans carry author_name/user_id. */
+  agent_codename?: string | null;
+  author_name?: string | null;
+  author_email?: string | null;
+  user_id?: string | null;
+  parent_comment_id?: string | null;
+  attachments?: Array<{ name?: string; url?: string; type?: string }>;
+}
+
+/** The task's comment thread, oldest first. */
+export async function pmTaskComments(client: HivekuMcpClient, id: string): Promise<PmTaskComment[]> {
+  const res = await client.callToolJson<unknown>('pm_task_comments_list', { id });
+  const list = unwrap<PmTaskComment[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+
+export async function pmTaskComment(client: HivekuMcpClient, id: string, content: string): Promise<unknown> {
+  return client.callToolJson<unknown>('pm_tasks_comment', { id, content, author_codename: 'vscode' });
+}
+
+/** Subtasks of one parent task (tolerant — older servers lack the tool). */
+export async function pmTaskSubtasks(client: HivekuMcpClient, parentTaskId: string): Promise<PmTask[]> {
+  try {
+    const res = await client.callToolJson<unknown>('pm_tasks_subtasks', { parent_task_id: parentTaskId, limit: 100 });
+    const list = unwrap<PmTask[]>(res);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+export interface AccountUser {
+  id?: string;
+  first_name?: string;
+  last_name?: string;
+  name?: string;
+  email?: string;
+}
+
+/** Account users (assignee ids for tasks). Tolerant — returns [] when CRM is unavailable. */
+export async function accountUsers(client: HivekuMcpClient): Promise<AccountUser[]> {
+  try {
+    const res = await client.callToolJson<Record<string, unknown>>('crm_list_users', {});
+    // This route wraps in {users:[...]}, not {data:[...]}.
+    const d = unwrap<Record<string, unknown>>(res) ?? {};
+    const list = Array.isArray(d) ? d : d.users;
+    return Array.isArray(list) ? (list as AccountUser[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 export interface Workflow {
@@ -877,6 +949,19 @@ export async function secretDelete(client: HivekuMcpClient, projectId: string, k
   return client.callToolJson<unknown>('project_secrets_delete', { project_id: projectId, key });
 }
 
+/** Secret KEY COUNT without pulling values (metadata_only). Tolerant — undefined on failure. */
+export async function secretsCount(client: HivekuMcpClient, projectId: string): Promise<number | undefined> {
+  try {
+    const res = await client.callToolJson<unknown>('project_secrets_list', { project_id: projectId, metadata_only: true });
+    const d = unwrap<Record<string, unknown>>(res) ?? {};
+    if (typeof d.count === 'number') return d.count;
+    if (Array.isArray(d.keys)) return d.keys.length;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function databaseStatus(client: HivekuMcpClient, projectId: string): Promise<Record<string, unknown>> {
   const res = await client.callToolJson<unknown>('database_status', { project_id: projectId });
   return unwrap<Record<string, unknown>>(res) ?? {};
@@ -884,10 +969,15 @@ export async function databaseStatus(client: HivekuMcpClient, projectId: string)
 export async function databaseTables(client: HivekuMcpClient, projectId: string): Promise<string[]> {
   const res = await client.callToolJson<unknown>('database_tables', { project_id: projectId });
   const d = unwrap<unknown>(res);
-  if (Array.isArray(d)) {
-    return d.map((t) => (typeof t === 'string' ? t : ((t as Record<string, unknown>).table_name as string) || (t as Record<string, unknown>).name as string)).filter(Boolean);
-  }
-  return [];
+  // The route nests once more: {data: {tables: rows[], count}} — accept both shapes.
+  const list = Array.isArray(d)
+    ? d
+    : d && typeof d === 'object' && Array.isArray((d as Record<string, unknown>).tables)
+      ? ((d as Record<string, unknown>).tables as unknown[])
+      : [];
+  return list
+    .map((t) => (typeof t === 'string' ? t : ((t as Record<string, unknown>).table_name as string) || ((t as Record<string, unknown>).name as string)))
+    .filter(Boolean);
 }
 
 export interface MediaItem {
@@ -928,13 +1018,177 @@ export async function mediaLibraryList(
   client: HivekuMcpClient,
   opts: { search?: string; media_type?: string; limit?: number } = {},
 ): Promise<MediaAsset[]> {
-  const args: Record<string, unknown> = { limit: opts.limit ?? 300 };
-  if (opts.search) args.search = opts.search;
-  if (opts.media_type) args.media_type = opts.media_type;
-  const res = await client.callToolJson<unknown>('media_library_list', args);
-  const list = unwrap<MediaAsset[]>(res);
-  return Array.isArray(list) ? list : [];
+  // The route caps a page at 100 regardless of `limit` — page until satisfied.
+  const want = opts.limit ?? 300;
+  const out: MediaAsset[] = [];
+  for (let page = 1; out.length < want && page <= Math.ceil(want / 100); page++) {
+    const args: Record<string, unknown> = { limit: 100, page };
+    if (opts.search) args.search = opts.search;
+    if (opts.media_type) args.media_type = opts.media_type;
+    const res = await client.callToolJson<unknown>('media_library_list', args);
+    const list = unwrap<MediaAsset[]>(res);
+    const rows = Array.isArray(list) ? list : [];
+    out.push(...rows);
+    if (rows.length < 100) break;
+  }
+  return out;
 }
+
+/** Update asset metadata (title/alt/tags/folder) — the file itself is immutable. */
+export async function mediaUpdate(
+  client: HivekuMcpClient,
+  assetId: string,
+  patch: { title?: string; alt_text?: string; tags?: string[]; folder_id?: string },
+): Promise<unknown> {
+  return client.callToolJson<unknown>('media_update', { asset_id: assetId, ...patch });
+}
+
+/** Hard-delete an asset (S3 purge). 409 in_use unless force. */
+export async function mediaDelete(client: HivekuMcpClient, assetId: string, force = false): Promise<unknown> {
+  return client.callToolJson<unknown>('media_delete', { asset_id: assetId, ...(force ? { force: true } : {}) });
+}
+
+/** Upload bytes into the account media library (base64, 50MB cap server-side). */
+export async function mediaUpload(
+  client: HivekuMcpClient,
+  fileName: string,
+  contentBase64: string,
+  opts: { mime_type?: string; title?: string; folder_id?: string } = {},
+): Promise<unknown> {
+  return client.callToolJson<unknown>('media_upload', { file_name: fileName, content: contentBase64, ...opts });
+}
+
+export interface MediaFolder {
+  id?: string;
+  name?: string;
+  asset_count?: number;
+}
+export async function mediaFolders(client: HivekuMcpClient): Promise<MediaFolder[]> {
+  try {
+    const res = await client.callToolJson<unknown>('media_folders_list', {});
+    const list = unwrap<MediaFolder[]>(res);
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+// ── CMS (per website project): collections + entries ─────────────────────────
+
+export interface CmsCollection {
+  id?: string;
+  name?: string;
+  format?: string;
+  field_count?: number;
+  route_pattern?: string;
+}
+export async function cmsCollections(client: HivekuMcpClient, projectId: string): Promise<CmsCollection[]> {
+  const res = await client.callToolJson<unknown>('cms_list_collections', { project_id: projectId });
+  const d = unwrap<unknown>(res);
+  if (Array.isArray(d)) return d as CmsCollection[];
+  const list = (d as Record<string, unknown>)?.collections;
+  return Array.isArray(list) ? (list as CmsCollection[]) : [];
+}
+
+export interface CmsEntry {
+  slug?: string;
+  id?: string;
+  title?: string;
+  name?: string;
+  status?: string;
+  /** The entries route emits camelCase. */
+  updatedAt?: string;
+  displayDate?: string;
+}
+export async function cmsEntries(
+  client: HivekuMcpClient,
+  projectId: string,
+  collectionId: string,
+  limit = 200,
+): Promise<CmsEntry[]> {
+  const res = await client.callToolJson<unknown>('cms_list_entries', {
+    project_id: projectId,
+    collection_id: collectionId,
+    limit,
+  });
+  const d = unwrap<unknown>(res);
+  if (Array.isArray(d)) return d as CmsEntry[];
+  const list = (d as Record<string, unknown>)?.entries;
+  return Array.isArray(list) ? (list as CmsEntry[]) : [];
+}
+
+export async function cmsReadEntry(
+  client: HivekuMcpClient,
+  projectId: string,
+  collectionId: string,
+  slug: string,
+): Promise<Record<string, unknown> | undefined> {
+  const res = await client.callToolJson<unknown>('cms_read_entry', {
+    project_id: projectId,
+    collection_id: collectionId,
+    slug,
+  });
+  const d = unwrap<Record<string, unknown>>(res);
+  // The route wraps the entry once more: {entry: {...}, updatedAt, variant}.
+  if (d && typeof d.entry === 'object' && d.entry !== null) return d.entry as Record<string, unknown>;
+  return d;
+}
+
+/** Upsert an entry by slug. `status` draft|published|scheduled (+publish_at ISO for scheduled). */
+export async function cmsWriteEntry(
+  client: HivekuMcpClient,
+  projectId: string,
+  collectionId: string,
+  slug: string,
+  fields: Record<string, unknown>,
+  opts: { status?: string; publish_at?: string } = {},
+): Promise<unknown> {
+  return client.callToolJson<unknown>('cms_write_entry', {
+    project_id: projectId,
+    collection_id: collectionId,
+    slug,
+    fields,
+    ...opts,
+  });
+}
+
+export async function cmsDeleteEntry(
+  client: HivekuMcpClient,
+  projectId: string,
+  collectionId: string,
+  slug: string,
+): Promise<unknown> {
+  return client.callToolJson<unknown>('cms_delete_entry', { project_id: projectId, collection_id: collectionId, slug });
+}
+
+export async function cmsPromoteDraft(
+  client: HivekuMcpClient,
+  projectId: string,
+  collectionId: string,
+  slug: string,
+): Promise<unknown> {
+  return client.callToolJson<unknown>('cms_promote_draft', { project_id: projectId, collection_id: collectionId, slug });
+}
+
+export async function cmsCreateCollection(
+  client: HivekuMcpClient,
+  projectId: string,
+  // path/slugFrom/fields are REQUIRED by the tool schema AND the manifest Zod
+  // schema — omitting any of them 422s.
+  spec: { id: string; name: string; format: string; path: string; slugFrom: 'filename'; fields: unknown[] },
+): Promise<unknown> {
+  return client.callToolJson<unknown>('cms_create_collection', { project_id: projectId, ...spec });
+}
+
+export async function cmsDeleteCollection(
+  client: HivekuMcpClient,
+  projectId: string,
+  collectionId: string,
+): Promise<unknown> {
+  return client.callToolJson<unknown>('cms_delete_collection', { project_id: projectId, collection_id: collectionId });
+}
+
+// ── Memory / knowledge-base CRUD (account AI brain) ───────────────────────────
 
 export interface MemoryEntry {
   id?: string;
@@ -944,6 +1198,7 @@ export interface MemoryEntry {
   project_id?: string;
   version?: number | string;
   updated_at?: string;
+  type?: string;
 }
 
 /** List account knowledge entries of one type (memory|rule|skill|command|agent|identity). */
@@ -951,6 +1206,88 @@ export async function listMemory(client: HivekuMcpClient, type: string): Promise
   const res = await client.callToolJson<unknown>('memory_list', { type });
   const list = unwrap<MemoryEntry[]>(res);
   return Array.isArray(list) ? list : [];
+}
+
+/** Every memory row regardless of type, tagged with its type (domain-prefix decode). */
+export async function listMemoryAll(client: HivekuMcpClient): Promise<MemoryEntry[]> {
+  const res = await client.callToolJson<unknown>('memory_list', {});
+  const list = unwrap<MemoryEntry[]>(res);
+  if (!Array.isArray(list)) return [];
+  return list.map((m) => ({
+    ...m,
+    type:
+      m.type ??
+      (String(m.domain ?? '').startsWith('_')
+        ? String(m.domain).slice(1).split(':')[0]
+        : 'memory'),
+  }));
+}
+
+export async function memoryGet(client: HivekuMcpClient, memoryId: string): Promise<MemoryEntry | undefined> {
+  const res = await client.callToolJson<unknown>('memory_get', { memory_id: memoryId });
+  return unwrap<MemoryEntry>(res);
+}
+
+export async function memoryCreate(
+  client: HivekuMcpClient,
+  spec: { type?: string; name?: string; domain?: string; content: string; project_id?: string },
+): Promise<MemoryEntry | undefined> {
+  const res = await client.callToolJson<unknown>('memory_create', spec);
+  return unwrap<MemoryEntry>(res);
+}
+
+export async function memoryUpdate(client: HivekuMcpClient, memoryId: string, content: string): Promise<unknown> {
+  return client.callToolJson<unknown>('memory_update', { memory_id: memoryId, content });
+}
+
+export async function memoryDelete(client: HivekuMcpClient, memoryId: string): Promise<unknown> {
+  return client.callToolJson<unknown>('memory_delete', { memory_id: memoryId });
+}
+
+export interface MemoryVersion {
+  /** Snapshot UUID (the route names it version_id; there is no `id` field). */
+  version_id?: string;
+  version?: number;
+  created_at?: string;
+  changed_by?: string;
+}
+export async function memoryVersions(client: HivekuMcpClient, memoryId: string): Promise<MemoryVersion[]> {
+  const res = await client.callToolJson<unknown>('memory_list_versions', { memory_id: memoryId });
+  const d = unwrap<unknown>(res);
+  if (Array.isArray(d)) return d as MemoryVersion[];
+  const list = (d as Record<string, unknown>)?.versions;
+  return Array.isArray(list) ? (list as MemoryVersion[]) : [];
+}
+
+export async function memoryRestoreVersion(client: HivekuMcpClient, versionId: string): Promise<unknown> {
+  return client.callToolJson<unknown>('memory_restore_version', { version_id: versionId });
+}
+
+export interface KnowledgeBase {
+  id?: string;
+  name?: string;
+  description?: string;
+  context_type?: string;
+  is_default?: boolean;
+  tags?: string[];
+  /** Prisma include — the route never returns a flat document_count. */
+  _count?: { knowledge_documents?: number; knowledge_sources?: number };
+}
+export async function kbList(client: HivekuMcpClient): Promise<KnowledgeBase[]> {
+  const res = await client.callToolJson<unknown>('kb_list', {});
+  const d = unwrap<unknown>(res);
+  if (Array.isArray(d)) return d as KnowledgeBase[];
+  const list = (d as Record<string, unknown>)?.knowledge_bases ?? (d as Record<string, unknown>)?.kbs;
+  return Array.isArray(list) ? (list as KnowledgeBase[]) : [];
+}
+export async function kbCreate(
+  client: HivekuMcpClient,
+  spec: { name: string; description?: string; context_type?: string },
+): Promise<unknown> {
+  return client.callToolJson<unknown>('kb_create', spec);
+}
+export async function kbDelete(client: HivekuMcpClient, kbId: string): Promise<unknown> {
+  return client.callToolJson<unknown>('kb_delete', { kb_id: kbId });
 }
 
 /** Send a message to a department agent and return its reply text. */

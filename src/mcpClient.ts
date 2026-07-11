@@ -112,10 +112,22 @@ export class HivekuMcpClient {
     if (typeof text !== 'string') {
       throw new Error(`Tool ${name} returned no text content`);
     }
+    let parsed: T;
     try {
-      return JSON.parse(text) as T;
+      parsed = JSON.parse(text) as T;
     } catch {
       throw new Error(`Tool ${name} returned non-JSON content: ${text.slice(0, 200)}`);
     }
+    // The Olympus proxy returns backend failures as a NORMAL tool result whose
+    // payload is `{error: string, status: number, ...}` (isError is never set).
+    // Without this check every 4xx/5xx flows into callers as "data" — writes
+    // report success, lists render empty. Sniff that exact shape and throw.
+    if (parsed && typeof parsed === 'object') {
+      const p = parsed as Record<string, unknown>;
+      if (typeof p.error === 'string' && typeof p.status === 'number' && p.status >= 400) {
+        throw new Error(`Tool ${name} failed (${p.status}): ${p.error}${p.details ? ` — ${JSON.stringify(p.details).slice(0, 200)}` : ''}`);
+      }
+    }
+    return parsed;
   }
 }

@@ -21,10 +21,18 @@ import { openModulePanel } from './panel';
 import { openTaskDetail } from './taskDetail';
 import { effectiveDepartments } from './roles';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
+import { cmsEntryUri, memoryUri } from './platformFs';
 
 type ClientFor = (accountId: string) => Promise<HivekuMcpClient>;
 
 const panels = new Map<string, vscode.WebviewPanel>();
+
+/** Nudge an open console: if the given tab is the one on screen, reload it.
+ *  Fired when a hiveku: virtual doc (CMS entry / memory) is saved, so the
+ *  table behind the editor reflects the save without a manual refresh. */
+export function refreshConsoleTab(accountId: string, tab: string): void {
+  panels.get(accountId)?.webview.postMessage({ type: 'reloadif', tab });
+}
 
 // ── Console lifecycle diagnostics (persisted to a file so support can read it) ──
 import * as os from 'os';
@@ -257,6 +265,116 @@ async function loadIntegrations(client: HivekuMcpClient): Promise<Record<string,
 
 
 /**
+ * CMS tab — the full CRUD surface (collections + entries per website project),
+ * mirroring the web dashboard's Website Content editor. Entries open as
+ * editable JSON documents (hiveku: virtual FS); everything else runs through
+ * native dialogs + cms_* tools.
+ */
+async function loadCmsTab(client: HivekuMcpClient): Promise<Record<string, unknown>> {
+  const sitesRaw = await client.callToolJson<unknown>('sites_list', { limit: 50 }).catch(() => ({}));
+  const sites = extractRows(sitesRaw).filter((s) => s.project_type !== 'external').slice(0, 10);
+  const out = await mapLimit(sites, 3, async (site) => {
+    const projectId = String(site.id ?? '');
+    let collections: api.CmsCollection[] = [];
+    let error: string | undefined;
+    try {
+      collections = await api.cmsCollections(client, projectId);
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+    }
+    const cols = await mapLimit(collections.slice(0, 15), 4, async (c) => {
+      const collectionId = String(c.id ?? c.name ?? '');
+      let entries: api.CmsEntry[] = [];
+      try {
+        entries = await api.cmsEntries(client, projectId, collectionId, 100);
+      } catch {
+        /* collection without a readable index — render header only */
+      }
+      return {
+        id: collectionId,
+        name: c.name ?? collectionId,
+        format: c.format ?? '',
+        route: c.route_pattern ?? '',
+        entries: entries.map((e) => ({
+          slug: String(e.slug ?? e.id ?? ''),
+          title: String(e.title ?? e.name ?? ''),
+          status: String(e.status ?? ''),
+          updated: String(e.updatedAt ?? e.displayDate ?? ''),
+        })),
+      };
+    });
+    return { id: projectId, name: String(site.name ?? site.slug ?? projectId), error, collections: cols };
+  });
+  return { kind: 'cmsdash', sites: out };
+}
+
+/** Media Library tab — thumbnail grid over the account-wide library, with CRUD. */
+async function loadMediaTab(client: HivekuMcpClient): Promise<Record<string, unknown>> {
+  const [assets, folders] = await Promise.all([
+    api.mediaLibraryList(client, { limit: 200 }),
+    api.mediaFolders(client),
+  ]);
+  const folderName = new Map(folders.map((f) => [String(f.id ?? ''), f.name ?? '']));
+  return {
+    kind: 'mediadash',
+    assets: assets.map((a) => ({
+      id: String(a.id ?? ''),
+      url: a.file_url || a.external_url || '',
+      name: a.title || a.original_filename || a.filename || '(asset)',
+      mime: a.mime_type || '',
+      kind: a.media_type || '',
+      size: a.file_size ?? 0,
+      source: a.source_type || '',
+      folder: folderName.get(String((a as Record<string, unknown>).folder_id ?? '')) ?? '',
+      created: a.created_at || '',
+    })),
+    folders: folders.map((f) => ({ id: String(f.id ?? ''), name: f.name ?? '', count: f.asset_count ?? 0 })),
+  };
+}
+
+/** Knowledge & Memory tab — the account's AI brain, editable. */
+async function loadKnowledgeTab(client: HivekuMcpClient): Promise<Record<string, unknown>> {
+  const [memories, kbs] = await Promise.all([
+    api.listMemoryAll(client).catch(() => [] as api.MemoryEntry[]),
+    api.kbList(client).catch(() => [] as api.KnowledgeBase[]),
+  ]);
+  return {
+    kind: 'knowdash',
+    memories: memories.map((m) => ({
+      id: String(m.id ?? ''),
+      domain: String(m.domain ?? ''),
+      type: String(m.type ?? 'memory'),
+      version: m.version ?? '',
+      updated: String(m.updated_at ?? ''),
+      scoped: !!m.project_id,
+    })),
+    kbs: kbs.map((k) => ({
+      id: String(k.id ?? ''),
+      name: k.name ?? '(kb)',
+      type: k.context_type ?? '',
+      docs: k._count?.knowledge_documents ?? undefined,
+      isDefault: !!k.is_default,
+    })),
+  };
+}
+
+/** Claude Code / Codex prompt that turns a memory row into a training loop. */
+function trainPrompt(account: AccountRecord, domain?: string): string {
+  const target = domain ? `the "${domain}" entry` : 'this account\'s AI memory';
+  return [
+    `Help me train and optimize ${target} in Hiveku's AI memory (account: ${account.label}).`,
+    '',
+    `1. Read what exists: memory_list(${domain ? `{ domain: "${domain}" }` : ''}) then memory_get({ memory_id }) for the full content.`,
+    '2. Critique it like an editor: stale facts, vague instructions, missing edge cases, contradictions with other domains.',
+    '3. Interview me for what is missing — ask targeted questions instead of inventing facts.',
+    '4. Write the improved version back with memory_update({ memory_id, content }) — the prior version is snapshotted automatically.',
+    '5. If a NEW skill/rule emerged from the conversation, create it: memory_create({ type, name, content }).',
+    '',
+    'Keep entries dense and imperative: they are read by agents at runtime, not by humans.',
+  ].join('\n');
+}
+
+/**
  * Analytics + Visitor Intelligence dashboard. Traffic KPIs across the account's
  * sites (28d vs prior, ClickHouse-backed overview route) + the SDR/BDR chase
  * list: ICP-matched + recently-identified visitors (analytics_visitors).
@@ -445,6 +563,115 @@ async function runEmailAction(client: HivekuMcpClient, action: string, id: strin
   return 'done';
 }
 
+// ── Native-dialog CRUD flows (webview button → dialogs → tool call → reload) ──
+
+const TASK_STATUSES = ['todo', 'queued', 'in_progress', 'qa', 'ready_for_review', 'blocked', 'done'];
+const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
+
+async function createTaskFlow(client: HivekuMcpClient): Promise<boolean> {
+  const projects = await api.pmProjectsList(client);
+  if (projects.length === 0) {
+    vscode.window.showInformationMessage('No PM projects in this account to add a task to.');
+    return false;
+  }
+  const proj = await vscode.window.showQuickPick(
+    projects.map((p) => ({ label: p.name || p.id, id: p.id })),
+    { placeHolder: 'Project for the new task' },
+  );
+  if (!proj) return false;
+  const title = await vscode.window.showInputBox({ prompt: 'Task title' });
+  if (!title) return false;
+  const priority = await vscode.window.showQuickPick(['(default)', ...TASK_PRIORITIES], { placeHolder: 'Priority' });
+  if (priority === undefined) return false;
+  const due = await vscode.window.showInputBox({ prompt: 'Due date (YYYY-MM-DD, empty = none)', placeHolder: '2026-07-18' });
+  if (due === undefined) return false;
+  const users = await api.accountUsers(client);
+  let assignee: string | undefined;
+  if (users.length > 0) {
+    const pick = await vscode.window.showQuickPick(
+      [{ label: '(unassigned)', id: '' }, ...users.map((u) => ({ label: [u.first_name ?? u.name, u.last_name].filter(Boolean).join(' ') || u.email || u.id || '?', description: u.email ?? '', id: u.id ?? '' }))],
+      { placeHolder: 'Assign to' },
+    );
+    if (pick === undefined) return false;
+    assignee = pick.id || undefined;
+  }
+  await api.pmTaskCreate(client, title, proj.id, {
+    priority: priority === '(default)' ? undefined : priority,
+    due_date: due || undefined,
+    assigned_to_id: assignee,
+  });
+  vscode.window.showInformationMessage(`Created task: ${title}`);
+  return true;
+}
+
+async function editTaskFlow(client: HivekuMcpClient, taskId: string, currentStatus: string): Promise<boolean> {
+  const what = await vscode.window.showQuickPick(['Status', 'Priority', 'Assignee', 'Due date', 'Title'], {
+    placeHolder: 'Edit which field?',
+  });
+  if (!what) return false;
+  if (what === 'Status') {
+    const status = await vscode.window.showQuickPick(TASK_STATUSES, { placeHolder: `Status (now: ${currentStatus || '?'})` });
+    if (!status) return false;
+    const wasDone = ['done', 'completed', 'archived'].includes(currentStatus.toLowerCase());
+    // done has real semantics (completed_at, progress) — route through the
+    // dedicated complete/uncomplete verbs instead of a raw status PATCH.
+    if (status === 'done') await client.callToolJson<unknown>('pm_tasks_complete', { id: taskId });
+    else if (wasDone) await client.callToolJson<unknown>('pm_tasks_uncomplete', { id: taskId, status });
+    else await api.pmTaskUpdate(client, taskId, { status });
+  } else if (what === 'Priority') {
+    const priority = await vscode.window.showQuickPick(TASK_PRIORITIES, { placeHolder: 'Priority' });
+    if (!priority) return false;
+    await api.pmTaskUpdate(client, taskId, { priority });
+  } else if (what === 'Assignee') {
+    const users = await api.accountUsers(client);
+    if (users.length === 0) {
+      vscode.window.showInformationMessage('No account users available to assign.');
+      return false;
+    }
+    const pick = await vscode.window.showQuickPick(
+      [{ label: '(unassign)', id: null as string | null }, ...users.map((u) => ({ label: [u.first_name ?? u.name, u.last_name].filter(Boolean).join(' ') || u.email || u.id || '?', description: u.email ?? '', id: (u.id ?? '') as string | null }))],
+      { placeHolder: 'Assign to' },
+    );
+    if (pick === undefined) return false;
+    await api.pmTaskUpdate(client, taskId, { assigned_to_id: pick.id });
+  } else if (what === 'Due date') {
+    const due = await vscode.window.showInputBox({ prompt: 'Due date (YYYY-MM-DD, empty clears)', placeHolder: '2026-07-18' });
+    if (due === undefined) return false;
+    await api.pmTaskUpdate(client, taskId, { due_date: due || null });
+  } else {
+    const title = await vscode.window.showInputBox({ prompt: 'New title' });
+    if (!title) return false;
+    await api.pmTaskUpdate(client, taskId, { title });
+  }
+  return true;
+}
+
+/** Read a picked local file and push it into the media library. Returns count uploaded. */
+async function uploadMediaFlow(client: HivekuMcpClient): Promise<number> {
+  const picks = await vscode.window.showOpenDialog({
+    canSelectMany: true,
+    openLabel: 'Upload to Hiveku Media Library',
+    filters: { Media: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'mp4', 'mov', 'webm', 'mp3', 'wav', 'pdf'] },
+  });
+  if (!picks?.length) return 0;
+  let uploaded = 0;
+  for (const uri of picks) {
+    const name = path.basename(uri.fsPath);
+    const bytes = await fsp.readFile(uri.fsPath);
+    // MCP JSON-RPC carries the file as base64 in one request body — keep it modest.
+    if (bytes.byteLength > 15 * 1024 * 1024) {
+      vscode.window.showWarningMessage(`${name}: over 15MB — upload it via the Hiveku dashboard instead.`);
+      continue;
+    }
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Uploading ${name}…` },
+      () => api.mediaUpload(client, name, bytes.toString('base64')),
+    );
+    uploaded++;
+  }
+  return uploaded;
+}
+
 export function openAccountConsole(
   account: AccountRecord,
   clientFor: ClientFor,
@@ -476,12 +703,15 @@ export function openAccountConsole(
   const buildTabs = (pageAccess: Record<string, boolean> | undefined) => {
     const { primary, other } = effectiveDepartments(rolePrefs?.role, rolePrefs?.departments ?? [], pageAccess);
     const hasRole = !!rolePrefs?.role && other.length > 0;
+    // `pages` hidden alongside `workflows`: Code Projects (tree) is the site
+    // surface; page data still ships in the local export.
+    const hidden = new Set(['workflows', 'pages']);
     return [
       { id: 'tasks', label: 'Tasks', group: 'Run' },
       { id: 'automations', label: 'Automations', group: 'Run' },
       { id: 'integrations', label: 'Connect', group: 'Run' },
-      ...primary.filter((d) => d.id !== 'workflows').map((d) => ({ id: d.id, label: d.label, group: hasRole ? 'Your departments' : 'Departments' })),
-      ...other.filter((d) => d.id !== 'workflows').map((d) => ({ id: d.id, label: d.label, group: 'Other' })),
+      ...primary.filter((d) => !hidden.has(d.id)).map((d) => ({ id: d.id, label: d.label, group: hasRole ? 'Your departments' : 'Departments' })),
+      ...other.filter((d) => !hidden.has(d.id)).map((d) => ({ id: d.id, label: d.label, group: 'Other' })),
     ];
   };
   const initTabs = async () => {
@@ -540,6 +770,21 @@ export function openAccountConsole(
         panel.webview.postMessage({ type: 'tab', tab, data });
         return;
       }
+      if (!raw && tab === 'cms') {
+        data = await loadCmsTab(client);
+        panel.webview.postMessage({ type: 'tab', tab, data });
+        return;
+      }
+      if (!raw && tab === 'media') {
+        data = await loadMediaTab(client);
+        panel.webview.postMessage({ type: 'tab', tab, data });
+        return;
+      }
+      if (!raw && tab === 'knowledge') {
+        data = await loadKnowledgeTab(client);
+        panel.webview.postMessage({ type: 'tab', tab, data });
+        return;
+      }
       if (tab === 'tasks') {
         data = { tasks: await api.pmTasksAll(client) };
       } else if (tab === 'automations') {
@@ -577,7 +822,21 @@ export function openAccountConsole(
   };
 
   panel.webview.onDidReceiveMessage(
-    async (msg: { type: string; tab?: string; id?: string; enabled?: boolean; sub?: string }) => {
+    async (msg: {
+      type: string;
+      tab?: string;
+      id?: string;
+      enabled?: boolean;
+      sub?: string;
+      status?: string;
+      project?: string;
+      collection?: string;
+      slug?: string;
+      url?: string;
+      name?: string;
+      domain?: string;
+      title?: string;
+    }) => {
       try {
         diag(`msg type=${msg.type} tab=${msg.tab ?? ''}`);
         // NOTE: no eager clientFor here — a dead/missing key must never block
@@ -650,6 +909,197 @@ export function openAccountConsole(
         } else if (msg.type === 'operate' && msg.tab) {
           const mod = moduleById(DEPT_TO_MODULE[msg.tab]);
           if (mod) openModulePanel(account, mod, clientFor, appUrl, {}, undefined, lastPageAccess);
+        } else if (msg.type === 'newtask') {
+          if (await createTaskFlow(await clientFor(account.accountId))) {
+            await load('tasks');
+            void vscode.commands.executeCommand('hiveku.refreshTree');
+          }
+        } else if (msg.type === 'taskedit' && msg.id) {
+          if (await editTaskFlow(await clientFor(account.accountId), msg.id, msg.status ?? '')) {
+            await load('tasks');
+            void vscode.commands.executeCommand('hiveku.refreshTree');
+          }
+        } else if (msg.type === 'taskdel' && msg.id) {
+          const ok = await vscode.window.showWarningMessage(
+            `Delete task "${msg.title || msg.id}"? This removes it (and its comments) permanently.`,
+            { modal: true },
+            'Delete',
+          );
+          if (ok === 'Delete') {
+            await api.pmTaskDelete(await clientFor(account.accountId), msg.id);
+            await load('tasks');
+            void vscode.commands.executeCommand('hiveku.refreshTree');
+          }
+        } else if (msg.type === 'cmsedit' && msg.project && msg.collection && msg.slug) {
+          const doc = await vscode.workspace.openTextDocument(cmsEntryUri(account.accountId, msg.project, msg.collection, msg.slug));
+          await vscode.window.showTextDocument(doc, { preview: false });
+        } else if (msg.type === 'cmsnew' && msg.project && msg.collection) {
+          const slug = await vscode.window.showInputBox({
+            prompt: `New entry slug in "${msg.collection}"`,
+            placeHolder: 'my-first-post',
+            validateInput: (v) => (/^[a-z0-9][a-z0-9-]*$/.test(v) ? undefined : 'lowercase letters, digits, dashes'),
+          });
+          if (slug) {
+            const doc = await vscode.workspace.openTextDocument(cmsEntryUri(account.accountId, msg.project, msg.collection, slug));
+            await vscode.window.showTextDocument(doc, { preview: false });
+            vscode.window.showInformationMessage(`Fill in the fields and save — saving creates "${slug}".`);
+          }
+        } else if (msg.type === 'cmsdel' && msg.project && msg.collection && msg.slug) {
+          const ok = await vscode.window.showWarningMessage(`Delete CMS entry "${msg.slug}"?`, { modal: true }, 'Delete');
+          if (ok === 'Delete') {
+            await api.cmsDeleteEntry(await clientFor(account.accountId), msg.project, msg.collection, msg.slug);
+            await load('cms');
+          }
+        } else if (msg.type === 'cmspromote' && msg.project && msg.collection && msg.slug) {
+          await api.cmsPromoteDraft(await clientFor(account.accountId), msg.project, msg.collection, msg.slug);
+          vscode.window.showInformationMessage(`Published "${msg.slug}".`);
+          await load('cms');
+        } else if (msg.type === 'cmsnewcol' && msg.project) {
+          const colId = await vscode.window.showInputBox({
+            prompt: 'Collection id (slug)',
+            placeHolder: 'blog',
+            validateInput: (v) => (/^[a-z0-9][a-z0-9-]*$/.test(v) ? undefined : 'lowercase letters, digits, dashes'),
+          });
+          if (!colId) return;
+          const colName = await vscode.window.showInputBox({ prompt: 'Collection name', value: colId });
+          if (!colName) return;
+          const format = await vscode.window.showQuickPick(['mdx', 'json'], { placeHolder: 'Entry format' });
+          if (!format) return;
+          // path/slugFrom/fields are REQUIRED by the manifest schema — a minimal
+          // title+body scaffold matches what the dashboard's "New collection" seeds.
+          await api.cmsCreateCollection(await clientFor(account.accountId), msg.project, {
+            id: colId,
+            name: colName,
+            format,
+            path: `content/${colId}`,
+            slugFrom: 'filename',
+            fields: [
+              { name: 'title', type: 'string', required: true, label: 'Title' },
+              { name: 'body', type: 'markdown', isBody: true, label: 'Body' },
+            ],
+          });
+          await load('cms');
+        } else if (msg.type === 'cmsdelcol' && msg.project && msg.collection) {
+          const ok = await vscode.window.showWarningMessage(
+            `Delete collection "${msg.collection}" from the CMS manifest? Entry files stay in the project code.`,
+            { modal: true },
+            'Delete',
+          );
+          if (ok === 'Delete') {
+            await api.cmsDeleteCollection(await clientFor(account.accountId), msg.project, msg.collection);
+            await load('cms');
+          }
+        } else if (msg.type === 'mediaupload') {
+          const n = await uploadMediaFlow(await clientFor(account.accountId));
+          if (n > 0) {
+            vscode.window.showInformationMessage(`Uploaded ${n} file(s) to the media library.`);
+            await load('media');
+          }
+        } else if (msg.type === 'mediarename' && msg.id) {
+          const title = await vscode.window.showInputBox({ prompt: 'New title', value: msg.name ?? '' });
+          if (title) {
+            await api.mediaUpdate(await clientFor(account.accountId), msg.id, { title });
+            await load('media');
+          }
+        } else if (msg.type === 'mediadel' && msg.id) {
+          const ok = await vscode.window.showWarningMessage(`Delete "${msg.name || 'asset'}" from the media library?`, { modal: true }, 'Delete');
+          if (ok !== 'Delete') return;
+          try {
+            await api.mediaDelete(await clientFor(account.accountId), msg.id);
+          } catch (err) {
+            const m = err instanceof Error ? err.message : String(err);
+            if (/in_use|409/i.test(m)) {
+              const force = await vscode.window.showWarningMessage(
+                'This asset is referenced by content (emails, pages, CMS entries). Delete anyway and leave those references broken?',
+                { modal: true },
+                'Delete anyway',
+              );
+              if (force !== 'Delete anyway') return;
+              await api.mediaDelete(await clientFor(account.accountId), msg.id, true);
+            } else {
+              throw err;
+            }
+          }
+          await load('media');
+        } else if (msg.type === 'copyurl' && msg.url) {
+          await vscode.env.clipboard.writeText(msg.url);
+          vscode.window.showInformationMessage('URL copied.');
+        } else if (msg.type === 'openurl' && msg.url) {
+          await vscode.env.openExternal(vscode.Uri.parse(msg.url));
+        } else if (msg.type === 'memedit' && msg.id) {
+          const doc = await vscode.workspace.openTextDocument(memoryUri(account.accountId, msg.id, msg.domain ?? 'memory'));
+          await vscode.window.showTextDocument(doc, { preview: false });
+        } else if (msg.type === 'memnew') {
+          const type = await vscode.window.showQuickPick(['memory', 'skill', 'rule', 'command', 'agent', 'identity'], {
+            placeHolder: 'Entry type',
+          });
+          if (!type) return;
+          const name = await vscode.window.showInputBox({
+            prompt: type === 'memory' ? 'Domain (e.g. seo, outbound)' : 'Name (kebab-case)',
+            validateInput: (v) => (/^[a-z0-9][a-z0-9_-]*$/.test(v) ? undefined : 'lowercase letters, digits, dashes'),
+          });
+          if (!name) return;
+          const created = await api.memoryCreate(await clientFor(account.accountId), {
+            type,
+            name,
+            content: `# ${name}\n\n(Write the ${type} content here, then save.)\n`,
+          });
+          await load('knowledge');
+          const newId = created?.id ? String(created.id) : undefined;
+          if (newId) {
+            const doc = await vscode.workspace.openTextDocument(memoryUri(account.accountId, newId, created?.domain ?? name));
+            await vscode.window.showTextDocument(doc, { preview: false });
+          }
+        } else if (msg.type === 'memdel' && msg.id) {
+          const ok = await vscode.window.showWarningMessage(
+            `Delete memory entry "${msg.domain || msg.id}"? (Recoverable — a snapshot is kept in version history.)`,
+            { modal: true },
+            'Delete',
+          );
+          if (ok === 'Delete') {
+            await api.memoryDelete(await clientFor(account.accountId), msg.id);
+            await load('knowledge');
+          }
+        } else if (msg.type === 'memhistory' && msg.id) {
+          const client = await clientFor(account.accountId);
+          const versions = await api.memoryVersions(client, msg.id);
+          if (versions.length === 0) {
+            vscode.window.showInformationMessage('No version history yet for this entry.');
+            return;
+          }
+          const pick = await vscode.window.showQuickPick(
+            versions.map((v) => ({
+              label: `v${v.version ?? '?'}`,
+              description: v.created_at ? new Date(v.created_at).toLocaleString() : '',
+              versionId: String(v.version_id ?? ''),
+            })),
+            { placeHolder: 'Restore which snapshot? (forward-restore — current content is snapshotted first)' },
+          );
+          if (pick?.versionId) {
+            await api.memoryRestoreVersion(client, pick.versionId);
+            vscode.window.showInformationMessage('Version restored.');
+            await load('knowledge');
+          }
+        } else if (msg.type === 'memtrain') {
+          await vscode.env.clipboard.writeText(trainPrompt(account, msg.domain));
+          vscode.window.showInformationMessage('Training prompt copied — paste it into Claude Code or Codex in this account\'s workspace.');
+        } else if (msg.type === 'kbnew') {
+          const name = await vscode.window.showInputBox({ prompt: 'Knowledge base name' });
+          if (!name) return;
+          const description = await vscode.window.showInputBox({ prompt: 'Description (optional)' });
+          if (description === undefined) return;
+          await api.kbCreate(await clientFor(account.accountId), { name, ...(description ? { description } : {}) });
+          await load('knowledge');
+        } else if (msg.type === 'kbdel' && msg.id) {
+          const ok = await vscode.window.showWarningMessage(
+            `Delete knowledge base "${msg.name || msg.id}" and all its documents?`,
+            { modal: true },
+            'Delete',
+          );
+          if (ok === 'Delete') {
+            await api.kbDelete(await clientFor(account.accountId), msg.id);
+            await load('knowledge');
+          }
         } else if (msg.type === 'open') {
           await vscode.env.openExternal(vscode.Uri.parse(msg.sub ? `${dashBase}/${msg.sub}` : dashBase));
         }
@@ -662,7 +1112,8 @@ export function openAccountConsole(
 
 function consoleHtml(webview: vscode.Webview, label: string): string {
   const nonce = crypto.randomBytes(16).toString('hex');
-  const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';`;
+  // img-src allows remote https + data: — the Media Library grid renders CDN thumbnails.
+  const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; img-src ${webview.cspSource} https: data:; script-src 'nonce-${nonce}';`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -722,6 +1173,18 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
     .drillgrid { display: flex; gap: 24px; flex-wrap: wrap; }
     .drillgrid table { width: auto; }
     .rawlink { display: block; margin-top: 16px; }
+    /* ── media grid ── */
+    .toolbar { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+    .toolbar input[type=text] { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 5px; padding: 4px 8px; font-size: 12px; flex: 1; max-width: 260px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
+    .card { background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-panel-border); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+    .thumb { height: 110px; display: flex; align-items: center; justify-content: center; background: var(--vscode-input-background); cursor: pointer; overflow: hidden; }
+    .thumb img { max-width: 100%; max-height: 100%; object-fit: cover; }
+    .ext { font-size: 11px; font-weight: 600; opacity: .55; text-transform: uppercase; letter-spacing: .05em; }
+    .cardname { font-size: 11px; padding: 6px 8px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cardsub { font-size: 10px; opacity: .55; padding: 0 8px; }
+    .cardacts { display: flex; gap: 2px; padding: 4px 6px 6px; flex-wrap: wrap; }
+    .cardacts button { padding: 2px 7px; font-size: 10px; }
   </style>
 </head>
 <body>
@@ -814,6 +1277,8 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
       var openCt=0;tasks.forEach(function(t){if(!isDone(t))openCt++;});
       var sec=el('div','sec');sec.appendChild(el('span',null,'Tasks'));
       sec.appendChild(el('span','ct',openCt+' open · '+(tasks.length-openCt)+' completed'));
+      var nt=btn('+ New Task','',function(){vscode.postMessage({type:'newtask'});});
+      nt.style.marginLeft='auto';sec.appendChild(nt);
       content.appendChild(sec);
       content.appendChild(smartTable({
         rows:tasks,
@@ -838,8 +1303,11 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
           {h:'project',get:function(t){return proj(t)||'-';}},
           {h:'created',get:function(t){return t.created_at?String(t.created_at).slice(0,10):'';}},
           {h:'',get:function(){return '';},render:function(t){
-            if(isDone(t))return document.createTextNode('');
-            return btn('Done','ghost',function(){vscode.postMessage({type:'complete',id:t.id});});
+            var act=el('span');
+            if(!isDone(t))act.appendChild(btn('Done','ghost',function(){vscode.postMessage({type:'complete',id:t.id});}));
+            act.appendChild(btn('Edit','ghost',function(){vscode.postMessage({type:'taskedit',id:t.id,status:String(t.status||'')});}));
+            act.appendChild(btn('Delete','ghost',function(){vscode.postMessage({type:'taskdel',id:t.id,title:t.title||t.name||''});}));
+            return act;
           }}
         ]
       }));
@@ -1223,6 +1691,165 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
       content.appendChild(rawLink());
     }
 
+    function renderCmsDash(d){
+      clear(content);
+      var sites=(d.sites||[]);
+      if(!sites.length){content.appendChild(el('div','muted','No website projects.'));content.appendChild(rawLink());return;}
+      content.appendChild(el('div','muted','Entries open as editable JSON in the editor - saving writes straight to the CMS (drafts stay drafts until promoted).'));
+      sites.forEach(function(s){
+        var sec=el('div','sec');sec.appendChild(el('span',null,s.name));
+        var nc=btn('+ New collection','ghost',function(){vscode.postMessage({type:'cmsnewcol',project:s.id});});
+        nc.style.marginLeft='auto';sec.appendChild(nc);
+        content.appendChild(sec);
+        if(s.error){content.appendChild(el('div','alerts','CMS unavailable: '+s.error));return;}
+        if(!(s.collections||[]).length){content.appendChild(el('div','muted','No CMS collections in this project yet.'));return;}
+        s.collections.forEach(function(c){
+          var csec=el('div','sec');
+          csec.appendChild(el('span',null,c.name));
+          csec.appendChild(el('span','ct',(c.entries||[]).length+' entries · '+(c.format||'')+(c.route?(' · '+c.route):'')));
+          var ne=btn('+ New entry','ghost',function(){vscode.postMessage({type:'cmsnew',project:s.id,collection:c.id});});
+          ne.style.marginLeft='auto';csec.appendChild(ne);
+          csec.appendChild(btn('Delete collection','ghost',function(){vscode.postMessage({type:'cmsdelcol',project:s.id,collection:c.id});}));
+          content.appendChild(csec);
+          if(!(c.entries||[]).length){content.appendChild(el('div','muted','No entries.'));return;}
+          content.appendChild(smartTable({
+            rows:c.entries,
+            search:c.entries.length>8,
+            facets:c.entries.length>8?[{label:'status',get:function(e){return e.status;}}]:[],
+            sortIdx:3,sortDesc:true,
+            onRow:function(tr,e){vscode.postMessage({type:'cmsedit',project:s.id,collection:c.id,slug:e.slug});},
+            cols:[
+              {h:'slug',get:function(e){return e.slug;}},
+              {h:'title',get:function(e){return e.title||'-';}},
+              {h:'status',get:function(e){return e.status;},render:function(e){return el('span','badge '+(e.status==='published'?'ok':''),e.status||'?');}},
+              {h:'updated',get:function(e){return e.updated?String(e.updated).slice(0,10):'';}},
+              {h:'',get:function(){return '';},render:function(e){
+                var act=el('span');
+                act.appendChild(btn('Edit','ghost',function(){vscode.postMessage({type:'cmsedit',project:s.id,collection:c.id,slug:e.slug});}));
+                if(e.status==='draft')act.appendChild(btn('Publish','ghost',function(){vscode.postMessage({type:'cmspromote',project:s.id,collection:c.id,slug:e.slug});}));
+                act.appendChild(btn('Delete','ghost',function(){vscode.postMessage({type:'cmsdel',project:s.id,collection:c.id,slug:e.slug});}));
+                return act;
+              }}
+            ]
+          }));
+        });
+      });
+      content.appendChild(rawLink());
+    }
+
+    var mediaAll=[];
+    function renderMediaDash(d){
+      clear(content);
+      mediaAll=(d.assets||[]);
+      var bar=el('div','toolbar');
+      var inp=document.createElement('input');inp.type='text';inp.placeholder='Filter media...';
+      inp.addEventListener('input',function(){drawMediaGrid(inp.value.toLowerCase());});
+      bar.appendChild(inp);
+      bar.appendChild(btn('Upload','',function(){vscode.postMessage({type:'mediaupload'});}));
+      bar.appendChild(el('span','ct',mediaAll.length+' assets'));
+      content.appendChild(bar);
+      var host=el('div');host.id='mediagrid';content.appendChild(host);
+      drawMediaGrid('');
+      content.appendChild(rawLink());
+    }
+    function drawMediaGrid(q){
+      var host=document.getElementById('mediagrid');
+      if(!host)return;
+      clear(host);
+      var items=mediaAll.filter(function(a){
+        if(!q)return true;
+        return (a.name+' '+a.kind+' '+a.folder+' '+a.source).toLowerCase().indexOf(q)>=0;
+      });
+      if(!items.length){host.appendChild(el('div','muted',q?'No matches.':'No media yet - Upload puts files in the account library.'));return;}
+      var grid=el('div','grid');
+      items.forEach(function(a){
+        var card=el('div','card');
+        var th=el('div','thumb');
+        var isImg=(a.mime&&a.mime.indexOf('image/')===0)||a.kind==='image';
+        if(isImg&&a.url){
+          var img=document.createElement('img');
+          img.decoding='async';img.referrerPolicy='no-referrer';
+          // NO loading=lazy: unreliable inside webview iframes - below-fold thumbs never load.
+          img.src=a.url;
+          img.addEventListener('error',function(){clear(th);th.appendChild(el('span','ext',(a.name.split('.').pop()||'?')));});
+          th.appendChild(img);
+        }else{
+          th.appendChild(el('span','ext',(a.kind||a.name.split('.').pop()||'file')));
+        }
+        th.title='Click to copy URL';
+        th.addEventListener('click',function(){if(a.url)vscode.postMessage({type:'copyurl',url:a.url});});
+        card.appendChild(th);
+        card.appendChild(el('div','cardname',a.name));
+        var sub=[];if(a.folder)sub.push(a.folder);if(a.size)sub.push(Math.round(a.size/1024)+'kb');if(a.source)sub.push(a.source);
+        card.appendChild(el('div','cardsub',sub.join(' · ')));
+        var acts=el('div','cardacts');
+        if(a.url)acts.appendChild(btn('Open','ghost',function(){vscode.postMessage({type:'openurl',url:a.url});}));
+        acts.appendChild(btn('Rename','ghost',function(){vscode.postMessage({type:'mediarename',id:a.id,name:a.name});}));
+        acts.appendChild(btn('Delete','ghost',function(){vscode.postMessage({type:'mediadel',id:a.id,name:a.name});}));
+        card.appendChild(acts);
+        grid.appendChild(card);
+      });
+      host.appendChild(grid);
+    }
+
+    function renderKnowDash(d){
+      clear(content);
+      var mems=(d.memories||[]);
+      var sec=el('div','sec');sec.appendChild(el('span',null,'AI memory'));
+      sec.appendChild(el('span','ct',mems.length+' entries - what the agents know about this account'));
+      var nm=btn('+ New entry','',function(){vscode.postMessage({type:'memnew'});});
+      nm.style.marginLeft='auto';sec.appendChild(nm);
+      sec.appendChild(btn('Train with Claude/Codex','ghost',function(){vscode.postMessage({type:'memtrain'});}));
+      content.appendChild(sec);
+      content.appendChild(el('div','muted','Click a row to open it as editable markdown - saving writes back (every save keeps a version snapshot). "Train" copies a prompt that has Claude Code interview you and rewrite the entry.'));
+      if(!mems.length){content.appendChild(el('div','muted','No memory yet - chat with departments or use "+ New entry".'));}
+      else{
+        content.appendChild(smartTable({
+          rows:mems,
+          search:true,
+          facets:[{label:'type',get:function(m){return m.type;}}],
+          sortIdx:3,sortDesc:true,
+          onRow:function(tr,m){vscode.postMessage({type:'memedit',id:m.id,domain:m.domain});},
+          cols:[
+            {h:'domain',get:function(m){return m.domain;}},
+            {h:'type',get:function(m){return m.type;}},
+            {h:'version',num:true,get:function(m){return m.version||0;}},
+            {h:'updated',get:function(m){return m.updated?String(m.updated).slice(0,10):'';}},
+            {h:'',get:function(){return '';},render:function(m){
+              var act=el('span');
+              act.appendChild(btn('Edit','ghost',function(){vscode.postMessage({type:'memedit',id:m.id,domain:m.domain});}));
+              act.appendChild(btn('Train','ghost',function(){vscode.postMessage({type:'memtrain',domain:m.domain});}));
+              act.appendChild(btn('History','ghost',function(){vscode.postMessage({type:'memhistory',id:m.id});}));
+              act.appendChild(btn('Delete','ghost',function(){vscode.postMessage({type:'memdel',id:m.id,domain:m.domain});}));
+              return act;
+            }}
+          ]
+        }));
+      }
+      var kbs=(d.kbs||[]);
+      var sec2=el('div','sec');sec2.appendChild(el('span',null,'Knowledge bases'));
+      sec2.appendChild(el('span','ct',kbs.length+' - document stores for semantic search'));
+      var nk=btn('+ New KB','ghost',function(){vscode.postMessage({type:'kbnew'});});
+      nk.style.marginLeft='auto';sec2.appendChild(nk);
+      content.appendChild(sec2);
+      if(!kbs.length){content.appendChild(el('div','muted','No knowledge bases.'));}
+      else{
+        var wrap=el('div','tablewrap');var t=el('table');
+        var h=el('tr');['name','type','docs','default',''].forEach(function(x){h.appendChild(el('th',null,x));});t.appendChild(h);
+        kbs.forEach(function(k){
+          var tr=el('tr');
+          tr.appendChild(el('td',null,k.name));
+          tr.appendChild(el('td',null,k.type||''));
+          tr.appendChild(el('td',null,k.docs!==undefined?String(k.docs):''));
+          tr.appendChild(el('td',null,k.isDefault?'yes':''));
+          var td=el('td');td.appendChild(btn('Delete','ghost',function(){vscode.postMessage({type:'kbdel',id:k.id,name:k.name});}));tr.appendChild(td);
+          t.appendChild(tr);
+        });
+        wrap.appendChild(t);content.appendChild(wrap);
+      }
+      content.appendChild(rawLink());
+    }
+
     function renderDept(d){
       clear(content);
       var sets=(d.datasets||[]);
@@ -1276,9 +1903,11 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
       if(m.type==='tabs'){TABS=m.tabs||TABS;renderNav();return;}
       if(m.type==='banner'){var bb=el('div','alerts',m.text);bb.style.margin='10px 16px 0';document.querySelector('.main').insertBefore(bb,content);return;}
       if(m.type==='goto'){if(m.tab)select(m.tab,m.focus);return;}
+      if(m.type==='reloadif'){if(m.tab===current)select(current);return;}
       if(m.type==='ppcdrill'){renderDrill(m.id,m.drill||{});return;}
       if(m.type==='ppcads'){renderAds(m.id,m.ads||[]);return;}
       if(m.type!=='tab')return;
+      if(m.tab!==current)return; // stale response for a tab the user left
       if(m.data&&m.data.error){clear(content);content.appendChild(el('div','err',m.data.error));return;}
       if(m.tab==='tasks')renderTasks(m.data);
       else if(m.tab==='automations')renderAuto(m.data);
@@ -1287,6 +1916,9 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
       else if(m.data&&m.data.kind==='emaildash')renderEmailDash(m.data);
       else if(m.data&&m.data.kind==='ppcdash')renderPpcDash(m.data);
       else if(m.data&&m.data.kind==='seodash')renderSeoDash(m.data);
+      else if(m.data&&m.data.kind==='cmsdash')renderCmsDash(m.data);
+      else if(m.data&&m.data.kind==='mediadash')renderMediaDash(m.data);
+      else if(m.data&&m.data.kind==='knowdash')renderKnowDash(m.data);
       else renderDept(m.data);
     });
 

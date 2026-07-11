@@ -27,7 +27,7 @@ import { pullEnv, pushEnv } from './env';
 import { openMediaGallery } from './gallery';
 import { openReviewAnnotator } from './reviewAnnotator';
 import { openDashboard } from './dashboard';
-import { openAccountConsole } from './console';
+import { openAccountConsole, refreshConsoleTab } from './console';
 import { openModulePanel, isEntitled } from './panel';
 import { MODULES, PROJECT_MODULE, moduleById, moduleGroupGate } from './modules';
 import { openTaskDetail } from './taskDetail';
@@ -56,6 +56,7 @@ import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
 import { setupLocalSupabase } from './localSupabase';
 import { scaffoldLocalAutomations, installAgencyCadence } from './localAutomations';
 import { captureBaseline, writeProjectLink, readProjectLink, type ProjectLink } from './workspace';
+import { registerHivekuFs, envUri } from './platformFs';
 
 let accounts: AccountStore;
 let log: vscode.OutputChannel;
@@ -349,6 +350,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.showEnvLogs', (node) => showEnvLogsForNode(node)),
     vscode.commands.registerCommand('hiveku.envLogs', () => withScm((s) => envLogsForScm(s))),
     vscode.commands.registerCommand('hiveku.consoleOpen', (arg) => openConsoleFocused(arg)),
+    vscode.commands.registerCommand('hiveku.openProjectEnv', (node) => openProjectEnv(node)),
+    vscode.commands.registerCommand('hiveku.projectDatabase', (node) => openProjectDatabase(node)),
     vscode.commands.registerCommand('hiveku.refreshConsole', () => {
       invalidateEntitlements();
       consoleTree.refresh();
@@ -364,6 +367,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.operate', (node) => openOperate(node)),
     vscode.commands.registerCommand('hiveku.projectPanel', () => withScm((s) => openProjectPanel(s))),
     vscode.workspace.onDidChangeWorkspaceFolders(() => loadWorkspaceScms()),
+  );
+
+  // hiveku: virtual documents (.env secrets, CMS entries, memory) — editor-native CRUD.
+  registerHivekuFs(context, clientForAccount);
+  // A saved CMS/memory doc should reflect in the open console tab behind it.
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument((doc) => {
+      if (doc.uri.scheme !== 'hiveku') return;
+      const seg = doc.uri.path.replace(/^\/+/, '').split('/');
+      if (seg[0] === 'cms') refreshConsoleTab(seg[1], 'cms');
+      else if (seg[0] === 'memory') refreshConsoleTab(seg[1], 'knowledge');
+    }),
   );
 
   tree = new HivekuTreeProvider(accounts, clientForAccount);
@@ -1154,10 +1169,22 @@ async function downloadEverything(node: { record: AccountRecord }): Promise<void
   }
 }
 
-/** Open a chat panel with a department agent. */
-async function chatDepartment(node: { record: AccountRecord; department: string }): Promise<void> {
-  if (!node?.record || !node.department) return;
-  openDepartmentChat(node.record, node.department, clientForAccount);
+/** Open a chat panel with a department agent. Falls back to pickers when
+ * invoked without a node (palette / account context menu) — the Brand Knowledge
+ * tree that used to carry the department nodes was removed 2026-07-11. */
+async function chatDepartment(node: { record?: AccountRecord; department?: string } | undefined): Promise<void> {
+  const record = node?.record ?? (await accounts.pick('Chat with a department in which account?'));
+  if (!record) return;
+  let department = node?.department;
+  if (!department) {
+    const pick = await vscode.window.showQuickPick(
+      DEPARTMENTS.map((d) => ({ label: d.label, id: d.id })),
+      { placeHolder: 'Which department agent?' },
+    );
+    if (!pick) return;
+    department = pick.id;
+  }
+  openDepartmentChat(record, department, clientForAccount);
 }
 
 async function completeTask(node: { record: AccountRecord; task: api.PmTask }): Promise<void> {
@@ -1533,6 +1560,64 @@ async function openHelpdesk(node: { record: AccountRecord } | undefined): Promis
 function openTask(node: { record: AccountRecord; task: api.PmTask } | undefined): void {
   if (!node?.record || !node.task) return;
   openTaskDetail(node.record, node.task, clientForAccount, appUrl);
+}
+
+/** The project's secrets as an editable virtual .env (save pushes to Hiveku). */
+async function openProjectEnv(node: { record: AccountRecord; project: api.SiteSummary } | undefined): Promise<void> {
+  if (!node?.record || !node.project?.id) return;
+  try {
+    const doc = await vscode.workspace.openTextDocument(
+      envUri(node.record.accountId, node.project.id, node.project.name || node.project.slug || 'project'),
+    );
+    await vscode.window.showTextDocument(doc, { preview: false });
+  } catch (err) {
+    vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
+  }
+}
+
+/** Browse the project's database: table pick → live row preview (database_query). */
+async function openProjectDatabase(node: { record: AccountRecord; project: api.SiteSummary } | undefined): Promise<void> {
+  if (!node?.record || !node.project?.id) return;
+  try {
+    const client = await clientForAccount(node.record.accountId);
+    const projectId = node.project.id;
+    const tables = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Window, title: 'Hiveku: loading database…' },
+      () => api.databaseTables(client, projectId),
+    );
+    if (tables.length === 0) {
+      const provision = await vscode.window.showInformationMessage(
+        'No database tables (or not provisioned yet). Provision a Hiveku-managed database for this project?',
+        'Provision',
+        'Cancel',
+      );
+      if (provision === 'Provision') {
+        await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, title: 'Provisioning database…' },
+          () => client.callToolJson('database_provision', { project_id: projectId }),
+        );
+        vscode.window.showInformationMessage('Database provisioned.');
+        tree.refresh();
+      }
+      return;
+    }
+    const table = await vscode.window.showQuickPick(tables, {
+      placeHolder: `${tables.length} table(s) — pick one to preview rows`,
+    });
+    if (!table) return;
+    const rowsRaw = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Window, title: `Hiveku: reading ${table}…` },
+      () => client.callToolJson<unknown>('database_query', { project_id: projectId, sql: `SELECT * FROM "${table}" LIMIT 50` }),
+    );
+    // Render the preview as a JSON doc — grep-able, copy-able, Claude-readable.
+    const doc = await vscode.workspace.openTextDocument({
+      language: 'json',
+      content: JSON.stringify(rowsRaw, null, 2),
+    });
+    await vscode.window.showTextDocument(doc, { preview: true });
+  } catch (err) {
+    vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
+  }
 }
 
 /** Open the Account Console (Tasks board + CRM + Automations) for an account. */
