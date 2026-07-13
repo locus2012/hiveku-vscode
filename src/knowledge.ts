@@ -1150,6 +1150,14 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   \`delete_missing: true\` (ALWAYS \`dry_run: true\` first). Importing a brand-new app? Create the project
   with \`site_create({ creation_mode: "import" })\` so the starter kit never contaminates it. Bulk
   removals: \`project_files_bulk_delete({ paths })\` — one call, not N rate-limited singles.
+- **SVG is TEXT, not a binary asset — save it like source code.** An SVG is XML: save it with
+  \`project_file_save\` / \`project_files_bulk_save\` (encoding \`utf-8\`, the default) or let the tarball
+  lane carry it — it lands in the code lane so \`import Icon from "./icon.svg"\` resolves and so a bulk
+  pull returns its content. Do NOT base64 it, and do NOT \`assets_upload\` a component-imported SVG (the
+  S3 asset lane breaks that import; assets_upload is only for a plain \`public/*.svg\` referenced by
+  URL). Script / \`onload=\` / \`<foreignObject>\` / \`javascript:\` content is stripped server-side for
+  safety (a project SVG is served same-origin with the live site) — expect a \`warning\` if anything
+  was removed; that is intended, not a failure.
 - **Preview debugging order (all work without escalation):** \`preview_runtime_errors\` (parsed SSR
   stacks from the dev server) → \`preview_http_get\` (exact dev-server response, incl. 500 bodies) →
   \`preview_read_file\` (any container file) → \`preview_logs\`. \`preview_exec\` honors \`cwd\` (default
