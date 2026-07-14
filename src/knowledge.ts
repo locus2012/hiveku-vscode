@@ -1157,6 +1157,7 @@ Manager), NOT in the code, and is injected into the deployed Lambdas + Fly previ
   everywhere, \`KEY_DEV\` local override, \`KEY_PROD\`/\`KEY_STAGING\` per tier.
 - **Never** paste a secret value into code, a commit, memory, or a reply; never commit \`.env.local\`.
 
+
 ### Keep Hiveku in sync — it is the source of truth (memory + PM)
 Hiveku, NOT your local files, is the system of record. After meaningful work, write back so every
 department and the dashboard agents stay current — don't let what you learned or did live only on disk.
@@ -1223,6 +1224,21 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   on static-origin tiers) only heal via this tool or the next preview start. It also returns
   \`leftovers[]\` — old-framework artifacts to delete (a lingering \`vite.config.ts\`, stale \`vite\`/\`next\`
   deps in package.json) so the build analyzers never see mixed signals. Clean those up in the same push.
+- **YOU ARE NOT THE ONLY WRITER — check what is CURRENT before you start, and again before you
+  push.** Other agents (Claude Code, Codex, the in-app AI, teammates) push to these same Hiveku
+  projects, sometimes while you are working. Your pull goes stale.
+  - **Before starting:** \`project_version_log({ project_id, limit: 20 })\` — the one call that answers
+    "what happened to this project recently?" (edits, checkpoints, restores, deploys, newest-first).
+    Recent activity from someone else = assume this project is live and move carefully.
+  - **Before pushing** (especially after a long session): re-run
+    \`project_files_status({ project_id, local: [{path, sha256}] })\`. \`changed\` = someone edited a file
+    you also hold; \`only_remote\` = someone ADDED files you do not have. Reconcile — never blind-overwrite.
+  - **Before any tree-replace** (\`delete_missing: true\` on import/bulk-save): ALWAYS \`dry_run: true\`
+    first and READ the would-delete list. A path you did not send may be another agent’s NEW file, not
+    a leftover — deleting it destroys their work. If the list has anything you did not intend to
+    remove, STOP, re-pull, reconcile.
+  - Every destructive op is checkpointed (\`checkpoint_hash\` = rollback target), but recovery is a
+    mess — prevention is the job. When in doubt, prefer a targeted write over a tree-replace.
 - **ONE FOLDER = ONE ACCOUNT. Keep every scratch file inside it.** This machine runs MANY Hiveku
   account folders at once, so \`/tmp\` is shared ground: two accounts writing \`/tmp/site.tar.gz\` at
   the same time overwrite each other, and one account’s data leaks into another’s session. Put ALL
@@ -1565,6 +1581,21 @@ It reports, per knowledge item:
 If that file is missing or old, re-run the sync check or re-download from the sidebar.
 Local memory files are read-only as far as Hiveku is concerned — persist changes with
 \`memory_create\` / \`memory_update\` / \`memory_delete\`, then re-download.
+
+**You are NOT the only writer.** Other agents (Claude Code, Codex, the in-app AI) and real people
+push to this account WHILE you work — memory, content, CMS entries, tasks, project code. So:
+- **See what is current BEFORE you start**, not just when you finish. Read/list the thing you are
+  about to change; for project code, \`project_version_log({ project_id, limit: 20 })\` shows every
+  recent edit, checkpoint, restore and deploy in one call.
+- **Re-check right before you write.** A long session makes your snapshot stale.
+- **Never blind-overwrite.** If something moved under you, reconcile — do not steamroll it. Anything
+  destructive (tree-replace, \`delete_missing\`) gets a \`dry_run\` first: read what it would delete.
+
+**Scratch stays in \`.hiveku/tmp/\`.** This machine runs MANY account folders at once, so \`/tmp\` is
+shared ground — two accounts writing the same temp file overwrite each other and leak across
+sessions. Put every temporary file (downloads, intermediate output, generated scripts, notes) in
+\`.hiveku/tmp/\` (per-account, gitignored, never pushed). Never write scratch to \`/tmp\`, your home
+directory, or the folder root; never touch another account's folder.
 
 ## Folder layout
 - \`memory/<dept>/\` \`skills/<dept>/\` \`rules/<dept>/\` — department knowledge (.md)

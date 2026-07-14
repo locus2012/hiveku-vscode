@@ -80,6 +80,11 @@ Ignore only its Claude-specific file paths (\`.claude/*\`) — your equivalents 
 
 Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
 - Verify identity before ANY write: \`get_account_info\` must return THIS account.
+- **You are NOT the only writer.** Other agents and people push to these same projects while you work.
+  Check what is current BEFORE you start (\`project_version_log\`) and AGAIN before you push
+  (\`project_files_status\` — \`changed\` = they edited it, \`only_remote\` = they added files you lack).
+  Before any tree-replace (\`delete_missing: true\`), \`dry_run\` first and read the would-delete list: a
+  file you did not send may be someone else's NEW work, not a leftover. Never blind-overwrite.
 - **Keep ALL scratch work in \`.hiveku/tmp/\`.** This machine runs many account folders at once, so
   \`/tmp\` is shared ground — two accounts writing \`/tmp/site.tar.gz\` overwrite each other and leak
   across sessions. Never write temp files to \`/tmp\`, your home dir, or the repo root; never touch
