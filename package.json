@@ -2,7 +2,7 @@
   "name": "hiveku-vscode",
   "displayName": "Hiveku",
   "description": "Run entire Hiveku accounts from VS Code with Claude Code — role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
-  "version": "0.70.3",
+  "version": "0.71.0",
   "publisher": "hiveku",
   "license": "MIT",
   "icon": "icon.png",
@@ -904,6 +904,11 @@
           "type": "boolean",
           "default": false,
           "markdownDescription": "Also scaffold OpenAI Codex support into Hiveku folders: `AGENTS.md`, a project-scoped `.codex/config.toml` carrying the folder's Hiveku MCP server + account key, and `.agents/skills/*` mirrors of every /hiveku-* command — so the Codex CLI / IDE extension works the same as Claude Code. Enable via **Hiveku: Set Up Codex Support** (it also offers to pre-trust your folders in `~/.codex/config.toml`, which Codex requires before loading project config)."
+        },
+        "hiveku.sandboxWorkspace": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Sandbox each Hiveku account folder at the OS level, so Claude Code's **terminal commands physically cannot write outside that account's folder** (the per-session temp and the package caches `~/.npm`, `~/.cache`, `~/Library/Caches` stay writable so installs still work).\n\nThis is the only hard guarantee of per-account siloing: permission rules bind the edit tools, but a shell command like `tar czf /tmp/x.tar.gz` is only stopped by the sandbox. Recommended when one machine works many accounts.\n\nOff by default because it constrains every subprocess — turn it on, then run **Hiveku: Refresh Setup** and confirm your builds still pass."
         }
       }
     },

@@ -338,6 +338,19 @@ let configuredPermissionMode: PermissionMode = 'acceptEdits';
 export function setPermissionMode(mode: PermissionMode): void {
   configuredPermissionMode = mode;
 }
+
+/**
+ * OS-level workspace sandbox (hiveku.sandboxWorkspace). When on, Claude Code's
+ * Bash commands physically cannot write outside this account's folder — the
+ * only real guarantee of per-account siloing, since permission deny rules bind
+ * the Write/Edit TOOLS but not arbitrary subprocesses (`tar czf /tmp/x`).
+ * Default OFF: the sandbox also walls off tool caches, so we allow-list the
+ * common ones below; flip it on per-machine once builds are verified.
+ */
+let configuredSandbox = false;
+export function setSandboxWorkspace(on: boolean): void {
+  configuredSandbox = on;
+}
 export function getPermissionMode(): PermissionMode {
   return configuredPermissionMode;
 }
@@ -469,10 +482,52 @@ async function writeClaudeSettings(baseDir: string, mode: PermissionMode = confi
   // Retire the older broad env/mcp deny rules if a previous scaffold wrote them.
   const RETIRED = new Set(['Read(.env)', 'Read(.env.*)', 'Read(**/.env)', 'Read(**/.env.*)', 'Read(.mcp.json)', 'Read(**/.mcp.json)']);
   let denyList = deny.filter((r) => !RETIRED.has(r));
-  for (const rule of ['Read(**/.env.local)', 'Read(**/.env.*.local)']) {
+  // SILOING (one folder = one account, and a machine runs hundreds of them):
+  // block the SHARED temp, so scratch can't collide or leak between accounts.
+  // `//path` is the absolute-path form in permission rules; deny beats allow AND
+  // beats the permission mode, so these hold even under bypassPermissions. They
+  // bind the Write/Edit TOOLS — Bash subprocesses are contained by the sandbox.
+  //
+  // NOT denied: `~/.claude/**`. Claude Code writes MEMORY there with the Write
+  // tool, under a per-workspace-path directory (…/projects/<slug>/memory) that
+  // is already siloed per account — and a deny rule can't carry an exception,
+  // so denying it would silently kill memory in every account folder.
+  for (const rule of [
+    'Read(**/.env.local)',
+    'Read(**/.env.*.local)',
+    'Write(//tmp/**)',
+    'Edit(//tmp/**)',
+    'Write(//private/tmp/**)',
+    'Edit(//private/tmp/**)',
+  ]) {
     if (!haveDeny.has(rule) && !denyList.includes(rule)) denyList.push(rule);
   }
+  // Drop the over-broad rule if an earlier build of this scaffold wrote it.
+  const OVERBROAD = new Set(['Write(~/.claude/**)', 'Edit(~/.claude/**)']);
+  denyList = denyList.filter((r) => !OVERBROAD.has(r));
   (settings.permissions as Record<string, unknown>).deny = denyList;
+
+  // OS-level sandbox — the only thing that can stop a Bash command from writing
+  // outside this folder. Default writable = cwd + subdirs + the per-session
+  // temp, which IS the siloing guarantee; we allow-list the package/tool caches
+  // so npm/pnpm/git keep working. Opt-in (hiveku.sandboxWorkspace) because it
+  // constrains every subprocess on the machine's build tooling.
+  if (configuredSandbox) {
+    settings.sandbox = {
+      ...(typeof settings.sandbox === 'object' && settings.sandbox ? settings.sandbox : {}),
+      enabled: true,
+      filesystem: {
+        // Tool caches live outside the workspace — without these, npm install fails.
+        allowWrite: ['~/.npm', '~/.cache', '~/Library/Caches', '~/.pnpm-store', '~/.yarn'],
+        // The sandbox default already confines writes to the cwd; name the
+        // shared temp explicitly so a stray `tar czf /tmp/...` fails loudly.
+        denyWrite: ['/tmp/**', '/private/tmp/**'],
+      },
+    };
+  } else if (settings.sandbox && typeof settings.sandbox === 'object') {
+    // Toggled back off — disable rather than silently leaving it enforced.
+    (settings.sandbox as Record<string, unknown>).enabled = false;
+  }
   await writeAtomic(file, JSON.stringify(settings, null, 2) + '\n');
 }
 
@@ -998,6 +1053,34 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 /** Add patterns to a `.gitignore` without clobbering existing rules. */
+/**
+ * The workspace scratch dir. ONE machine runs hundreds of account folders, so a
+ * shared `/tmp` is a collision surface (two sessions writing /tmp/site.tar.gz
+ * clobber each other) AND a leak surface. `.hiveku/tmp/` is per-account,
+ * already gitignored (`.hiveku/`), already refused by every push/import path.
+ */
+async function writeScratchDir(baseDir: string): Promise<void> {
+  const dir = path.join(baseDir, '.hiveku', 'tmp');
+  await fs.mkdir(dir, { recursive: true });
+  await writeAtomic(
+    path.join(dir, 'README.md'),
+    [
+      '# Scratch space for this account',
+      '',
+      'Claude Code / Codex: put EVERY temporary file here — tarballs, intermediate',
+      'output, generated scripts, downloads, notes-to-self.',
+      '',
+      'Why not `/tmp`: this machine runs many Hiveku account folders at once. `/tmp` is',
+      'shared, so two accounts working at the same time overwrite each other (and leak',
+      "one account's data into another's session). This folder is per-account.",
+      '',
+      'Gitignored, never committed, never pushed to Hiveku, never included in a tarball',
+      'import. Safe to delete at any time.',
+      '',
+    ].join('\n'),
+  );
+}
+
 async function appendGitignore(baseDir: string, patterns: string[]): Promise<void> {
   const gi = path.join(baseDir, '.gitignore');
   let text = '';
@@ -1140,11 +1223,22 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   on static-origin tiers) only heal via this tool or the next preview start. It also returns
   \`leftovers[]\` — old-framework artifacts to delete (a lingering \`vite.config.ts\`, stale \`vite\`/\`next\`
   deps in package.json) so the build analyzers never see mixed signals. Clean those up in the same push.
+- **ONE FOLDER = ONE ACCOUNT. Keep every scratch file inside it.** This machine runs MANY Hiveku
+  account folders at once, so \`/tmp\` is shared ground: two accounts writing \`/tmp/site.tar.gz\` at
+  the same time overwrite each other, and one account’s data leaks into another’s session. Put ALL
+  temporary work — tarballs, intermediate output, generated scripts, downloads, notes-to-self — in
+  **\`.hiveku/tmp/\`** (per-account, gitignored, never pushed). Never write scratch to \`/tmp\`, to your
+  home directory, to \`~/.claude\`, or to the repo root (it pollutes the project and can get
+  committed). Never read or write another account’s folder.
+- **NEVER ingest local agent config into a project.** \`.mcp.json\` and \`.codex/config.toml\` carry
+  THIS account’s API key inlined; \`.env*\` carry secrets; \`.hiveku/\` \`.claude/\` \`.agents/\` are local
+  tooling. Exclude them from every tar (the server refuses them too, and reports
+  \`skipped_local_config\`). Real secrets belong in Hiveku’s store (\`project_secrets_*\`), never in code.
 - **Whole-tree / large / byte-exact pushes: use the TARBALL IMPORT LANE — never re-emit file bodies
   through yourself** (that's how \`&\` becomes \`&amp;\`, trailing newlines vanish, and big files
   truncate). Flow: \`project_import_presign({ project_id })\` →
-  \`tar czf /tmp/site.tar.gz --exclude node_modules --exclude .git --exclude .next -C <dir> .\` →
-  \`curl -T /tmp/site.tar.gz "<upload_url>" -H "Content-Type: application/gzip"\` →
+  \`COPYFILE_DISABLE=1 tar czf .hiveku/tmp/site.tar.gz --exclude node_modules --exclude .git --exclude .next --exclude .hiveku --exclude .claude --exclude .codex --exclude .agents --exclude .mcp.json --exclude ".env*" -C <dir> .\` →
+  \`curl -T .hiveku/tmp/site.tar.gz "<upload_url>" -H "Content-Type: application/gzip"\` →
   \`project_import_finalize({ project_id, key })\` → **verify** the returned per-file sha256 manifest
   against local hashes (\`shasum -a 256\`). Binaries auto-route to the CDN asset lane. Tree-replace via
   \`delete_missing: true\` (ALWAYS \`dry_run: true\` first). Importing a brand-new app? Create the project
@@ -1303,6 +1397,7 @@ export async function writeProjectScaffold(opts: ScaffoldOptions): Promise<void>
   // 4) Claude Code accelerators: a read-tool/safe-bash allowlist (fewer prompts +
   //    acceptEdits) and /hiveku-* slash commands for the common loop.
   await writeClaudeSettings(opts.baseDir, opts.permissionMode).catch(() => undefined);
+  await writeScratchDir(opts.baseDir).catch(() => undefined);
   await writeSlashCommands(opts.baseDir, opts.projectId).catch(() => undefined);
   await writeRoleSlashCommands(opts.baseDir, opts.role).catch(() => undefined);
   await writeAgencySkills(opts.baseDir, opts.role).catch(() => undefined);
@@ -1536,6 +1631,7 @@ ${MULTI_SESSION_BLOCK}${roleClaudeMdBlock(opts.role)}`;
   // allowlist (fewer prompts) + account-level /hiveku-* slash commands + the
   // user's role commands (/hiveku-daily and the role loops).
   await writeClaudeSettings(opts.baseDir, opts.permissionMode).catch(() => undefined);
+  await writeScratchDir(opts.baseDir).catch(() => undefined);
   await writeAccountSlashCommands(opts.baseDir).catch(() => undefined);
   await writeRoleSlashCommands(opts.baseDir, opts.role).catch(() => undefined);
   await writeAgencySkills(opts.baseDir, opts.role).catch(() => undefined);

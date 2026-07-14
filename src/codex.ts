@@ -80,6 +80,13 @@ Ignore only its Claude-specific file paths (\`.claude/*\`) — your equivalents 
 
 Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
 - Verify identity before ANY write: \`get_account_info\` must return THIS account.
+- **Keep ALL scratch work in \`.hiveku/tmp/\`.** This machine runs many account folders at once, so
+  \`/tmp\` is shared ground — two accounts writing \`/tmp/site.tar.gz\` overwrite each other and leak
+  across sessions. Never write temp files to \`/tmp\`, your home dir, or the repo root; never touch
+  another account's folder.
+- **Never ingest local agent config into a project.** \`.codex/config.toml\` and \`.mcp.json\` carry THIS
+  account's API key inlined, and \`.env*\` carry secrets — exclude them from every tar/push (the server
+  refuses them too). Secrets belong in \`project_secrets_*\`, never in project code.
 - **PM tasks are required** — create one when you start work, comment as you go, complete it when
   done, all attributed to the authenticated user (resolve via \`crm_list_users\`).
 - **Every completed task ends with an "Owner update"** — 2–4 calm, plain-language sentences a busy

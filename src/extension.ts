@@ -42,6 +42,7 @@ import {
   computeSyncStatus,
   hivekuMcpServer,
   setPermissionMode,
+  setSandboxWorkspace,
   setConnectedAsMap,
   setCodexSupport,
   type PermissionMode,
@@ -230,6 +231,7 @@ function refreshPermStatusBar(): void {
 
 function syncPermissionMode(): void {
   setPermissionMode(currentPermMode());
+  setSandboxWorkspace(vscode.workspace.getConfiguration('hiveku').get<boolean>('sandboxWorkspace', false));
   refreshPermStatusBar();
 }
 
@@ -435,6 +437,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         void vscode.window
           .showInformationMessage(
             'Claude Code autonomy changed. Run "Hiveku: Refresh Setup" in your open Hiveku folders to apply it.',
+            'Refresh Setup',
+          )
+          .then((c) => c === 'Refresh Setup' && vscode.commands.executeCommand('hiveku.refreshSetup'));
+      }
+      if (e.affectsConfiguration('hiveku.sandboxWorkspace')) {
+        setSandboxWorkspace(vscode.workspace.getConfiguration('hiveku').get<boolean>('sandboxWorkspace', false));
+        void vscode.window
+          .showInformationMessage(
+            'Workspace sandbox changed. Run "Hiveku: Refresh Setup" in your Hiveku folders to apply it.',
             'Refresh Setup',
           )
           .then((c) => c === 'Refresh Setup' && vscode.commands.executeCommand('hiveku.refreshSetup'));
