@@ -1268,6 +1268,17 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   URL). Script / \`onload=\` / \`<foreignObject>\` / \`javascript:\` content is stripped server-side for
   safety (a project SVG is served same-origin with the live site) — expect a \`warning\` if anything
   was removed; that is intended, not a failure.
+- **RESERVED CDN PREFIXES — never create a PAGE route under these top-level paths:**
+  \`assets/\`, \`extracted-assets/\`, \`images/\`, \`img/\`, \`icons/\`, \`documents/\`, \`fonts/\`, \`videos/\`,
+  \`audio/\`, \`media/\`, \`screenshots/\`, \`brand/\`, \`brand-images/\`, \`imported/\`. On the deployed
+  environments (development/staging/production) CloudFront routes these prefixes straight to the S3
+  asset origin, so a PAGE there returns **403 AccessDenied** — \`/videos/\` and every child path never
+  reach the app. Putting ASSETS there is fine (that is what they are for); it is page routes that
+  break. Static clean-URL sites serve \`videos.html\` as \`/videos/\` — exactly the broken form — and
+  Next.js routes like \`app/videos/page.tsx\` lose all their child paths. Name pages \`/video\`,
+  \`/watch\`, \`/gallery\`, \`/our-videos\` instead (only the exact segment collides — \`/media-kit\` is
+  fine, \`/media/kit\` is not). If a scraped/imported site carries such a page, RENAME the route
+  before deploying.
 - **Preview debugging order (all work without escalation):** \`preview_runtime_errors\` (parsed SSR
   stacks from the dev server) → \`preview_http_get\` (exact dev-server response, incl. 500 bodies) →
   \`preview_read_file\` (any container file) → \`preview_logs\`. \`preview_exec\` honors \`cwd\` (default
