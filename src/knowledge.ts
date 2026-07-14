@@ -1618,6 +1618,44 @@ directory, or the folder root; never touch another account's folder.
 | Helpdesk / KB | memory/knowledge_base | \`helpdesk_*\`, \`kb_*\` | knowledge_base |
 | Workflow | memory/workflow | \`workflow_*\` | workflow |
 
+### Email marketing — the order MATTERS (sends are gated; skipping a step means it silently will not send)
+
+**1. \`marketing_setup_status\` FIRST.** One call lists every condition that BLOCKS a send, with the fix.
+Do not build anything until it returns \`ready_to_send: true\`. The two that bite hardest:
+- **A VERIFIED sending domain.** The campaign\'s \`from_email\` must be on one (\`email_domain_add\` →
+  \`email_domain_verify\`). Building is allowed without it; SENDING is refused.
+- **The CAN-SPAM mailing address** (\`marketing_mailing_address_set\`). Footer validation FAILS without
+  a physical address, so NO campaign can send. You can build a perfect campaign and be permanently
+  blocked — set this early.
+
+**2. Audience → contacts.** \`email_audience_create\` (dynamic \`filter_json\` or \`kind:"static"\`), then
+put people in it. Audience members are CRM CONTACTS: resolve/create ids with \`crm_search_contacts\` /
+\`crm_contact_upsert_by_email\` / \`crm_contacts_bulk_create\`, then \`email_audience_members_add\`.
+Then **\`email_audience_preview\`** — it tells you how many are actually DELIVERABLE and why the rest
+are skipped (unsubscribed / suppressed / no email). A 0-deliverable audience is refused at send.
+
+**3. Template — use \`marketing_template_*\`, NOT \`email_template_*\`.** They are different tables.
+\`email_template_*\` writes the TRANSACTIONAL store for the /api/v1 send API, and a campaign CANNOT
+reference it. \`marketing_template_create\` takes either \`layout_json\` (the visual builder\'s block tree —
+stays editable in the builder) or raw \`compiled_html\`. Bodies need an unsubscribe link + the address
+to pass footer validation (\`{{unsubscribe_link}}\` is substituted per recipient).
+
+**4. Campaign → ALWAYS dry-run, then test-send, THEN send.**
+\`email_campaign_create\` → \`email_campaign_send_now({ dry_run: true })\` (materializes the recipient list,
+reports totalQueued / skippedBreakdown, sends NOTHING) → \`email_campaign_test_send({ to })\` (real mail to
+a seed inbox; check "Show original" for DKIM/SPF/DMARC + List-Unsubscribe) → then \`send_now\` for real, or
+\`email_campaign_schedule\`. Dispatch runs on a ~60s cron tick, so "sent" is not instant.
+
+**Every send runs a pre-flight and REFUSES rather than half-sending** (marketing enabled, not paused,
+SES tenant, verified domain, CAN-SPAM footer, plan cap, non-empty audience, template snapshot). If a
+send is refused, read the \`code\` — it names the gate. Do not try to route around it.
+
+**Under-delivered?** Check \`marketing_frequency_cap_get\` — recipients already emailed that many times in
+the last 7 days are SILENTLY skipped (\`skipped_frequency_cap\`), not failed.
+
+**Never invent send results.** Read \`email_campaign_metrics\` / \`email_campaign_get\` before telling the
+owner anything landed. \`total_sent: 0\` on a "sent" campaign means it reached NOBODY.
+
 Tool families: \`crm_* seo_* ppc_* email_* social_* helpdesk_* kb_* content_*\`
 \`marketing_* brand_* avatar_* analytics_* memory_* workflow_* voice_* pm_*\`. Call
 \`hiveku_docs_search\` / \`hiveku_docs_get\` to find exact tool names + arg shapes.
