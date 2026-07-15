@@ -1218,6 +1218,15 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   then commit the resolution.
 - **Commit ≠ live.** Deploy with \`deploy_site({ project_id, environment: "development" | "staging" | "production" })\`.
   Saving/committing reaches the instant Fly preview, but the Lambda environments update ONLY on \`deploy_site\`.
+- **Deploys are VERIFIED SERVING, and \`deploy_doctor\` is your diagnosis tool.** Every deploy ends
+  with a post-deploy smoke check: the pipeline requests the live URL through the CDN and FAILS the
+  deploy if real routes return 403/404/5xx — so a deploy that reports success was verified actually
+  serving. If a deploy fails with **"live site FAILS verification"**, the artifacts shipped but the
+  serving path is broken: run \`deploy_doctor({ project_id, environment })\` and relay its CRITICAL
+  findings' fix text verbatim — do NOT blindly retry (a retry reproduces the same result). Same rule
+  any time a deployed URL misbehaves (403/404/blank while "deploy said ready"): \`deploy_doctor\`
+  FIRST — it sees the CloudFront wiring, edge functions, and CDN-vs-origin diff that you cannot —
+  and NEVER propose deleting/recreating a Lambda or distribution without running it.
 - **Converted the framework (e.g. Vite → Next.js)? Run \`site_reanalyze({ project_id })\` after pushing
   the new code.** Deploys auto-detect the framework from files (a stale label won't break the build),
   but Hiveku's stored labels (project_type / detected_project_type — the latter drives redirect rewrites
