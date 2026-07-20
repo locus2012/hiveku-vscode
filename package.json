@@ -1,7 +1,7 @@
 {
   "name": "hiveku-vscode",
   "displayName": "Hiveku",
-  "description": "Run entire Hiveku accounts from VS Code with Claude Code — role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
+  "description": "Run entire Hiveku accounts from VS Code with Claude Code \u2014 role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
   "version": "0.72.2",
   "publisher": "hiveku",
   "license": "MIT",
@@ -33,7 +33,7 @@
       },
       {
         "command": "hiveku.setPermissionMode",
-        "title": "Hiveku: Set Claude Code Autonomy…",
+        "title": "Hiveku: Set Claude Code Autonomy\u2026",
         "icon": "$(unlock)"
       },
       {
@@ -69,7 +69,7 @@
       },
       {
         "command": "hiveku.cloneProject",
-        "title": "Hiveku: Download Project…"
+        "title": "Hiveku: Download Project\u2026"
       },
       {
         "command": "hiveku.refresh",
@@ -83,7 +83,7 @@
       },
       {
         "command": "hiveku.pushLocal",
-        "title": "Hiveku: Push Local Changes (reliable — assets + code)",
+        "title": "Hiveku: Push Local Changes (reliable \u2014 assets + code)",
         "icon": "$(cloud-upload)"
       },
       {
@@ -98,11 +98,11 @@
       },
       {
         "command": "hiveku.revert",
-        "title": "Hiveku: Revert to a Commit…"
+        "title": "Hiveku: Revert to a Commit\u2026"
       },
       {
         "command": "hiveku.deploy",
-        "title": "Hiveku: Deploy…",
+        "title": "Hiveku: Deploy\u2026",
         "icon": "$(rocket)"
       },
       {
@@ -111,29 +111,29 @@
       },
       {
         "command": "hiveku.createBranch",
-        "title": "Hiveku: Create Branch…",
+        "title": "Hiveku: Create Branch\u2026",
         "icon": "$(git-branch-create)"
       },
       {
         "command": "hiveku.switchBranch",
-        "title": "Hiveku: Switch Branch…",
+        "title": "Hiveku: Switch Branch\u2026",
         "icon": "$(git-branch)"
       },
       {
         "command": "hiveku.merge",
-        "title": "Hiveku: Merge Branch into main…"
+        "title": "Hiveku: Merge Branch into main\u2026"
       },
       {
         "command": "hiveku.previewBranch",
-        "title": "Hiveku: Preview Branch on Fly…"
+        "title": "Hiveku: Preview Branch on Fly\u2026"
       },
       {
         "command": "hiveku.compare",
-        "title": "Hiveku: Compare Branches…"
+        "title": "Hiveku: Compare Branches\u2026"
       },
       {
         "command": "hiveku.prune",
-        "title": "Hiveku: Prune Branch Storage…"
+        "title": "Hiveku: Prune Branch Storage\u2026"
       },
       {
         "command": "hiveku.refreshTree",
@@ -147,7 +147,7 @@
       },
       {
         "command": "hiveku.filterAccounts",
-        "title": "Hiveku: Filter Accounts…",
+        "title": "Hiveku: Filter Accounts\u2026",
         "icon": "$(filter)"
       },
       {
@@ -319,12 +319,12 @@
       },
       {
         "command": "hiveku.operate",
-        "title": "Hiveku: Operate Account (CRM, SEO, Email…)",
+        "title": "Hiveku: Operate Account (CRM, SEO, Email\u2026)",
         "icon": "$(layout-panel)"
       },
       {
         "command": "hiveku.projectPanel",
-        "title": "Hiveku: Project Panel (deploys, DB, CMS, domains…)",
+        "title": "Hiveku: Project Panel (deploys, DB, CMS, domains\u2026)",
         "icon": "$(server-environment)"
       },
       {
@@ -343,7 +343,7 @@
       },
       {
         "command": "hiveku.openSite",
-        "title": "Hiveku: Open Site…",
+        "title": "Hiveku: Open Site\u2026",
         "icon": "$(globe)"
       },
       {
@@ -357,7 +357,7 @@
       },
       {
         "command": "hiveku.envLogs",
-        "title": "Hiveku: Environment Logs…",
+        "title": "Hiveku: Environment Logs\u2026",
         "icon": "$(output)"
       },
       {
@@ -438,7 +438,7 @@
     "viewsWelcome": [
       {
         "view": "hiveku.projects",
-        "contents": "Run your Hiveku accounts from the editor — projects, departments, media, and Claude scoped per account.\n[Guided Setup](command:hiveku.setup)\n\n[Connect Hiveku](command:hiveku.connect)\n\nPrefer to paste an API key?\n[Sign in with a key](command:hiveku.signIn)",
+        "contents": "Run your Hiveku accounts from the editor \u2014 projects, departments, media, and Claude scoped per account.\n[Guided Setup](command:hiveku.setup)\n\n[Connect Hiveku](command:hiveku.connect)\n\nPrefer to paste an API key?\n[Sign in with a key](command:hiveku.signIn)",
         "when": "!hiveku.signedIn"
       }
     ],
@@ -863,12 +863,14 @@
         "hiveku.baseUrl": {
           "type": "string",
           "default": "https://core.hiveku.com",
-          "description": "Base URL of the Hiveku MCP server (the /mcp endpoint is appended)."
+          "description": "Base URL of the Hiveku MCP server (the /mcp endpoint is appended). SECURITY: machine-scoped on purpose \u2014 this decides where the account Bearer key is sent, so a workspace .vscode/settings.json must NOT be able to override it and redirect keys to another host.",
+          "scope": "machine"
         },
         "hiveku.appUrl": {
           "type": "string",
           "default": "https://app.hiveku.com",
-          "description": "Base URL of the Hiveku web app (used by the browser Connect flow)."
+          "description": "Base URL of the Hiveku web app (used by the browser Connect flow). SECURITY: machine-scoped on purpose \u2014 this decides where the account Bearer key is sent, so a workspace .vscode/settings.json must NOT be able to override it and redirect keys to another host.",
+          "scope": "machine"
         },
         "hiveku.includeAssetsOnDownload": {
           "type": "boolean",
@@ -894,7 +896,7 @@
           ],
           "enumDescriptions": [
             "Auto-approve file edits and safe in-folder commands; still ask before deploys, git push, network, and Hiveku writes. Recommended.",
-            "Autonomous — skip permission prompts entirely (Claude Code runs account/site work without asking). Your .env*.local deny rule still blocks secret reads. Use when you trust Claude Code to operate an account end-to-end.",
+            "Autonomous \u2014 skip permission prompts entirely (Claude Code runs account/site work without asking). Your .env*.local deny rule still blocks secret reads. Use when you trust Claude Code to operate an account end-to-end.",
             "Ask before every edit and command (most cautious)."
           ],
           "default": "acceptEdits",
@@ -903,12 +905,12 @@
         "hiveku.codexSupport": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Also scaffold OpenAI Codex support into Hiveku folders: `AGENTS.md`, a project-scoped `.codex/config.toml` carrying the folder's Hiveku MCP server + account key, and `.agents/skills/*` mirrors of every /hiveku-* command — so the Codex CLI / IDE extension works the same as Claude Code. Enable via **Hiveku: Set Up Codex Support** (it also offers to pre-trust your folders in `~/.codex/config.toml`, which Codex requires before loading project config)."
+          "markdownDescription": "Also scaffold OpenAI Codex support into Hiveku folders: `AGENTS.md`, a project-scoped `.codex/config.toml` carrying the folder's Hiveku MCP server + account key, and `.agents/skills/*` mirrors of every /hiveku-* command \u2014 so the Codex CLI / IDE extension works the same as Claude Code. Enable via **Hiveku: Set Up Codex Support** (it also offers to pre-trust your folders in `~/.codex/config.toml`, which Codex requires before loading project config)."
         },
         "hiveku.sandboxWorkspace": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Sandbox each Hiveku account folder at the OS level, so Claude Code's **terminal commands physically cannot write outside that account's folder** (the per-session temp and the package caches `~/.npm`, `~/.cache`, `~/Library/Caches` stay writable so installs still work).\n\nThis is the only hard guarantee of per-account siloing: permission rules bind the edit tools, but a shell command like `tar czf /tmp/x.tar.gz` is only stopped by the sandbox. Recommended when one machine works many accounts.\n\nOff by default because it constrains every subprocess — turn it on, then run **Hiveku: Refresh Setup** and confirm your builds still pass."
+          "markdownDescription": "Sandbox each Hiveku account folder at the OS level, so Claude Code's **terminal commands physically cannot write outside that account's folder** (the per-session temp and the package caches `~/.npm`, `~/.cache`, `~/Library/Caches` stay writable so installs still work).\n\nThis is the only hard guarantee of per-account siloing: permission rules bind the edit tools, but a shell command like `tar czf /tmp/x.tar.gz` is only stopped by the sandbox. Recommended when one machine works many accounts.\n\nOff by default because it constrains every subprocess \u2014 turn it on, then run **Hiveku: Refresh Setup** and confirm your builds still pass."
         }
       }
     },

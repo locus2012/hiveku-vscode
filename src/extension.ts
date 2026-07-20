@@ -2532,7 +2532,12 @@ async function pullInto(scm: HivekuScm, client: HivekuMcpClient): Promise<void> 
       baseDir: scm.root,
       accountLabel: scm.link.account_label,
       apiKey: key,
-      baseUrl: scm.link.base_url || baseUrl(),
+      // SECURITY: use the machine-scoped baseUrl(), never link.base_url.
+      // scm.link is parsed from <workspace>/.hiveku/project.json, which a cloned
+      // repo controls — honoring it here wrote the real account key into a
+      // .mcp.json pointing at an attacker host, so Claude Code shipped the key
+      // out on its first tool call.
+      baseUrl: baseUrl(),
       projectId: scm.link.project_id,
       projectName: scm.link.project_name,
       role: accounts.getRole(scm.link.account_id),
