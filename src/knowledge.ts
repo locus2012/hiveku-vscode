@@ -1259,9 +1259,14 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   THIS account’s API key inlined; \`.env*\` carry secrets; \`.hiveku/\` \`.claude/\` \`.agents/\` are local
   tooling. Exclude them from every tar (the server refuses them too, and reports
   \`skipped_local_config\`). Real secrets belong in Hiveku’s store (\`project_secrets_*\`), never in code.
-- **Whole-tree / large / byte-exact pushes: use the TARBALL IMPORT LANE — never re-emit file bodies
+- **Whole-tree / large / byte-exact pushes: prefer the TARBALL IMPORT LANE — never re-emit file bodies
   through yourself** (that's how \`&\` becomes \`&amp;\`, trailing newlines vanish, and big files
-  truncate). Flow: \`project_import_presign({ project_id })\` →
+  truncate). ⚠️ **The presigned upload runs from YOUR machine straight to S3, so the \`curl -T\` step can
+  return \`403 ... explicit deny ...\` even though the presign succeeded** (the URL is signed
+  server-side; the PUT comes from your IP, which the platform's network controls may refuse). If that
+  happens: do NOT retry the lane — fall back to \`project_files_bulk_save\` (code, batched) +
+  \`assets_upload\` (binaries), which upload *through* the API and are unaffected, and report the 403
+  with the bucket name. Flow: \`project_import_presign({ project_id })\` →
   \`COPYFILE_DISABLE=1 tar czf .hiveku/tmp/site.tar.gz --exclude node_modules --exclude .git --exclude .next --exclude .hiveku --exclude .claude --exclude .codex --exclude .agents --exclude .mcp.json --exclude ".env*" -C <dir> .\` →
   \`curl -T .hiveku/tmp/site.tar.gz "<upload_url>" -H "Content-Type: application/gzip"\` →
   \`project_import_finalize({ project_id, key })\` → **verify** the returned per-file sha256 manifest
@@ -1709,12 +1714,21 @@ background task), the Hiveku-headless-routine gotcha, and per-role patterns.
 The key in \`.env\` is pinned to ONE Hiveku account. One folder = one account.
 ${MULTI_SESSION_BLOCK}${roleClaudeMdBlock(opts.role)}`;
 
-  const gitignore = ['.mcp.json', '.env', '.env.local', '.hiveku/', 'hiveku-data/', ''].join('\n');
+  // Credential-bearing files that must NEVER be git-trackable. `.codex/config.toml`
+  // is listed UNCONDITIONALLY (not only when codexSupport is on): this write is a
+  // destructive overwrite, so gating it on the current setting meant a folder that
+  // had once been set up for Codex — with the account key inlined in that file —
+  // silently lost its ignore line on the next "Refresh Setup", leaving a live key
+  // git-trackable. The breach entry point was a leaked credential; an ignore line
+  // costs nothing and removing one is unrecoverable.
+  const gitignoreLines = ['.mcp.json', '.env', '.env.local', '.codex/config.toml', '.hiveku/', 'hiveku-data/'];
 
   await writeAtomic(path.join(opts.baseDir, '.mcp.json'), mcpJson);
   await writeAtomic(path.join(opts.baseDir, '.env'), env);
   await writeAtomic(path.join(opts.baseDir, 'CLAUDE.md'), claudeMd);
-  await writeAtomic(path.join(opts.baseDir, '.gitignore'), gitignore);
+  // Merge rather than clobber — a destructive rewrite also destroyed any entries
+  // the user had added themselves.
+  await appendGitignore(opts.baseDir, gitignoreLines);
 
   // Claude Code accelerators for the account workspace: the read-tool/safe-bash
   // allowlist (fewer prompts) + account-level /hiveku-* slash commands + the
