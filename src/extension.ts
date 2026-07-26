@@ -2264,11 +2264,33 @@ async function showHistory(scm: HivekuScm): Promise<void> {
 }
 
 async function revert(scm: HivekuScm): Promise<void> {
+  // Revert only works on main, so say so instead of showing a list that silently
+  // omits everything.
+  //
+  // The filter below keeps commits that have a checkpoint_hash. Branch commits
+  // store their content as an S3 tree (tree_s3_key) and carry a NULL
+  // checkpoint_hash, so every branch commit disappears from this list — and the
+  // server has no primitive that materialises a branch commit back into a working
+  // state, so there is nothing to offer for them. Without this gate, a user on a
+  // branch saw either "No restorable commits found" or, worse, a list of MAIN's
+  // commits while believing they were reverting their branch.
+  if (scm.branch && scm.branch !== 'main') {
+    vscode.window.showWarningMessage(
+      `Revert works on main only — you are on "${scm.branch}". Switch to main ` +
+        `(Hiveku: Switch Branch) and revert there. Branch commits keep their content ` +
+        `separately and are not project restore points.`,
+    );
+    return;
+  }
+
   const client = await clientForAccount(scm.link.account_id);
-  const history = await api.vcsHistory(client, scm.link.project_id, 100);
+  const history = await api.vcsHistory(client, scm.link.project_id, 100, 'main');
   const restorable = history.filter((c) => c.checkpoint_hash);
   if (restorable.length === 0) {
-    vscode.window.showInformationMessage('No restorable commits found.');
+    vscode.window.showInformationMessage(
+      'No restorable commits found on main. A commit is only restorable if its ' +
+        'snapshot was captured successfully.',
+    );
     return;
   }
   const pick = await vscode.window.showQuickPick(

@@ -367,10 +367,17 @@ export async function vcsHistory(
   client: HivekuMcpClient,
   projectId: string,
   limit = 100,
+  /**
+   * Scope to one branch. Callers that act on a commit MUST pass this: an
+   * unscoped history mixes branches, and revert can only act on main (branch
+   * commits carry no checkpoint_hash and have no server-side restore primitive).
+   */
+  branch?: string,
 ): Promise<CommitSummary[]> {
   const res = await client.callToolJson<unknown>('project_vcs_history', {
     project_id: projectId,
     limit,
+    ...(branch ? { branch } : {}),
   });
   const list = unwrap<CommitSummary[]>(res);
   return Array.isArray(list) ? list : [];
