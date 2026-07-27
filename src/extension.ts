@@ -52,6 +52,7 @@ import { syncAccountCommands } from './commandSync';
 import { DataRefresher } from './dataRefresh';
 import { ROLES, effectiveDepartments } from './roles';
 import { departmentById, DEPARTMENTS } from './deptData';
+import { CHAT_DOMAINS } from './chatDomains';
 import { exportDepartments, DATA_DIR } from './dataExport';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
 import { setupLocalSupabase } from './localSupabase';
@@ -1189,8 +1190,10 @@ async function chatDepartment(node: { record?: AccountRecord; department?: strin
   if (!record) return;
   let department = node?.department;
   if (!department) {
+    // Offer the domains talk_to_department actually accepts, NOT the 24 console
+    // ids — only 5 of those overlapped, so 19 picks failed against the server.
     const pick = await vscode.window.showQuickPick(
-      DEPARTMENTS.map((d) => ({ label: d.label, id: d.id })),
+      CHAT_DOMAINS.map((d) => ({ label: d.label, id: d.id })),
       { placeHolder: 'Which department agent?' },
     );
     if (!pick) return;

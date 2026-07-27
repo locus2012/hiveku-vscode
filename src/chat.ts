@@ -11,14 +11,28 @@ import * as vscode from 'vscode';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
 import { departmentLabel } from './knowledge';
+import { toChatDomain, chatDomainListForMessage } from './chatDomains';
 
 const panels = new Map<string, vscode.WebviewPanel>();
 
 export function openDepartmentChat(
   account: { accountId: string; label: string },
-  department: string,
+  departmentId: string,
   clientFor: (accountId: string) => Promise<HivekuMcpClient>,
 ): void {
+  // Every entry point funnels through here — the picker, the tree node, and the
+  // Operate row actions — so this is the one place the console vocabulary has
+  // to be translated into a domain talk_to_department accepts. Callers used to
+  // pass a console id straight through and 19 of 24 departments failed, with
+  // the server's "Unknown domain" JSON rendered into the panel as a reply.
+  const department = toChatDomain(departmentId);
+  if (!department) {
+    void vscode.window.showWarningMessage(
+      `There is no department agent for "${departmentLabel(departmentId)}". Agents available: ${chatDomainListForMessage()}.`,
+    );
+    return;
+  }
+
   const key = `${account.accountId}:${department}`;
   const existing = panels.get(key);
   if (existing) {
