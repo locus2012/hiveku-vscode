@@ -24,6 +24,7 @@ export const CHAT_DOMAINS: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'social', label: 'Social' },
   { id: 'content', label: 'Content' },
   { id: 'ppc', label: 'PPC' },
+  { id: 'analytics', label: 'Analytics' },
   { id: 'outbound', label: 'Outbound' },
   { id: 'branding', label: 'Branding' },
   { id: 'website_design', label: 'Website Design' },
@@ -40,7 +41,7 @@ const VALID = new Set(CHAT_DOMAINS.map((d) => d.id));
  * Console ids (and a few legacy ids used by Operate row actions) that map onto
  * a real chat domain. Anything absent here has NO department agent behind it —
  * `sales`, `crm`, `email`, `helpdesk`, `accounting`, `pm`, `mc`, `voice`,
- * `hiveboards`, `media`, `commerce`, `pages`, `analytics`, `cms`, `database`.
+ * `hiveboards`, `media`, `commerce`, `pages`, `cms`, `database`.
  * Those must surface a clear message rather than being sent to the server to
  * fail. (`account_context_get` documents `sales` and `helpdesk` as domains, but
  * `talk_to_department` does not accept them — the two tools disagree.)
