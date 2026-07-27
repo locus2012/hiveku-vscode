@@ -49,13 +49,30 @@ export function openDepartmentChat(
   panel.onDidDispose(() => panels.delete(key));
   panel.webview.html = chatHtml(panel.webview, departmentLabel(department), account.label);
 
+  // Held for the life of the panel so the department agent sees one continuous
+  // conversation. Previously no session id was sent or kept, so every message
+  // started a brand-new session — the panel looked like a chat and behaved as a
+  // series of one-shots, with the agent unable to refer to anything said above.
+  let sessionId: string | null = null;
+
   panel.webview.onDidReceiveMessage(async (msg: { type: string; text?: string }) => {
     if (msg.type !== 'send' || !msg.text) return;
     panel.webview.postMessage({ type: 'thinking' });
     try {
       const client = await clientFor(account.accountId);
-      const reply = await api.talkToDepartment(client, department, msg.text);
-      panel.webview.postMessage({ type: 'reply', text: reply });
+      const result = await api.talkToDepartment(client, department, msg.text, sessionId);
+      // Refusals return session_id: null, so fall back to the id we already
+      // hold rather than dropping it and silently restarting the conversation.
+      sessionId = result.sessionId ?? sessionId;
+      panel.webview.postMessage({
+        type: result.isError ? 'error' : 'reply',
+        text: result.reply,
+      });
+      // A truncated answer arrives as reply + warning. Show the reply, then say
+      // plainly that it is incomplete — otherwise a half-answer reads as whole.
+      if (result.warning) {
+        panel.webview.postMessage({ type: 'error', text: result.warning });
+      }
     } catch (err) {
       panel.webview.postMessage({ type: 'error', text: err instanceof Error ? err.message : String(err) });
     }

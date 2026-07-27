@@ -1332,18 +1332,42 @@ export async function kbDelete(client: HivekuMcpClient, kbId: string): Promise<u
   return client.callToolJson<unknown>('kb_delete', { kb_id: kbId });
 }
 
-/** Send a message to a department agent and return its reply text. */
+export interface DepartmentReply {
+  reply: string;
+  /** Pass back on the next turn to continue the same conversation. */
+  sessionId: string | null;
+  /** True when the server refused outright (unknown domain, no access). */
+  isError: boolean;
+  /**
+   * Set when the server returned a reply AND an error together. That happens
+   * on the partial-streamError path, where a real but TRUNCATED answer carries
+   * the stream fault alongside it — so it must not render as a complete answer.
+   * (The mid-stream-stall path returns an empty response, so it lands in the
+   * refusal branch above rather than here.)
+   */
+  warning: string | null;
+}
+
+/** Send a message to a department agent. Returns its reply plus session state. */
 export async function talkToDepartment(
   client: HivekuMcpClient,
   domain: string,
   message: string,
-): Promise<string> {
+  sessionId?: string | null,
+): Promise<DepartmentReply> {
   // talk_to_department returns brand-aligned content; surface its text. We read
   // the raw tool result so we can fall back to the first text block if the
   // payload isn't a tidy { data } envelope.
-  const result = await client.callTool('talk_to_department', { domain, message });
+  //
+  // sessionId is what makes this a conversation. The tool has always accepted
+  // it and returns one on every reply, but the client never sent it, so each
+  // message opened a fresh session and the panel behaved as a series of
+  // one-shots while looking like a chat.
+  const args: Record<string, unknown> = { domain, message };
+  if (sessionId) args.session_id = sessionId;
+  const result = await client.callTool('talk_to_department', args);
   const text = result?.content?.[0]?.text;
-  if (typeof text !== 'string') return '(no response)';
+  if (typeof text !== 'string') return { reply: '(no response)', sessionId: sessionId ?? null, isError: true, warning: null };
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
     const data = (parsed.data && typeof parsed.data === 'object' ? parsed.data : parsed) as Record<string, unknown>;
@@ -1353,8 +1377,36 @@ export async function talkToDepartment(
       (typeof data.response === 'string' && data.response) ||
       (typeof data.text === 'string' && data.text) ||
       (typeof data.output === 'string' && data.output);
-    return reply || text;
+    // The server reports a refusal as an ordinary result carrying `error`, with
+    // none of the reply keys set. Without this the raw JSON error object was
+    // rendered into the panel as though the agent had said it.
+    const err = typeof data.error === 'string' ? data.error : null;
+    const nextSession = typeof data.session_id === 'string' ? data.session_id : null;
+    // Any empty reply is a failure, whether or not the server named an error.
+    // `error` is spread CONDITIONALLY server-side, so a turn that produced only
+    // tool calls and no content event comes back as
+    // { response: "", tool_calls: [...] } with no error key at all. Testing
+    // `!reply && err` let that fall through to `reply || text` and posted the
+    // raw JSON blob into the panel as though the agent had said it — the exact
+    // thing this was meant to stop.
+    if (!reply) {
+      return {
+        reply: err ?? 'The department returned no answer (it may have run tools without replying). Try rephrasing.',
+        sessionId: nextSession ?? sessionId ?? null,
+        isError: true,
+        warning: null,
+      };
+    }
+    // reply AND error together = a real but truncated answer (agent stalled or
+    // the stream errored part-way). Surfacing only the reply would present a
+    // half-answer as complete, which is worse than showing nothing.
+    return {
+      reply: reply || text,
+      sessionId: nextSession ?? sessionId ?? null,
+      isError: false,
+      warning: reply && err ? err : null,
+    };
   } catch {
-    return text; // already plain text
+    return { reply: text, sessionId: sessionId ?? null, isError: false, warning: null }; // already plain text
   }
 }
