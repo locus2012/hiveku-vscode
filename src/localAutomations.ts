@@ -15,6 +15,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { availableCadenceCommands } from './roleCommands';
 
 // ── lib.mjs : shared helpers (Hiveku MCP client, cron matcher, claude -p, env, idempotency) ──
 const LIB_MJS = `// Shared helpers for Hiveku local automations. ESM, Node 18+ (global fetch).
@@ -362,10 +363,25 @@ console.log(new Date().toISOString(), 'wrote', file);
  * registry.json (idempotent), and leaves scheduler install to the caller/CLI.
  * Returns the job ids that are now registered.
  */
-export async function installAgencyCadence(accountDir: string): Promise<string[]> {
+export async function installAgencyCadence(accountDir: string, roleId?: string): Promise<string[]> {
   await scaffoldLocalAutomations(accountDir);
   const autoDir = path.join(accountDir, 'automations');
-  for (const job of CADENCE_JOBS) {
+
+  // Only schedule cadence jobs whose slash command will actually exist for this
+  // role. /hiveku-weekly and /hiveku-report are written only for roles with a
+  // cadence spec (seo, ppc, marketer, social, sales, outbound, owner), and
+  // /hiveku-daily is not written at all when no role is set — so scheduling all
+  // three unconditionally left dev, bookkeeper, pm, helpdesk and role-less
+  // accounts with cron jobs invoking command files that were never created.
+  const available = availableCadenceCommands(roleId);
+  const jobs = CADENCE_JOBS.filter((j) => available.has(j.command.replace(/^\//, '')));
+  if (jobs.length === 0) {
+    throw new Error(
+      'Agency Cadence needs a role that ships scheduled commands. Set a role (SEO, PPC, Marketer, Social, Sales, Outbound, or Owner) with "Hiveku: Set Role", then run this again.',
+    );
+  }
+
+  for (const job of jobs) {
     await fs.writeFile(path.join(autoDir, 'workers', `${job.id}.mjs`), cadenceWorker(job.id, job.command), 'utf8');
   }
   const regPath = path.join(autoDir, 'registry.json');
@@ -376,12 +392,12 @@ export async function installAgencyCadence(accountDir: string): Promise<string[]
   } catch {
     /* fresh registry */
   }
-  for (const job of CADENCE_JOBS) {
+  for (const job of jobs) {
     if (reg.automations.some((a) => a.id === job.id)) continue;
     reg.automations.push({ id: job.id, cron: job.cron, worker: job.id, desc: job.desc, enabled: true });
   }
   await fs.writeFile(regPath, JSON.stringify(reg, null, 2) + '\n', 'utf8');
-  return CADENCE_JOBS.map((j) => j.id);
+  return jobs.map((j) => j.id);
 }
 
 /**

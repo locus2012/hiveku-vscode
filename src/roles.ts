@@ -93,7 +93,7 @@ export const ROLES: Role[] = [
     id: 'marketer',
     label: 'Marketer',
     blurb: 'Content, email, social, brand, analytics',
-    deptIds: ['content', 'creative', 'social', 'email', 'seo', 'media', 'analytics', 'pm'],
+    deptIds: ['content', 'creative', 'social', 'email', 'seo', 'surveys', 'media', 'analytics', 'pm'],
     knowledgeDomains: ['marketing', 'content', 'branding'],
     briefTools: ['email_stats', 'email_campaign_metrics', 'social_analytics_summary', 'analytics_overview', 'analytics_visitors'],
   },

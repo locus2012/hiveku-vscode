@@ -629,6 +629,26 @@ Produce this account's monthly report for $ARGUMENTS (default: last full month).
 }
 
 /** Every loop-command filename any role can generate — used to clean up on role switch. */
+/**
+ * The cadence slash commands that will actually exist on disk for a role.
+ *
+ * Agency Cadence used to schedule all three cron jobs unconditionally, but the
+ * commands they invoke are role-dependent: `cadenceCommands()` returns {} for
+ * any role without a spec entry (dev, bookkeeper, pm, helpdesk), and
+ * writeRoleCommands() returns before writing /hiveku-daily when no role is set.
+ * So those users got cron jobs firing `claude -p "/hiveku-weekly"` against a
+ * command file that was never written — burning a scheduled run to produce
+ * nothing. The installer now asks this first and schedules only what exists.
+ */
+export function availableCadenceCommands(roleId: string | undefined): Set<string> {
+  const role = roleById(roleId);
+  // No role: writeRoleCommands() returns before /hiveku-daily is written.
+  if (!role) return new Set<string>();
+  const names = new Set<string>(['hiveku-daily']);
+  for (const name of Object.keys(cadenceCommands(role))) names.add(name);
+  return names;
+}
+
 function allLoopNames(): Set<string> {
   const names = new Set<string>(['hiveku-weekly', 'hiveku-report']);
   for (const r of ROLES) for (const name of Object.keys(roleLoops(r))) names.add(name);

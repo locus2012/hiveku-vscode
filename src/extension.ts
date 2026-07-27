@@ -1637,7 +1637,9 @@ async function installCadence(node: { record: AccountRecord } | undefined): Prom
   );
   if (ok !== 'Install') return;
   try {
-    const jobs = await installAgencyCadence(folder);
+    // Pass the role: only cadence jobs whose slash command actually gets
+    // written for it are scheduled, instead of cron firing at a missing file.
+    const jobs = await installAgencyCadence(folder, accounts.getRole(record.accountId));
     const autoDir = path.join(folder, 'automations');
     cp.execFileSync(process.execPath, [path.join(autoDir, 'manage.mjs'), 'install'], { cwd: autoDir, stdio: 'ignore', timeout: 20000 });
     vscode.window.showInformationMessage(

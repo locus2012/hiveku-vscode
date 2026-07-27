@@ -11,6 +11,8 @@
  * parents first, then pulls each child, tagging every row with its parent.
  */
 
+import type { PageAccessKey } from './pageAccessKeys';
+
 import { HivekuMcpClient } from './mcpClient';
 import { SEO_SETUP, CRM_SETUP, EMAIL_SETUP, SOCIAL_SETUP, OUTBOUND_SETUP, ACCOUNTING_SETUP } from './setupPlaybooks';
 
@@ -73,8 +75,12 @@ export interface ReferenceSpec {
 export interface Department {
   id: string;
   label: string;
-  /** pageAccess gate key (plan/role entitlement). */
-  gate?: string;
+  /**
+   * pageAccess gate key (plan/role entitlement). Typed, not `string`: the
+   * entitlement check is fail-open, so a key that isn't a real PageAccess field
+   * is never false and LEAKS the feature to every account instead of hiding it.
+   */
+  gate?: PageAccessKey;
   datasets: Dataset[];
   /** Read-only department (no CRUD via MCP) — console/exports won't imply writes. */
   readOnly?: boolean;
@@ -557,7 +563,7 @@ export const DEPARTMENTS: Department[] = [
     id: 'outbound',
     label: 'Outbound (BDR)',
     setup: OUTBOUND_SETUP,
-    gate: 'outbound',
+    gate: 'marketing_outbound',
     datasets: [
       { id: 'campaigns', label: 'Campaigns', tool: 'outbound_list_campaigns', args: { limit: 200 }, columns: [{ key: ['name', 'campaign_name'], label: 'campaign' }, { key: 'status' }, { key: ['provider', 'integration_provider', 'integration_id'], label: 'provider' }, { key: ['lead_count', 'total_leads', 'leads_count'], label: 'leads' }, { key: ['reply_count', 'replied_count', 'replies'], label: 'replies' }] },
       { id: 'leads', label: 'Leads', tool: 'outbound_list_leads', args: { limit: 500 }, columns: [{ key: ['first_name', 'name'], label: 'name' }, { key: 'last_name' }, { key: 'email' }, { key: ['company', 'company_name'], label: 'company' }, { key: ['internal_status', 'status'], label: 'status' }, { key: 'is_interested', label: 'interested' }, { key: ['has_replied', 'replied'], label: 'replied' }, { key: ['campaign_name', 'campaign_id'], label: 'campaign' }] },
@@ -760,6 +766,7 @@ export const DEPARTMENTS: Department[] = [
   {
     id: 'knowledge',
     label: 'Knowledge & Memory',
+    gate: 'marketing_knowledge_base',
     datasets: [
       { id: 'memory', label: 'AI memory (skills/rules/facts)', tool: 'memory_list', detail: { detailTool: 'memory_get', argKey: 'memory_id', nameKey: 'domain', dir: 'memory-detail' }, columns: [{ key: 'domain' }, { key: 'type' }, { key: 'version' }] },
       { id: 'kbs', label: 'Knowledge bases', tool: 'kb_list', columns: [{ key: 'name' }, { key: 'context_type', label: 'type' }, { key: 'is_default', label: 'default' }, { key: 'tags' }] },
@@ -771,8 +778,34 @@ export const DEPARTMENTS: Department[] = [
       'Each memory\'s full markdown content is in `memory-detail/<domain>.json`.',
   },
   {
+    id: 'surveys',
+    label: 'Surveys (NPS/CSAT)',
+    gate: 'marketing_surveys',
+    datasets: [
+      {
+        id: 'surveys',
+        label: 'Surveys',
+        tool: 'survey_list',
+        detail: { detailTool: 'survey_results', argKey: 'survey_id', nameKey: 'name', dir: 'survey-results' },
+        columns: [
+          { key: 'name' },
+          { key: 'type' },
+          { key: 'status' },
+          { key: ['response_count', 'responses'], label: 'responses' },
+          { key: ['score', 'nps', 'csat'], label: 'score' },
+        ],
+      },
+    ],
+    crud:
+      'Create a DRAFT with `survey_create` (omit `questions` to get the canonical NPS/CSAT wording — changing it breaks score comparability). ' +
+      'Edit or activate with `survey_update`; status="active" is what makes a survey sendable and requires at least one active question. ' +
+      '`survey_results` returns the delivery funnel, the metric, and the latest free-text answers — quote those verbatim as real customer language rather than inventing testimonials. ' +
+      '`survey_send` REALLY SENDS email/SMS: it takes contact_ids (from the crm_* tools) and/or raw emails, enforces the throttle window, dedupes, respects SMS quiet hours, and caps a single call at 200 recipients. Confirm with the user before calling it.',
+  },
+  {
     id: 'media',
     label: 'Media Library',
+    gate: 'marketing_assets',
     datasets: [
       { id: 'assets', label: 'Assets', tool: 'media_library_list', args: { limit: 200 }, columns: [{ key: ['title', 'filename'], label: 'file' }, { key: 'media_type', label: 'type' }, { key: 'source_type', label: 'source' }, { key: 'tags' }] },
       { id: 'folders', label: 'Folders', tool: 'media_folders_list', columns: [{ key: 'name' }, { key: 'asset_count', label: 'assets' }] },
