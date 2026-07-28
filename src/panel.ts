@@ -120,18 +120,31 @@ function firstObjectArray(obj: Record<string, unknown>): unknown[] | undefined {
  * if that isn't an array, dig for the first object-array property (one level in
  * the unwrapped object, then the raw payload) so oddly-wrapped tools still render.
  */
-function extractRows(payload: unknown): Row[] {
+/**
+ * Rows from a tool payload, plus whether we actually RECOGNISED the shape.
+ *
+ * Returning a bare [] conflated two very different outcomes: "the account has
+ * no deals" and "the response came back in a shape we do not understand". Both
+ * rendered as "No deals." — so a parsing regression looked like a quiet client.
+ */
+function extractRows(payload: unknown): { rows: Row[]; recognised: boolean } {
   const inner = unwrap(payload);
-  if (Array.isArray(inner)) return inner as Row[];
+  if (Array.isArray(inner)) return { rows: inner as Row[], recognised: true };
   if (inner && typeof inner === 'object') {
     const a = firstObjectArray(inner as Record<string, unknown>);
-    if (a) return a as Row[];
+    if (a) return { rows: a as Row[], recognised: true };
   }
   if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
     const a = firstObjectArray(payload as Record<string, unknown>);
-    if (a) return a as Row[];
+    if (a) return { rows: a as Row[], recognised: true };
   }
-  return [];
+  // An explicitly empty envelope IS a real empty result — only an unparseable
+  // shape is unrecognised.
+  const emptyish =
+    inner === null ||
+    inner === undefined ||
+    (inner && typeof inner === 'object' && Object.keys(inner as object).length === 0);
+  return { rows: [], recognised: !!emptyish };
 }
 
 /** Resolve a possibly-dotted key path (e.g. "stage.name", "_count.deals"). */
@@ -219,11 +232,32 @@ export function openModulePanel(
     try {
       const client = await clientFor(account.accountId);
       const res = await client.callToolJson<unknown>(section.tool, { ...context, ...(section.args ?? {}) });
-      const rows: Row[] = section.transform ? section.transform(res) : extractRows(res);
+      let rows: Row[];
+      let recognised = true;
+      if (section.transform) {
+        rows = section.transform(res);
+      } else {
+        const parsed = extractRows(res);
+        rows = parsed.rows;
+        recognised = parsed.recognised;
+      }
       rowsBySection.set(sectionId, rows);
+      // Zero rows from a shape we could not read is a FAULT, not a quiet
+      // account — say so rather than rendering the friendly empty message.
+      if (!rows.length && !recognised) {
+        panel.webview.postMessage({
+          type: 'error',
+          section: sectionId,
+          message: `Could not read the response from ${section.tool}. This is a display fault, not an empty account — the data may exist. Check the Hiveku output channel.`,
+        });
+        return;
+      }
+      const CAP = 100;
       panel.webview.postMessage({
         type: 'rows',
         section: sectionId,
+        // Never present a capped page as the whole truth.
+        capped: rows.length > CAP ? { shown: CAP, of: rows.length } : undefined,
         empty: section.empty ?? 'Nothing here.',
         detail: !!section.detail,
         header: (section.headerActions ?? []).map((a) => ({ id: a.id, label: a.label })),
@@ -381,7 +415,7 @@ function panelHtml(webview: vscode.Webview, spec: ModuleSpec): string {
   var tabsEl = document.getElementById('tabs');
   var content = document.getElementById('content');
   var searchEl = document.getElementById('search');
-  var lastRows = [], lastHeader = [], lastDetail = false, lastEmpty = 'Nothing here.';
+  var lastRows = [], lastHeader = [], lastDetail = false, lastEmpty = 'Nothing here.', lastCapped = null;
   function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e;}
   function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
   function btn(label,cls,fn){var b=el('button',cls,label);b.addEventListener('click',fn);return b;}
@@ -396,6 +430,7 @@ function panelHtml(webview: vscode.Webview, spec: ModuleSpec): string {
     var f=(filter||'').toLowerCase();
     var rows=lastRows.filter(function(r){if(!f)return true;var hay=r.title+' '+(r.fields||[]).map(function(x){return x.value;}).join(' ');return hay.toLowerCase().indexOf(f)>=0;});
     if(!rows.length){content.appendChild(el('div','muted',f?'No matches.':lastEmpty));return;}
+    if(lastCapped){content.appendChild(el('div','muted','Showing '+lastCapped.shown+' of '+lastCapped.of+' — this list is capped. Use the dashboard for the full set.'));}
     rows.forEach(function(r){
       var row=el('div','row');
       var main=el('div','main');
@@ -421,7 +456,7 @@ function panelHtml(webview: vscode.Webview, spec: ModuleSpec): string {
       return;
     }
     if(m.type!=='rows')return;
-    lastRows=m.rows||[]; lastHeader=m.header||[]; lastDetail=!!m.detail; lastEmpty=m.empty||'Nothing here.';
+    lastRows=m.rows||[]; lastHeader=m.header||[]; lastDetail=!!m.detail; lastEmpty=m.empty||'Nothing here.'; lastCapped=m.capped||null;
     renderRows(searchEl.value);
   });
   renderTabs(); if(current) select(current);

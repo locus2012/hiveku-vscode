@@ -368,12 +368,17 @@ export function setConnectedAsMap(map: Record<string, string | undefined>): void
 // so it stops prompting on every call. Reads only — mutations (commit, save,
 // deploy, delete, secrets, supabase) are intentionally absent so they still confirm.
 const HIVEKU_ALLOW: string[] = [
+  // Written by the ACCOUNT scaffold and by each export, NOT by the project
+  // scaffold — in a site folder the runner lives one level up, at the account
+  // root. Both forms are allowed so the agent can run it from either place.
   'Bash(node .hiveku/pull-data.mjs)',
   'Bash(node .hiveku/pull-data.mjs:*)',
+  'Bash(node ../../.hiveku/pull-data.mjs)',
+  'Bash(node ../../.hiveku/pull-data.mjs:*)',
   'mcp__hiveku__*_get',
-  'mcp__hiveku__get_.*',
+  'mcp__hiveku__get_*',
   'mcp__hiveku__*_list',
-  'mcp__hiveku__list_.*',
+  'mcp__hiveku__list_*',
   'mcp__hiveku__*_list_*',
   // NOT a '*_status' glob. Glob '*' spans underscores, so '*_status' also
   // matches helpdesk_ticket_set_status — a PATCH that changes a customer-facing
@@ -397,8 +402,8 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__marketing_setup_status',
   'mcp__hiveku__connections_status',
   'mcp__hiveku__redesign_status',
-  'mcp__hiveku__verify_.*',
-  'mcp__hiveku__hiveku_docs_.*',
+  'mcp__hiveku__verify_*',
+  'mcp__hiveku__hiveku_docs_*',
   'mcp__hiveku__account_context_get',
   'mcp__hiveku__project_files_search',
   'mcp__hiveku__project_files_bulk_get',
@@ -426,7 +431,7 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__preview_overview',
   'mcp__hiveku__preview_logs',
   'mcp__hiveku__preview_screenshot',
-  'mcp__hiveku__analytics_.*',
+  'mcp__hiveku__analytics_*',
   'mcp__hiveku__talk_to_department',
   // Role daily-brief signals (read-only reports the /hiveku-daily commands chain).
   'mcp__hiveku__*_summary',
@@ -810,11 +815,15 @@ NEVER paste a secret value into code, a commit, memory, or a chat reply; never c
     'hiveku-remember': `---
 description: Persist what you learned/did into the right Hiveku department memory (source of truth).
 argument-hint: "[department] [what you learned]"
-allowed-tools: mcp__hiveku__memory_create, mcp__hiveku__memory_update, mcp__hiveku__memory_list, mcp__hiveku__list_departments
+allowed-tools: mcp__hiveku__memory_create, mcp__hiveku__memory_update, mcp__hiveku__memory_list
 ---
 Record a learning to Hiveku so every department stays in sync. ${idLine}
 
-1. Pick the right department (e.g. \`dev\`, \`marketing\`, \`sales\`, \`seo\`, \`helpdesk\`). \`list_departments\` if unsure.
+1. Pick the department this memory belongs to. Memory domains are a FREE-FORM label — use the one the
+   account already uses: call \`memory_list\` and reuse an existing \`domain\` value rather than inventing
+   one, or a plain slug like \`dev\` / \`marketing\` / \`sales\` / \`seo\` / \`helpdesk\` if none fits.
+   Do NOT use \`list_departments\` for this — it returns the CHAT-agent domains, a different and smaller
+   vocabulary, and picking from it will split your memory across two naming schemes.
 2. Check for an existing entry to refine: \`memory_list({ domain: "<department>" })\`.
 3. Write it: \`memory_create({ type: "memory", name: "<department>", content })\` — \`content\` is concise markdown:
    what you did, what you learned, why it matters, how to apply next time. On a 409 (already exists) use
@@ -1188,7 +1197,11 @@ operate EVERY department — not just edit code — and combine them in one task
 - **Local department data (for analysis):** if \`hiveku-data/\` exists, it holds a downloaded
   snapshot of this account's data (SEO rankings/keywords/backlinks, CRM deals/contacts, ads,
   social, content, email) as \`hiveku-data/<dept>/<dataset>.json\` — grep/analyze it like code.
-  Each folder's README names the source MCP tool. It's a SNAPSHOT: to change anything, call the
+  Each folder's README names the source MCP tool. **Check \`hiveku-data/STATUS.json\` first** — it
+  carries \`fetched_at\` plus \`failed\` (datasets that did NOT fetch — an empty file there means
+  "not retrieved", NOT "no data") and \`truncated\` (row caps hit, so the count is a floor, not a
+  total; call the live tool with paging if the real number matters).
+  It's a SNAPSHOT: to change anything, call the
   live tool; to refresh, run "Hiveku: Download Department Data" (or the Account Console). Absent
   until first downloaded.
 - **Brand-perfect generative work:** \`talk_to_department({ domain, message })\` runs that

@@ -22,6 +22,10 @@ export interface DatasetResult {
   label: string;
   tool: string;
   count: number;
+  /** True when the source tool's row cap was hit — `count` is a floor, not a total. */
+  truncated?: boolean;
+  /** Server-reported total when it gives one, so a capped count can say so. */
+  total?: number;
   error?: string;
   detailDir?: string;
   detailCount?: number;
@@ -74,7 +78,15 @@ export async function exportDepartment(
       ...(error ? { error } : {}),
       rows,
     });
-    const result: DatasetResult = { id: ds.id, label: ds.label, tool: ds.tool, count: rows.length, error };
+    const result: DatasetResult = {
+      id: ds.id,
+      label: ds.label,
+      tool: ds.tool,
+      count: rows.length,
+      ...(truncated ? { truncated: true } : {}),
+      ...(total != null ? { total } : {}),
+      error,
+    };
 
     // Rich-document dump: one full-object file per row (workflow graphs, avatars, …).
     if (ds.detail && rows.length) {
@@ -126,6 +138,27 @@ export async function exportDepartments(
   // Keep the self-serve runner + manifest fresh so Claude Code can re-pull these
   // departments itself (node .hiveku/pull-data.mjs) without the extension.
   await writeDataRunner(baseDir).catch(() => undefined); // preserves existing role defaults
+
+  // Machine-readable status alongside the human READMEs. An agent reading this
+  // export has no other way to tell a FRESH empty dataset from a STALE one, or
+  // a real zero from a capped page — both look like a small rows array.
+  const datasets = out.flatMap((d) => d.datasets.map((x) => ({ department: d.id, ...x })));
+  await writeJson(path.join(baseDir, DATA_DIR, 'STATUS.json'), {
+    account: accountLabel,
+    fetched_at: fetchedAt,
+    departments: out.map((d) => d.id),
+    dataset_count: datasets.length,
+    failed: datasets.filter((d) => d.error).map((d) => ({ department: d.department, dataset: d.id, error: d.error })),
+    truncated: datasets
+      .filter((d) => d.truncated)
+      .map((d) => ({ department: d.department, dataset: d.id, returned: d.count, total: d.total ?? null })),
+    note:
+      'Snapshot, not live. `fetched_at` is when it was taken — re-run "Hiveku: Download Department Data" ' +
+      '(or node .hiveku/pull-data.mjs) to refresh. Anything under `failed` was NOT fetched: its .json may be ' +
+      'absent or a previous snapshot, so do not read an empty result there as "no data". Anything under ' +
+      '`truncated` hit the source tool row cap — `returned` is a floor, not a total; call the live MCP tool ' +
+      'with paging if the real count matters.',
+  });
   return out;
 }
 

@@ -329,7 +329,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.restoreAccount', () => restoreAccount()),
     vscode.commands.registerCommand('hiveku.cloneProject', () => cloneProject()),
     vscode.commands.registerCommand('hiveku.refresh', () => withScm((s) => s.refresh())),
-    vscode.commands.registerCommand('hiveku.commit', () => withScm((s) => s.commit())),
+    vscode.commands.registerCommand('hiveku.commit', () => withScm((s) => s.commit(), true)),
     // Per-file discard from the Changes list. VS Code hands the resource state
     // for the clicked row, so resolve the owning SCM by path rather than
     // guessing the active one.
@@ -348,18 +348,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await owner.discardFile(path.relative(owner.root, fsPath).split(path.sep).join('/'));
       },
     ),
-    vscode.commands.registerCommand('hiveku.pushLocal', () => withScm((s) => s.push())),
+    vscode.commands.registerCommand('hiveku.pushLocal', () => withScm((s) => s.push(), true)),
     vscode.commands.registerCommand('hiveku.annotateReview', () => withScm((s) => openReviewAnnotator(s.root, s.link.project_name))),
     vscode.commands.registerCommand('hiveku.showHistory', () => withScm((s) => showHistory(s))),
-    vscode.commands.registerCommand('hiveku.revert', () => withScm((s) => revert(s))),
-    vscode.commands.registerCommand('hiveku.deploy', () => withScm((s) => deploy(s))),
-    vscode.commands.registerCommand('hiveku.pull', () => withScm((s) => pull(s))),
-    vscode.commands.registerCommand('hiveku.createBranch', () => withScm((s) => createBranch(s))),
-    vscode.commands.registerCommand('hiveku.switchBranch', () => withScm((s) => switchBranch(s))),
-    vscode.commands.registerCommand('hiveku.merge', () => withScm((s) => merge(s))),
+    vscode.commands.registerCommand('hiveku.revert', () => withScm((s) => revert(s), true)),
+    vscode.commands.registerCommand('hiveku.deploy', () => withScm((s) => deploy(s), true)),
+    vscode.commands.registerCommand('hiveku.pull', () => withScm((s) => pull(s), true)),
+    vscode.commands.registerCommand('hiveku.createBranch', () => withScm((s) => createBranch(s), true)),
+    vscode.commands.registerCommand('hiveku.switchBranch', () => withScm((s) => switchBranch(s), true)),
+    vscode.commands.registerCommand('hiveku.merge', () => withScm((s) => merge(s), true)),
     vscode.commands.registerCommand('hiveku.previewBranch', () => withScm((s) => previewBranch(s))),
     vscode.commands.registerCommand('hiveku.compare', () => withScm((s) => compare(s))),
-    vscode.commands.registerCommand('hiveku.prune', () => withScm((s) => prune(s))),
+    vscode.commands.registerCommand('hiveku.prune', () => withScm((s) => prune(s), true)),
     vscode.commands.registerCommand('hiveku.refreshTree', () => {
       invalidateEntitlements();
       tree.refresh();
@@ -388,8 +388,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.previewLogs', () => withScm((s) => resources.previewLogs(s, clientForAccount, log))),
     vscode.commands.registerCommand('hiveku.previewScreenshot', () => withScm((s) => resources.previewScreenshot(s, clientForAccount))),
     vscode.commands.registerCommand('hiveku.secrets', () => withScm((s) => resources.manageSecrets(s, clientForAccount))),
-    vscode.commands.registerCommand('hiveku.pullEnv', () => withScm((s) => pullEnv(s, clientForAccount))),
-    vscode.commands.registerCommand('hiveku.pushEnv', () => withScm((s) => pushEnv(s, clientForAccount))),
+    vscode.commands.registerCommand('hiveku.pullEnv', () => withScm((s) => pullEnv(s, clientForAccount), true)),
+    vscode.commands.registerCommand('hiveku.pushEnv', () => withScm((s) => pushEnv(s, clientForAccount), true)),
     vscode.commands.registerCommand('hiveku.localSupabase', () => withScm((s) => localSupabaseForScm(s))),
     vscode.commands.registerCommand('hiveku.database', () => withScm((s) => resources.showDatabase(s, clientForAccount))),
     vscode.commands.registerCommand('hiveku.media', () => withScm((s) => resources.showMedia(s, clientForAccount))),
@@ -458,7 +458,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   refresher = new DataRefresher(context, accounts, clientForAccount, (id) => getEntitlements(id), () => consoleTree.refresh());
 
-  connect = new ConnectFlow(accounts, appUrl, (newAccountIds) => {
+  connect = new ConnectFlow(context, accounts, appUrl, (newAccountIds) => {
     syncConnectedAs(); // new accounts carry connectedAs — refresh before their scaffold runs
     refreshStatusBar();
     updateSignedInContext();
@@ -630,23 +630,48 @@ function refreshStatusBar(): void {
   }
 }
 
-async function getActiveScm(): Promise<HivekuScm | undefined> {
+/**
+ * Resolve the project a Source Control command acts on.
+ *
+ * With several projects open this used to pick silently from whichever editor
+ * happened to be focused, so Push/Commit/Switch could act on a project the user
+ * was not looking at with nothing on screen naming it. When the choice is
+ * IMPLICIT and ambiguous, `mutating` callers now confirm the target first — the
+ * single-project case (the overwhelming majority) is untouched and silent.
+ */
+async function getActiveScm(mutating = false): Promise<HivekuScm | undefined> {
   if (scms.size === 0) return undefined;
   if (scms.size === 1) return [...scms.values()][0];
   const active = vscode.window.activeTextEditor?.document.uri;
   if (active) {
     const folder = vscode.workspace.getWorkspaceFolder(active);
-    if (folder && scms.has(folder.uri.fsPath)) return scms.get(folder.uri.fsPath);
+    const guess = folder && scms.has(folder.uri.fsPath) ? scms.get(folder.uri.fsPath) : undefined;
+    if (guess) {
+      if (!mutating) return guess;
+      const account = accounts.list().find((a) => a.accountId === guess.link.account_id);
+      const ok = await vscode.window.showQuickPick(
+        [
+          { label: `$(check) ${guess.link.project_name}`, detail: `Account: ${account?.label ?? guess.link.account_id}`, v: 'yes' },
+          { label: 'Choose a different project…', v: 'other' },
+        ],
+        { placeHolder: `${scms.size} Hiveku projects are open — act on this one?` },
+      );
+      if (!ok) return undefined;
+      if (ok.v === 'yes') return guess;
+    }
   }
   const pick = await vscode.window.showQuickPick(
-    [...scms.values()].map((s) => ({ label: s.link.project_name, scm: s })),
+    [...scms.values()].map((s) => {
+      const a = accounts.list().find((x) => x.accountId === s.link.account_id);
+      return { label: s.link.project_name, description: a?.label ?? '', scm: s };
+    }),
     { placeHolder: 'Which Hiveku project?' },
   );
   return pick?.scm;
 }
 
-async function withScm(fn: (scm: HivekuScm) => Promise<void>): Promise<void> {
-  const scm = await getActiveScm();
+async function withScm(fn: (scm: HivekuScm) => Promise<void>, mutating = false): Promise<void> {
+  const scm = await getActiveScm(mutating);
   if (!scm) {
     vscode.window.showWarningMessage('No Hiveku project in this workspace. Run "Hiveku: Download Project…".');
     return;

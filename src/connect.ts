@@ -16,9 +16,20 @@ interface ExchangeResponse {
 }
 
 export class ConnectFlow {
-  private pendingState: string | undefined;
+  /**
+   * The one-time state that ties the browser round-trip to THIS request.
+   *
+   * Persisted, not just in memory: the user leaves VS Code for a browser and
+   * comes back, and any reload in between (or the deep link waking a different
+   * window) used to drop it — the return then failed "state mismatch — start
+   * Connect again" with no hint that a reload caused it. Stored with a
+   * timestamp so a stale value cannot be replayed indefinitely.
+   */
+  private static readonly STATE_KEY = 'hiveku.connect.pendingState';
+  private static readonly STATE_TTL_MS = 15 * 60 * 1000;
 
   constructor(
+    private readonly ctx: vscode.ExtensionContext,
     private readonly accounts: AccountStore,
     private readonly appUrl: () => string,
     private readonly onConnected: (newAccountIds: string[]) => void,
@@ -33,7 +44,7 @@ export class ConnectFlow {
   /** Open the consent page in the browser. */
   async start(): Promise<void> {
     const state = crypto.randomBytes(16).toString('hex');
-    this.pendingState = state;
+    await this.ctx.globalState.update(ConnectFlow.STATE_KEY, { state, at: Date.now() });
     const redirect = `${vscode.env.uriScheme}://hiveku.hiveku-vscode/auth`;
     // Tell the consent page which accounts are ALREADY connected here so it
     // pre-selects them instead of showing a fresh "0 of X".
@@ -73,11 +84,17 @@ export class ConnectFlow {
       vscode.window.showErrorMessage('Hiveku connect: missing code.');
       return;
     }
-    if (!state || state !== this.pendingState) {
-      vscode.window.showErrorMessage('Hiveku connect: state mismatch — start "Connect Hiveku" again.');
+    const saved = this.ctx.globalState.get<{ state: string; at: number }>(ConnectFlow.STATE_KEY);
+    const expired = saved ? Date.now() - saved.at > ConnectFlow.STATE_TTL_MS : false;
+    if (!state || !saved || expired || state !== saved.state) {
+      vscode.window.showErrorMessage(
+        expired
+          ? 'Hiveku connect: that link expired (15 min). Run "Hiveku: Connect Hiveku" again.'
+          : 'Hiveku connect: this window did not start that connect request. Run "Hiveku: Connect Hiveku" again from the window you want the accounts in.',
+      );
       return;
     }
-    this.pendingState = undefined;
+    await this.ctx.globalState.update(ConnectFlow.STATE_KEY, undefined);
 
     try {
       const data = await vscode.window.withProgress(

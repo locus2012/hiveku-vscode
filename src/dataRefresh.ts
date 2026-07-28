@@ -21,7 +21,18 @@ interface RefreshPrefs {
   enabled: boolean;
   intervalHours: number;
   lastRun?: string;
+  /** Consecutive failures since the last success — drives the stale warning. */
+  failures?: number;
+  lastError?: string;
+  lastErrorAt?: string;
 }
+
+/**
+ * Warn after this many CONSECUTIVE failures. One is almost always a closed
+ * laptop or a flaky network and warning then would just train the user to
+ * dismiss it; three in a row means the export is genuinely not updating.
+ */
+const FAILURES_BEFORE_WARNING = 3;
 
 type PrefsMap = Record<string, RefreshPrefs>;
 
@@ -104,11 +115,42 @@ export class DataRefresher {
             { location: vscode.ProgressLocation.Window, title: `Hiveku: refreshing ${record.label} data…` },
             () => exportDepartments(client, depts, folder, record.label, () => undefined),
           );
-          map[accountId] = { ...p, lastRun: new Date().toISOString() };
+          map[accountId] = { ...p, lastRun: new Date().toISOString(), lastError: undefined, failures: 0 };
           await this.setPrefs(map);
           this.onRefreshed();
-        } catch {
-          // Network/auth failure — leave lastRun so we retry next tick, never nag.
+        } catch (err) {
+          // Never nag on a transient blip — but never stay silent forever either.
+          // These exports are what Claude Code reads as the account's data, so a
+          // refresh that has been broken for days means the agent is working from
+          // stale numbers with nobody aware. Record the failure and surface it
+          // once it is no longer plausibly transient.
+          const failures = (p.failures ?? 0) + 1;
+          const reason = err instanceof Error ? err.message : String(err);
+          map[accountId] = { ...p, failures, lastError: reason, lastErrorAt: new Date().toISOString() };
+          await this.setPrefs(map);
+          if (failures === FAILURES_BEFORE_WARNING) {
+            const staleFor = p.lastRun
+              ? `${Math.floor((Date.now() - Date.parse(p.lastRun)) / 3600_000)}h`
+              : 'ever since it was enabled';
+            void vscode.window
+              .showWarningMessage(
+                `Hiveku data refresh for "${record.label}" has failed ${failures} times — its hiveku-data export is stale (${staleFor}). Agents reading it are working from old numbers.`,
+                'Retry now',
+                'Turn off auto-refresh',
+              )
+              .then(async (choice) => {
+                if (choice === 'Retry now') {
+                  const cur = this.prefs();
+                  cur[accountId] = { ...cur[accountId], failures: 0 };
+                  await this.setPrefs(cur);
+                  void this.tick();
+                } else if (choice === 'Turn off auto-refresh') {
+                  const cur = this.prefs();
+                  cur[accountId] = { ...cur[accountId], enabled: false };
+                  await this.setPrefs(cur);
+                }
+              });
+          }
         }
       }
     } finally {

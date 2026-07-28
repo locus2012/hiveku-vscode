@@ -174,8 +174,10 @@ STEP 3 — INITIATE. This SPLITS by provider — the paths are NOT the same:
   B) BING WEBMASTER (organic search — the GSC equivalent) — NO OAuth. It's an SEO connection with just an
      API key: \`seo_connection_create({ platform: "bing_webmaster", site_url, api_key })\` (key from
      bing.com/webmasters → Settings → API access; the site can be one-click "Import from Google Search
-     Console" there). Then \`seo_sync\` + \`seo_bing_stats\` to verify. Do NOT use integration_oauth_initiate
-     or integration_create for Bing Webmaster — both reject it ("Unknown provider_slug").
+     Console" there). Then \`seo_sync\` + \`seo_bing_stats\` to verify. \`integration_oauth_initiate\` does
+     NOT support it (that route is Google-only). \`integration_create\` DOES accept
+     \`provider_slug: "bing_webmaster"\` with \`credentials: { api_key }\` — prefer
+     \`seo_connection_create\` so the key lands on the SEO connection the seo_* tools read.
   C) BING ADS (microsoft_ads) — CLI OAuth is NOT supported (integration_oauth_initiate is Google-only).
      Register the Azure app once (\`oauth_app_create({ provider: "microsoft", products: ["microsoft_ads"],
      client_id, client_secret })\`), then the human connects it in the DASHBOARD:
