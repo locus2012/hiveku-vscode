@@ -16,7 +16,7 @@ import { AccountStore, type AccountRecord } from './accounts';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
 import { downloadAndExtract } from './download';
-import { HivekuScm } from './scm';
+import { HivekuScm, REMOTE_SCHEME } from './scm';
 import { HivekuTreeProvider } from './tree';
 import { AccountConsoleProvider } from './consoleTree';
 import { ConnectFlow } from './connect';
@@ -322,6 +322,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.cloneProject', () => cloneProject()),
     vscode.commands.registerCommand('hiveku.refresh', () => withScm((s) => s.refresh())),
     vscode.commands.registerCommand('hiveku.commit', () => withScm((s) => s.commit())),
+    // Per-file discard from the Changes list. VS Code hands the resource state
+    // for the clicked row, so resolve the owning SCM by path rather than
+    // guessing the active one.
+    vscode.commands.registerCommand(
+      'hiveku.discardFile',
+      async (state?: vscode.SourceControlResourceState) => {
+        const fsPath = state?.resourceUri?.fsPath;
+        if (!fsPath) return;
+        const owner = [...scms.values()]
+          .filter((s) => fsPath.startsWith(s.root + path.sep))
+          .sort((a, b) => b.root.length - a.root.length)[0];
+        if (!owner) {
+          vscode.window.showWarningMessage('That file is not inside a downloaded Hiveku project.');
+          return;
+        }
+        await owner.discardFile(path.relative(owner.root, fsPath).split(path.sep).join('/'));
+      },
+    ),
     vscode.commands.registerCommand('hiveku.pushLocal', () => withScm((s) => s.push())),
     vscode.commands.registerCommand('hiveku.annotateReview', () => withScm((s) => openReviewAnnotator(s.root, s.link.project_name))),
     vscode.commands.registerCommand('hiveku.showHistory', () => withScm((s) => showHistory(s))),
@@ -340,7 +358,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('hiveku.refreshTasks', () => tree.refreshTasks(true)),
     vscode.commands.registerCommand('hiveku.filterAccounts', () => filterAccounts()),
-    vscode.commands.registerCommand('hiveku.clearAccountFilter', () => tree.setAccountFilter('')),
+    // Clear BOTH trees. autoFocusWorkspaceAccount filters the Projects tree AND
+    // the Account Console on activation, but this only ever cleared the former —
+    // and consoleTree.setFilter was never called with an empty string anywhere.
+    // Opening one client's folder therefore hid every other client from the
+    // console for the life of the window, with no visible cause and no way back.
+    vscode.commands.registerCommand('hiveku.clearAccountFilter', () => {
+      tree.setAccountFilter('');
+      consoleTree.setFilter('');
+    }),
     vscode.commands.registerCommand('hiveku.cloneProjectItem', (node) => cloneProjectItem(node)),
     vscode.commands.registerCommand('hiveku.connect', () => connect.start()),
     vscode.commands.registerCommand('hiveku.downloadType', (node) => downloadType(node)),
@@ -454,6 +480,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await pickRole(pending[0], 'How will you run this account here? (Esc to skip)');
     })();
   });
+  // Serves the read-only "what Hiveku currently has" side of a working-tree
+  // diff, so clicking a changed file in Source Control shows a real comparison.
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(REMOTE_SCHEME, {
+      async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
+        const q = new URLSearchParams(uri.query);
+        try {
+          const client = await clientForAccount(q.get('account') ?? '');
+          return await api.fileContent(client, q.get('project') ?? '', q.get('path') ?? '');
+        } catch (err) {
+          return `Could not load Hiveku's copy of this file:\n${errMsg(err)}`;
+        }
+      },
+    }),
+  );
+
   connect.register(context);
   registerFileHistory(context, resolveFileProject, clientForAccount);
   updateSignedInContext();

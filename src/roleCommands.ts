@@ -382,7 +382,7 @@ description: Chase overdue receivables — reminders drafted per invoice, activi
 ---
 AR chase. 1. \`accounting_ar_aging\` + \`accounting_invoice_list({ status: "all" })\` → overdue invoices.
 2. Per overdue invoice, draft a firm-but-brand-aligned reminder via
-   \`talk_to_department({ domain: "sales", message })\`. Show drafts — do NOT send anything without approval.
+   \`talk_to_department({ domain: "outbound", message })\`. Show drafts — do NOT send anything without approval.
 3. Log each chase as an activity (\`crm_create_activity\`) and record promised dates as PM tasks.
 4. ${PERSIST_STEP}
 `,

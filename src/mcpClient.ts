@@ -56,6 +56,7 @@ export class HivekuMcpClient {
   private sessionId: string | null = null;
   private nextId = 1;
   private initialized = false;
+  private initializing: Promise<void> | undefined;
 
   constructor(opts: { baseUrl: string; apiKey: string; profile?: string }) {
     if (!opts.baseUrl) throw new Error('baseUrl required');
@@ -138,13 +139,25 @@ export class HivekuMcpClient {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    await this.request('initialize', {
-      protocolVersion: PROTOCOL_VERSION,
-      capabilities: {},
-      clientInfo: { name: 'hiveku-vscode', version: '0.1.0' },
-    });
-    await this.request('notifications/initialized', {}).catch(() => undefined);
-    this.initialized = true;
+    // Memoize the in-flight handshake, not just the finished one. The old guard
+    // only checked the resolved flag, which is set AFTER both awaits — so
+    // concurrent callTools each ran their own initialize + notifications pair.
+    // A 7-way Promise.allSettled did seven handshakes, all queued behind the
+    // same 6-slot gate, for one logical read.
+    if (!this.initializing) {
+      this.initializing = (async () => {
+        await this.request('initialize', {
+          protocolVersion: PROTOCOL_VERSION,
+          capabilities: {},
+          clientInfo: { name: 'hiveku-vscode', version: '0.1.0' },
+        });
+        await this.request('notifications/initialized', {}).catch(() => undefined);
+        this.initialized = true;
+      })().finally(() => {
+        this.initializing = undefined;
+      });
+    }
+    await this.initializing;
   }
 
   async callTool(name: string, args: Record<string, unknown> = {}): Promise<McpToolResult> {

@@ -44,10 +44,34 @@ export class AccountStore {
     return this.ctx.secrets.get(secretKey(accountId));
   }
 
+  /**
+   * Reuse one client per (account, baseUrl). It used to build a NEW client on
+   * every call, and each new client must handshake before its first tool call —
+   * so one logical read cost three HTTP round trips plus a keychain read, across
+   * 82 call sites. The client holds no per-request state, so sharing is safe.
+   */
+  private readonly clientCache = new Map<string, HivekuMcpClient>();
+
   async getClient(accountId: string, baseUrl: string): Promise<HivekuMcpClient> {
+    const cacheKey = `${accountId}::${baseUrl}`;
+    const cached = this.clientCache.get(cacheKey);
+    if (cached) return cached;
     const key = await this.getKey(accountId);
     if (!key) throw new Error(`No stored key for account ${accountId}. Run "Hiveku: Sign In".`);
-    return new HivekuMcpClient({ baseUrl, apiKey: key });
+    const client = new HivekuMcpClient({ baseUrl, apiKey: key });
+    this.clientCache.set(cacheKey, client);
+    return client;
+  }
+
+  /** Drop cached clients for an account whose key changed or was revoked. */
+  private invalidateClients(accountId?: string): void {
+    if (!accountId) {
+      this.clientCache.clear();
+      return;
+    }
+    for (const k of [...this.clientCache.keys()]) {
+      if (k.startsWith(`${accountId}::`)) this.clientCache.delete(k);
+    }
   }
 
   /**
@@ -91,6 +115,7 @@ export class AccountStore {
    */
   async addAccount(accountId: string, label: string, key: string, connectedAs?: string): Promise<AccountRecord> {
     await this.ctx.secrets.store(secretKey(accountId), key.trim());
+    this.invalidateClients(accountId); // the cached client holds the OLD key
     const records = this.list().filter((r) => r.accountId !== accountId);
     const record: AccountRecord = { accountId, label, ...(connectedAs ? { connectedAs } : {}) };
     records.push(record);
@@ -161,6 +186,7 @@ export class AccountStore {
     for (let i = 0; i < incoming.length; i += BATCH) {
       const slice = incoming.slice(i, i + BATCH);
       await Promise.all(slice.map((a) => this.ctx.secrets.store(secretKey(a.accountId), a.key.trim())));
+      for (const a of slice) this.invalidateClients(a.accountId); // keys may have been rotated
       onProgress?.(Math.min(i + BATCH, incoming.length), incoming.length);
     }
 
@@ -178,6 +204,7 @@ export class AccountStore {
 
   async signOut(accountId: string): Promise<void> {
     await this.ctx.secrets.delete(secretKey(accountId));
+    this.invalidateClients(accountId);
     await this.setIndex(this.list().filter((r) => r.accountId !== accountId));
     // Clean per-account side maps (were previously leaked on removal).
     for (const key of [FOLDERS_KEY, DEPARTMENTS_KEY, ROLES_KEY]) {

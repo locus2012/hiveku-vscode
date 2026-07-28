@@ -1775,8 +1775,13 @@ description: Run a department's server-side agent (full brand/memory) for strate
 argument-hint: "<department> <message>"
 allowed-tools: mcp__hiveku__talk_to_department
 ---
-The first word of "$ARGUMENTS" is the department domain (e.g. sales, seo, ppc, social, content,
-email, helpdesk, branding, marketing); the rest is the message.
+The first word of "$ARGUMENTS" is the department domain; the rest is the message.
+Valid domains (talk_to_department rejects anything else): seo, social, content, marketing,
+branding, outbound, ppc, analytics, customer_avatar, customer_journey, before_after_grid,
+website_design, knowledge_base, workflow. There is NO sales, email or helpdesk agent — use
+outbound for sales motion. An unknown domain does not raise a tool error: it returns a normal
+result with an empty response and an \`error\` string, so check for that rather than assuming
+silence means success.
 Call \`talk_to_department({ domain: <first word>, message: <the rest> })\` and return its reply.
 For generative work prefer this over writing copy yourself — it runs with full brand/memory/skills.
 Then persist the result with the matching tool (e.g. content_create) if asked.

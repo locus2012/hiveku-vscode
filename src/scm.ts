@@ -47,11 +47,22 @@ async function runLimited<T>(items: T[], limit: number, fn: (item: T) => Promise
   await Promise.all(workers);
 }
 
+/** Scheme backing the read-only "what Hiveku currently has" side of a diff. */
+export const REMOTE_SCHEME = 'hiveku-remote';
+
+/** Encode the coordinates the content provider needs to fetch one file. */
+export function remoteUri(accountId: string, projectId: string, rel: string): vscode.Uri {
+  return vscode.Uri.parse(
+    `${REMOTE_SCHEME}:/${rel}?account=${encodeURIComponent(accountId)}&project=${encodeURIComponent(projectId)}&path=${encodeURIComponent(rel)}`,
+  );
+}
+
 export class HivekuScm implements vscode.Disposable {
   readonly sc: vscode.SourceControl;
   private readonly changes: vscode.SourceControlResourceGroup;
   private readonly disposables: vscode.Disposable[] = [];
   private statuses = new Map<string, ChangeKind>();
+  private watchTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly rootUri: vscode.Uri,
@@ -63,7 +74,26 @@ export class HivekuScm implements vscode.Disposable {
     this.sc.inputBox.placeholder = 'Commit message (saved to Hiveku)';
     this.sc.acceptInputCommand = { command: 'hiveku.commit', title: 'Commit to Hiveku' };
     this.changes = this.sc.createResourceGroup('changes', 'Changes');
-    this.disposables.push(this.sc, this.changes);
+
+    // Keep the Changes list live. Without a watcher it only ever reflected the
+    // last manual refresh, so a file you or an agent just created did not
+    // appear — and, before commit() started refreshing unconditionally, was
+    // silently left out of the commit. Debounced because an agent editing a
+    // project can produce a burst of writes.
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(rootUri, '**/*'),
+    );
+    const bump = (): void => {
+      if (this.watchTimer) clearTimeout(this.watchTimer);
+      this.watchTimer = setTimeout(() => {
+        this.watchTimer = undefined;
+        void this.refresh().catch(() => undefined);
+      }, 700);
+    };
+    watcher.onDidCreate(bump);
+    watcher.onDidChange(bump);
+    watcher.onDidDelete(bump);
+    this.disposables.push(this.sc, this.changes, watcher);
   }
 
   get root(): string {
@@ -71,6 +101,7 @@ export class HivekuScm implements vscode.Disposable {
   }
 
   dispose(): void {
+    if (this.watchTimer) clearTimeout(this.watchTimer);
     for (const d of this.disposables) d.dispose();
   }
 
@@ -210,8 +241,28 @@ export class HivekuScm implements vscode.Disposable {
   private resourceState(rel: string, kind: ChangeKind): vscode.SourceControlResourceState {
     const resourceUri = vscode.Uri.file(path.join(this.root, rel));
     const letter = kind === 'modified' ? 'M' : kind === 'added' ? 'A' : 'D';
+    // Clicking a changed file used to do nothing — no command, no
+    // quickDiffProvider, no per-file menu. The only ways to see what changed
+    // were a branch-level compare or a version history, neither of which diffs
+    // the working tree against Hiveku. For an operator reviewing what an agent
+    // did before it reaches a client's site, that was the largest gap in the
+    // loop. A modified file now opens a real side-by-side diff; an added file
+    // just opens, since there is no remote side to compare against.
+    const command: vscode.Command =
+      kind === 'modified'
+        ? {
+            command: 'vscode.diff',
+            title: 'Compare with Hiveku',
+            arguments: [
+              remoteUri(this.link.account_id, this.link.project_id, rel),
+              resourceUri,
+              `${path.basename(rel)} — Hiveku ↔ local`,
+            ],
+          }
+        : { command: 'vscode.open', title: 'Open', arguments: [resourceUri] };
     return {
       resourceUri,
+      command,
       decorations: {
         strikeThrough: kind === 'deleted',
         tooltip: `${kind} — ${rel}`,
@@ -219,6 +270,41 @@ export class HivekuScm implements vscode.Disposable {
         dark: { badge: letter } as vscode.SourceControlResourceDecorations,
       },
     };
+  }
+
+  /**
+   * Restore ONE file to Hiveku's current content.
+   *
+   * Until now the only way to undo a single bad local edit was hiveku.pull,
+   * which overwrites the entire tree — so reverting one file meant losing every
+   * other uncommitted change too.
+   */
+  async discardFile(rel: string): Promise<void> {
+    const kind = this.statuses.get(rel);
+    const ok = await vscode.window.showWarningMessage(
+      `Discard local changes to ${rel}?`,
+      {
+        modal: true,
+        detail:
+          kind === 'added'
+            ? 'This file does not exist on Hiveku, so it will be DELETED from this folder.'
+            : "This file will be replaced with Hiveku's current content. Local edits are lost.",
+      },
+      'Discard',
+    );
+    if (ok !== 'Discard') return;
+
+    const abs = path.join(this.root, rel);
+    if (kind === 'added') {
+      await fs.rm(abs, { force: true });
+    } else {
+      const client = await this.clientFactory();
+      const content = await api.fileContent(client, this.link.project_id, rel);
+      await fs.mkdir(path.dirname(abs), { recursive: true });
+      await fs.writeFile(abs, content, 'utf8');
+    }
+    await this.refresh();
+    vscode.window.showInformationMessage(`Discarded local changes to ${rel}.`);
   }
 
   /** Overwrite local files with given content (used to drop conflict markers in). */
@@ -237,12 +323,19 @@ export class HivekuScm implements vscode.Disposable {
       vscode.window.showWarningMessage('Enter a commit message first.');
       return;
     }
+    // ALWAYS refresh — never commit from a cached status map.
+    //
+    // This used to refresh only when statuses was EMPTY, and statuses is
+    // populated solely by refresh(). So the common path was: the view refreshed
+    // at window open, you or an agent then created three new files, the Changes
+    // list still showed the old set, and commit built its file list from that
+    // stale map — silently omitting the new files while reporting success.
+    // Content of already-tracked files was read fresh at commit time, which
+    // made it maximally deceptive: most of the commit was correct.
+    await this.refresh();
     if (this.statuses.size === 0) {
-      await this.refresh();
-      if (this.statuses.size === 0) {
-        vscode.window.showInformationMessage('Nothing to commit — already in sync with Hiveku.');
-        return;
-      }
+      vscode.window.showInformationMessage('Nothing to commit — already in sync with Hiveku.');
+      return;
     }
 
     // "You're behind" guard (main only) — Hiveku may have moved since you pulled.

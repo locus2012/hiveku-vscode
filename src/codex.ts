@@ -211,6 +211,57 @@ export async function mirrorCommandsToSkills(baseDir: string): Promise<number> {
     await fs.writeFile(skillPath, skill, 'utf8');
     written += 1;
   }
+
+  written += await mirrorAgencySkills(baseDir, STAMP);
+  return written;
+}
+
+/**
+ * Mirror the agency methodology skills into the Codex tree.
+ *
+ * These are the deepest guidance layer the product ships — the month-1
+ * baseline, the weekly cadence, the report structure, the exact tool chains,
+ * and the only DataForSEO cost warning anywhere in the scaffold. Only the
+ * slash commands were being mirrored, so Codex ran without any of it while
+ * Claude Code had all of it.
+ *
+ * They already carry their own YAML frontmatter, so unlike commands they are
+ * copied through unchanged apart from the $ARGUMENTS translation.
+ */
+async function mirrorAgencySkills(baseDir: string, stamp: string): Promise<number> {
+  const skillsDir = path.join(baseDir, '.claude', 'skills');
+  let dirs: string[] = [];
+  try {
+    dirs = (await fs.readdir(skillsDir, { withFileTypes: true }))
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return 0; // no skills scaffolded (role has none, or not written yet)
+  }
+  let written = 0;
+  for (const name of dirs) {
+    let src: string;
+    try {
+      src = await fs.readFile(path.join(skillsDir, name, 'SKILL.md'), 'utf8');
+    } catch {
+      continue;
+    }
+    const destDir = path.join(baseDir, '.agents', 'skills', name);
+    const destPath = path.join(destDir, 'SKILL.md');
+    try {
+      const existing = await fs.readFile(destPath, 'utf8');
+      if (!existing.includes(stamp)) continue; // user-authored — never clobber
+    } catch {
+      /* new */
+    }
+    const body = src.replace(/\$ARGUMENTS/g, '(the arguments the user gave after the skill name)');
+    // Insert the stamp after the existing frontmatter so re-runs stay idempotent.
+    const fm = body.match(/^---\n[\s\S]*?\n---\n?/);
+    const stamped = fm ? `${fm[0]}${stamp}\n\n${body.slice(fm[0].length).trimStart()}` : `${stamp}\n\n${body}`;
+    await fs.mkdir(destDir, { recursive: true });
+    await fs.writeFile(destPath, stamped, 'utf8');
+    written += 1;
+  }
   return written;
 }
 

@@ -563,6 +563,27 @@ export async function fileVersions(
   return Array.isArray(list) ? list : [];
 }
 
+/**
+ * Current remote content of one file. Used as the left-hand side when diffing
+ * the working tree against Hiveku — fileDiff returns a unified diff string, not
+ * content, so it cannot serve that role.
+ */
+export async function fileContent(
+  client: HivekuMcpClient,
+  projectId: string,
+  filePath: string,
+): Promise<string> {
+  const res = await client.callToolJson<unknown>('project_file_get', {
+    project_id: projectId,
+    file_path: filePath,
+  });
+  const data = unwrap<Record<string, unknown>>(res) as Record<string, unknown> | undefined;
+  const content = data?.content;
+  if (typeof content !== 'string') return '';
+  // Binary files come back base64-tagged; there is nothing useful to diff.
+  return data?.encoding === 'base64' ? '(binary file — no text diff)' : content;
+}
+
 /** Unified diff of a past version vs the current version. */
 export async function fileDiff(
   client: HivekuMcpClient,
