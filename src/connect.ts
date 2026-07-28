@@ -36,13 +36,28 @@ export class ConnectFlow {
     this.pendingState = state;
     const redirect = `${vscode.env.uriScheme}://hiveku.hiveku-vscode/auth`;
     // Tell the consent page which accounts are ALREADY connected here so it
-    // pre-selects them (instead of showing a fresh "0 of X"). Capped to keep the
-    // URL sane for SaaS owners with many accounts.
-    const connected = this.accounts.list().map((a) => a.accountId).slice(0, 400);
+    // pre-selects them instead of showing a fresh "0 of X".
+    //
+    // Capped by ENCODED LENGTH, not by count. The old slice(0, 400) let 350
+    // accounts produce a ~13.8KB request line — past the 8KB limit nginx and
+    // most CDNs enforce — so the consent page failed to load before the user
+    // could pick anything. This is supplementary data: the page independently
+    // marks accounts connected from the user's own active mcp_api_keys and
+    // merely unions this list, so dropping it on a large roster costs nothing
+    // but a little pre-selection.
+    const MAX_CONNECTED_PARAM_CHARS = 1500;
+    const ids: string[] = [];
+    let budget = MAX_CONNECTED_PARAM_CHARS;
+    for (const a of this.accounts.list()) {
+      const cost = a.accountId.length + 3; // id + encoded comma
+      if (cost > budget) break;
+      budget -= cost;
+      ids.push(a.accountId);
+    }
     const url =
       `${this.appUrl().replace(/\/+$/, '')}/connect/vscode` +
       `?state=${encodeURIComponent(state)}&redirect=${encodeURIComponent(redirect)}` +
-      (connected.length ? `&connected=${encodeURIComponent(connected.join(','))}` : '');
+      (ids.length ? `&connected=${encodeURIComponent(ids.join(','))}` : '');
     await vscode.env.openExternal(vscode.Uri.parse(url));
     vscode.window.showInformationMessage(
       'Continue in your browser to choose accounts + departments, then return to VS Code.',
@@ -84,13 +99,22 @@ export class ConnectFlow {
       // The exchange returns EVERY account selected on the consent page —
       // including ones already connected here. Only the genuinely new ones
       // should trigger first-time setup (role prompts etc.).
-      const before = new Set(this.accounts.list().map((a) => a.accountId));
-      const newIds: string[] = [];
-      for (const a of data.accounts ?? []) {
-        if (!before.has(a.account_id)) newIds.push(a.account_id);
-        await this.accounts.addAccount(a.account_id, a.account_name || a.account_id, a.api_key, data.connected_as);
-        await this.accounts.setDepartments(a.account_id, data.departments ?? []);
-      }
+      // One index write and one departments write for the whole batch. Doing
+      // this per account was O(n^2) on the index and, for a SaaS owner
+      // connecting hundreds of accounts, meant well over a thousand awaited
+      // writes — the connect appeared to hang and could fail outright.
+      const incoming = (data.accounts ?? []).map((a) => ({
+        accountId: a.account_id,
+        label: a.account_name || a.account_id,
+        key: a.api_key,
+      }));
+      const newIds = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'Storing Hiveku account keys…' },
+        (progress) =>
+          this.accounts.addAccounts(incoming, data.connected_as, data.departments ?? [], (done, total) =>
+            progress.report({ message: `${done} of ${total}` }),
+          ),
+      );
       vscode.window.showInformationMessage(
         newIds.length
           ? `Connected ${newIds.length} new Hiveku account(s) (keys refreshed for ${(data.accounts?.length ?? 0) - newIds.length} existing).`

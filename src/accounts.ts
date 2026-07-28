@@ -98,6 +98,75 @@ export class AccountStore {
     return record;
   }
 
+  /**
+   * Add many accounts in one pass.
+   *
+   * addAccount() is O(n) per call — it re-reads the index, appends, and writes
+   * the WHOLE array back — so connecting N accounts one at a time costs O(n^2)
+   * index writes plus a keychain write and a departments write each. At ~350
+   * accounts that is over a thousand awaited writes against an ever-growing
+   * blob, which is why a large connect appeared to hang or fail outright.
+   *
+   * This writes the index and the departments map exactly ONCE, and stores the
+   * secrets in bounded-concurrency batches (the OS keychain throttles and can
+   * reject an unbounded parallel burst).
+   *
+   * Returns the ids that were NOT already present, so the caller can run
+   * first-time setup for just those.
+   */
+  async addAccounts(
+    incoming: Array<{ accountId: string; label: string; key: string }>,
+    connectedAs?: string,
+    departments?: string[],
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<string[]> {
+    const existing = this.list();
+    const known = new Set(existing.map((r) => r.accountId));
+    const newIds = incoming.filter((a) => !known.has(a.accountId)).map((a) => a.accountId);
+
+    // INDEX FIRST, THEN SECRETS — the order matters on failure.
+    //
+    // An index entry with no key is visible and self-describing: getKey returns
+    // undefined and the UI already says "No stored key for X. Re-connect the
+    // account first." A key with no index entry is invisible forever — nothing
+    // sweeps orphaned secrets, and secrets.delete is only reachable via signOut,
+    // which only sees accounts that are IN the index. Storing secrets first
+    // would strand up to a full batch of live keys in the OS keychain on any
+    // mid-run failure, while adding zero accounts.
+    //
+    // Rebuild the index once. Incoming wins on label/connectedAs for accounts
+    // already present. Unlike addAccount's filter-then-push this preserves the
+    // existing account's POSITION instead of moving it to the tail, so a
+    // reconnect no longer churns sidebar order.
+    const byId = new Map(existing.map((r) => [r.accountId, r]));
+    for (const a of incoming) {
+      byId.set(a.accountId, {
+        accountId: a.accountId,
+        label: a.label,
+        ...(connectedAs ? { connectedAs } : {}),
+      });
+    }
+    await this.setIndex([...byId.values()]);
+
+    if (departments) {
+      const map = this.ctx.globalState.get<Record<string, string[]>>(DEPARTMENTS_KEY, {});
+      for (const a of incoming) map[a.accountId] = departments;
+      await this.ctx.globalState.update(DEPARTMENTS_KEY, map);
+    }
+
+    // Distinct keychain keys, so a bounded burst is safe. Promise.all fails
+    // fast, but the index is already committed, so a failure leaves keyless
+    // rows the user can fix by reconnecting — not invisible orphans.
+    const BATCH = 12;
+    for (let i = 0; i < incoming.length; i += BATCH) {
+      const slice = incoming.slice(i, i + BATCH);
+      await Promise.all(slice.map((a) => this.ctx.secrets.store(secretKey(a.accountId), a.key.trim())));
+      onProgress?.(Math.min(i + BATCH, incoming.length), incoming.length);
+    }
+
+    return newIds;
+  }
+
   /** Follow account renames from Hiveku (label is display-only; the id is identity). */
   async updateLabel(accountId: string, label: string): Promise<void> {
     const records = this.list();
@@ -161,6 +230,13 @@ export class AccountStore {
     const map = this.ctx.globalState.get<Record<string, string[]>>(DEPARTMENTS_KEY, {});
     map[accountId] = departments;
     await this.ctx.globalState.update(DEPARTMENTS_KEY, map);
+  }
+
+  /** Set one role across many accounts with a SINGLE map write. */
+  async setRoles(accountIds: string[], role: string): Promise<void> {
+    const map = this.ctx.globalState.get<Record<string, string>>(ROLES_KEY, {});
+    for (const id of accountIds) map[id] = role;
+    await this.ctx.globalState.update(ROLES_KEY, map);
   }
 
   // ── Per-account role (how this user runs the account here) ────────────────

@@ -409,10 +409,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // one account must never re-interrogate the whole roster (existing accounts
     // get asked lazily by the department-session button, or via Set Role).
     void (async () => {
-      for (const id of newAccountIds) {
-        const rec = accounts.list().find((r) => r.accountId === id);
-        if (rec && !accounts.getRole(id)) await pickRole(rec, 'How will you run this account here? (Esc to skip)');
+      const byId = new Map(accounts.list().map((r) => [r.accountId, r]));
+      const pending = newAccountIds
+        .map((id) => byId.get(id))
+        .filter((r): r is AccountRecord => !!r && !accounts.getRole(r.accountId));
+      if (pending.length === 0) return;
+      // One prompt per account is fine for one or two. Connecting a roster of
+      // 70 meant 70 modals in a row with no way to answer once, so offer to
+      // apply a single role to the whole batch first.
+      if (pending.length > 1) {
+        await pickRoleForMany(pending);
+        return;
       }
+      await pickRole(pending[0], 'How will you run this account here? (Esc to skip)');
     })();
   });
   connect.register(context);
@@ -1744,6 +1753,52 @@ function warnIfMixedAccounts(): void {
 // ── Roles ─────────────────────────────────────────────────────────────────────
 
 /** Role QuickPick for one account; stores it, refreshes surfaces, offers re-scaffold. */
+/**
+ * Choose a role for MANY newly-connected accounts at once.
+ *
+ * The connect flow used to loop pickRole() over every new account, so adding a
+ * roster of 70 meant 70 consecutive modals with no way to answer once. Almost
+ * everyone runs a whole roster the same way, so ask once and apply to all —
+ * with an explicit escape hatch for the minority that genuinely differ.
+ */
+async function pickRoleForMany(records: AccountRecord[]): Promise<void> {
+  const SET_ALL = 'set-all';
+  const PER_ACCOUNT = 'per-account';
+  const SKIP = 'skip';
+  const choice = await vscode.window.showQuickPick(
+    [
+      { label: `Use one role for all ${records.length}`, detail: 'Recommended — you can change any account later with "Hiveku: Set Role".', id: SET_ALL },
+      { label: 'Choose per account', detail: `Asks ${records.length} times, once per account.`, id: PER_ACCOUNT },
+      { label: 'Skip for now', detail: 'No roles set. Each account asks the first time you use it.', id: SKIP },
+    ],
+    { placeHolder: `${records.length} new accounts connected — how do you want to set roles?`, ignoreFocusOut: true },
+  );
+  if (!choice || choice.id === SKIP) return;
+
+  if (choice.id === PER_ACCOUNT) {
+    for (const rec of records) {
+      await pickRole(rec, 'How will you run this account here? (Esc to skip)');
+    }
+    return;
+  }
+
+  const pick = await vscode.window.showQuickPick(
+    ROLES.map((r) => ({ label: r.label, detail: r.blurb, id: r.id })),
+    { placeHolder: `Role to apply to all ${records.length} accounts`, ignoreFocusOut: true },
+  );
+  if (!pick) return;
+
+  // One map write for the whole batch. Looping setRole would have re-read and
+  // re-written the entire roles map per account — the same O(n^2) shape this
+  // change set removed from the connect path.
+  await accounts.setRoles(records.map((r) => r.accountId), pick.id);
+  tree.refresh();
+  consoleTree.refresh();
+  vscode.window.showInformationMessage(
+    `Set ${records.length} accounts to ${pick.label}. Change any of them with "Hiveku: Set Role".`,
+  );
+}
+
 async function pickRole(record: AccountRecord, placeHolder: string): Promise<void> {
   const current = accounts.getRole(record.accountId);
   const pick = await vscode.window.showQuickPick(
