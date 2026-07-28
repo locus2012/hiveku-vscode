@@ -22,6 +22,7 @@ import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
 import { mapLimit, departmentById, fetchDataset } from './deptData';
 import { effectiveDepartments, roleById } from './roles';
+import { AUTO_EXPAND_MAX_ACCOUNTS } from './tree';
 
 interface AccountNode { kind: 'account'; record: AccountRecord; }
 interface SectionNode { kind: 'section'; record: AccountRecord; tab: 'tasks' | 'automations'; label: string; icon: string; }
@@ -69,7 +70,15 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
   getTreeItem(node: ConsoleNode): vscode.TreeItem {
     switch (node.kind) {
       case 'account': {
-        const item = new vscode.TreeItem(node.record.label, vscode.TreeItemCollapsibleState.Expanded);
+        // Same reason as the Projects tree: each expanded account awaits its own
+        // account_entitlements call, so auto-expanding a large roster fires one
+        // per account on every reveal and refresh.
+        const item = new vscode.TreeItem(
+          node.record.label,
+          this.accounts.list().length > AUTO_EXPAND_MAX_ACCOUNTS
+            ? vscode.TreeItemCollapsibleState.Collapsed
+            : vscode.TreeItemCollapsibleState.Expanded,
+        );
         item.iconPath = new vscode.ThemeIcon('account');
         item.contextValue = 'hivekuConsoleAccount';
         const role = roleById(this.accounts.getRole(node.record.accountId));

@@ -84,8 +84,14 @@ const scms = new Map<string, HivekuScm>();
  * (new projects, new tasks, updated tasks) by diffing against a per-account
  * snapshot. Returns the badge lines + whether anything changed (→ refresh tree).
  */
-async function scanAccounts(): Promise<{ lines: string[]; changed: boolean }> {
+async function scanAccounts(): Promise<{
+  lines: string[];
+  changed: boolean;
+  /** Accounts whose data could not be read at all — never treat these as quiet. */
+  unreachable: Array<{ label: string; reason: string }>;
+}> {
   const lines: string[] = [];
+  const unreachable: Array<{ label: string; reason: string }> = [];
   let changed = false;
   for (const acc of accounts.list()) {
     try {
@@ -172,15 +178,36 @@ async function scanAccounts(): Promise<{ lines: string[]; changed: boolean }> {
         }
       }
       accountSnapshots.set(acc.accountId, { projects: projSig, tasks: taskSig });
-    } catch {
-      /* skip unreachable accounts */
+    } catch (err) {
+      // An unreachable account is NOT a quiet account. Swallowing this made a
+      // revoked key, an expired plan or a network fault indistinguishable from
+      // "nothing to do" — and the summary then reported "all clear", which is
+      // the most misleading thing it could say about an account it never
+      // managed to read.
+      unreachable.push({ label: acc.label, reason: err instanceof Error ? err.message : String(err) });
     }
   }
-  return { lines, changed };
+  // Surface failures FIRST — an operator triaging a roster needs to know which
+  // accounts were not checked before trusting anything the list implies.
+  if (unreachable.length > 0) {
+    lines.unshift(
+      ...unreachable.map((u) => `$(warning) ${u.label} — could not be read (${u.reason.slice(0, 80)})`),
+    );
+  }
+  return { lines, changed, unreachable };
 }
+
+let notificationScanInFlight = false;
 
 async function updateNotifications(): Promise<void> {
   if (!treeView) return;
+  // scanAccounts is a serial sweep over the whole roster. It runs on activate
+  // AND every 5 minutes; on a large roster one sweep can outlast the interval,
+  // so without this guard sweeps stack and each one re-triggers a tree refresh.
+  // DataRefresher.tick() already guards the same way.
+  if (notificationScanInFlight) return;
+  notificationScanInFlight = true;
+  try {
   const { lines, changed } = await scanAccounts();
   // Root-folder setup outranks everything: until it's set, downloads have no home.
   if (!hivekuRoot()) {
@@ -191,9 +218,12 @@ async function updateNotifications(): Promise<void> {
     const m = s.match(/(\d+)/);
     if (m) count += Number.parseInt(m[1], 10);
   }
-  treeView.badge = count > 0 ? { value: count, tooltip: `Hiveku — updates:\n${lines.join('\n')}` } : undefined;
-  // New/updated projects or tasks landed on Hiveku → refresh the sidebar so it's current.
-  if (changed) tree.refresh();
+    treeView.badge = count > 0 ? { value: count, tooltip: `Hiveku — updates:\n${lines.join('\n')}` } : undefined;
+    // New/updated projects or tasks landed on Hiveku → refresh the sidebar so it's current.
+    if (changed) tree.refresh();
+  } finally {
+    notificationScanInFlight = false;
+  }
 }
 
 function updateSignedInContext(): void {
@@ -490,6 +520,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(new vscode.Disposable(() => clearInterval(refreshTimer)));
 
   // First run: gently offer the guided setup (no accounts + never onboarded).
+  // One-time migration: Guided Setup used to write 'workspaceRoot', which no
+  // consumer read. Anyone who ran it already has their chosen folder stranded
+  // there — recover it rather than asking them to pick again.
+  {
+    const cfg = vscode.workspace.getConfiguration('hiveku');
+    const stranded = (cfg.get<string>('workspaceRoot', '') || '').trim();
+    const active = (cfg.get<string>('rootFolder', '') || '').trim();
+    if (stranded && !active) {
+      await cfg.update('rootFolder', stranded, vscode.ConfigurationTarget.Global);
+      await cfg.update('workspaceRoot', undefined, vscode.ConfigurationTarget.Global);
+    }
+  }
+
   if (accounts.list().length === 0 && !context.globalState.get('hiveku.onboarded')) {
     void (async () => {
       const choice = await vscode.window.showInformationMessage(
@@ -867,11 +910,6 @@ async function filterAccounts(): Promise<void> {
 }
 
 /** Configured Hiveku root folder (parent for all account/project folders), if set. */
-function workspaceRoot(): string | undefined {
-  const v = vscode.workspace.getConfiguration('hiveku').get<string>('workspaceRoot', '');
-  return v && v.trim() ? v.trim() : undefined;
-}
-
 /** Open the account-wide media library gallery (searchable; copy URL to clipboard). */
 async function mediaGallery(node: { record: AccountRecord } | undefined): Promise<void> {
   const account = node?.record ?? (await accounts.pick('Media library for which account?'));
@@ -902,9 +940,14 @@ async function runSetup(): Promise<void> {
     title: 'Choose a folder where Hiveku keeps your accounts + projects (each account gets a subfolder)',
   });
   if (picked && picked.length) {
+    // MUST be 'rootFolder' — that is the key every consumer reads (the
+    // activation warning, the tree's setup gate, the badge, ensureAccountFolder
+    // and reconcileAccountFolders). Guided Setup used to write 'workspaceRoot',
+    // which nothing read, so the primary CTA silently discarded the user's
+    // choice and the sidebar immediately asked the same question again.
     await vscode.workspace
       .getConfiguration('hiveku')
-      .update('workspaceRoot', picked[0].fsPath, vscode.ConfigurationTarget.Global);
+      .update('rootFolder', picked[0].fsPath, vscode.ConfigurationTarget.Global);
   }
   if (extensionContext) await extensionContext.globalState.update('hiveku.onboarded', true);
 
@@ -2118,13 +2161,20 @@ async function openWorkspace(node: { record: AccountRecord } | undefined): Promi
 
 /** Show what needs attention + recent changes across all accounts. */
 async function attention(): Promise<void> {
-  const { lines } = await vscode.window.withProgress(
+  const { lines, unreachable } = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: 'Hiveku: scanning accounts…' },
     () => scanAccounts(),
   );
   if (lines.length === 0) {
+    // Only claim "all clear" when every account was actually READ. Saying it
+    // while some could not be reached is the most misleading possible summary.
     vscode.window.showInformationMessage('Nothing needs attention — all clear across your accounts.');
     return;
+  }
+  if (unreachable.length > 0) {
+    void vscode.window.showWarningMessage(
+      `${unreachable.length} account(s) could not be read — they are listed first and were NOT checked.`,
+    );
   }
   await vscode.window.showQuickPick(lines, { placeHolder: 'Attention + recent changes across your Hiveku accounts' });
 }
@@ -2562,10 +2612,19 @@ async function deploy(scm: HivekuScm): Promise<void> {
 }
 
 async function pull(scm: HivekuScm): Promise<void> {
+  // Refresh first — sc.count is only set inside refresh() and nothing watches
+  // the filesystem, so the guard was reading a stale count and skipping the
+  // warning precisely when the user had unsaved work.
+  await scm.refresh();
   if ((scm.sc.count ?? 0) > 0) {
     const choice = await vscode.window.showWarningMessage(
-      'You have uncommitted local changes. Pulling overwrites tracked files with Hiveku\'s current state. Continue?',
-      { modal: true },
+      'Pull latest from Hiveku?',
+      {
+        modal: true,
+        detail:
+          `${scm.sc.count} uncommitted change(s) in this folder will be overwritten with ` +
+          `Hiveku's current state. Commit or push first if you want to keep them.`,
+      },
       'Pull anyway',
     );
     if (choice !== 'Pull anyway') return;

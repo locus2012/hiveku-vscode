@@ -214,6 +214,13 @@ const GROUP_META: Record<string, { label: string; icon: string; context: string;
   workflows: { label: 'Workflows', icon: 'zap', context: 'hivekuWorkflowsGroup' },
 };
 
+/**
+ * Above this many connected accounts, tree nodes start collapsed. Expanding a
+ * node is what triggers its per-account fetch, so auto-expanding a large roster
+ * is a request storm on every reveal and every refresh.
+ */
+export const AUTO_EXPAND_MAX_ACCOUNTS = 25;
+
 export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
   private readonly _onDidChange = new vscode.EventEmitter<HivekuNode | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChange.event;
@@ -347,7 +354,21 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
   getTreeItem(node: HivekuNode): vscode.TreeItem {
     switch (node.kind) {
       case 'account': {
-        const item = new vscode.TreeItem(node.record.label, vscode.TreeItemCollapsibleState.Expanded);
+        // Expanding an account resolves its children, which fetches that
+        // account's site list. Auto-expanding EVERY account therefore fired one
+        // network call per account the moment the sidebar was revealed — and
+        // again on every refresh (connect, sign-in/out, restore, root change,
+        // new task, download, config change, and the 5-minute scan). At a few
+        // accounts that is invisible; at a few hundred it is a request storm
+        // behind a 6-slot gate. Stay expanded for a small roster so the common
+        // case still feels immediate; collapse above the threshold so children
+        // load only when the operator actually opens one.
+        const item = new vscode.TreeItem(
+          node.record.label,
+          this.accounts.list().length > AUTO_EXPAND_MAX_ACCOUNTS
+            ? vscode.TreeItemCollapsibleState.Collapsed
+            : vscode.TreeItemCollapsibleState.Expanded,
+        );
         item.iconPath = new vscode.ThemeIcon('account');
         item.contextValue = 'hivekuAccount';
         if (node.record.connectedAs) item.description = node.record.connectedAs;
@@ -376,7 +397,9 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
         // Code Projects opens ready to use — it is the tree's whole purpose now.
         const item = new vscode.TreeItem(
           meta.label,
-          node.group === 'projects' ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed,
+          node.group === 'projects' && this.accounts.list().length <= AUTO_EXPAND_MAX_ACCOUNTS
+            ? vscode.TreeItemCollapsibleState.Expanded
+            : vscode.TreeItemCollapsibleState.Collapsed,
         );
         item.iconPath = new vscode.ThemeIcon(meta.icon);
         item.contextValue = meta.context;

@@ -14,6 +14,7 @@ import {
   captureBaseline,
   materializeTree,
   readBaseManifest,
+  IGNORE_DIRS,
   isCdnServableAssetPath,
   readFileForCommit,
   readProjectLink,
@@ -176,10 +177,23 @@ export class HivekuScm implements vscode.Disposable {
 
   /** Switch the working tree to another branch (materializes its content). */
   async switchBranch(branchName: string): Promise<void> {
+    // Refresh BEFORE deciding. sc.count is only ever set inside refresh(), and
+    // nothing watches the filesystem, so a tree that was clean at the last
+    // refresh reports 0 no matter what has been edited or created since — the
+    // warning was skipped exactly when it mattered most. materializeTree then
+    // rm's every local file not in the target branch, so a file the operator or
+    // an agent just created was deleted with no prompt at all.
+    await this.refresh();
     if ((this.sc.count ?? 0) > 0) {
       const ok = await vscode.window.showWarningMessage(
-        `Switch to "${branchName}"? This overwrites local files with that branch's content; uncommitted changes will be lost.`,
-        { modal: true },
+        `Switch to "${branchName}"?`,
+        {
+          modal: true,
+          detail:
+            `${this.sc.count} uncommitted change(s) in this folder will be LOST — the branch's ` +
+            `content replaces local files, and anything not in that branch is deleted. ` +
+            `Commit first if you want to keep them.`,
+        },
         'Switch',
       );
       if (ok !== 'Switch') return;
@@ -320,7 +334,21 @@ export class HivekuScm implements vscode.Disposable {
       const buf = await fs.readFile(path.join(this.root, rel));
       if (!treeMap.has(rel) || treeMap.get(rel) !== storedHashOf(buf).hash) toSend.push(rel);
     }
-    const toDelete = [...treeMap.keys()].filter((p) => !localSet.has(p));
+    // A remote path missing locally is NOT reliable evidence the user deleted it.
+    // walkFiles skips IGNORE_DIRS by NAME at any depth (workspace.ts), so a
+    // remote file living under dist/, build/, out/, .cache/ or .claude/ never
+    // appears in the local walk and would be classified as a deletion. Never
+    // delete those — the local copy simply cannot see them.
+    const isUnderIgnoredDir = (rel: string): boolean =>
+      rel.split('/').slice(0, -1).some((seg) => IGNORE_DIRS.has(seg));
+    const allMissing = [...treeMap.keys()].filter((p) => !localSet.has(p));
+    const shielded = allMissing.filter(isUnderIgnoredDir);
+    let toDelete = allMissing.filter((p) => !isUnderIgnoredDir(p));
+    if (shielded.length > 0) {
+      this.log.appendLine(
+        `[push] not deleting ${shielded.length} remote path(s) under ignored directories (invisible to the local walk): ${shielded.slice(0, 5).join(', ')}${shielded.length > 5 ? '…' : ''}`,
+      );
+    }
 
     if (toSend.length === 0 && toDelete.length === 0) {
       vscode.window.showInformationMessage('Nothing to push — already in sync with Hiveku.');
@@ -348,6 +376,41 @@ export class HivekuScm implements vscode.Disposable {
       }
     }
 
+    // Deleting remote files is the one irreversible half of a push, and until
+    // now it happened silently: the success toast reported it as an achievement
+    // ("Pushed: 12 file(s), 431 deleted"). The "you're behind" guard above only
+    // fires when the REMOTE moved — wiping 400 remote assets because the local
+    // copy never had them passed straight through. The most common trigger is
+    // benign and invisible: hiveku.includeAssetsOnDownload=false means the
+    // binaries were never downloaded, so the next push proposes deleting all of
+    // them. Name what will go, and require an explicit opt-in.
+    if (toDelete.length > 0) {
+      const preview = toDelete.slice(0, 10).map((p) => `  • ${p}`).join('\n');
+      const more = toDelete.length > 10 ? `\n  …and ${toDelete.length - 10} more` : '';
+      const choice = await vscode.window.showWarningMessage(
+        `Push will DELETE ${toDelete.length} file(s) from Hiveku.`,
+        {
+          modal: true,
+          detail:
+            `These exist on Hiveku but not in this folder:\n${preview}${more}\n\n` +
+            `If you downloaded this project without assets, or these live in a folder ` +
+            `the extension ignores, they are not really gone — deleting them here removes ` +
+            `them from Hiveku for everyone.`,
+        },
+        'Upload changes only',
+        'Upload and delete',
+      );
+      if (choice === undefined) return;
+      if (choice === 'Upload changes only') {
+        this.log.appendLine(`[push] user declined ${toDelete.length} deletion(s); uploading changes only`);
+        toDelete = [];
+      }
+      if (toSend.length === 0 && toDelete.length === 0) {
+        vscode.window.showInformationMessage('Nothing to push — deletions were skipped.');
+        return;
+      }
+    }
+
     // Read + lane-classify every changed file up front.
     const ASSET_B64_CAP = 34_000_000; // ~25MB decoded — the assets_upload server cap
     const codeFiles: CommitFile[] = [];
@@ -370,8 +433,8 @@ export class HivekuScm implements vscode.Disposable {
     let deleted = 0;
 
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Pushing to Hiveku (${this.branch})…`, cancellable: false },
-      async (progress) => {
+      { location: vscode.ProgressLocation.Notification, title: `Pushing to Hiveku (${this.branch})…`, cancellable: true },
+      async (progress, token) => {
         // ── Code lane: batched, per-batch-verified bulk_save ──────────────────
         let batch: CommitFile[] = [];
         let batchBytes = 0;
@@ -430,7 +493,18 @@ export class HivekuScm implements vscode.Disposable {
         saved += assetDone;
 
         // ── Deletions ─────────────────────────────────────────────────────────
+        // Honour cancellation here specifically: this is the irreversible half,
+        // and stopping between files leaves a partial but coherent state (the
+        // rest simply stay on Hiveku). A cancel button that did nothing would be
+        // worse than none, so the token is actually checked each iteration.
+        let cancelledDeletes = 0;
         for (const p of toDelete) {
+          if (token.isCancellationRequested) {
+            cancelledDeletes = toDelete.length - deleted;
+            this.log.appendLine(`[push] cancelled — ${cancelledDeletes} deletion(s) not applied`);
+            break;
+          }
+          progress.report({ message: `deleting ${deleted + 1} of ${toDelete.length}…` });
           try {
             await api.fileDelete(client, this.link.project_id, p);
             deleted++;
@@ -438,6 +512,11 @@ export class HivekuScm implements vscode.Disposable {
             this.log.appendLine(`[push] delete failed ${p}: ${(e as Error).message}`);
             failedPaths.push(p);
           }
+        }
+        if (cancelledDeletes > 0) {
+          void vscode.window.showWarningMessage(
+            `Push cancelled — ${deleted} file(s) deleted, ${cancelledDeletes} left on Hiveku. Uploads already sent were kept.`,
+          );
         }
       },
     );
