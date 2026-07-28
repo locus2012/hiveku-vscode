@@ -417,7 +417,19 @@ async function main() {
     // total === 0 = references-only department — references log their own errors.
     if (total === 0 || total > errs) okDepts++;
   }
-  statusAll.updated_at = new Date().toISOString();
+  const nowIso = new Date().toISOString();
+  statusAll.updated_at = nowIso;
+  // Mirror the extension exporter's fields so an agent can read ONE marker
+  // regardless of which writer refreshed last. \`failed\` is the important one:
+  // an empty dataset file means "not retrieved" here, not "no data".
+  statusAll.fetched_at = nowIso;
+  statusAll.failed = Object.keys(statusAll)
+    .filter((k) => statusAll[k] && typeof statusAll[k] === 'object' && statusAll[k].datasets)
+    .flatMap((k) =>
+      Object.entries(statusAll[k].datasets)
+        .filter(([, v]) => v && v.error)
+        .map(([ds, v]) => ({ department: k, dataset: ds, error: String(v.error).slice(0, 200) })),
+    );
   statusAll.runner_version = ${RUNNER_VERSION};
   writeJson(statusFile, statusAll);
   if (targets.length && okDepts === 0) { console.error('Every dataset failed — check the account key in .mcp.json.'); process.exit(1); }

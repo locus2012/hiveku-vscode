@@ -214,9 +214,40 @@ export async function showDatabase(scm: HivekuScm, clientFor: ClientFor): Promis
     );
     return;
   }
-  await vscode.window.showQuickPick(tables.map((t) => `$(table) ${t}`), {
-    placeHolder: `${tables.length} table(s) — ${scm.link.project_name}`,
-  });
+  // Picking a table used to do nothing at all — a read-only list with no way
+  // to see what is in it. Show the schema, which is what you opened this for.
+  const picked = await vscode.window.showQuickPick(
+    tables.map((t) => ({ label: `$(table) ${t}`, table: t })),
+    { placeHolder: `${tables.length} table(s) — pick one to see its columns` },
+  );
+  if (!picked) return;
+
+  try {
+    const cols = await busy(`Hiveku: describing ${picked.table}…`, () =>
+      api.databaseDescribe(client, scm.link.project_id, picked.table),
+    );
+    if (!cols.length) {
+      vscode.window.showInformationMessage(`${picked.table}: no columns returned.`);
+      return;
+    }
+    await vscode.window.showQuickPick(
+      cols.map((c) => ({
+        label: `$(symbol-field) ${c.column_name ?? '(unnamed)'}`,
+        description: c.data_type ?? '',
+        detail: [
+          c.is_nullable === 'NO' ? 'NOT NULL' : 'nullable',
+          c.column_default ? `default ${c.column_default}` : '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      })),
+      { placeHolder: `${picked.table} — ${cols.length} column(s)`, matchOnDescription: true },
+    );
+  } catch (err) {
+    vscode.window.showErrorMessage(
+      `Could not describe ${picked.table}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
 
 export async function showMedia(scm: HivekuScm, clientFor: ClientFor): Promise<void> {

@@ -143,7 +143,20 @@ export async function exportDepartments(
   // export has no other way to tell a FRESH empty dataset from a STALE one, or
   // a real zero from a capped page — both look like a small rows array.
   const datasets = out.flatMap((d) => d.datasets.map((x) => ({ department: d.id, ...x })));
-  await writeJson(path.join(baseDir, DATA_DIR, 'STATUS.json'), {
+  // MERGE, don't replace. The self-serve runner (.hiveku/pull-data.mjs) writes
+  // this same file with per-department blocks keyed by dept id plus
+  // updated_at/runner_version. Overwriting it would erase whatever the agent's
+  // own last refresh recorded — and leave two incompatible shapes fighting over
+  // one filename.
+  const statusPath = path.join(baseDir, DATA_DIR, 'STATUS.json');
+  let prior: Record<string, unknown> = {};
+  try {
+    prior = JSON.parse(await fs.readFile(statusPath, 'utf8')) as Record<string, unknown>;
+  } catch {
+    /* first export */
+  }
+  await writeJson(statusPath, {
+    ...prior,
     account: accountLabel,
     fetched_at: fetchedAt,
     departments: out.map((d) => d.id),
@@ -158,6 +171,8 @@ export async function exportDepartments(
       'absent or a previous snapshot, so do not read an empty result there as "no data". Anything under ' +
       '`truncated` hit the source tool row cap — `returned` is a floor, not a total; call the live MCP tool ' +
       'with paging if the real count matters.',
+    // Mirrors the runner's field so either writer refreshes the same marker.
+    updated_at: fetchedAt,
   });
   return out;
 }

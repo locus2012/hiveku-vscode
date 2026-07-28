@@ -1201,6 +1201,9 @@ operate EVERY department — not just edit code — and combine them in one task
   carries \`fetched_at\` plus \`failed\` (datasets that did NOT fetch — an empty file there means
   "not retrieved", NOT "no data") and \`truncated\` (row caps hit, so the count is a floor, not a
   total; call the live tool with paging if the real number matters).
+  The knowledge folders — \`memory/\`, \`skills/\`, \`rules/\` — only exist AFTER a download. If they
+  are absent that is a workspace that has not pulled yet, NOT an error and NOT an empty account:
+  read the live data with \`memory_list\` / \`kb_list\` instead of concluding there is nothing there.
   It's a SNAPSHOT: to change anything, call the
   live tool; to refresh, run "Hiveku: Download Department Data" (or the Account Console). Absent
   until first downloaded.
