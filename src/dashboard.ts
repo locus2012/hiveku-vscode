@@ -63,13 +63,25 @@ export function openDashboard(
 
 async function refresh(accounts: AccountRecord[], clientFor: ClientFor, appUrl: () => string): Promise<void> {
   if (!panel) return;
-  panel.webview.postMessage({ type: 'loading' });
+  // STREAM, don't block. This used to await every account before posting
+  // anything, so a roster of 300 showed the literal text "Loading…" for as
+  // long as the slowest account took — with no progress, no partial results,
+  // and no way to act on the clients that had already answered.
+  panel.webview.postMessage({ type: 'loading', total: accounts.length });
+  const rows: AccountKpi[] = [];
+  let done = 0;
   // 3 accounts at a time (7 concurrent calls each) — an unthrottled map
   // across N accounts was the single worst rate-limit burst in the extension.
-  const rows = await mapLimit(accounts, 3, (a) => fetchKpi(a, clientFor, appUrl));
-  // Agency triage order: most neglected clients first (server drift score).
-  rows.sort((a, b) => (b.driftScore ?? -1) - (a.driftScore ?? -1));
-  panel.webview.postMessage({ type: 'data', rows });
+  await mapLimit(accounts, 3, async (a) => {
+    const kpi = await fetchKpi(a, clientFor, appUrl);
+    rows.push(kpi);
+    done += 1;
+    // Re-sort on each arrival so the worst client is always on top, even
+    // mid-load. Agency triage order: most neglected first (server drift score).
+    const sorted = [...rows].sort((a2, b2) => (b2.driftScore ?? -1) - (a2.driftScore ?? -1));
+    panel?.webview.postMessage({ type: 'data', rows: sorted, done, total: accounts.length, streaming: done < accounts.length });
+    return kpi;
+  });
 }
 
 function num(v: unknown): number | undefined {
@@ -263,9 +275,14 @@ function dashboardHtml(webview: vscode.Webview): string {
 
     window.addEventListener('message', function (ev) {
       var m = ev.data;
-      if (m.type === 'loading') { statusEl.textContent = 'Loading…'; }
+      if (m.type === 'loading') {
+        statusEl.textContent = m.total ? ('Loading 0 of ' + m.total + '…') : 'Loading…';
+      }
       else if (m.type === 'data') {
-        statusEl.textContent = '';
+        // Rows arrive incrementally and re-sorted, so the worst client stays on
+        // top while the rest are still loading. Say how far along we are rather
+        // than showing a bare spinner.
+        statusEl.textContent = m.streaming ? ('Loading ' + m.done + ' of ' + m.total + '… (worst first)') : '';
         clear(grid);
         if (!m.rows.length) { grid.appendChild(el('div', null, 'No connected accounts.')); return; }
         m.rows.forEach(function (r) { grid.appendChild(card(r)); });

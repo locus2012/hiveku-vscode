@@ -38,9 +38,30 @@ export function refreshConsoleTab(accountId: string, tab: string): void {
 import * as os from 'os';
 import * as fsp from 'fs/promises';
 const DIAG = path.join(os.homedir(), '.hiveku-console-debug.log');
+/** Rotate at 2MB. This appends on every console open, every tab init, every
+ *  webview message and every webview JS error, and nothing ever truncated it —
+ *  an unbounded file in the user's home directory. */
+const DIAG_MAX_BYTES = 2 * 1024 * 1024;
+let diagBytes: number | null = null;
+
 function diag(msg: string): void {
   const line = `${new Date().toISOString()} ${msg}\n`;
-  void fsp.appendFile(DIAG, line).catch(() => undefined);
+  void (async () => {
+    try {
+      if (diagBytes === null) {
+        diagBytes = await fsp.stat(DIAG).then((st) => st.size, () => 0);
+      }
+      if (diagBytes > DIAG_MAX_BYTES) {
+        // Keep one previous generation so a crash report still has context.
+        await fsp.rename(DIAG, `${DIAG}.1`).catch(() => undefined);
+        diagBytes = 0;
+      }
+      await fsp.appendFile(DIAG, line);
+      diagBytes += Buffer.byteLength(line);
+    } catch {
+      /* diagnostics must never break the console */
+    }
+  })();
 }
 
 /** Console dept tab -> the Operate module with the write actions for it. */
@@ -543,7 +564,14 @@ const EMAIL_ACTIONS: Record<string, { tool: string; confirm?: string; needsEmail
   resend: { tool: 'email_campaign_resend_non_openers', confirm: 'Clone this campaign as a new draft targeting only NON-openers?' },
 };
 
-async function runEmailAction(client: HivekuMcpClient, action: string, id: string): Promise<string | undefined> {
+async function runEmailAction(
+  client: HivekuMcpClient,
+  action: string,
+  id: string,
+  /** Named in the confirmation — a window-level modal is detached from the
+   *  console, so without these the user cannot tell WHICH campaign or WHOSE. */
+  context?: { accountLabel: string; subject?: string },
+): Promise<string | undefined> {
   const spec = EMAIL_ACTIONS[action];
   if (!spec) return 'unknown action';
   const args: Record<string, unknown> = { id };
@@ -558,7 +586,19 @@ async function runEmailAction(client: HivekuMcpClient, action: string, id: strin
     args.scheduled_for = when;
   }
   if (spec.confirm) {
-    const ok = await vscode.window.showWarningMessage(spec.confirm, { modal: true }, 'Yes');
+    const ok = await vscode.window.showWarningMessage(
+      spec.confirm,
+      {
+        modal: true,
+        detail: [
+          context?.subject ? `Campaign: ${context.subject}` : `Campaign id: ${id}`,
+          context?.accountLabel ? `Account: ${context.accountLabel}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
+      },
+      'Yes',
+    );
     if (ok !== 'Yes') return undefined;
   }
   await client.callToolJson<unknown>(spec.tool, args);
@@ -753,7 +793,13 @@ export function openAccountConsole(
   const load = async (tab: string, raw = false) => {
     const client = await clientFor(account.accountId);
     const post = (payload: unknown) => {
-      if (!raw) tabMemo.set(tab, { data: payload, at: Date.now() });
+      // NEVER memoize a failure. The catch below posts { error }, and caching
+      // that pinned the tab to a transient error for the full TTL — a manual
+      // retry inside the window just replayed the cached failure, which reads
+      // as "still broken" when it may have recovered immediately.
+      const isFailure = !!payload && typeof payload === 'object' && 'error' in (payload as Record<string, unknown>);
+      if (!raw && !isFailure) tabMemo.set(tab, { data: payload, at: Date.now() });
+      if (isFailure) tabMemo.delete(tab);
       panel.webview.postMessage({ type: 'tab', tab, data: payload });
     };
     let data: unknown = {};
@@ -869,7 +915,12 @@ export function openAccountConsole(
           await load(msg.tab, true);
         } else if (msg.type === 'emailact' && msg.id) {
           try {
-            const done = await runEmailAction(await clientFor(account.accountId), (msg as unknown as { action: string }).action, msg.id);
+            const done = await runEmailAction(
+              await clientFor(account.accountId),
+              (msg as unknown as { action: string }).action,
+              msg.id,
+              { accountLabel: account.label, subject: (msg as unknown as { subject?: string }).subject },
+            );
             if (done === 'done') {
               vscode.window.showInformationMessage('Email action completed.');
               await load('email');

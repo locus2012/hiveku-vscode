@@ -96,10 +96,13 @@ async function scanAccounts(): Promise<{
   lines: string[];
   changed: boolean;
   /** Accounts whose data could not be read at all — never treat these as quiet. */
-  unreachable: Array<{ label: string; reason: string }>;
+  unreachable: Array<{ label: string; reason: string; accountId: string }>;
+  /** Same rows as `lines`, but carrying the account so each one can be acted on. */
+  items: AttentionItem[];
 }> {
   const lines: string[] = [];
-  const unreachable: Array<{ label: string; reason: string }> = [];
+  const unreachable: Array<{ label: string; reason: string; accountId: string }> = [];
+  const items: AttentionItem[] = [];
   let changed = false;
   for (const acc of accounts.list()) {
     try {
@@ -129,11 +132,11 @@ async function scanAccounts(): Promise<{
             Date.parse(t.due_date) < Date.now() &&
             !['done', 'completed', 'archived'].includes((t.status ?? '').toLowerCase()),
         );
-        if (overdue.length) lines.push(`${acc.label}: ${overdue.length} overdue task(s)`);
+        if (overdue.length) { lines.push(`${acc.label}: ${overdue.length} overdue task(s)`); items.push({ label: `${acc.label}: ${overdue.length} overdue task(s)`, accountId: acc.accountId, kind: 'tasks' }); }
       }
       if (runsR.status === 'fulfilled') {
         const failed = runsR.value.filter((r) => api.isFailedRunStatus(r.status));
-        if (failed.length) lines.push(`${acc.label}: ${failed.length} failed workflow run(s)`);
+        if (failed.length) { lines.push(`${acc.label}: ${failed.length} failed workflow run(s)`); items.push({ label: `${acc.label}: ${failed.length} failed workflow run(s)`, accountId: acc.accountId, kind: 'workflows' }); }
       }
 
       // Change detection vs the last snapshot (skip on first scan = baseline).
@@ -182,6 +185,7 @@ async function scanAccounts(): Promise<{
         if (updTask) bits.push(`${updTask} updated task(s)`);
         if (bits.length) {
           lines.push(`${acc.label}: ${bits.join(', ')}`);
+          items.push({ label: `${acc.label}: ${bits.join(', ')}`, accountId: acc.accountId, kind: 'changes' });
           changed = true;
         }
       }
@@ -192,7 +196,7 @@ async function scanAccounts(): Promise<{
       // "nothing to do" — and the summary then reported "all clear", which is
       // the most misleading thing it could say about an account it never
       // managed to read.
-      unreachable.push({ label: acc.label, reason: err instanceof Error ? err.message : String(err) });
+      unreachable.push({ label: acc.label, accountId: acc.accountId, reason: err instanceof Error ? err.message : String(err) });
     }
   }
   // Surface failures FIRST — an operator triaging a roster needs to know which
@@ -201,8 +205,22 @@ async function scanAccounts(): Promise<{
     lines.unshift(
       ...unreachable.map((u) => `$(warning) ${u.label} — could not be read (${u.reason.slice(0, 80)})`),
     );
+    items.unshift(
+      ...unreachable.map((u) => ({
+        label: `$(warning) ${u.label} — could not be read (${u.reason.slice(0, 80)})`,
+        accountId: u.accountId,
+        kind: 'unreachable' as const,
+      })),
+    );
   }
-  return { lines, changed, unreachable };
+  return { lines, changed, unreachable, items };
+}
+
+/** One triage row: what needs attention, on which account, and of what kind. */
+interface AttentionItem {
+  label: string;
+  accountId: string;
+  kind: 'tasks' | 'workflows' | 'changes' | 'unreachable';
 }
 
 let notificationScanInFlight = false;
@@ -1251,22 +1269,41 @@ export async function migrateAccountFolder(account: AccountRecord, from: string,
 async function reconcileAccountFolders(): Promise<void> {
   const root = hivekuRoot();
   if (!root) return;
-  for (const account of accounts.list()) {
-    const stored = accounts.getFolder(account.accountId);
-    if (!stored) continue;
-    const canonical = path.join(root, slugForAccount(account.label, account.accountId));
-    if (stored === canonical) continue;
-    const existsOnDisk = await fs.access(stored).then(() => true, () => false);
-    if (existsOnDisk) {
-      if (await migrateAccountFolder(account, stored, canonical)) {
-        await accounts.setFolder(account.accountId, canonical);
+  // Collect, then write ONCE. setFolder rewrites the whole map per call, so
+  // changing the root folder with a large roster meant one whole-map write per
+  // account on top of the renames — and nothing told the user it was working.
+  const pending: Array<{ accountId: string; folder: string }> = [];
+  const list = accounts.list();
+  const stale = list.filter((a) => {
+    const stored = accounts.getFolder(a.accountId);
+    if (!stored) return false;
+    return stored !== path.join(root, slugForAccount(a.label, a.accountId));
+  });
+  if (stale.length === 0) return;
+
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'Hiveku: moving account folders…' },
+    async (progress) => {
+      let done = 0;
+      for (const account of stale) {
+        const stored = accounts.getFolder(account.accountId);
+        if (!stored) continue;
+        const canonical = path.join(root, slugForAccount(account.label, account.accountId));
+        progress.report({ message: `${++done} of ${stale.length} — ${account.label}` });
+        const existsOnDisk = await fs.access(stored).then(() => true, () => false);
+        if (existsOnDisk) {
+          if (await migrateAccountFolder(account, stored, canonical)) {
+            pending.push({ accountId: account.accountId, folder: canonical });
+          }
+        } else {
+          // Stale mapping to a deleted folder — forget it; next use recreates under the root.
+          pending.push({ accountId: account.accountId, folder: canonical });
+          await fs.mkdir(canonical, { recursive: true }).catch(() => undefined);
+        }
       }
-    } else {
-      // Stale mapping to a deleted folder — forget it; next use recreates under the root.
-      await accounts.setFolder(account.accountId, canonical);
-      await fs.mkdir(canonical, { recursive: true }).catch(() => undefined);
-    }
-  }
+    },
+  );
+  await accounts.setFolders(pending);
 }
 
 async function offerOpenFolder(dir: string, note: string): Promise<void> {
@@ -2284,21 +2321,18 @@ async function setupCodexSupport(): Promise<void> {
     "I'll accept Codex's prompts myself",
   );
   if (consent !== 'Pre-trust Hiveku folders') return;
-  const { preTrustFolder } = await import('./codex');
+  const { preTrustFolders } = await import('./codex');
   let added = 0;
   let already = 0;
+  // Collect the folders that actually exist, then write the global Codex config
+  // ONCE — preTrustFolder rewrites the whole file per call.
+  const dirs: string[] = [];
   for (const rec of accounts.list()) {
     const folder = accounts.getFolder(rec.accountId);
     if (!folder) continue;
-    try {
-      await fs.access(folder);
-      const result = await preTrustFolder(folder);
-      if (result === 'added') added++;
-      else already++;
-    } catch {
-      /* folder missing or unreadable — skip */
-    }
+    if (await fs.access(folder).then(() => true, () => false)) dirs.push(folder);
   }
+  ({ added, already } = await preTrustFolders(dirs));
   vscode.window.showInformationMessage(
     `Codex trust: ${added} folder(s) pre-trusted${already ? `, ${already} already trusted` : ''}. Open any Hiveku folder in Codex (CLI or the OpenAI VS Code extension) and it has the account's tools.`,
   );
@@ -2322,7 +2356,7 @@ async function openWorkspace(node: { record: AccountRecord } | undefined): Promi
 
 /** Show what needs attention + recent changes across all accounts. */
 async function attention(): Promise<void> {
-  const { lines, unreachable } = await vscode.window.withProgress(
+  const { lines, unreachable, items } = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: 'Hiveku: scanning accounts…' },
     () => scanAccounts(),
   );
@@ -2337,7 +2371,43 @@ async function attention(): Promise<void> {
       `${unreachable.length} account(s) could not be read — they are listed first and were NOT checked.`,
     );
   }
-  await vscode.window.showQuickPick(lines, { placeHolder: 'Attention + recent changes across your Hiveku accounts' });
+  // Actionable, not a dead list. Picking a row used to discard the result —
+  // you could see that a client had 3 overdue tasks and then had to go find
+  // that client yourself.
+  const pick = await vscode.window.showQuickPick(
+    items.map((it) => ({
+      label: it.label,
+      detail:
+        it.kind === 'unreachable'
+          ? 'Not checked — open to reconnect'
+          : it.kind === 'tasks'
+            ? 'Open this account\'s tasks'
+            : it.kind === 'workflows'
+              ? 'Open this account\'s automations'
+              : 'Open this account',
+      item: it,
+    })),
+    { placeHolder: 'Attention across your Hiveku accounts — pick one to open it', matchOnDetail: true },
+  );
+  if (!pick) return;
+
+  const record = accounts.list().find((r) => r.accountId === pick.item.accountId);
+  if (!record) return;
+  if (pick.item.kind === 'unreachable') {
+    const choice = await vscode.window.showWarningMessage(
+      `${record.label} could not be read. Its key may have been revoked or the network failed.`,
+      'Reconnect',
+      'Open anyway',
+    );
+    if (choice === 'Reconnect') {
+      await vscode.commands.executeCommand('hiveku.connect');
+      return;
+    }
+    if (!choice) return;
+  }
+  // Focus the console on that account so the next click is already in context.
+  consoleTree.setFilter(record.accountId);
+  await openConsole({ record });
 }
 
 async function newTask(node: { record: AccountRecord } | undefined): Promise<void> {

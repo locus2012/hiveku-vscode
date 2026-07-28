@@ -296,7 +296,25 @@ export function openModulePanel(
     }
     // tool action
     if (action.confirm) {
-      const ok = await vscode.window.showWarningMessage(action.confirm, { modal: true }, 'Confirm');
+      // Name the SUBJECT and the ACCOUNT. A VS Code modal is window-level and
+      // visually detached from the panel that raised it, so "Send this campaign
+      // now?" gave no way to tell which campaign, or which client — for actions
+      // that spend money or contact customers, on a machine with dozens of
+      // accounts open.
+      const subject =
+        row && typeof row === 'object'
+          ? String(pick(row as Row, section.titleKeys ?? ['name', 'title']) ?? '')
+          : '';
+      const ok = await vscode.window.showWarningMessage(
+        action.confirm,
+        {
+          modal: true,
+          detail: [subject && `Subject: ${subject}`, `Account: ${account.label}`]
+            .filter(Boolean)
+            .join('\n'),
+        },
+        'Confirm',
+      );
       if (ok !== 'Confirm') return;
     }
     const client = await clientFor(account.accountId);

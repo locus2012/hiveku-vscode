@@ -131,7 +131,7 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         const f = this.filter.toLowerCase();
         records = records.filter((r) => r.label.toLowerCase().includes(f) || r.accountId.toLowerCase().includes(f));
       }
-      if (records.length === 0) return [{ kind: 'message', label: 'No connected accounts — run "Hiveku: Connect"' }];
+      if (records.length === 0) return [{ kind: 'message', label: 'No connected accounts — run "Hiveku: Connect Hiveku"' }];
       return records.map((record) => ({ kind: 'account', record }));
     }
 

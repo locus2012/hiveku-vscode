@@ -1871,9 +1871,18 @@ allowed-tools: Read, mcp__hiveku__memory_list
 ---
 Report knowledge sync status for this account workspace.
 First read \`.hiveku/knowledge-status.json\` (written by the "Check Knowledge Sync" command) and
-summarize \`changed_remote\` / \`new_remote\` / \`deleted_remote\` / \`locally_modified\`. If it is
-missing or stale, tell me to run "Hiveku: Check Knowledge Sync" (or re-download) from the sidebar
-before trusting the local \`memory/\`, \`skills/\`, \`rules/\` files.
+summarize \`changed_remote\` / \`new_remote\` / \`deleted_remote\` / \`locally_modified\`.
+
+If that file is MISSING or STALE, do not stop and ask me to click something — you can answer this
+yourself. Call \`memory_list\` and compare it against the local \`memory/\` files: entries present
+remotely but not locally are new, entries whose \`version\` or \`updated_at\` is ahead of the local
+copy are changed, and local files with no remote entry were deleted upstream. Report that
+comparison, then mention that "Hiveku: Check Knowledge Sync" refreshes the status file and a
+re-download pulls the content.
+
+The local \`memory/\`, \`skills/\` and \`rules/\` folders only exist after a download — if they are
+absent this is simply a workspace that has not pulled its knowledge yet, NOT an error. Say so, and
+offer to run the comparison from \`memory_list\` alone.
 `,
   };
   for (const [name, body] of Object.entries(commands)) {

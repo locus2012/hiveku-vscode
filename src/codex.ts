@@ -271,6 +271,49 @@ async function mirrorAgencySkills(baseDir: string, stamp: string): Promise<numbe
  * first-run trust prompt. This crosses a security boundary, so callers MUST get
  * explicit user consent first (the setup command does).
  */
+/**
+ * Pre-trust MANY folders with a single read/write of ~/.codex/config.toml.
+ *
+ * preTrustFolder() reads and rewrites the whole global config per folder, so
+ * trusting a roster was O(n^2) against the user's own Codex config — and a
+ * non-atomic write per account, which is a file worth not corrupting. This
+ * reads once, appends every missing block, and writes once via a temp file +
+ * rename so an interrupted write cannot truncate the config.
+ */
+export async function preTrustFolders(
+  baseDirs: string[],
+): Promise<{ added: number; already: number }> {
+  const cfgPath = path.join(os.homedir(), '.codex', 'config.toml');
+  let cfg = '';
+  try {
+    cfg = await fs.readFile(cfgPath, 'utf8');
+  } catch {
+    /* no global config yet */
+  }
+  let added = 0;
+  let already = 0;
+  const blocks: string[] = [];
+  for (const dir of baseDirs) {
+    const header = `[projects."${path.resolve(dir)}"]`;
+    if (cfg.includes(header) || blocks.some((b) => b.startsWith(header))) {
+      already += 1;
+      continue;
+    }
+    blocks.push(`${header}\ntrust_level = "trusted"\n`);
+    added += 1;
+  }
+  if (blocks.length === 0) return { added, already };
+
+  await fs.mkdir(path.dirname(cfgPath), { recursive: true });
+  const sep = cfg.length && !cfg.endsWith('\n') ? '\n' : '';
+  const next = `${cfg}${sep}\n${blocks.join('\n')}`;
+  // Atomic: a partial write here would corrupt the user's global Codex config.
+  const tmp = `${cfgPath}.hiveku-tmp`;
+  await fs.writeFile(tmp, next, 'utf8');
+  await fs.rename(tmp, cfgPath);
+  return { added, already };
+}
+
 export async function preTrustFolder(baseDir: string): Promise<'added' | 'already'> {
   const cfgPath = path.join(os.homedir(), '.codex', 'config.toml');
   let cfg = '';

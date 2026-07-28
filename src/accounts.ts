@@ -248,6 +248,14 @@ export class AccountStore {
     await this.ctx.globalState.update(FOLDERS_KEY, map);
   }
 
+  /** Set many account folders with a SINGLE map write. */
+  async setFolders(entries: Array<{ accountId: string; folder: string }>): Promise<void> {
+    if (entries.length === 0) return;
+    const map = this.ctx.globalState.get<Record<string, string>>(FOLDERS_KEY, {});
+    for (const e of entries) map[e.accountId] = e.folder;
+    await this.ctx.globalState.update(FOLDERS_KEY, map);
+  }
+
   // ── Per-account selected departments (from the Connect flow) ──────────────
   getDepartments(accountId: string): string[] {
     const map = this.ctx.globalState.get<Record<string, string[]>>(DEPARTMENTS_KEY, {});
@@ -284,7 +292,11 @@ export class AccountStore {
     if (records.length === 1) return records[0];
     const choice = await vscode.window.showQuickPick(
       records.map((r) => ({ label: r.label, description: r.accountId, record: r })),
-      { placeHolder },
+      // matchOnDescription: the account id is shown as the description, and
+      // VS Code does NOT match typed text against it by default — so pasting an
+      // id (the thing you have when debugging a specific account) matched
+      // nothing at all on a roster of hundreds.
+      { placeHolder, matchOnDescription: true },
     );
     return choice?.record;
   }
