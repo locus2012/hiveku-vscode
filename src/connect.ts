@@ -115,11 +115,23 @@ export class ConnectFlow {
             progress.report({ message: `${done} of ${total}` }),
           ),
       );
-      vscode.window.showInformationMessage(
-        newIds.length
-          ? `Connected ${newIds.length} new Hiveku account(s) (keys refreshed for ${(data.accounts?.length ?? 0) - newIds.length} existing).`
-          : `Keys refreshed for ${data.accounts?.length ?? 0} already-connected account(s).`,
-      );
+      // Offer the next step rather than ending on a bare toast. Connecting
+      // creates no folder and downloads nothing, so a user who stops here has
+      // accounts in a sidebar and no way to act on them — the most common place
+      // first-run stalled.
+      const refreshed = (data.accounts?.length ?? 0) - newIds.length;
+      const msg = newIds.length
+        ? `Connected ${newIds.length} new Hiveku account(s)${refreshed > 0 ? ` (keys refreshed for ${refreshed} existing)` : ''}.`
+        : `Keys refreshed for ${data.accounts?.length ?? 0} already-connected account(s).`;
+      const NEXT = 'Set up an account';
+      void vscode.window
+        .showInformationMessage(
+          newIds.length ? `${msg} Next: download an account's data so Claude Code can work on it.` : msg,
+          ...(newIds.length ? [NEXT] : []),
+        )
+        .then((choice) => {
+          if (choice === NEXT) void vscode.commands.executeCommand('hiveku.downloadEverything');
+        });
       this.onConnected(newIds);
     } catch (err) {
       vscode.window.showErrorMessage(`Hiveku connect failed: ${err instanceof Error ? err.message : String(err)}`);

@@ -370,12 +370,33 @@ export function setConnectedAsMap(map: Record<string, string | undefined>): void
 const HIVEKU_ALLOW: string[] = [
   'Bash(node .hiveku/pull-data.mjs)',
   'Bash(node .hiveku/pull-data.mjs:*)',
-  'mcp__hiveku__.*_get',
+  'mcp__hiveku__*_get',
   'mcp__hiveku__get_.*',
-  'mcp__hiveku__.*_list',
+  'mcp__hiveku__*_list',
   'mcp__hiveku__list_.*',
-  'mcp__hiveku__.*_list_.*',
-  'mcp__hiveku__.*_status',
+  'mcp__hiveku__*_list_*',
+  // NOT a '*_status' glob. Glob '*' spans underscores, so '*_status' also
+  // matches helpdesk_ticket_set_status — a PATCH that changes a customer-facing
+  // ticket. It is the only true mutation among the 19 '_status' tools, so the
+  // safe reads are listed explicitly and that one keeps prompting.
+  'mcp__hiveku__crm_sequence_status',
+  'mcp__hiveku__crm_get_dnc_status',
+  'mcp__hiveku__workflow_run_status',
+  'mcp__hiveku__outbound_health_status',
+  'mcp__hiveku__project_files_status',
+  'mcp__hiveku__database_status',
+  'mcp__hiveku__deploy_status',
+  'mcp__hiveku__github_status',
+  'mcp__hiveku__shopify_status',
+  'mcp__hiveku__shopify_connection_status',
+  'mcp__hiveku__ppc_conversion_tracking_status',
+  'mcp__hiveku__email_service_status',
+  'mcp__hiveku__crm_ghl_status',
+  'mcp__hiveku__crm_hubspot_status',
+  'mcp__hiveku__voice_extension_status',
+  'mcp__hiveku__marketing_setup_status',
+  'mcp__hiveku__connections_status',
+  'mcp__hiveku__redesign_status',
   'mcp__hiveku__verify_.*',
   'mcp__hiveku__hiveku_docs_.*',
   'mcp__hiveku__account_context_get',
@@ -408,9 +429,9 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__analytics_.*',
   'mcp__hiveku__talk_to_department',
   // Role daily-brief signals (read-only reports the /hiveku-daily commands chain).
-  'mcp__hiveku__.*_summary',
-  'mcp__hiveku__.*_stats',
-  'mcp__hiveku__.*_metrics',
+  'mcp__hiveku__*_summary',
+  'mcp__hiveku__*_stats',
+  'mcp__hiveku__*_metrics',
   'mcp__hiveku__accounting_ap_aging',
   'mcp__hiveku__accounting_ar_aging',
   'mcp__hiveku__mc_tasks_next',
@@ -447,6 +468,34 @@ const HIVEKU_ALLOW: string[] = [
   'Bash(rg:*)',
   'Bash(find:*)',
 ];
+
+/**
+ * Pre-approve THIS folder's .mcp.json servers so Claude Code does not prompt on
+ * first open of every account folder.
+ *
+ * Written to .claude/settings.local.json, not settings.json, deliberately: from
+ * Claude Code v2.1.196, `enableAllProjectMcpServers` in an untrusted folder is
+ * honored ONLY from user or LOCAL settings — a project settings.json is ignored
+ * so that cloning a repo cannot auto-approve its own MCP servers. A scaffolded
+ * account folder is exactly that untrusted case, so settings.json would have no
+ * effect. Non-destructive: an existing file is merged, and an explicit `false`
+ * the user set is left alone.
+ */
+async function writeClaudeLocalSettings(baseDir: string): Promise<void> {
+  const file = path.join(baseDir, '.claude', 'settings.local.json');
+  let settings: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(await fs.readFile(file, 'utf8'));
+    if (parsed && typeof parsed === 'object') settings = parsed;
+  } catch {
+    /* none yet */
+  }
+  if (settings.enableAllProjectMcpServers === undefined) {
+    settings.enableAllProjectMcpServers = true;
+  }
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+}
 
 /** Merge our allow rules + acceptEdits default into .claude/settings.json (non-destructive). */
 async function writeClaudeSettings(baseDir: string, mode: PermissionMode = configuredPermissionMode): Promise<void> {
@@ -495,6 +544,11 @@ async function writeClaudeSettings(baseDir: string, mode: PermissionMode = confi
   for (const rule of [
     'Read(**/.env.local)',
     'Read(**/.env.*.local)',
+    // The agency OAuth client file holds client ids/secrets. The scaffold points
+    // the agent at it for CONNECT steps, so deny reading it into context the same
+    // way .env.local is denied — the values belong in the dashboard, not a reply.
+    'Read(**/.hiveku/agency-oauth.env)',
+    'Read(**/.env.*.wide-access)',
     'Write(//tmp/**)',
     'Edit(//tmp/**)',
     'Write(//private/tmp/**)',
@@ -1430,7 +1484,7 @@ export async function writeProjectScaffold(opts: ScaffoldOptions): Promise<void>
   await writeAtomic(mcpPath, JSON.stringify(config, null, 2) + '\n');
 
   // 2) .gitignore — the inlined key + any pulled env must never be committed.
-  await appendGitignore(opts.baseDir, ['.mcp.json', '.env.local', '.env.hiveku', '.hiveku/', 'hiveku-data/']);
+  await appendGitignore(opts.baseDir, ['.mcp.json', '.env.local', '.env.hiveku', '.hiveku/', 'hiveku-data/', '.claude/settings.local.json']);
 
   // 3) CLAUDE.md — tell Claude it has the full account toolset (+ the user's role loop).
   await appendHivekuSection(opts.baseDir, opts.accountLabel, mcpUrl, opts.role, opts.connectedAs);
@@ -1438,6 +1492,7 @@ export async function writeProjectScaffold(opts: ScaffoldOptions): Promise<void>
   // 4) Claude Code accelerators: a read-tool/safe-bash allowlist (fewer prompts +
   //    acceptEdits) and /hiveku-* slash commands for the common loop.
   await writeClaudeSettings(opts.baseDir, opts.permissionMode).catch(() => undefined);
+  await writeClaudeLocalSettings(opts.baseDir).catch(() => undefined);
   await writeScratchDir(opts.baseDir).catch(() => undefined);
   await writeSlashCommands(opts.baseDir, opts.projectId).catch(() => undefined);
   await writeRoleSlashCommands(opts.baseDir, opts.role).catch(() => undefined);
@@ -1551,7 +1606,8 @@ runs the whole flow — diagnose what is dead, register/reuse the shared OAuth a
 link, poll, sync, verify, re-pull. For Google/Microsoft BYOK the human's only jobs are the one-time
 cloud app (redirect URI \`https://app.hiveku.com/api/oauth/google/callback\` in *Authorized redirect
 URIs*, not JavaScript origins) and one consent click per account.
-The shared client lives in \`../.env.locus.wide-access\` (fleet root) or this folder — keys:
+The shared client lives in your agency's OAuth file — \`../.hiveku/agency-oauth.env\` (fleet root) or
+\`./.hiveku/agency-oauth.env\` (this folder) — keys:
 GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET / GOOGLE_ADS_DEVELOPER_TOKEN (from your agency MCC API
 Center, Google Ads only) / MICROSOFT_ADS_CLIENT_ID / MICROSOFT_ADS_CLIENT_SECRET.
 A dead connection ("Token refresh failed" / "Account has been deleted") = re-auth in place; it keeps the
@@ -1625,7 +1681,7 @@ directory, or the folder root; never touch another account's folder.
 ## Folder layout
 - \`memory/<dept>/\` \`skills/<dept>/\` \`rules/<dept>/\` — department knowledge (.md)
 - \`commands/\` \`agents/\` \`identity/\` — other knowledge types
-- \`projects/<slug>/\` — coder project source (each its own Hiveku VCS checkout; see below)
+- \`sites/<slug>/\` — coder project source (each its own Hiveku VCS checkout; see below)
 - \`.hiveku/knowledge-manifest.json\` / \`knowledge-status.json\` — sync state
 
 ## Departments — what's local, what to do live
@@ -1696,7 +1752,7 @@ it has the exact step-by-step (Google Ads connects via \`integration_oauth_initi
 Microsoft Ads via the dashboard; Bing Webmaster via \`integration_create\`).
 
 ## Coder projects — Hiveku VCS (git-like, no GitHub)
-Projects under \`projects/<slug>/\` are version-controlled IN HIVEKU (Supabase-backed):
+Projects under \`sites/<slug>/\` are version-controlled IN HIVEKU (Supabase-backed):
 - \`project_vcs_commit\` — commit to \`main\` or a branch
 - \`project_vcs_branch_create\` / \`project_vcs_checkout\` — branch + switch
 - \`project_vcs_merge\` — line-level 3-way merge back to main (conflicts flagged)
@@ -1721,7 +1777,7 @@ ${MULTI_SESSION_BLOCK}${roleClaudeMdBlock(opts.role)}`;
   // silently lost its ignore line on the next "Refresh Setup", leaving a live key
   // git-trackable. The breach entry point was a leaked credential; an ignore line
   // costs nothing and removing one is unrecoverable.
-  const gitignoreLines = ['.mcp.json', '.env', '.env.local', '.codex/config.toml', '.hiveku/', 'hiveku-data/'];
+  const gitignoreLines = ['.mcp.json', '.env', '.env.local', '.codex/config.toml', '.hiveku/', 'hiveku-data/', '.claude/settings.local.json'];
 
   await writeAtomic(path.join(opts.baseDir, '.mcp.json'), mcpJson);
   await writeAtomic(path.join(opts.baseDir, '.env'), env);
@@ -1734,6 +1790,7 @@ ${MULTI_SESSION_BLOCK}${roleClaudeMdBlock(opts.role)}`;
   // allowlist (fewer prompts) + account-level /hiveku-* slash commands + the
   // user's role commands (/hiveku-daily and the role loops).
   await writeClaudeSettings(opts.baseDir, opts.permissionMode).catch(() => undefined);
+  await writeClaudeLocalSettings(opts.baseDir).catch(() => undefined);
   await writeScratchDir(opts.baseDir).catch(() => undefined);
   await writeAccountSlashCommands(opts.baseDir).catch(() => undefined);
   await writeRoleSlashCommands(opts.baseDir, opts.role).catch(() => undefined);

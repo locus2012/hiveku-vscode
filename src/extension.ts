@@ -57,7 +57,15 @@ import { exportDepartments, DATA_DIR } from './dataExport';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
 import { setupLocalSupabase } from './localSupabase';
 import { scaffoldLocalAutomations, installAgencyCadence } from './localAutomations';
-import { captureBaseline, writeProjectLink, readProjectLink, type ProjectLink } from './workspace';
+import {
+  captureBaseline,
+  writeProjectLink,
+  readProjectLink,
+  readBaseManifest,
+  storedHashOf,
+  walkFiles,
+  type ProjectLink,
+} from './workspace';
 import { registerHivekuFs, envUri } from './platformFs';
 import { openDatabasePanel } from './databasePanel';
 
@@ -792,13 +800,38 @@ async function signOut(node?: { record: AccountRecord }): Promise<void> {
   await teardownAccountAutomations(folder);
 
   if (choice.value === 'delete' && folder) {
+    // The old copy said "Hiveku still has the projects + data — this only
+    // removes your local copy." That is false for exactly the things that are
+    // unrecoverable: uncommitted edits in every downloaded site, the pulled
+    // .env.local, hiveku-data snapshots, and local automations. Name the
+    // uncommitted work instead of reassuring past it.
+    const dirty = await uncommittedProjectsUnder(folder);
+    const risk = dirty.length
+      ? `\n\n${dirty.length} project(s) have UNCOMMITTED changes that exist nowhere else:\n` +
+        dirty.slice(0, 5).map((d) => `  • ${d}`).join('\n') +
+        (dirty.length > 5 ? `\n  …and ${dirty.length - 5} more` : '')
+      : '';
     const ok = await vscode.window.showWarningMessage(
-      `Permanently delete the LOCAL folder for "${record.label}"?\n${folder}\n\nHiveku still has the projects + data — this only removes your local copy.`,
-      { modal: true },
-      'Delete',
+      `Delete the local folder for "${record.label}"?`,
+      {
+        modal: true,
+        detail:
+          `${folder}\n\nCommitted work is safe on Hiveku. Anything not committed is not — ` +
+          `that includes local edits, pulled .env.local secrets, hiveku-data exports and ` +
+          `local automations.${risk}\n\nThe folder is moved to the OS trash, so it can be recovered from there.`,
+      },
+      'Move to Trash',
     );
-    if (ok !== 'Delete') return;
-    await fs.rm(folder, { recursive: true, force: true }).catch((e) => log.appendLine(`[remove] rm ${folder}: ${String(e)}`));
+    if (ok !== 'Move to Trash') return;
+    // Trash, not rm -rf — recoverable, and it matches how the rest of the
+    // toolchain treats deletion.
+    try {
+      await moveToTrash(folder);
+    } catch (e) {
+      log.appendLine(`[remove] trash ${folder}: ${String(e)}`);
+      vscode.window.showErrorMessage(`Could not move the folder to Trash — it was left in place. ${errMsg(e)}`);
+      return;
+    }
   }
 
   // Best-effort: revoke the key server-side so removal is a true teardown (must
@@ -864,6 +897,63 @@ async function revokeAccountKey(record: AccountRecord): Promise<boolean> {
     log.appendLine(`[remove] key revoke failed: ${String(e)}`);
     return false;
   }
+}
+
+/**
+ * Names of downloaded projects under an account folder that have uncommitted
+ * work. Used so a destructive confirmation can say what is actually at risk
+ * instead of reassuring the user that Hiveku has everything.
+ */
+async function uncommittedProjectsUnder(folder: string): Promise<string[]> {
+  const sitesDir = path.join(folder, 'sites');
+  let entries: string[] = [];
+  try {
+    entries = (await fs.readdir(sitesDir, { withFileTypes: true }))
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return []; // nothing downloaded yet
+  }
+  const dirty: string[] = [];
+  for (const name of entries) {
+    const root = path.join(sitesDir, name);
+    try {
+      const link = await readProjectLink(root);
+      if (!link) continue;
+      // Compare the working tree against the baseline captured at the last
+      // pull/clone/commit. Purely local — no network — so this stays fast enough
+      // to run inside a confirmation dialog.
+      const baseline = await readBaseManifest(root);
+      if (!baseline) { dirty.push(link.project_name || name); continue; }
+      const baseMap = new Map(baseline.map((e) => [e.path, e.sha256]));
+      const local = await walkFiles(root);
+      let changed = false;
+      for (const rel of local) {
+        const known = baseMap.get(rel);
+        if (known === undefined) { changed = true; break; } // new file
+        const buf = await fs.readFile(path.join(root, rel));
+        if (storedHashOf(buf).hash !== known) { changed = true; break; } // edited
+      }
+      if (!changed) {
+        const localSet = new Set(local);
+        for (const rel of baseMap.keys()) {
+          if (!localSet.has(rel)) { changed = true; break; } // deleted locally
+        }
+      }
+      if (changed) dirty.push(link.project_name || name);
+    } catch {
+      // Unreadable project — surface it as at-risk rather than assume it is clean.
+      dirty.push(name);
+    }
+  }
+  return dirty;
+}
+
+/** Move a path to the OS trash so a mistaken delete stays recoverable. */
+async function moveToTrash(target: string): Promise<void> {
+  // VS Code's own API handles the platform differences and shows the file in the
+  // OS trash, which `fs.rm` cannot do.
+  await vscode.workspace.fs.delete(vscode.Uri.file(target), { recursive: true, useTrash: true });
 }
 
 /** Restore an archived account back into the active sidebar. */
@@ -1204,31 +1294,35 @@ async function downloadDepartment(node: { record: AccountRecord; department: str
 }
 
 /** Download the full account: scaffold (.mcp.json/CLAUDE.md/.env) + all knowledge. */
-async function downloadEverything(node: { record: AccountRecord }): Promise<void> {
-  if (!node?.record) return;
+async function downloadEverything(node?: { record?: AccountRecord }): Promise<void> {
+  // Invoked from a tree row with a record, OR from the command palette / the
+  // post-connect prompt with nothing. It used to return silently in the second
+  // case, which is why the only route to it was right-clicking a tree row.
+  const record = node?.record ?? (await accounts.pick('Set up which account?'));
+  if (!record) return;
   try {
-    const dir = await ensureAccountFolder(node.record);
+    const dir = await ensureAccountFolder(record);
     if (!dir) return;
     let count = 0;
     let siteCount = 0;
     let deptCount = 0;
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Downloading ${node.record.label}…` },
+      { location: vscode.ProgressLocation.Notification, title: `Downloading ${record.label}…` },
       async (progress) => {
         progress.report({ message: 'scaffold' });
-        const key = await accounts.getKey(node.record.accountId);
+        const key = await accounts.getKey(record.accountId);
         if (key) {
           await writeScaffold({
             baseDir: dir,
-            accountLabel: node.record.label,
+            accountLabel: record.label,
             apiKey: key,
             baseUrl: baseUrl(),
-            role: accounts.getRole(node.record.accountId),
-            accountId: node.record.accountId,
+            role: accounts.getRole(record.accountId),
+            accountId: record.accountId,
           });
         }
         progress.report({ message: 'knowledge' });
-        const index = await tree.indexFor(node.record.accountId);
+        const index = await tree.indexFor(record.accountId);
         count = await writeEntries(dir, selectEntries(index));
         progress.report({ message: 'account commands' });
         const sync = await syncAccountCommands(index, dir);
@@ -1238,14 +1332,14 @@ async function downloadEverything(node: { record: AccountRecord }): Promise<void
 
         // "Everything" means everything: all site projects + department data too
         // (this is the one-button account bootstrap).
-        const client = await clientForAccount(node.record.accountId);
+        const client = await clientForAccount(record.accountId);
         const sites = (await api.sitesList(client).catch(() => [] as api.SiteSummary[])).filter(
           (p) => p.project_type !== 'external',
         );
         for (const p of sites) {
           const label = p.name || p.slug || p.id;
           try {
-            await downloadProjectCore(node.record, p, dir, (m) => progress.report({ message: `${label}: ${m}` }));
+            await downloadProjectCore(record, p, dir, (m) => progress.report({ message: `${label}: ${m}` }));
             siteCount++;
           } catch (err) {
             log.appendLine(`[everything] site ${label}: ${errMsg(err)}`);
@@ -1253,14 +1347,14 @@ async function downloadEverything(node: { record: AccountRecord }): Promise<void
         }
 
         progress.report({ message: 'department data' });
-        const ent = await getEntitlements(node.record.accountId).catch(() => undefined);
+        const ent = await getEntitlements(record.accountId).catch(() => undefined);
         const { primary, other } = effectiveDepartments(
-          accounts.getRole(node.record.accountId),
-          accounts.getDepartments(node.record.accountId),
+          accounts.getRole(record.accountId),
+          accounts.getDepartments(record.accountId),
           ent?.page_access,
         );
         const depts = primary.length ? primary : other;
-        const results = await exportDepartments(client, depts, dir, node.record.label, (m) =>
+        const results = await exportDepartments(client, depts, dir, record.label, (m) =>
           progress.report({ message: m }),
         ).catch(() => []);
         deptCount = results.length;
@@ -1269,7 +1363,7 @@ async function downloadEverything(node: { record: AccountRecord }): Promise<void
     );
     await offerOpenFolder(
       dir,
-      `Downloaded ${node.record.label}: scaffold + ${count} knowledge file(s) + ${siteCount} site project(s) + data for ${deptCount} department(s).`,
+      `Downloaded ${record.label}: scaffold + ${count} knowledge file(s) + ${siteCount} site project(s) + data for ${deptCount} department(s).`,
     );
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);

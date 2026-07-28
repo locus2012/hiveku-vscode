@@ -147,7 +147,7 @@ Never ask them to run MCP tools. When a platform connects only in the dashboard,
 them the exact ACCOUNT-SCOPED link and verify afterward — that link IS the deliverable.
 
 SHARED CREDENTIALS (BYOK, reused across every account): read the agency OAuth client from
-\`../.env.locus.wide-access\` (fleet root) or \`./.env.locus.wide-access\` (this folder). It holds
+\`../.hiveku/agency-oauth.env\` (fleet root) or \`./.hiveku/agency-oauth.env\` (this folder). It holds
 GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET / GOOGLE_ADS_DEVELOPER_TOKEN / MICROSOFT_ADS_CLIENT_ID /
 MICROSOFT_ADS_CLIENT_SECRET. If it is missing, tell the user to create it (format is in the account
 CLAUDE.md) — one client serves every account, so this is a one-time paste.
@@ -215,7 +215,7 @@ THE HUMAN'S ONLY TWO JOBS (state them, and that everything else is you):
      origins":
        Google:    https://app.hiveku.com/api/oauth/google/callback
        Microsoft: https://app.hiveku.com/api/oauth/microsoft/callback
-     Then paste the client id/secret into .env.locus.wide-access.
+     Then paste the client id/secret into .hiveku/agency-oauth.env.
   2. ONE consent click per account (step 4).
 
 THE #1 FAILURE — "Error 400: redirect_uri_mismatch": the exact redirect URI above is NOT on the client's
@@ -642,8 +642,9 @@ Produce this account's monthly report for $ARGUMENTS (default: last full month).
  */
 export function availableCadenceCommands(roleId: string | undefined): Set<string> {
   const role = roleById(roleId);
-  // No role: writeRoleCommands() returns before /hiveku-daily is written.
-  if (!role) return new Set<string>();
+  // No role still gets the generalist /hiveku-daily (see writeRoleCommands), but
+  // not the role-specific weekly/report loops.
+  if (!role) return new Set<string>(['hiveku-daily']);
   const names = new Set<string>(['hiveku-daily']);
   for (const name of Object.keys(cadenceCommands(role))) names.add(name);
   return names;
@@ -669,7 +670,28 @@ export async function writeRoleSlashCommands(baseDir: string, roleId: string | u
   await writeCmd(baseDir, 'hiveku-research', RESEARCH_COMMAND);
   await writeCmd(baseDir, 'hiveku-media', MEDIA_COMMAND);
   const role = roleById(roleId);
-  if (!role) return ['hiveku-pull-data', 'hiveku-connect', 'hiveku-new-site', 'hiveku-research', 'hiveku-media'];
+  if (!role) {
+    // No role set — the role prompt is skippable, and this used to return HERE,
+    // before /hiveku-daily and /hiveku-onboard were written. The walkthrough's
+    // final step tells the user to run exactly those, so skipping the role left
+    // the product pointing at commands that did not exist. Write the
+    // role-independent ones using the generalist 'owner' brief so they always
+    // work; the role-specific loops still require a role.
+    const generalist = roleById('owner');
+    if (generalist) await writeCmd(baseDir, 'hiveku-daily', dailyCommand(generalist));
+    await writeCmd(baseDir, 'hiveku-onboard', ONBOARD_COMMAND);
+    await writeCmd(baseDir, 'hiveku-new-command', NEW_COMMAND);
+    return [
+      ...(generalist ? ['hiveku-daily'] : []),
+      'hiveku-onboard',
+      'hiveku-new-command',
+      'hiveku-pull-data',
+      'hiveku-connect',
+      'hiveku-new-site',
+      'hiveku-research',
+      'hiveku-media',
+    ];
+  }
   const loops = { ...roleLoops(role), ...cadenceCommands(role) };
   // Clean up loop commands from a previous role.
   const mine = new Set(Object.keys(loops));
