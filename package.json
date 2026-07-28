@@ -1001,7 +1001,8 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "vscode:prepublish": "npm run compile"
+    "vscode:prepublish": "npm run check:permissions && npm run compile",
+    "check:permissions": "node scripts/check-permission-rules.mjs"
   },
   "dependencies": {
     "tar": "^7.4.3"
