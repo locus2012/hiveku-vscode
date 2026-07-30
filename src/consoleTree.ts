@@ -61,6 +61,20 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
     this._onDidChange.fire();
   }
 
+  /** The active search term, so the search box can prefill with it. */
+  get currentFilter(): string {
+    return this.filter;
+  }
+
+  /** How many accounts the current filter matches — same predicate the tree uses. */
+  matchCount(): number {
+    if (!this.filter) return this.accounts.list().length;
+    const f = this.filter.toLowerCase();
+    return this.accounts.list().filter(
+      (r) => r.label.toLowerCase().includes(f) || r.accountId.toLowerCase().includes(f),
+    ).length;
+  }
+
   refresh(): void {
     this.entCache.clear();
     this.countCache.clear();
@@ -75,7 +89,10 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         // per account on every reveal and refresh.
         const item = new vscode.TreeItem(
           node.record.label,
-          this.accounts.list().length > AUTO_EXPAND_MAX_ACCOUNTS
+          // Expand based on what is VISIBLE, not the whole roster. Searching a
+          // 300-account list down to two should show them open — the threshold
+          // exists to stop a fetch storm, and two accounts is not a storm.
+          this.matchCount() > AUTO_EXPAND_MAX_ACCOUNTS
             ? vscode.TreeItemCollapsibleState.Collapsed
             : vscode.TreeItemCollapsibleState.Expanded,
         );
@@ -131,7 +148,13 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         const f = this.filter.toLowerCase();
         records = records.filter((r) => r.label.toLowerCase().includes(f) || r.accountId.toLowerCase().includes(f));
       }
-      if (records.length === 0) return [{ kind: 'message', label: 'No connected accounts — run "Hiveku: Connect Hiveku"' }];
+      if (records.length === 0) {
+        // Distinguish "you have no accounts" from "your search matched none" —
+        // an empty tree otherwise reads as though the accounts are gone.
+        return this.filter
+          ? [{ kind: 'message', label: `No account matches "${this.filter}" — clear the search to see all` }]
+          : [{ kind: 'message', label: 'No connected accounts — run "Hiveku: Connect Hiveku"' }];
+      }
       return records.map((record) => ({ kind: 'account', record }));
     }
 

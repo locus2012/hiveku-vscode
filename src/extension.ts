@@ -84,6 +84,7 @@ let connect: ConnectFlow;
 const accountSnapshots = new Map<string, { projects: Map<string, string>; tasks: Map<string, string> }>();
 let extensionContext: vscode.ExtensionContext;
 const scms = new Map<string, HivekuScm>();
+let consoleView: vscode.TreeView<unknown> | undefined;
 
 /** Collect "needs attention" items across all accounts (overdue tasks, failed runs). */
 /**
@@ -392,6 +393,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.clearAccountFilter', () => {
       tree.setAccountFilter('');
       consoleTree.setFilter('');
+      if (consoleView) consoleView.description = undefined;
     }),
     vscode.commands.registerCommand('hiveku.cloneProjectItem', (node) => cloneProjectItem(node)),
     vscode.commands.registerCommand('hiveku.connect', () => connect.start()),
@@ -430,6 +432,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('hiveku.installCadence', (node) => installCadence(node)),
     vscode.commands.registerCommand('hiveku.consoleShowAll', () => consoleTree.setShowAll(!consoleTree.showAll)),
+    // Search the Account Console. With 300+ accounts the tree is unusable
+    // without one, and the filter machinery already existed — matching label
+    // OR account id — with no way for anyone to set it.
+    vscode.commands.registerCommand('hiveku.searchConsole', async () => {
+      const total = accounts.list().length;
+      const term = await vscode.window.showInputBox({
+        prompt: `Search ${total} account(s) by name or id`,
+        placeHolder: 'Type part of a client name, or paste an account id — empty to clear',
+        value: consoleTree.currentFilter,
+        ignoreFocusOut: true,
+      });
+      if (term === undefined) return; // Esc — leave the current filter alone
+      consoleTree.setFilter(term);
+      const shown = consoleTree.matchCount();
+      if (consoleView) {
+        consoleView.description = term.trim() ? `${shown} of ${total} — "${term.trim()}"` : undefined;
+      }
+      if (term.trim() && shown === 0) {
+        const clear = await vscode.window.showWarningMessage(
+          `No account matches "${term.trim()}".`,
+          'Clear search',
+        );
+        if (clear === 'Clear search') {
+          consoleTree.setFilter('');
+          if (consoleView) consoleView.description = undefined;
+        }
+      }
+    }),
     vscode.commands.registerCommand('hiveku.syncCommands', (node) => syncCommands(node)),
     vscode.commands.registerCommand('hiveku.openSiteEnv', (arg) => openSiteEnv(arg)),
     vscode.commands.registerCommand('hiveku.openSite', (node) => openSite(node)),
@@ -472,7 +502,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(treeView);
 
   consoleTree = new AccountConsoleProvider(accounts, clientForAccount, (id) => getEntitlements(id));
-  context.subscriptions.push(vscode.window.createTreeView('hiveku.console', { treeDataProvider: consoleTree }));
+  consoleView = vscode.window.createTreeView('hiveku.console', { treeDataProvider: consoleTree });
+  context.subscriptions.push(consoleView);
 
   refresher = new DataRefresher(context, accounts, clientForAccount, (id) => getEntitlements(id), () => consoleTree.refresh());
 
