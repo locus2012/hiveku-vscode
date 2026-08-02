@@ -156,18 +156,77 @@ export function envDescriptorsFromSite(site: SiteSummary): EnvDescriptor[] {
   return envs;
 }
 
-/** Returns a short-lived signed S3 URL for the project's tarball. */
+export interface SnapshotResult {
+  download_url: string;
+  file_count: number;
+  compression: 'gzip' | 'none';
+}
+
+interface JobStatus {
+  status: string;
+  terminal?: boolean;
+  progress?: number;
+  progress_message?: string;
+  result?: unknown;
+  error?: string;
+}
+
+/**
+ * Returns a short-lived signed URL for the project's tarball.
+ *
+ * Runs as a BACKGROUND JOB and long-polls for the result, rather than holding
+ * one request open. The synchronous tool cannot serve a large project at all:
+ * Cloudflare closes the connection at 120 seconds regardless of what the server
+ * allows or what timeout this client uses, surfacing as an edge HTTP 524. A
+ * project with hundreds of MB of inline binaries is well past that line, so no
+ * timeout value makes the sync path work — the build has to outlive the request.
+ *
+ * job_status_get long-polls server-side (wait_seconds), so this is one call per
+ * ~20s of build time, not a sleep-and-poll loop.
+ */
 export async function snapshotUrl(
   client: HivekuMcpClient,
   projectId: string,
   includeAssets: boolean,
-): Promise<{ download_url: string; file_count: number; compression: 'gzip' | 'none' }> {
-  const res = await client.callToolJson<unknown>('project_files_snapshot', {
+  onProgress?: (note: string) => void,
+): Promise<SnapshotResult> {
+  const started = await client.callToolJson<unknown>('project_files_snapshot_async', {
     project_id: projectId,
     include_assets: includeAssets,
     compress: 'gzip',
   });
-  return unwrap(res);
+  const { job_id: jobId } = unwrap<{ job_id?: string }>(started);
+  if (!jobId) throw new Error('Snapshot job did not return a job_id');
+
+  // Generous overall bound. The server has its own limits; this only stops a
+  // wedged job from hanging the download UI forever.
+  const deadline = Date.now() + 15 * 60 * 1000;
+  for (;;) {
+    if (Date.now() > deadline) {
+      throw new Error('Snapshot timed out after 15 minutes — the project may be too large to package.');
+    }
+    const raw = await client.callToolJson<unknown>('job_status_get', {
+      job_id: jobId,
+      wait_seconds: 20,
+    });
+    const job = unwrap<JobStatus>(raw);
+
+    if (job.terminal || ['succeeded', 'failed', 'cancelled', 'timed_out'].includes(job.status)) {
+      if (job.status !== 'succeeded') {
+        throw new Error(`Snapshot ${job.status}${job.error ? `: ${job.error}` : ''}`);
+      }
+      // The job's result is the same body the sync tool returned.
+      const result = job.result as { data?: SnapshotResult } | SnapshotResult | undefined;
+      const snap = (result as { data?: SnapshotResult })?.data ?? (result as SnapshotResult);
+      if (!snap?.download_url) throw new Error('Snapshot succeeded but returned no download_url');
+      return snap;
+    }
+
+    if (onProgress) {
+      const pct = typeof job.progress === 'number' ? ` ${job.progress}%` : '';
+      onProgress(`building snapshot${pct}${job.progress_message ? ` — ${job.progress_message}` : ''}`);
+    }
+  }
 }
 
 export async function filesStatus(

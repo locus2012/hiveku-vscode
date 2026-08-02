@@ -2554,7 +2554,7 @@ async function downloadProjectCore(
     .get<boolean>('includeAssetsOnDownload', true);
 
   report('preparing snapshot');
-  const snap = await api.snapshotUrl(client, project.id, includeAssets);
+  const snap = await api.snapshotUrl(client, project.id, includeAssets, report);
   report(`extracting ${snap.file_count} files`);
   await downloadAndExtract(snap.download_url, destRoot);
 
