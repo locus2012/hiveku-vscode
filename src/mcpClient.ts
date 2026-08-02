@@ -20,6 +20,29 @@ const PROTOCOL_VERSION = '2024-11-05';
  * rejection after the server-advertised delay.
  */
 const MAX_CONCURRENT = 6;
+
+/**
+ * Per-tool request budgets, for the handful of tools that do real server-side
+ * work rather than answering a query.
+ *
+ * The 60s default is right for interactive reads — a stalled one must not hang
+ * a surface forever. It is wrong for these: project_files_snapshot tars,
+ * compresses and uploads an entire project, and its builder route declares
+ * `maxDuration = 180`. The client was therefore abandoning the request at a
+ * third of the time the server was still allowed to spend, and reporting it as
+ * a timeout, so a download that was progressing normally looked like a fault.
+ *
+ * Keep these AT the server's own limit, not above it: past that the route is
+ * dead anyway and a longer client wait just delays the same failure. Measured
+ * on the largest real project (617 MB, mostly inline JPEG) compression is not
+ * the cost — gzip level 6 vs 1 differs by 0.3s on 300 MB, since JPEG does not
+ * compress — the time goes to reading content out of Postgres and pushing the
+ * archive to S3.
+ */
+const SLOW_TOOL_TIMEOUT_MS: Record<string, number> = {
+  // Matches maxDuration = 180 on the files-snapshot route.
+  project_files_snapshot: 180_000,
+};
 let inFlight = 0;
 const waiters: Array<() => void> = [];
 async function acquireSlot(): Promise<void> {
@@ -74,10 +97,10 @@ export class HivekuMcpClient {
     return url.toString();
   }
 
-  private async request<T = unknown>(method: string, params: unknown): Promise<T> {
+  private async request<T = unknown>(method: string, params: unknown, timeoutMs?: number): Promise<T> {
     await acquireSlot();
     try {
-      return await this.requestOnce<T>(method, params);
+      return await this.requestOnce<T>(method, params, timeoutMs);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const retryAfter = rateLimitRetrySeconds(msg);
@@ -85,13 +108,13 @@ export class HivekuMcpClient {
       // One polite retry after the advertised window — background UI surfaces
       // should self-heal a 429 instead of surfacing red toasts.
       await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-      return await this.requestOnce<T>(method, params);
+      return await this.requestOnce<T>(method, params, timeoutMs);
     } finally {
       releaseSlot();
     }
   }
 
-  private async requestOnce<T = unknown>(method: string, params: unknown): Promise<T> {
+  private async requestOnce<T = unknown>(method: string, params: unknown, timeoutMs?: number): Promise<T> {
     const id = this.nextId++;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
@@ -104,8 +127,16 @@ export class HivekuMcpClient {
 
     // Hard timeout: a single stalled request must never hang a surface forever
     // (seen live: the Account Console stuck on "Loading…" behind one dead await).
+    //
+    // The 60s default suits interactive reads. It is WRONG for the few tools
+    // that do real server-side work: project_files_snapshot tars, compresses
+    // and uploads the whole project, and the builder route is allowed 180s for
+    // it — so the client was giving up at a third of the budget the server was
+    // still legitimately using, and reporting it as a timeout rather than as
+    // "still working". See SLOW_TOOL_TIMEOUT_MS.
+    const budget = timeoutMs ?? 60_000;
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 60_000);
+    const timer = setTimeout(() => ctrl.abort(), budget);
     let res: Response;
     try {
       res = await fetch(this.endpoint, {
@@ -115,7 +146,9 @@ export class HivekuMcpClient {
         signal: ctrl.signal,
       });
     } catch (err) {
-      if (ctrl.signal.aborted) throw new Error(`MCP request timed out after 60s (${method})`);
+      if (ctrl.signal.aborted) {
+        throw new Error(`MCP request timed out after ${Math.round(budget / 1000)}s (${method})`);
+      }
       throw err;
     } finally {
       clearTimeout(timer);
@@ -162,7 +195,11 @@ export class HivekuMcpClient {
 
   async callTool(name: string, args: Record<string, unknown> = {}): Promise<McpToolResult> {
     await this.initialize();
-    const result = await this.request<McpToolResult>('tools/call', { name, arguments: args });
+    const result = await this.request<McpToolResult>(
+      'tools/call',
+      { name, arguments: args },
+      SLOW_TOOL_TIMEOUT_MS[name],
+    );
     if (result?.isError) {
       const text = result.content?.[0]?.text ?? 'unknown tool error';
       throw new Error(`Tool ${name} errored: ${text}`);
