@@ -190,10 +190,25 @@ export async function snapshotUrl(
   includeAssets: boolean,
   onProgress?: (note: string) => void,
 ): Promise<SnapshotResult> {
+  // Idempotency key, bucketed by time.
+  //
+  // Jobs run as a fire-and-forget Promise INSIDE the builder's web process —
+  // "async" moves the HTTP response off the critical path, it does not move the
+  // work off the shared dyno. So without a key, every retry (an impatient
+  // second click, a reconnect, a failed poll) starts ANOTHER multi-hundred-MB
+  // tar on the same box, and they stack. That is the inline-heavy-work shape
+  // behind the 2026-07-31 outage.
+  //
+  // The bucket matters because enqueueJob reuses ANY job with a matching key,
+  // including finished ones: a constant key would pin the caller to one stale
+  // snapshot forever. Ten minutes dedupes retries while staying well inside the
+  // signed URL's 1-hour lifetime, so a reused job's download_url is still good.
+  const bucket = Math.floor(Date.now() / (10 * 60 * 1000));
   const started = await client.callToolJson<unknown>('project_files_snapshot_async', {
     project_id: projectId,
     include_assets: includeAssets,
     compress: 'gzip',
+    idempotency_key: `vscode-download:${projectId}:${includeAssets ? 'assets' : 'code'}:${bucket}`,
   });
   const { job_id: jobId } = unwrap<{ job_id?: string }>(started);
   if (!jobId) throw new Error('Snapshot job did not return a job_id');
