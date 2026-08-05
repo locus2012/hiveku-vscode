@@ -1372,19 +1372,27 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   way, so run the sweep if a supposedly-deleted file still resolves. It only ever removes objects
   with no asset row, is scoped to this project, and never touches deployed build output.
 - **A prefix ALREADY shadows a route (routes 403 through the CDN, 200 from the origin)?** You can
-  fix this yourself now — it used to need Hiveku support. The cause is a CloudFront behavior sending
-  that prefix to the asset origin, usually because an asset directory shares its name with a page
-  route (\`learn/buyer-hero.jpg\` and \`/learn/buyer\`). ORDER MATTERS:
-  1. \`project_cdn_behaviors_list({ project_id, environment })\` — shows every behavior as
-     \`stale\` or \`protected\`.
-  2. Move or delete the colliding ASSETS first — put them under \`images/…\`. Deleting rows is not
-     enough on its own: \`project_assets_orphan_sweep({ project_id, prefixes: [...] })\` (dry-run,
-     then \`dry_run: false\`) removes the S3 objects, which is what the deploy actually reads.
-  3. \`project_cdn_behaviors_prune({ project_id, environment })\` — dry-run, then apply.
-  4. Redeploy.
-  Pruning FIRST does nothing lasting: the next deploy rebuilds the behaviors from whatever assets
-  remain. Behaviors that serve the app (\`_next/static/*\`, \`_next/image*\`, anything on the Lambda
-  or image-optimizer origin) are never removable and are refused if you name them.
+  fix this yourself — it used to need Hiveku support. The cause is a CloudFront behavior sending
+  that prefix to the asset origin because an asset directory shares its name with a page route
+  (\`learn/buyer-hero.jpg\` and \`/learn/buyer\`). **ORDER: clear the backing → DEPLOY → prune →
+  invalidate.** Pruning BEFORE the deploy is undone by it, because a deploy rebuilds behaviors from
+  whatever backing still exists.
+  1. \`project_cdn_behaviors_list({ project_id, environment })\` — \`backed_by\` tells you what is
+     holding each pattern open and therefore which tool clears it: \`asset_rows\` →
+     \`assets_delete\`; \`asset_bucket_objects\` → \`project_assets_orphan_sweep\`;
+     \`site_bucket_objects\` → no tool sweeps that bucket (it also holds the deployed build output).
+  2. Clear it. For a whole prefix use
+     \`project_assets_orphan_sweep({ project_id, prefixes: ["learn","marketplace"], delete_current: true })\`
+     — dry-run first. That deletes rows AND objects AND writes tombstones in one call. The
+     tombstones are load-bearing: without them the next deploy's S3 sync re-imports every row you
+     just deleted, which makes the whole thing look like it failed.
+  3. \`deploy_site({ project_id, environment })\` — let the deploy rebuild behaviors from the now-empty
+     prefixes.
+  4. \`project_cdn_behaviors_prune({ project_id, environment })\` — dry-run, then apply. Behaviors that
+     serve the app (\`_next/static/*\`, \`_next/image*\`, Lambda / image-optimizer origins) are never
+     removable and are refused if you name them.
+  5. \`project_cdn_invalidate\`, then re-test. Allow a few minutes for CloudFront to propagate.
+  If a pattern comes back after all this, re-read \`backed_by\` — something is still supplying it.
 - **Deployed but the live site still shows the OLD version?** Asset behaviors cache
   (Managed-CachingOptimized), so a file replaced at the SAME path serves stale bytes until TTL, and
   deploying does NOT invalidate. Use
