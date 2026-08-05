@@ -1363,6 +1363,36 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   \`/watch\`, \`/gallery\`, \`/our-videos\` instead (only the exact segment collides — \`/media-kit\` is
   fine, \`/media/kit\` is not). If a scraped/imported site carries such a page, RENAME the route
   before deploying.
+- **A prefix ALREADY shadows a route (routes 403 through the CDN, 200 from the origin)?** You can
+  fix this yourself now — it used to need Hiveku support. The cause is a CloudFront behavior sending
+  that prefix to the asset origin, usually because an asset directory shares its name with a page
+  route (\`learn/buyer-hero.jpg\` and \`/learn/buyer\`). ORDER MATTERS:
+  1. \`project_cdn_behaviors_list({ project_id, environment })\` — shows every behavior as
+     \`stale\` or \`protected\`.
+  2. Move or delete the colliding ASSETS first — put them under \`images/…\`. Deleting rows is not
+     enough on its own: \`project_assets_orphan_sweep({ project_id, prefixes: [...] })\` (dry-run,
+     then \`dry_run: false\`) removes the S3 objects, which is what the deploy actually reads.
+  3. \`project_cdn_behaviors_prune({ project_id, environment })\` — dry-run, then apply.
+  4. Redeploy.
+  Pruning FIRST does nothing lasting: the next deploy rebuilds the behaviors from whatever assets
+  remain. Behaviors that serve the app (\`_next/static/*\`, \`_next/image*\`, anything on the Lambda
+  or image-optimizer origin) are never removable and are refused if you name them.
+- **Deployed but the live site still shows the OLD version?** Asset behaviors cache
+  (Managed-CachingOptimized), so a file replaced at the SAME path serves stale bytes until TTL, and
+  deploying does NOT invalidate. Use
+  \`project_cdn_invalidate({ project_id, environment, action: "invalidate" })\` — it defaults to
+  \`/*\`, which is ONE billable path and covers everything. Invalidation is billed past 1,000 paths
+  per month per ACCOUNT: send \`/*\` rather than enumerating, never loop it, and give it a minute to
+  propagate. Hashed bundles (\`_next/static\`) never need this; images, fonts and documents replaced
+  in place do.
+- **EVERY page route 404s but /_next/ chunks and assets load fine?** A viewer-request function
+  written for static URL routing is rewriting paths against a Lambda/SSR origin — classic after
+  converting a static project to a framework. Confirm with
+  \`project_cdn_config_get({ project_id, environment })\` (look at
+  \`default_behavior.viewer_request_functions\` and \`origin_kind\`), then
+  \`project_cdn_repair({ project_id, environment, action: "clear_viewer_function" })\` and redeploy so
+  the tier re-attaches the right one. If instead EVERY request fails outright, check
+  \`enabled\` in the same config read and use \`action: "enable_distribution"\`.
 - **Preview debugging order (all work without escalation):** \`preview_runtime_errors\` (parsed SSR
   stacks from the dev server) → \`preview_http_get\` (exact dev-server response, incl. 500 bodies) →
   \`preview_read_file\` (any container file) → \`preview_logs\`. \`preview_exec\` honors \`cwd\` (default
