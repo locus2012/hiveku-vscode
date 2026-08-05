@@ -1363,6 +1363,14 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   \`/watch\`, \`/gallery\`, \`/our-videos\` instead (only the exact segment collides — \`/media-kit\` is
   fine, \`/media/kit\` is not). If a scraped/imported site carries such a page, RENAME the route
   before deploying.
+- **Deleted an asset but it is STILL being served?** \`assets_delete\` now removes the S3 object as
+  well as the row, and reports \`s3_object_deleted\`. If that comes back **false**, the row is gone
+  but the file is still live — and a row-only delete is invisible: nothing lists it, yet the object
+  keeps serving and the deploy keeps deriving CloudFront asset behaviors from its directory. Clear it
+  with \`project_assets_orphan_sweep({ project_id, prefixes: ["<top-level dir>"] })\` — dry-run first,
+  then \`dry_run: false\`. Older deletes (before this behaviour existed) left objects behind the same
+  way, so run the sweep if a supposedly-deleted file still resolves. It only ever removes objects
+  with no asset row, is scoped to this project, and never touches deployed build output.
 - **A prefix ALREADY shadows a route (routes 403 through the CDN, 200 from the origin)?** You can
   fix this yourself now — it used to need Hiveku support. The cause is a CloudFront behavior sending
   that prefix to the asset origin, usually because an asset directory shares its name with a page
