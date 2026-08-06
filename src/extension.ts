@@ -607,15 +607,44 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // the tree can't be a fetch-once snapshot. A 60s tick + window-refocus both run
   // the CHEAP staleness check (repaint only when past TTL; refetch only for
   // expanded groups) — see HivekuTreeProvider.refreshTasks.
-  const tasksTimer = setInterval(() => tree.refreshTasks(false), 60 * 1000);
+  //
+  // GATED ON THE WINDOW ACTUALLY BEING LOOKED AT.
+  //
+  // This tick fans out: a repaint refetches every EXPANDED account, and
+  // pmTasksAll is TWO MCP calls each. On the agency roster (~385 accounts) that
+  // is ~770 calls per TTL window, forever, whether or not anyone is watching —
+  // and it runs through the MCP relay into uncached Olympus endpoints on a
+  // single-instance builder. That fan-out, from always-open windows, is what
+  // was tipping app.hiveku.com over this week.
+  //
+  // An unfocused window, or one where the Hiveku view is not even on screen,
+  // has nothing to keep fresh: the next focus/expand repaints from cache and
+  // refetches what is stale anyway. So skipping is invisible to the user and
+  // removes the bulk of the load.
+  const shouldPoll = () =>
+    vscode.window.state.focused && (treeView?.visible ?? false);
+  const tasksTimer = setInterval(() => {
+    if (!shouldPoll()) return;
+    tree.refreshTasks(false);
+  }, 60 * 1000);
   context.subscriptions.push(new vscode.Disposable(() => clearInterval(tasksTimer)));
   context.subscriptions.push(
     vscode.window.onDidChangeWindowState((e) => {
-      if (e.focused) tree.refreshTasks(false);
+      // Refocus is the right moment to catch up — but only if the view is on
+      // screen. Refocusing a window whose Hiveku panel is hidden should cost
+      // nothing.
+      if (e.focused && treeView?.visible) tree.refreshTasks(false);
     }),
   );
   void refresher.tick();
-  const refreshTimer = setInterval(() => void refresher.tick(), 30 * 60 * 1000);
+  // Same reasoning as the tasks tick, at lower volume: this also walks every
+  // account (dataRefresh.ts). Half-hourly rather than per-minute, so it was not
+  // the thing tipping the builder over — but an unfocused window has no reason
+  // to sync data nobody is looking at, and it catches up on the next focus.
+  const refreshTimer = setInterval(() => {
+    if (!vscode.window.state.focused) return;
+    void refresher.tick();
+  }, 30 * 60 * 1000);
   context.subscriptions.push(new vscode.Disposable(() => clearInterval(refreshTimer)));
 
   // First run: gently offer the guided setup (no accounts + never onboarded).

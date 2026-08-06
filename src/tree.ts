@@ -259,7 +259,13 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
   }
 
   /** Tasks are considered fresh for this long; past it, the next repaint refetches. */
-  private static readonly TASKS_TTL_MS = 90_000;
+  // 90s was tuned for a single account in view. On the agency roster it means
+  // every expanded account refetches (2 MCP calls each) roughly every other
+  // tick — the fan-out that was overloading the builder. Five minutes is still
+  // well inside "fresh enough" for a task tree that also refetches on expand
+  // and on window refocus, and it cuts steady-state polling by ~3x on top of
+  // the focus/visibility gate in extension.ts.
+  private static readonly TASKS_TTL_MS = 300_000;
 
   /**
    * Tasks-only freshness. force=true (the refresh button) drops the cache and
