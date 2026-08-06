@@ -601,7 +601,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
   refreshStatusBar();
   void updateNotifications();
-  const notifTimer = setInterval(() => void updateNotifications(), 5 * 60 * 1000);
+  // THIS sweep — not the tasks tick below — was the dominant load on the
+  // builder. scanAccounts makes FOUR MCP calls per account (sites_list,
+  // pm_tasks_list, workflow_runs_recent, get_account_info) for the ENTIRE
+  // roster, and until 0.72.24 it ran every 5 minutes unconditionally: window
+  // minimized, machine idle overnight, didn't matter. mcp_audit_logs showed the
+  // four tools in lockstep at ~221k calls each per day, ~34-39k/hour FLAT
+  // around the clock — a curve only unattended windows produce. On the agency
+  // roster (~385 accounts) one machine alone contributed ~18k calls/hour.
+  //
+  // Gate: focused window only (NOT treeView.visible — the badge lives on the
+  // activity-bar icon precisely so it can pull you into a view you don't have
+  // open). Interval stretched 5 → 15 min: the badge is ambient, nobody needs
+  // 5-minute freshness on it, and a refocus catch-up below covers the gap.
+  const NOTIF_INTERVAL_MS = 15 * 60 * 1000;
+  let lastNotifScanAt = Date.now();
+  const notifTimer = setInterval(() => {
+    if (!vscode.window.state.focused) return;
+    lastNotifScanAt = Date.now();
+    void updateNotifications();
+  }, NOTIF_INTERVAL_MS);
   context.subscriptions.push(new vscode.Disposable(() => clearInterval(notifTimer)));
   // Tasks freshness: Claude Code creates tasks/subtasks/comments mid-session, so
   // the tree can't be a fetch-once snapshot. A 60s tick + window-refocus both run
@@ -634,6 +653,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // screen. Refocusing a window whose Hiveku panel is hidden should cost
       // nothing.
       if (e.focused && treeView?.visible) tree.refreshTasks(false);
+      // Badge catch-up: the notif sweep skipped every tick while unfocused, so
+      // on refocus run ONE sweep if we're past the interval. Stamp BEFORE the
+      // async call so rapid focus/blur cycles can't stack sweeps (scanAccounts
+      // also has its own in-flight guard as a second layer).
+      if (e.focused && Date.now() - lastNotifScanAt > NOTIF_INTERVAL_MS) {
+        lastNotifScanAt = Date.now();
+        void updateNotifications();
+      }
     }),
   );
   void refresher.tick();
