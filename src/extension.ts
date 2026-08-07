@@ -600,7 +600,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       .then((c) => (c === 'Choose Root Folder' ? setRootFolder() : undefined));
   }
   refreshStatusBar();
-  void updateNotifications();
+  // The ACTIVATION sweep is gated exactly like the timer below. Tonight's
+  // incident data (08-06): every restored window fired a full roster sweep on
+  // startup — VS Code reopens ALL windows on login but only one has focus, so
+  // a 3-window restore cost 3 x ~1,500 calls before anyone touched anything.
+  // A background window skips the sweep; lastNotifScanAt stays 0 so the
+  // refocus catch-up below runs its first sweep the moment it's actually used.
   // THIS sweep — not the tasks tick below — was the dominant load on the
   // builder. scanAccounts makes FOUR MCP calls per account (sites_list,
   // pm_tasks_list, workflow_runs_recent, get_account_info) for the ENTIRE
@@ -615,7 +620,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // open). Interval stretched 5 → 15 min: the badge is ambient, nobody needs
   // 5-minute freshness on it, and a refocus catch-up below covers the gap.
   const NOTIF_INTERVAL_MS = 15 * 60 * 1000;
-  let lastNotifScanAt = Date.now();
+  let lastNotifScanAt = 0;
+  if (vscode.window.state.focused) {
+    lastNotifScanAt = Date.now();
+    void updateNotifications();
+  }
   const notifTimer = setInterval(() => {
     if (!vscode.window.state.focused) return;
     lastNotifScanAt = Date.now();
