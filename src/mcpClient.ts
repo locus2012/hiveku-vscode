@@ -70,6 +70,40 @@ function rateLimitRetrySeconds(message: string): number | null {
 export interface McpToolResult {
   content?: Array<{ type: string; text?: string }>;
   isError?: boolean;
+  /** Server registry stamp — rides every response; used for drift detection. */
+  _meta?: { hiveku?: { registry_version?: string; tool_count?: number } };
+}
+
+// ── Registry-drift detection (NO polling — piggybacks on responses) ─────────
+// The server stamps every tools/call result with a hash of the tool registry.
+// The first stamp a window sees becomes the baseline; a later differing stamp
+// means the server shipped new/changed tools since this window's clients
+// connected. One callback fire per window — the banner, not a nag.
+let registryBaseline: string | null = null;
+let driftNotified = false;
+let driftCallback: ((info: { toolCount?: number }) => void) | undefined;
+
+export function onRegistryDrift(cb: (info: { toolCount?: number }) => void): void {
+  driftCallback = cb;
+}
+
+/** After a reconnect: adopt the next stamp as the new baseline. */
+export function resetRegistryDrift(): void {
+  registryBaseline = null;
+  driftNotified = false;
+}
+
+function noteRegistryStamp(meta: McpToolResult['_meta']): void {
+  const version = meta?.hiveku?.registry_version;
+  if (typeof version !== 'string' || !version) return;
+  if (registryBaseline === null) {
+    registryBaseline = version;
+    return;
+  }
+  if (version !== registryBaseline && !driftNotified) {
+    driftNotified = true;
+    driftCallback?.({ toolCount: meta?.hiveku?.tool_count });
+  }
 }
 
 export class HivekuMcpClient {
@@ -200,6 +234,7 @@ export class HivekuMcpClient {
       { name, arguments: args },
       SLOW_TOOL_TIMEOUT_MS[name],
     );
+    noteRegistryStamp(result?._meta);
     if (result?.isError) {
       const text = result.content?.[0]?.text ?? 'unknown tool error';
       throw new Error(`Tool ${name} errored: ${text}`);

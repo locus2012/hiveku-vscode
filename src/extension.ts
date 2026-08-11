@@ -13,7 +13,7 @@ import * as path from 'path';
 import * as cp from 'child_process';
 import * as vscode from 'vscode';
 import { AccountStore, type AccountRecord } from './accounts';
-import { HivekuMcpClient } from './mcpClient';
+import { HivekuMcpClient, onRegistryDrift, resetRegistryDrift } from './mcpClient';
 import * as api from './hivekuApi';
 import { downloadAndExtract } from './download';
 import { HivekuScm, REMOTE_SCHEME } from './scm';
@@ -600,6 +600,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       .then((c) => (c === 'Choose Root Folder' ? setRootFolder() : undefined));
   }
   refreshStatusBar();
+  // New-tools banner: the MCP server stamps every response with a registry
+  // hash (see mcpClient.noteRegistryStamp) — ZERO extra requests. When the
+  // stamp changes mid-session (a deploy shipped new/changed tools), offer a
+  // one-click reconnect of this window's clients. Embedded Claude Code /
+  // Codex terminals hold their own MCP connections we cannot recycle — the
+  // banner tells the user how.
+  onRegistryDrift(({ toolCount }) => {
+    void vscode.window
+      .showInformationMessage(
+        `Hiveku shipped new or updated MCP tools${toolCount ? ` (registry now ${toolCount} tools)` : ''}. ` +
+          'Reconnect to pick them up. Embedded Claude Code/Codex sessions need /mcp → reconnect (or a session restart).',
+        'Reconnect Hiveku',
+        'Later',
+      )
+      .then((choice) => {
+        if (choice === 'Reconnect Hiveku') {
+          accounts.reconnectAllClients();
+          resetRegistryDrift();
+          tree.refresh();
+          void vscode.window.setStatusBarMessage('Hiveku clients reconnected — new tools active.', 5000);
+        }
+      });
+  });
   // The ACTIVATION sweep is gated exactly like the timer below. Tonight's
   // incident data (08-06): every restored window fired a full roster sweep on
   // startup — VS Code reopens ALL windows on login but only one has focus, so

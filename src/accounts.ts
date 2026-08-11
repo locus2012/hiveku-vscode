@@ -63,6 +63,15 @@ export class AccountStore {
     return client;
   }
 
+  /**
+   * Recreate every cached client on next use — the "Reconnect Hiveku" action
+   * after the server ships new tools. Keys are untouched; fresh clients
+   * re-initialize and register the current tool list.
+   */
+  reconnectAllClients(): void {
+    this.clientCache.clear();
+  }
+
   /** Drop cached clients for an account whose key changed or was revoked. */
   private invalidateClients(accountId?: string): void {
     if (!accountId) {
