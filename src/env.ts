@@ -83,9 +83,9 @@ async function ensureGitignored(root: string): Promise<void> {
 
 export async function pullEnv(scm: HivekuScm, clientFor: ClientFor): Promise<void> {
   const client = await clientFor(scm.link.account_id);
-  const secrets = await vscode.window.withProgress(
+  const { values: secrets, sensitiveKeys } = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: 'Hiveku: pulling project secrets…' },
-    () => api.secretsMap(client, scm.link.project_id),
+    () => api.secretsMapWithSensitive(client, scm.link.project_id),
   );
   if (Object.keys(secrets).length === 0) {
     vscode.window.showInformationMessage('No secrets are set on this Hiveku project.');
@@ -103,7 +103,13 @@ export async function pullEnv(scm: HivekuScm, clientFor: ClientFor): Promise<voi
   const okGo = await vscode.window.showWarningMessage(
     `Write ${count} secret(s) to ${ENV_FILE}? Keys: ${preview}
 
-The file is gitignored + never pushed to Hiveku, and Claude Code is denied from reading .env files — but the values WILL be on this disk.`,
+The file is gitignored + never pushed to Hiveku, and Claude Code is denied from reading .env files — but the values WILL be on this disk.${
+      sensitiveKeys.length > 0
+        ? `
+
+NOT included (${sensitiveKeys.length} sensitive, write-only on Hiveku): ${sensitiveKeys.slice(0, 8).sort().join(', ')}${sensitiveKeys.length > 8 ? ` … +${sensitiveKeys.length - 8} more` : ''}. Set these by hand if your local build needs them.`
+        : ''
+    }`,
     { modal: true },
     'Write .env.local',
   );

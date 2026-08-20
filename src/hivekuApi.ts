@@ -1017,12 +1017,30 @@ export function maskSecret(v: string): string {
  * Manager) — NOT an array, so we read the `secrets` object directly.
  */
 export async function secretsMap(client: HivekuMcpClient, projectId: string): Promise<Record<string, string>> {
+  return (await secretsMapWithSensitive(client, projectId)).values;
+}
+
+/**
+ * Values plus the names of variables that are write-only on the platform.
+ *
+ * Sensitive keys are OMITTED from `secrets` server-side, never blanked, so they
+ * simply do not appear in `values`. Without carrying `sensitiveKeys` alongside, a
+ * hidden variable would be indistinguishable from one that was never set, and the
+ * user would go debugging a phantom.
+ */
+export async function secretsMapWithSensitive(
+  client: HivekuMcpClient,
+  projectId: string,
+): Promise<{ values: Record<string, string>; sensitiveKeys: string[] }> {
   const res = await client.callToolJson<unknown>('project_secrets_list', { project_id: projectId });
   const d = unwrap<Record<string, unknown>>(res) ?? {};
   const secrets = (d.secrets && typeof d.secrets === 'object' ? d.secrets : {}) as Record<string, unknown>;
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(secrets)) out[k] = v == null ? '' : String(v);
-  return out;
+  const values: Record<string, string> = {};
+  for (const [k, v] of Object.entries(secrets)) values[k] = v == null ? '' : String(v);
+  const sensitiveKeys = Array.isArray(d.sensitive_keys)
+    ? (d.sensitive_keys as unknown[]).map((k) => String(k))
+    : [];
+  return { values, sensitiveKeys };
 }
 
 /** Display list: keys with masked values, sorted. */

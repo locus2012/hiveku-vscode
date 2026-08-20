@@ -139,8 +139,21 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
     const client = await this.clientFor(p.accountId);
     let text: string;
     if (p.kind === 'env') {
-      const map = await api.secretsMap(client, p.projectId!);
-      text = serializeEnv(map);
+      const { values, sensitiveKeys } = await api.secretsMapWithSensitive(client, p.projectId!);
+      // Hidden variables are listed as comments rather than dropped. If they simply
+      // vanished from this buffer, saving it would look like the user deleted them,
+      // and writeEnv's delete-diff would be computed against an incomplete picture.
+      // As comments they are visible, and parseEnv ignores them, so the diff below
+      // never proposes deleting a key the server refused to show.
+      text = serializeEnv(values);
+      if (sensitiveKeys.length > 0) {
+        const notes = sensitiveKeys
+          .slice()
+          .sort()
+          .map((key) => `# ${key}= (sensitive: write only, hidden by Hiveku)`)
+          .join('\n');
+        text = `${text}${text.endsWith('\n') || text === '' ? '' : '\n'}\n# The following are set but cannot be shown. Assign a value to replace one.\n${notes}\n`;
+      }
     } else if (p.kind === 'cms') {
       text = await this.readCmsEntry(client, p);
     } else {
