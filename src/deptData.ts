@@ -407,18 +407,23 @@ AEO measures whether the domain appears in AI Overviews, Featured Snippets, and 
 
 const COMMERCE_SETUP = `# Connecting a Shopify store
 
-Hiveku is headless: a connected store renders live on the site (products/inventory aren't copied in).
-Shopify uses a bring-your-own-app OAuth model (app client_id/secret live per-account).
+Hiveku is headless. A connected store renders live on the site, and products and inventory are not copied into Hiveku (the schema has no Shopify product or inventory mirror table). Shopify is bring-your-own-app, so \`client_id\` and \`client_secret\` are registered per account.
 
-1. **Register the Shopify app** (once) — in the **Hiveku dashboard** at Commerce → Settings → Shopify, register
-   the app inline (client_id + client_secret from the user's Shopify Partner/custom app; the connect dialog there
-   walks through it). OAuth apps for Shopify are dashboard-registered (not via oauth_app_create).
-2. **Start the install**: \`shopify_connect_start\` → returns the Shopify install/authorize URL; give it to the user to approve on their store.
-3. **Poll**: \`shopify_connection_status({ shop_domain })\` until a row appears with \`disconnected_at = null\` (approval done).
-4. **Verify**: \`shopify_status({ project_id })\` and \`shopify_catalog_list({ project_id })\` (per website project — get project_id from \`sites_list\`).
+1. **Register the Shopify OAuth app** (once). The dashboard path is Commerce -> Settings -> Shopify. Use that surface when the merchant also needs the App Automation Token for headless extension deploys, since no MCP tool in the registry writes that token. From MCP, \`oauth_app_create({ provider: 'shopify', name, client_id, client_secret, products: ['shopify_storefront'] })\` reaches the same table: the builder route's provider list includes \`shopify\` and its product list includes \`shopify_storefront\`. The tool's published \`provider\` enum shows only google/microsoft/meta and its \`products\` description omits \`shopify_storefront\`, but nothing validates the tool schema before proxying. All five arguments are required, and \`name\` must be unique per (account, provider).
 
-Products/orders stay in Shopify Admin; this department reads catalog + inventory and supports draft-product creation.
-`;
+2. **Get the app id**: \`oauth_app_list({ provider: 'shopify' })\`. Same enum gap, same outcome.
+
+3. **Start the install**: \`shopify_connect_start({ oauth_app_id, shop_domain, intent_type })\`. All three are required. \`shop_domain\` must be a \`*.myshopify.com\` domain. \`intent_type\` is \`shopify_project_connect\` (also pass \`project_id\`; this is the per-project Ecommerce case), \`shopify_account_connect\`, or \`shopify_reconnect\` (also pass \`connection_id\`). Returns \`setup_url\`, which the user opens in their own browser (it is the merchant's Shopify consent screen, you cannot approve it for them), and \`callback_url\`, which must already be listed in the Shopify app's Allowed redirection URLs. Omitting any of the three required arguments returns 400 "oauth_app_id, shop_domain, and intent_type are required". An \`oauth_app_id\` that does not resolve to a row on this account under provider \`shopify\` (wrong id, wrong account, or an app registered under another provider) returns 412 with \`code: 'no_oauth_app'\`.
+
+4. **Poll**: \`shopify_connection_status({ shop_domain })\` until a row for that store shows \`disconnected_at = null\`. Rows are sanitized and never include tokens. \`shop_domain\` is an optional filter; omit it to list every connection on the account.
+
+5. **Verify**: \`shopify_status({ project_id })\` and \`shopify_catalog_list({ project_id })\`. Get \`project_id\` from \`sites_list\`. \`shopify_status\` accepts \`include: 'catalog'\` for a product and collection sample.
+
+6. **Scaffold the storefront** before expecting live products on the page. Pre-flight with \`shopify_scaffold_compat({ project_id, feature })\`, which reports router type, path aliases, Tailwind presence, and route collisions. Then \`shopify_storefront_scaffold({ project_id, feature, dry_run: true })\` to preview the file plan, and rerun without \`dry_run\` to write. Scaffold \`storefront-client\` first. The \`feature\` enum is \`storefront-client\`, \`revalidate-route\`, \`cart\`, \`sitemap\`, \`customer-account\`, \`product-detail-route\`, \`reviews\`, \`subscriptions\`. Existing files are skipped unless you pass \`overwrite: true\`. Files land in the project's code versions; use the normal preview and deploy path to make them live.
+
+**Reads after connect.** \`shopify_catalog_list({ project_id })\` returns product-level fields including the \`totalInventory\` aggregate and takes an optional \`params: { first }\`. \`shopify_inventory_get({ project_id })\` returns per-variant \`inventoryQuantity\`, \`price\`, \`sku\`, \`title\`, and \`options\`, and takes \`params: { handle }\` for one product or \`params: { first }\` for recent products. \`shopify_admin({ project_id, admin_action })\` covers the named handlers \`ping\`, \`get_shop\`, \`list_products\`, \`list_installed_apps\`, \`app_compat_check\`, \`list_orders\`, and \`product_inventory\`, all gated \`any-member\`, so agent calls pass the role gate. \`list_orders\` and \`product_inventory\` are absent from the \`shopify_admin\` description's action list, but both handlers exist and \`admin_action\` carries no enum, so do not assume they are unsupported. The registry has no \`commerce_\`-prefixed tool; reach orders through \`shopify_admin\` with \`admin_action: 'list_orders'\`.
+
+**Writes.** Catalog writes are a handoff to the merchant in Shopify Admin. \`create_product_draft\` is not a tool name; it exists only as an \`admin_action\` value, it is gated \`policy: 'admin'\`, and the Olympus proxy forwards no \`x-builder-user-id\`, so the acting role resolves to null and the call returns 403 "Write actions require a forwarded x-builder-user-id with admin or owner role". The writes that do reach from here are \`shopify_storefront_scaffold\`, which writes project files, and \`shopify_admin({ project_id, admin_action: 'invalidate_cache', params: { tags: ['<cache-tag>'] } })\`, which is gated \`any-member\` and dispatches a cache-tag invalidation across the deployed sites on that connection. \`tags\` is required and must hold 1 to 20 strings of 1 to 64 characters; calling \`invalidate_cache\` without \`params\` sends an empty body and returns 400 "Invalid arguments". Skip \`shopify_eject_manifest\`: its mapping POSTs to a builder route that exports only a \`GET\` handler, so the call cannot succeed, and that route computes a read-only migration plan rather than performing an eject.`;
 
 export const DEPARTMENTS: Department[] = [
   {
@@ -579,10 +584,49 @@ export const DEPARTMENTS: Department[] = [
       { id: 'sequence_learnings', label: 'Sequence performance learnings (A/B winners + losers)', tool: 'outbound_list_sequence_learnings', args: { limit: 200 }, columns: [{ key: ['sequence_name', 'sequence_id'], label: 'sequence' }, { key: ['outcome', 'verdict'], label: 'outcome' }, { key: ['created_at'], label: 'when', date: true }] },
     ],
     crud:
-      'Create a lead: `outbound_create_lead`. After a reply, mark interest/stage with ' +
-      '`outbound_update_lead({lead_id, is_interested, internal_status})`. New campaign: `outbound_create_campaign`. ' +
-      'Lists: `outbound_list_campaigns` / `outbound_list_leads` (filters: status, is_interested, has_replied, campaign_id). ' +
-      'For Smartlead/HeyReach two-way sync, drive sends from those tools and persist replies here.',
+      'Ten of the 18 `outbound_*` tools write. Campaigns and leads mirror SmartLead; objections, sales assets, ' +
+      'sequence learnings and reply drafts are Hiveku-local tables. `outbound_create_campaign` requires `name` ' +
+      'and `integration_id`, and no `outbound_*` tool returns that id: `connections_status` reports cold-email ' +
+      '`provider`, `is_active`, `sync_status` and `last_synced_at` but omits `id`, and `integration_list` reads ' +
+      'the unrelated `account_integrations` table, so lift `integration_id` off an existing ' +
+      '`outbound_list_campaigns` row, which selects it. On an account with no campaigns yet there is no ' +
+      'tool-side source for it, so the first campaign is dashboard work. Provider gating answers with more than ' +
+      'one code, so do not branch on `unsupported_provider` alone: campaign create 404s when the integration id ' +
+      'is not found, not active, or not owned by the account; `outbound_create_lead` checks the campaign\'s ' +
+      'integration for inactive FIRST (412 `integration_inactive`) and only then the provider (412 ' +
+      '`unsupported_provider`); both can also return 412 `integration_missing_key`. ' +
+      '`outbound_create_lead({campaign_id, email})` writes to SmartLead BEFORE the local row and additionally ' +
+      'declares the profile fields `outbound_update_lead` does not (first_name, last_name, company_name, ' +
+      'job_title, phone, linkedin_url, website, location, custom_fields); its 201 body returns only `{id, ' +
+      'email, campaign_id, status}` plus a `note`, while the row itself is stamped `status: \'pending_sync\'` ' +
+      'with a `pending-<timestamp>` external id that blocks upstream patches until the sync reconciles it. ' +
+      '`outbound_update_lead` requires `lead_id` and declares only status, internal_status, is_interested, ' +
+      'internal_notes, custom_fields; the proxy DROPS undeclared args before the request leaves, so passing ' +
+      'name, email, company or phone through this tool changes nothing, and with no declared field riding along ' +
+      'the route answers 400 "Provide at least one field to update." Use internal_status, is_interested and ' +
+      'internal_notes for agent-side state; `status` writes the local mirror only. `custom_fields` is the one ' +
+      'declared field forwarded to SmartLead, and an upstream refusal still returns 200 with a `warning` field, ' +
+      'so read it. `outbound_push_lead_to_crm({lead_id})` is idempotent (a re-push appends only new email ' +
+      'activities) and FAILS BY RESOLVING: the route answers 422 with the failed result under `data`, and the ' +
+      'proxy hands non-2xx back as an ordinary tool result carrying `error`, `status` and `details` (the ' +
+      'outcome lands at `details.data.outcome`), never as an exception, so branch on the returned payload and ' +
+      'not on the absence of a throw. `outbound_save_reply_draft({thread_id, body_text})` saves a PENDING draft ' +
+      'for human review; no `outbound_*` tool sends mail, and a re-call on a thread that already has a pending ' +
+      'draft returns the existing row with `action: \'existing_pending\'`. ' +
+      '`outbound_log_objection({objection_type, objection_text})` soft-dedupes: an exact case-insensitive text ' +
+      'match within the same account and type increments `times_seen` instead of inserting a row; refine or ' +
+      'approve with `outbound_update_objection({objection_id})`, which declares response_text, ' +
+      'response_outcome, is_approved, industry, persona, increment_seen, increment_overcome. Create assets with ' +
+      '`outbound_add_sales_asset({asset_type, name})` and edit them with ' +
+      '`outbound_update_sales_asset({asset_id})`, which retires via `is_active: false` and bumps usage via ' +
+      '`times_used_increment` after an asset is cited in a reply. ' +
+      '`outbound_record_sequence_learning({external_campaign_id, sequence_number})` takes the PROVIDER campaign ' +
+      'id and raw counts in `stats`; rates are computed server-side. The paired read ' +
+      '`outbound_list_sequence_learnings({campaign_id})` also expects the provider id despite its argument ' +
+      'name, since the route assigns it to `external_campaign_id`, so a Hiveku campaign UUID returns an empty ' +
+      'list with a 200. No `outbound_*` tool maps to campaign pause/resume, mailbox settings, warmup, sending ' +
+      'schedules, inbox thread detail or pipeline-stage config; those routes exist but nothing wraps them, so ' +
+      'they are dashboard work.',
   },
   {
     id: 'social',
@@ -656,11 +700,34 @@ export const DEPARTMENTS: Department[] = [
       { id: 'pnl-summary', label: 'P&L summary', tool: 'accounting_pnl_summary' },
     ],
     crud:
-      'Bills (AP): `accounting_bill_create` → `accounting_bill_submit` → `accounting_bill_approve` → ' +
-      '`accounting_bill_record_payment` / `accounting_bill_void`. Vendors: `accounting_vendor_create`. ' +
-      'Payroll members: `accounting_member_create`; runs: `accounting_payroll_run_create` (computes from tracked time × rate). ' +
-      'AR invoice payments: `accounting_invoice_record_payment` (invoice AUTHORING is CRM-side: ' +
-      '`crm_estimate_convert_to_invoice`). All money fields are in CENTS. Aging + P&L are summary objects (the `*.json` references).',
+      'Bills (AP): `accounting_bill_create` (requires `vendor_id` and `line_items`) opens a bill in `draft`; ' +
+      '`accounting_bill_submit` (requires `bill_id`) then `accounting_bill_approve` (requires `bill_id`) is the ' +
+      'intended path, but approve accepts a bill in `draft` as well as `submitted`, so submit is optional ' +
+      'rather than a gate. Settle or kill it with `accounting_bill_record_payment` (requires `bill_id`, ' +
+      '`amount_cents`) or `accounting_bill_void` (requires `bill_id`). Vendors: `accounting_vendor_create` ' +
+      '(requires `name`). Payroll members: `accounting_member_create` (requires `name`); runs: ' +
+      '`accounting_payroll_run_create` (requires `period_start`, `period_end`), which computes hourly members ' +
+      'from tracked time times rate and gives fixed members the flat rate. AR payments: ' +
+      '`accounting_invoice_record_payment`, which needs `method` as well as `invoice_id` and `amount_cents` ' +
+      'even though its own schema does not list `method` as required, because the AR route has no default for ' +
+      'it while the AP one defaults to check; invoice AUTHORING is CRM-side via ' +
+      '`crm_estimate_convert_to_invoice` (requires `estimate_id`), which is the first of two hand-offs out of ' +
+      'this department. MONEY UNITS ARE NOT UNIFORM: arguments named `*_cents` are cents, but `pay_rate` on ' +
+      '`accounting_member_create` and `accounting_member_update`, and `bill_rate` on ' +
+      '`accounting_member_update`, are DOLLARS and are multiplied by 100 at the route edge, so read the ' +
+      'argument name before you convert. `accounting_member_create` does not declare `bill_rate`, and the proxy ' +
+      'drops any argument a tool does not declare, so a bill rate passed at create time is silently discarded ' +
+      'while the call still succeeds; set it with `accounting_member_update`, which does declare it. Aging and ' +
+      'P&L are read-only summaries: `accounting_ap_aging`, `accounting_ar_aging`, `accounting_pnl_summary` (the ' +
+      '`*.json` references). Recording a payment is a ONE-WAY DOOR. No accounting tool deletes, voids or ' +
+      'reverses a recorded payment; `amount_cents` must be an integer of 1 or more, so no negative entry can ' +
+      'undo one; and once a bill carries any payment, both `accounting_bill_void` and `accounting_bill_delete` ' +
+      'refuse it with 409, which makes the delete error\'s advice to void it instead dead. Confirm the party, ' +
+      'the document and the exact cents integer before every payment call. The second hand-off is payroll: ' +
+      '`accounting_payroll_run_create` only ever creates a `draft` run, no finalize tool is registered on this ' +
+      'surface, and the Wise CSV export is a dashboard session route that refuses a draft run with 409, so a ' +
+      'run created from here cannot be paid out until a human finalizes it in the dashboard. Never report ' +
+      'payroll as done from here.',
   },
   {
     id: 'creative',
@@ -877,11 +944,25 @@ export const DEPARTMENTS: Department[] = [
       { id: 'contracts', label: 'Contracts (e-sign)', tool: 'crm_envelope_list', columns: [{ key: 'title' }, { key: 'status' }, { key: 'subject_type', label: 'type' }] },
     ],
     crud:
-      'Shopify products/orders are managed in Shopify Admin (read here; drafts via `shopify_admin({admin_action:"create_product_draft"})`). ' +
-      'Estimates: `crm_estimate_create` / `_update` (draft; 409 on accepted/converted) / `_send` / `_mark_accepted` / ' +
-      '`_convert_to_invoice` / `_delete` (soft-delete a draft). ' +
-      'Contracts: `crm_envelope_create` / `_update` (draft only — retitle, swap layout, edit signer roster) / `_send` / `_void` ' +
-      '(add signers via `crm_envelope_add_signer`). See SETUP.md to connect a Shopify store.',
+      'Shopify catalog and orders live in Shopify Admin and are read-only from here. `shopify_catalog_list`, ' +
+      '`shopify_inventory_get`, and `shopify_admin` each take `project_id` as a path param, and the Olympus ' +
+      'proxy rejects the call before it issues any HTTP request when that param is missing, so resolve the ' +
+      'project with `sites_list` first and always pass it: `shopify_catalog_list({ project_id })`, ' +
+      '`shopify_inventory_get({ project_id })`. `create_product_draft` is the only action in the builder\'s ' +
+      'Shopify admin registry carrying `policy: \'admin\'`, and the proxy forwards no acting-user header, so ' +
+      'the role check sees no role and returns 403; create products in Shopify Admin instead. Estimates: ' +
+      '`crm_estimate_create({ line_items, contact_id })` (`company_id` works in place of `contact_id`, the ' +
+      'route 400s if neither is present, and line-item money is `unit_cents`), then `crm_estimate_send({ ' +
+      'estimate_id, channel })` with channel `email`, `sms`, or `both`. `crm_estimate_update({ estimate_id })` ' +
+      'edits while status is draft, sent, viewed, expired, or declined and returns 409 on accepted or ' +
+      'converted; passing `line_items` replaces the whole set. There is no estimate duplicate, clone or copy ' +
+      'tool; rebuild a superseded estimate as a new one. `crm_estimate_delete({ estimate_id })` soft-deletes ' +
+      'and revokes portal tokens, and also returns 409 on accepted or converted. Record offline agreement with ' +
+      '`crm_estimate_mark_accepted({ estimate_id, signer_name })`, then `crm_estimate_convert_to_invoice({ ' +
+      'estimate_id })`. Contracts: `crm_envelope_create({ title, signers })` (pass `layout_json` for the ' +
+      'block-based path), `crm_envelope_update({ envelope_id })` and `crm_envelope_add_signer({ envelope_id, ' +
+      'name, email })` both return 409 unless the envelope is still draft, `crm_envelope_send({ envelope_id })` ' +
+      'sends it, and `crm_envelope_void({ envelope_id })` returns 409 on a completed envelope.',
     setup: COMMERCE_SETUP,
   },
   {

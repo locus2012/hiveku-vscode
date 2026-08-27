@@ -1020,7 +1020,8 @@
     "check:permissions": "node scripts/check-permission-rules.mjs",
     "check:connect-departments": "node --import ./scripts/register-ts.mjs scripts/check-connect-departments.mjs",
     "gen:registry": "node --import ./scripts/register-ts.mjs scripts/gen-dept-manifest.mjs",
-    "check:registry": "npm run gen:registry && node --import ./scripts/register-ts.mjs scripts/check-dept-manifest-drift.mjs"
+    "check:registry": "npm run gen:registry && node --import ./scripts/register-ts.mjs scripts/check-dept-manifest-drift.mjs",
+    "sync:registry": "npm run gen:registry && cp src/dept-manifest.json ../hiveku-claude-plugin/lib/dept-manifest.json && npm run check:registry"
   },
   "dependencies": {
     "tar": "^7.4.3"

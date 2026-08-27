@@ -150,75 +150,83 @@ no MCP tool that starts a social consent flow. The user connects each account in
 After connecting, re-run "Download Department Data → Social" to refresh \`hiveku-data/social/*.json\`.
 `;
 
-export const OUTBOUND_SETUP = `# Outbound (cold email / LinkedIn) first-run: Smartlead + HeyReach — verified
+export const OUTBOUND_SETUP = `# Outbound cold email: first run
 
-Check current state FIRST: \`integration_list\` (account-level integrations) + \`outbound_list_campaigns\`
-(cold-email campaigns; each row carries the \`integration_id\` of its provider connection).
+Cold email runs on SmartLead. The dashboard connect form posts a hardcoded \`provider: 'smartlead'\` and does not let the user pick a provider, and \`cold_email_integrations\` is unique on (account_id, provider). Campaign creation and lead creation both refuse a non-SmartLead integration with 412 \`unsupported_provider\`. There is no HeyReach or LinkedIn outreach connector in the product today: no route, no tool, no schema column, and the only mention anywhere is one code comment. Log LinkedIn and other out-of-band touches into the CRM instead, with \`crm_contact_upsert_by_email\` (requires \`email\`) and \`crm_create_activity\`.
 
-## STEP 1 — connect Smartlead / HeyReach (dashboard)
-\`integration_providers_list\` shows valid slugs + \`can_create_from_cli\` — but \`integration_create\` only
-accepts API-key providers **bing_webmaster** and **dataforseo**; everything else 422s with a dashboard URL.
-Cold-email providers (Smartlead, HeyReach) are connected in the **Hiveku dashboard** (dashboard —
-Marketing → Outbound → settings), which writes the provider row the outbound tools read.
-After connecting, \`outbound_list_campaigns\` rows expose the \`integration_id\` to pass to create calls.
-For account integrations created here, \`integration_test({ integration_id })\` live-checks credentials.
+## Step 0. Read current state
+Call \`connections_status\` (no arguments). It returns a one-shot integration inventory including cold email, each row carrying provider, \`is_active\`, \`sync_status\`, \`last_synced_at\`. It does not return the integration UUID. Do not use \`integration_list\` for this check: it reads the separate \`account_integrations\` table, while the outbound tools read \`cold_email_integrations\`.
 
-## STEP 2 — local reply-triage worker keys (workspace, not Hiveku)
-Put \`SMARTLEAD_API_KEY\` and \`HEYREACH_API_KEY\` into \`automations/.env\` (gitignored) so the local
-reply-triage automation can poll the providers directly. The framework is scaffolded by the
-"Hiveku: Scaffold Local Automations" command and documented in \`.claude/AUTOMATION.md\`; schedule with
-\`node automations/manage.mjs create --id reply-triage --cron "17 9-17 * * 1-5" --worker reply-triage\`.
+## Step 1. Connect SmartLead in the dashboard
+\`integration_create\` accepts only the API-key providers \`bing_webmaster\` and \`dataforseo\`; every other provider gets a 422 carrying a \`dashboard_url\`. So connect SmartLead by hand at Marketing -> Outbound -> Cold Email -> Settings. The form collects an API key only. When no integration exists yet the Cold Email page opens on the Settings view.
 
-## STEP 3 — the first campaign + leads
-1. \`outbound_create_campaign({ name, integration_id, sequences? })\` — creates the campaign upstream too.
-   SmartLead is the only provider with a create path today; other providers return **412 unsupported_provider**.
-2. \`outbound_create_lead({ campaign_id, email, first_name?, company_name?, linkedin_url?, ... })\` per lead.
-   Update later with \`outbound_update_lead\`.
+## Step 2. Obtain integration_id
+\`outbound_create_campaign\` requires \`name\` and \`integration_id\`. The tool that surfaces \`integration_id\` is \`outbound_list_campaigns\`, whose rows each carry it. On an account with zero campaigns, no MCP tool returns it. Create the first campaign in the dashboard, then read \`integration_id\` back from \`outbound_list_campaigns\` and reuse that value for later calls.
 
-## Reply events — webhook or polling
-There is no Hiveku tool that subscribes to Smartlead/HeyReach reply events directly. Two options:
-- \`workflow_provision_webhook({ name })\` → \`{ webhook_url, trigger_id }\` in one shot; paste \`webhook_url\`
-  into the provider's own webhook settings (dashboard — on the Smartlead side) to push replies into a workflow.
-- Otherwise rely on polling via the local reply-triage automation worker (STEP 2).
-(\`email_webhook_create\` covers Hiveku's OWN email send events, not provider replies — don't use it for this.)
+## Step 3. Connect sending mailboxes on the SmartLead side
+With no healthy inbox, \`outbound_health_status\` pushes the blocker "No connected email accounts. Add and verify at least one inbox." and subtracts 40 from \`readinessScore\`. No MCP tool lists or adds cold-email mailboxes. The \`inboxHealth\` array from \`outbound_health_status\` (email, status, warmupScore, dailySent, dailyLimit) is the only agent-visible view of them.
+
+## Step 4. Seed sales assets
+\`outbound_add_sales_asset\` requires \`asset_type\` and \`name\`, and also accepts \`description\`, \`url\`, \`content\`, \`use_cases\`, \`persona_tags\`. \`asset_type\` is documented as pricing | calendar | case_study | one_pager | demo | other; the route does not enforce that list, so pass those exact values. Read assets back with \`outbound_list_sales_assets({ is_active: 'true' })\`, because with no \`is_active\` filter the list includes retired assets.
+
+## Step 5. First campaign and leads
+1. \`outbound_create_campaign({ name, integration_id })\` sends the NAME ONLY upstream. The schema also accepts \`sequences\`, but those are written to the local row only and the upstream SmartLead campaign comes back empty. A 201 with your sequences on the local row does not mean the steps exist in SmartLead. Author the email steps in SmartLead and verify them there before activating. Refusals: 404 (integration not found, inactive, or not owned), 412 \`unsupported_provider\`, 412 \`integration_missing_key\`, 502 \`upstream_failed\`.
+2. \`outbound_create_lead({ campaign_id, email })\` adds one lead per call, and the schema takes a single \`email\` with no bulk path. Optional fields include \`first_name\`, \`last_name\`, \`company_name\`, \`job_title\`, \`phone\`, \`linkedin_url\`, \`website\`, \`location\`, \`custom_fields\`. A 409 \`upstream_rejected\` means the address is a duplicate or on the global block list; skip it rather than retrying. On success the row lands as \`status: 'pending_sync'\` with \`external_id\` set to \`pending-<timestamp>\` until the next sync reconciles it. That is normal. While \`external_id\` still starts with \`pending-\`, \`outbound_update_lead\` applies local fields only and returns a warning saying so.
+
+## Replies
+The \`/api/cron/sync-smartlead-inbox\` route pulls replies for each active integration, classifies each into sentiment, classification, and priority, and writes the threads that \`outbound_list_inbox\` reads. No Hiveku tool subscribes to SmartLead reply events directly. To push provider events into a workflow, call \`workflow_provision_webhook({ name })\`, which returns \`{ workflow_id, webhook_url, trigger_id }\` in one shot, and paste \`webhook_url\` into SmartLead's own webhook settings. Do not use \`email_webhook_create\` here: it writes Hiveku's own \`email_webhooks\` table, which covers Hiveku's own email sends.
 
 ## Verify
-\`outbound_list_leads({ campaign_id })\` returns the test leads, and the worker dry-runs clean:
-\`node automations/manage.mjs run --id reply-triage\`. Then re-run "Download Department Data → Outbound".
-`;
+\`outbound_health_status\` returns a \`readinessScore\` with an empty \`blockers\` array, \`outbound_list_leads({ campaign_id })\` returns the test leads, and \`outbound_list_inbox({ thread_status: 'needs_reply' })\` responds.`;
 
-export const ACCOUNTING_SETUP = `# Accounting first-run: vendors, payroll members, first bill cycle — verified
+export const ACCOUNTING_SETUP = `# Accounting first run: settings, categories, vendors, payroll roster, one test bill
 
-Check current state FIRST: \`accounting_vendor_list\` + \`accounting_member_list\`. Existing vendors/members
-mean the account is partially set up — only fill the gaps.
+One transport rule before anything else: the MCP proxy sends only the arguments a tool's own inputSchema declares (or its \`bodyParams\` allowlist, where one exists). Anything else is dropped before the request leaves, so a real-sounding but undeclared field returns a success response with that field unset and no error. Pass only the parameters named below.
 
-## Vendors (accounts payable)
-\`accounting_vendor_create({ name, email?, target_currency, default_payment_terms?, tax_id?, is_1099? })\` —
-\`target_currency\` is the Wise payout currency (e.g. USD, PHP); \`is_1099\` flags year-end 1099 reporting
-(pair it with \`tax_id\`).
+## 1. Read current state
+\`accounting_vendor_list\`, \`accounting_member_list\`, \`accounting_expense_category_list\`. Rows already present mean the account is partly set up, so fill gaps only. \`accounting_expense_category_list\` auto-seeds industry preset categories on its FIRST call, so call it before anything else reads categories.
 
-## Payroll members
-\`accounting_member_create({ name, email, pay_rate, pay_rate_type, pay_period, target_currency })\` —
-\`pay_rate\` is in **DOLLARS** (per hour when pay_rate_type='hourly', per period when 'fixed');
-\`pay_period\`: weekly | bi_weekly | semi_monthly | monthly. Runs come later via \`accounting_payroll_run_create\`.
+## 2. Settings (before the first bill)
+\`accounting_settings_get\`, then \`accounting_settings_update({ bill_prefix?, default_currency?, default_payment_terms? })\`. All three are optional and they are the only fields the tool declares. No dashboard page reads or writes them, so this is the surface for them.
 
-## Expense categories (chart of accounts)
-\`accounting_expense_category_list\` — first call **auto-seeds** industry defaults for the account. Use these
-category ids on bill line items so the P&L groups correctly. There is NO create tool — adding custom
-categories beyond the seeded set is (dashboard).
+\`bill_prefix\` is baked into every generated bill number as \`{prefix}-{YYYY}-{padded6}\`, and existing bills are not renumbered, so set it before creating anything. \`next_bill_number\` is not writable through this tool.
 
-## Payment processors (dashboard)
-Charging customers (Hiveku Payments / BYO Stripe / Authorize.net) is configured in the **Hiveku dashboard**
-(dashboard — Commerce/Billing settings); no MCP tool registers a processor.
+\`default_currency\` and \`default_payment_terms\` are stored labels with no consumer in the builder. Bill creation applies its own \`USD\` default for currency and never copies terms from settings. Set a bill's \`currency\` and \`terms\` on \`accounting_bill_create\` itself.
 
-## Verify with a draft bill cycle (safe — void before any payment)
-1. \`accounting_bill_create({ vendor_id, line_items: [{ description, quantity, unit_cents, category_id? }],
-   due_date? })\` — creates a DRAFT bill; \`unit_cents\` is cents, \`tax_bps\` is basis points (875 = 8.75%),
-   bill_number auto-generates.
-2. \`accounting_bill_void({ bill_id, reason? })\` — voids it so it never hits expenses or A/P. (Void is refused
-   once a bill has payments — a fresh draft always voids cleanly.)
-3. \`accounting_ap_aging\` — the voided bill must NOT appear in any bucket.
-4. \`accounting_pnl_summary({ period_start?, period_end? })\` — returns revenue/expenses/profit in cents.
+## 3. Expense categories
+Custom categories: \`accounting_expense_category_create({ name, code?, sort_order? })\`. \`name\` is required and is unique per account; the constraint counts archived rows, so a reused name returns 409 and creates nothing.
 
-Then re-run "Download Department Data → Accounting" to refresh \`hiveku-data/accounting/*.json\`.
-`;
+\`sort_order\` defaults to 0 and the list orders \`sort_order\` asc then \`name\` asc. The seeded presets are written at ascending \`sort_order\` in preset order (0, 1, 2, ...), so a new category left at 0 sorts to the TOP, ahead of every preset at 1 or higher. Pass a high \`sort_order\` to file it after the presets.
+
+## 4. Vendors (accounts payable)
+\`accounting_vendor_create({ name, email?, phone?, default_payment_terms?, tax_id?, is_1099?, notes? })\`. \`name\` is the only required field, and those are all the fields the create tool declares.
+
+- The create tool also advertises \`target_currency\`, but \`accounting_vendors\` has no such column and the route drops it. Payout currency is a payroll MEMBER field, not a vendor field.
+- \`tax_id\` and \`is_1099\` are stored and rendered in the vendors table. No 1099 generator, report or export reads them, so do not tell a user that 1099 filing is handled.
+- \`default_expense_category_id\` is NOT a create parameter. Set it afterwards with \`accounting_vendor_update({ vendor_id, default_expense_category_id })\`. A category id owned by another account 400s that whole call with \`Unknown default expense category\`.
+- To retire a vendor, prefer \`accounting_vendor_update({ vendor_id, is_archived: true })\`. That hides it from \`accounting_vendor_list\` and is reversible with \`is_archived: false\` as long as you kept the id. \`accounting_vendor_delete({ vendor_id })\` reads no body, takes no confirm field, does not check for open bills, and no Olympus tool undoes it.
+
+## 5. Payroll members
+\`accounting_member_create({ name, email?, pay_rate?, pay_rate_type?, pay_period?, target_currency? })\`. Only \`name\` is required and everything else defaults (\`pay_rate\` 0, \`pay_rate_type\` hourly, \`pay_period\` bi_weekly, \`target_currency\` USD), so pass them explicitly or you seed a roster of zero-rate members.
+
+\`pay_rate\` is in DOLLARS, not cents: per hour when \`pay_rate_type\` is \`hourly\`, per period when \`fixed\`. The route multiplies by 100, and read surfaces report it back as \`pay_rate_cents\`. \`pay_rate_type\`: hourly | fixed. \`pay_period\`: weekly | bi_weekly | semi_monthly | monthly.
+
+\`source_currency\` is not a parameter of \`accounting_member_create\`. It is declared on \`accounting_member_update({ member_id, ... })\` and on \`accounting_payroll_run_create\`. \`bill_rate\` is also on \`accounting_member_update\` only, and it is DOLLARS as well.
+
+To take someone off payroll, use \`accounting_member_update({ member_id, status: 'inactive' })\`. Payroll run creation selects members on \`status: 'active'\` and never reads \`is_archived\`, so archiving alone leaves them being paid.
+
+Runs come later: \`accounting_payroll_run_create({ period_start, period_end })\`, both YYYY-MM-DD and both required.
+
+## 6. Payment processors are not configured here
+Charging customers (Hiveku Payments, your own Stripe, Authorize.Net) is configured in the Hiveku dashboard under Commerce settings. No MCP tool registers a processor. On the A/P side, \`accounting_bill_record_payment\` records a payment in the books and does not transfer funds.
+
+## 7. Verify with one test bill, and clear it before any payment
+1. \`accounting_bill_create({ vendor_id, line_items: [{ description, quantity, unit_cents }] })\`. Both \`vendor_id\` and \`line_items\` are required. The bill is created as \`draft\` and its \`bill_number\` is generated for it. \`unit_cents\` is cents. \`tax_bps\`, if you pass it, is document tax in basis points (875 = 8.75%).
+2. \`accounting_bill_submit({ bill_id })\` moves draft to submitted. It has three refusals: 404 for an unknown or cross-account id, 409 \`Cannot submit a bill in status "..."\` for anything not draft (which is what a retry after a success hits), and 400 \`Add at least one line item before submitting\` when the total is 0 or less.
+3. \`accounting_ap_aging\` returns six scalar sums and nothing else (\`current_cents\`, \`d1_30_cents\`, \`d31_60_cents\`, \`d61_90_cents\`, \`d90_plus_cents\`, \`total_cents\`), so do not look for this bill in the response. Watch \`total_cents\` move, and only on an account quiet enough for the delta to mean something. It buckets bills in status submitted, approved, open and partially_paid, so a draft bill is not in it and reading aging before step 2 proves nothing.
+4. \`accounting_bill_void({ bill_id, reason? })\`, then \`accounting_ap_aging\` again and expect \`total_cents\` back where it started.
+5. \`accounting_pnl_summary({ period_start?, period_end? })\` returns \`revenue_cents\`, \`expenses_cents\`, \`profit_cents\` and \`margin_bps\`. It is cash basis and counts recorded bill PAYMENTS as expenses, not open bills, so an unpaid test bill should not move it in either direction.
+
+Do not record a payment against the test bill. Once \`amount_paid_cents\` is above 0, \`accounting_bill_void\` returns 409 with \`This bill has payments recorded and cannot be voided. Reverse the payments first.\`, and \`accounting_bill_delete\` refuses on the same condition. The tool registry has no payment reversal, refund or payment-delete tool, so that advice cannot be followed from MCP and the bill stays in the books.
+
+Then re-run "Download Department Data -> Accounting" to refresh \`hiveku-data/accounting/*.json\`.`;
