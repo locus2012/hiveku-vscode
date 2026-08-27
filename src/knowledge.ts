@@ -148,6 +148,36 @@ async function writeAtomic(file: string, contents: string): Promise<void> {
   await fs.writeFile(file, contents, 'utf8');
 }
 
+/**
+ * Write a file that CONTAINS A CREDENTIAL, readable only by its owner.
+ *
+ * `.env` and `.mcp.json` both carry a live `hvk_` key. They were written with
+ * fs.writeFile's default mode, which lands at 0644 under a typical umask, so on
+ * five real account folders the account key was world-readable. Gitignoring them
+ * stops a commit; it does nothing about every process already running as this
+ * user, which is the population that actually matters here: an npm postinstall,
+ * a dependency, another MCP server.
+ *
+ * The mode is passed to the CREATE call rather than chmod-ed afterwards. A
+ * chmod after the write leaves a window where the file exists at 0644 with the
+ * key already in it, and that window is enough.
+ *
+ * Note `fs.writeFile`'s mode applies only when it creates the file: an existing
+ * file keeps its current permissions, so re-scaffolding over an old 0644 file
+ * would not tighten it. Hence the explicit chmod for that case.
+ */
+async function writeSecretFile(file: string, contents: string): Promise<void> {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, contents, { encoding: 'utf8', mode: 0o600 });
+  // Existing files ignore the mode above; repair them rather than leaving a key
+  // exposed just because the folder was scaffolded by an older build.
+  try {
+    await fs.chmod(file, 0o600);
+  } catch {
+    // Best effort: a filesystem without POSIX modes must not fail the scaffold.
+  }
+}
+
 // ── Sync manifest + drift detection ─────────────────────────────────────────
 // So Claude Code (and the user) can tell when the LOCAL copy is out of sync
 // with the Hiveku account: changed/new/deleted remotely, or edited locally.
@@ -1841,8 +1871,9 @@ ${MULTI_SESSION_BLOCK}${roleClaudeMdBlock(opts.role)}`;
   // costs nothing and removing one is unrecoverable.
   const gitignoreLines = ['.mcp.json', '.env', '.env.local', '.codex/config.toml', '.hiveku/', 'hiveku-data/', '.claude/settings.local.json'];
 
-  await writeAtomic(path.join(opts.baseDir, '.mcp.json'), mcpJson);
-  await writeAtomic(path.join(opts.baseDir, '.env'), env);
+  // Both of these carry the live account key: owner-only, never 0644.
+  await writeSecretFile(path.join(opts.baseDir, '.mcp.json'), mcpJson);
+  await writeSecretFile(path.join(opts.baseDir, '.env'), env);
   await writeAtomic(path.join(opts.baseDir, 'CLAUDE.md'), claudeMd);
   // Merge rather than clobber — a destructive rewrite also destroyed any entries
   // the user had added themselves.

@@ -134,7 +134,17 @@ NOT included (${sensitiveKeys.length} sensitive, write-only on Hiveku): ${sensit
     if (ok !== 'Overwrite') return;
   }
 
-  await fs.writeFile(target, toEnvFile(env), 'utf8');
+  // This file is secrets by definition: the message below literally counts them.
+  // fs.writeFile's default mode lands at 0644 under a typical umask, and the mode
+  // argument only applies when the file is CREATED, so an existing file keeps
+  // whatever it had. Pass the mode and repair afterwards, otherwise overwriting a
+  // file scaffolded by an older build leaves the secrets world-readable.
+  await fs.writeFile(target, toEnvFile(env), { encoding: 'utf8', mode: 0o600 });
+  try {
+    await fs.chmod(target, 0o600);
+  } catch {
+    // Best effort: a filesystem without POSIX modes must not fail the write.
+  }
   await ensureGitignored(scm.root);
   const choice = await vscode.window.showInformationMessage(
     `Wrote ${count} secret(s) to ${ENV_FILE} (gitignored).`,
