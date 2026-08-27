@@ -1,0 +1,1312 @@
+{
+  "version": 1,
+  "default_departments": [
+    "workflows",
+    "seo",
+    "ppc",
+    "crm",
+    "outbound",
+    "social",
+    "content",
+    "email",
+    "accounting",
+    "creative",
+    "helpdesk",
+    "pm",
+    "mc",
+    "voice",
+    "hiveboards",
+    "knowledge",
+    "surveys",
+    "media",
+    "localseo",
+    "aeo",
+    "commerce",
+    "pages",
+    "analytics",
+    "cms",
+    "database"
+  ],
+  "departments": [
+    {
+      "id": "workflows",
+      "label": "Automations",
+      "crud": "To EDIT a workflow: read `definitions/<wf>.json` (its `{nodes,edges}` graph) and `node-catalog.json` (valid node `type` strings + each type's `data` fields). Then make SURGICAL edits — `workflow_node_add({workflow_id,type,data,position})`, `workflow_node_update({workflow_id,node_id,data})`, `workflow_node_delete` (cascades its edges), `workflow_edge_add({workflow_id,source,target,sourceHandle?})`, `workflow_edge_delete` — each is version-snapshotted. Or replace the whole graph with `workflow_update({workflow_id,definition:{nodes,edges}})`. CREATE: `workflow_create({name})` then build incrementally. TRIGGERS (two parts): every workflow needs one trigger-category node AND, for external triggers, a `workflow_triggers` row — after `workflow_node_add` of the trigger node call `workflow_trigger_create({workflow_id,name,node_id,trigger_type,config})` (check `trigger-types.json` for config keys); manage via `workflow_trigger_update`/`workflow_trigger_delete`. For a webhook-in, `workflow_provision_webhook({name})` does create+node+trigger in one shot (bearer token shown once). VERIFY BEFORE ENABLING: `workflow_validate({workflow_id})` after every batch of edits, then dry-run with `workflow_test({workflow_id,input_data})` — it fires NO real side effects. NEVER use `workflow_run` to test (it sends real emails/Slack/CRM writes and burns run quota). Debug a run via `workflow_run_get` (per-node step_states) + `workflow_run_logs`. SCHEDULE: `workflow_set_schedule({workflow_id,cron_expression,timezone?,enabled?})` (upsert), read `workflow_get_schedule`, remove `workflow_delete_schedule`. ROLLBACK: `workflow_versions_list` → `workflow_version_restore`. Enable/disable: `workflow_enable`/`workflow_disable`. Run for real: `workflow_run`. Delete: `workflow_delete`. TEMPLATES + FORM-WIRING: skip hand-building — `workflow_templates_list` → `workflow_create_from_template({ slug, overrides })`. To wire EVERY form in a website project in ONE call: `workflow_bulk_provision_for_project({ project_id, template_slug, file_paths?, dry_run: true })` (dry-run first) — provisions a submit-handler workflow per form; single form: `workflow_bind_form({ workflow_id, project_id, form_file_path })`. Set who gets notified with `workflow_set_recipient`.",
+      "references": [
+        {
+          "id": "node-catalog",
+          "label": "Node type catalog (260+ types)",
+          "tool": "workflow_node_types_list"
+        },
+        {
+          "id": "trigger-types",
+          "label": "Trigger types + config keys",
+          "tool": "workflow_trigger_types_list"
+        },
+        {
+          "id": "event-trigger-types",
+          "label": "Event trigger types",
+          "tool": "workflow_event_trigger_types_list"
+        },
+        {
+          "id": "templating-syntax",
+          "label": "Templating syntax reference",
+          "tool": "workflow_templating_syntax"
+        }
+      ],
+      "datasets": [
+        {
+          "id": "workflows",
+          "label": "Workflows",
+          "tool": "workflow_list",
+          "args": {
+            "limit": 200
+          },
+          "detail": {
+            "detailTool": "workflow_get",
+            "nameKey": "name",
+            "dir": "definitions"
+          }
+        },
+        {
+          "id": "recent_runs",
+          "label": "Recent runs (7d)",
+          "tool": "workflow_runs_recent",
+          "args": {
+            "limit": 200
+          },
+          "dyn_args": {
+            "since": 7
+          }
+        }
+      ]
+    },
+    {
+      "id": "seo",
+      "label": "SEO",
+      "crud": "SEO tracking project: `seo_create_project` (no update/delete tool — create-only via MCP). Website on-page SEO settings (robots.txt, sitemap_settings, meta): `seo_project_get` / `seo_project_update` with the BUILDER project_id from `list_projects` — NOT the `seo_list_projects` id. Tracked keywords: `seo_track_keyword` to add, `seo_tracked_keyword_delete` to remove (id from `tracked_keywords.json`, NOT keywords.json — different table). Competitors: `seo_add_competitor`. Audits: `seo_run_audit` / `seo_audit_start` → `seo_audit_get`. Sitemaps: `seo_generate_sitemap` / `seo_gsc_submit_sitemap` (remove `seo_gsc_delete_sitemap`); Bing: `seo_bing_submit_sitemap` / `seo_bing_submit_url`. Deliverables/reports: `seo_deliverable_save` / `seo_deliverable_update` / `seo_deliverable_delete`; report sections `seo_report_add_section` / `seo_report_update_section` / `seo_report_clear`. Refresh data: `seo_sync`. Keywords/rankings/backlinks/audits are per SEO project (project_id from `seo_list_projects`).",
+      "setup": "# Connecting SEO sources (GSC, Bing Webmaster) + first project — verified\n\nCheck current state FIRST: `seo_connections_list` (connected data sources) + `seo_list_projects`\n(existing SEO projects). Only run the steps below for whatever is missing.\n\n## STEP 0 (once per account) — the Google OAuth app (BYOK)\n`oauth_app_list({ provider: 'google' })`; if none covers `google_search_console`, the user first sets up\nGoogle Cloud Console (project → enable the **Search Console API** → OAuth consent screen → Web-app client →\nAuthorized redirect URI must include `https://app.hiveku.com/api/oauth/google/callback`), then:\n`oauth_app_create({ provider: 'google', name, client_id, client_secret, products: ['google_search_console'] })`.\nMissing app → `integration_oauth_initiate` returns **412 integration_not_configured**.\n\n## Google Search Console\n1. `integration_oauth_initiate({ provider_slug: 'google_search_console' })` → `{ setup_url, setup_token, connection_id }`.\n   Hand `setup_url` to the user (their browser, their consent).\n2. Poll `integration_oauth_check({ setup_token })` every ~5s until `status: 'completed'` (expires in 15 min).\n3. `seo_gsc_discover_sites({ id: connection_id })` → the verified properties; `seo_gsc_list_sites` also lists them.\n   Pick one (use `sc-domain:<domain>` if 0 URL-prefix sites are listed).\n4. `seo_connection_update({ id: connection_id, site_url })` → status flips to **connected**.\n\n## Bing Webmaster (API key — fully connectable from here, no OAuth, no dashboard)\nBing Webmaster is an SEO CONNECTION (same system as GSC/GBP), NOT a generic integration — the live\nprovider registry rejects `integration_create({ provider_slug: 'bing_webmaster' })` with \"Unknown\nprovider_slug\". Use:\n`seo_connection_create({ platform: 'bing_webmaster', site_url: 'https://example.com/', api_key })`\n— the user's key from bing.com/webmasters → Settings → API access (if the site isn't in Bing yet, they\nclick \"Import from Google Search Console\" there first — one click once GSC is connected). Then\n`seo_sync` and `seo_bing_stats` to verify data flows. (Full organic suite once connected:\n`seo_bing_query_stats` / `seo_bing_pages` / `seo_bing_crawl_stats` / `seo_bing_backlinks` /\n`seo_bing_submit_sitemap` / `seo_bing_submit_url`.)\n\n## The SEO project + keywords\n1. `seo_create_project({ domain, name, target_country?, target_language? })` → project_id.\n2. Track the initial keyword set — one call per keyword:\n   `seo_track_keyword({ keyword, target_domain })` (goal_id auto-derives from the domain so they group;\n   `location_code` defaults 2840/US, `search_engine` defaults google).\n\n## First audit + data pull\n1. `seo_run_audit({ project_id, audit_type: 'technical' })` (also: 'content', 'mobile') → audit_id.\n2. `seo_audit_get({ audit_id })` → issues + crawl summary once it completes.\n3. `seo_sync({ project_id })` — full pull of metrics + rankings from all configured connections\n   (DataForSEO / GSC / Bing).\n\n## Verify\n`seo_list_rankings({ project_id })` returns rows, or `seo_gsc_search_analytics` returns query data for the\nconnected site. Then re-run \"Download Department Data → SEO\" to refresh `hiveku-data/seo/*.json`.\n",
+      "datasets": [
+        {
+          "id": "projects",
+          "label": "SEO projects",
+          "tool": "seo_list_projects"
+        },
+        {
+          "id": "keywords",
+          "label": "Keywords",
+          "tool": "seo_keywords_list",
+          "args": {
+            "limit": 200
+          },
+          "scope": [
+            {
+              "parentTool": "seo_list_projects",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        },
+        {
+          "id": "rankings",
+          "label": "Rankings",
+          "tool": "seo_rankings_list",
+          "args": {
+            "limit": 200
+          },
+          "scope": [
+            {
+              "parentTool": "seo_list_projects",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        },
+        {
+          "id": "backlinks",
+          "label": "Backlinks",
+          "tool": "seo_backlinks_list",
+          "args": {
+            "limit": 200
+          },
+          "scope": [
+            {
+              "parentTool": "seo_list_projects",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        },
+        {
+          "id": "gsc_queries",
+          "label": "GSC queries (28d)",
+          "tool": "seo_gsc_search_analytics",
+          "args": {
+            "dimensions": [
+              "query"
+            ],
+            "row_limit": 1000
+          },
+          "dyn_args": {
+            "start": 28
+          }
+        },
+        {
+          "id": "gsc_pages",
+          "label": "GSC pages (28d)",
+          "tool": "seo_gsc_search_analytics",
+          "args": {
+            "dimensions": [
+              "page"
+            ],
+            "row_limit": 500
+          },
+          "dyn_args": {
+            "start": 28
+          }
+        },
+        {
+          "id": "audits",
+          "label": "Audits",
+          "tool": "seo_list_audits",
+          "scope": [
+            {
+              "parentTool": "seo_list_projects",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        },
+        {
+          "id": "competitors",
+          "label": "Competitors",
+          "tool": "seo_list_competitors",
+          "scope": [
+            {
+              "parentTool": "seo_list_projects",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        },
+        {
+          "id": "tracked_keywords",
+          "label": "Tracked keywords",
+          "tool": "seo_tracked_keywords_list",
+          "scope": [
+            {
+              "parentTool": "seo_list_projects",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ppc",
+      "label": "Ads (PPC) — Google & Bing",
+      "crud": "PLATFORM SPLIT (read first): the `ppc_*` ops tools below are GOOGLE-ONLY (they route through /ppc/ops which accepts only google_ads connections). BING (Microsoft) has exactly FOUR working write tools — `ppc_platform_pause_resource` / `ppc_platform_enable_resource` / `ppc_platform_budget_update` (resource_type: campaign|ad_group|ad|keyword) + `ppc_platform_period_comparison` (read). Everything else is Google-only: keyword bids, match types, negatives, RSAs, assets, recommendations, search-terms, conversion actions have NO Bing write/read path yet. READS: campaigns + daily metrics DO sync for Bing (platform-generic), but ad groups + ads do NOT (a server sync gap) — so `ad_groups.json` / `ads.json` are Google-only. Connect Bing Ads via the DASHBOARD (marketing/ppc) OAuth — the CLI OAuth initiate is Google-only. CAMPAIGN BUILD (Google): `ppc_campaign_create` → `ppc_ad_group_create` → `ppc_responsive_search_ad_create` → `ppc_keyword_add`. TUNE: `ppc_budget_update`, `ppc_keyword_bid_update`, `ppc_keyword_match_type_change`, `ppc_bid_modifier_update`, `ppc_bidding_strategy_update`, `ppc_negative_keyword_add` / `_remove` (mine `search_terms.json` for waste). ASSETS/AUDIENCES: `ppc_asset_create` → `ppc_asset_attach` / `_detach`; `ppc_custom_audience_create` → `ppc_audience_attach`; CRM loops `ppc_customer_match_upload` / `ppc_offline_conversion_upload`. STATE (Google): `ppc_pause_resource` / `ppc_enable_resource` (campaign/ad_group/ad/keyword). CHEAP WINS: read `recommendations.json` then `ppc_recommendation_apply`. Bulk: `ppc_bulk_edit`. DIAGNOSE: `ppc_conversion_tracking_status`, `ppc_disapprovals_list`, `ppc_anomaly_check`, `ppc_pacing_summary`. Most write tools take a `connection_id` + the resource id. Always `ppc_sync({ connection_id })` after big changes.",
+      "setup": "# Connecting Google Ads & Microsoft (Bing) Ads — exact, verified steps\n\nConnections live in `ppc_connections`. Check current state any time: `ppc_connection_list`.\nHiveku has NO platform-shared OAuth — every account brings its own OAuth client (BYOK).\n\n## STEP 0 (once per account) — the OAuth app\nCheck for an existing app: `oauth_app_list({ provider: 'google' })`. If none is enabled for the product\n(`google_ads`), create one — first the user does this in **Google Cloud Console**:\n  1. Create/pick a Google Cloud project → enable the **Google Ads API**.\n  2. OAuth consent screen → External; add the user as a test user (or publish).\n  3. Credentials → Create OAuth client ID → **Web application** → Authorized redirect URI MUST include\n     `https://app.hiveku.com/api/oauth/google/callback`.\n  4. Copy the Client ID + Client Secret.\nThen: `oauth_app_create({ provider: 'google', name: '<acct> Google Ads', client_id, client_secret, products: ['google_ads'] })`.\n(Skipping this → `integration_oauth_initiate` returns **412 integration_not_configured**.)\n\n## Google Ads — collect 3 fields, then run\nFrom the user: **developer_token** (their Google Ads MCC → Tools & Settings → API Center — required for EVERY\nAds API call), **customer_id** (client account, 10 digits no dashes), **manager_id** (the MCC id — ONLY if the\nclient account sits under a manager account; Google needs login-customer-id or sync fails).\n\nPath A — you have the customer_id:\n1. `integration_oauth_initiate({ provider_slug: 'google_ads', customer_id, manager_id?, developer_token })`\n   → `{ setup_url, setup_token, connection_id }`. (It pre-creates the ppc_connections row, status 'pending'.)\n2. Give the user `setup_url`; they complete Google's consent screen.\n3. **Poll** `integration_oauth_check({ setup_token })` every ~5s until `status: 'completed'` (expired=15min → re-initiate).\n   OAuth writes the refresh_token; with customer_id set, status auto-promotes to **connected**.\n4. `ppc_connection_test({ id: connection_id })` — live API check of OAuth + permissions.\n5. `ppc_sync({ connection_id })` (incremental, ≤60s; full 5-year backfill → `ppc_sync_async` then poll `job_status_get`).\n6. Verify: `ppc_account_settings_get({ connection_id })`, `ppc_campaign_list`, `ppc_conversion_tracking_status({ connection_id })`.\n\nPath B — discover the customer_id (user doesn't know it):\n1. `integration_oauth_initiate({ provider_slug: 'google_ads', developer_token })` → connection_id; user authorizes; poll check.\n2. `ppc_ads_discover_customers({ id: connection_id })` → accessible customer IDs (needs developer_token set; 412 if missing).\n3. `ppc_connection_update({ id: connection_id, customer_id, manager_id? })` → status auto-flips to **connected**.\n4. test → sync → verify (Path A steps 4–6).\n\nRe-auth a dead connection (refresh_token died): `integration_oauth_initiate({ provider_slug: 'google_ads', target_connection_id })`.\n\n## Microsoft / Bing Ads\nMicrosoft Ads OAuth is **dashboard-initiated** — `integration_oauth_initiate` is Google-only, so an agent cannot\nstart the Microsoft consent from here. Steps:\n1. (Once) register the Azure app: `oauth_app_create({ provider: 'microsoft', name, client_id, client_secret, products: ['microsoft_ads'] })`\n   (client_id/secret from Azure AD app registration; redirect URI → `https://app.hiveku.com/api/oauth/microsoft/callback`).\n2. The user connects Microsoft Ads in the **Hiveku dashboard** (Marketing → Ads → connect Microsoft). The\n   microsoft OAuth callback creates a `ppc_connections` row with `platform=microsoft_ads` (NO developer_token needed).\n3. Back here: `ppc_connection_list` shows it → `ppc_sync({ connection_id })` → all ppc_* read/CRUD tools work the same.\n\n## After connecting (either platform)\nRe-run \"Download Department Data → Ads (PPC)\" to refresh `hiveku-data/ppc/*.json`, then mine\n`keywords.json` (quality scores), `search_terms.json` (negative candidates), `recommendations.json`, `disapprovals.json`.\n",
+      "datasets": [
+        {
+          "id": "connections",
+          "label": "Ad accounts",
+          "tool": "ppc_connection_list"
+        },
+        {
+          "id": "campaigns",
+          "label": "Campaigns",
+          "tool": "ppc_campaign_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "ad_groups",
+          "label": "Ad groups",
+          "tool": "ppc_ad_group_list",
+          "args": {
+            "limit": 500
+          }
+        },
+        {
+          "id": "ads",
+          "label": "Ads (RSAs)",
+          "tool": "ppc_ad_list",
+          "args": {
+            "limit": 500
+          }
+        },
+        {
+          "id": "keywords",
+          "label": "Keywords +QS (Google)",
+          "tool": "ppc_keyword_list",
+          "args": {
+            "days": 30,
+            "limit": 2000
+          },
+          "scope": [
+            {
+              "parentTool": "ppc_connection_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "display_name",
+              "argKey": "connection_id",
+              "parentArgs": {
+                "platform": "google_ads"
+              }
+            }
+          ]
+        },
+        {
+          "id": "search_terms",
+          "label": "Search terms (Google)",
+          "tool": "ppc_search_terms_report",
+          "args": {
+            "days": 28,
+            "limit": 2000
+          },
+          "scope": [
+            {
+              "parentTool": "ppc_connection_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "display_name",
+              "argKey": "connection_id",
+              "parentArgs": {
+                "platform": "google_ads"
+              }
+            }
+          ]
+        },
+        {
+          "id": "metrics_daily",
+          "label": "Daily metrics (per campaign, 56d)",
+          "tool": "ppc_metrics",
+          "args": {
+            "limit": 200
+          },
+          "dyn_args": {
+            "since": 56
+          },
+          "scope": [
+            {
+              "parentTool": "ppc_campaign_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "campaign_id",
+              "parentArgs": {
+                "limit": 200
+              }
+            }
+          ]
+        },
+        {
+          "id": "recommendations",
+          "label": "Google recommendations",
+          "tool": "ppc_recommendations_list",
+          "args": {
+            "limit": 200
+          },
+          "scope": [
+            {
+              "parentTool": "ppc_connection_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "display_name",
+              "argKey": "connection_id",
+              "parentArgs": {
+                "platform": "google_ads"
+              }
+            }
+          ]
+        },
+        {
+          "id": "disapprovals",
+          "label": "Disapproved ads (Google)",
+          "tool": "ppc_disapprovals_list",
+          "args": {
+            "limit": 500
+          },
+          "scope": [
+            {
+              "parentTool": "ppc_connection_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "display_name",
+              "argKey": "connection_id",
+              "parentArgs": {
+                "platform": "google_ads"
+              }
+            }
+          ]
+        },
+        {
+          "id": "conversion_actions",
+          "label": "Conversion actions (Google)",
+          "tool": "ppc_conversion_actions_list",
+          "scope": [
+            {
+              "parentTool": "ppc_connection_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "display_name",
+              "argKey": "connection_id",
+              "parentArgs": {
+                "platform": "google_ads"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crm",
+      "label": "CRM / Sales",
+      "crud": "Contacts: `crm_create_contact` / `crm_update_contact` / `crm_delete_contact` / `crm_contact_upsert_by_email` / `crm_contact_merge` (bulk: `crm_import_preflight` then `crm_contacts_bulk_create`). Resolve `owner_id` from `users.json` (`crm_list_users`), never hardcode. Companies: `crm_create_company` / `crm_update_company` / `crm_delete_company` + `crm_link_contact_company`. Deals: `crm_create_deal` (name + pipeline_id + stage_id from `pipelines.json`) / `crm_update_deal` (stage moves, status, value) / `crm_delete_deal` + `crm_link_deal_contact` (bulk: `crm_deals_bulk_create`). Activities: `crm_create_activity` / `crm_update_activity` / `crm_delete_activity`. Sequences: enroll/leave with `crm_enroll_sequence` / `crm_unenroll_sequence` / `crm_pause_sequence_enrollment` / `crm_resume_sequence_enrollment`; edit steps via `crm_update_sequence` / `crm_update_sequence_step`. Tags: `crm_attach_tag` / `crm_detach_tag`. Custom fields: `crm_create_custom_field` / `crm_set_custom_field_value` (keys in `custom_fields.json`). Lead options: `crm_add_lead_status_option` / `crm_add_lead_source_option`. Compliance: `crm_set_dnc` / `crm_remove_dnc` before any outreach.",
+      "setup": "# CRM first-run: pipeline, import, inbox, external sync — verified\n\nCheck current state FIRST: `crm_list_pipelines` + `crm_list_contacts({ limit: 1 })`. A default pipeline and\nexisting contacts mean parts of this are already done — only fill the gaps.\n\n## Pipeline + lead taxonomy\n1. `crm_create_pipeline({ name, stages: [{ name, ... }], is_default? })` — create the sales pipeline with its stages.\n2. Custom lead statuses/sources (system slugs are reserved; slug = lowercase alphanumeric+dash+underscore, ≤40 chars):\n   `crm_add_lead_status_option({ value, label?, color? })` and `crm_add_lead_source_option({ value, label?, color? })`.\n\n## Importing contacts / companies (migrations)\n1. **ALWAYS dry-run first**: `crm_import_preflight({ entity: 'contacts'|'companies'|'deals', rows })` — returns\n   invalid rows + reasons, intra-batch dupes, cross-DB dupes, unknown custom-field keys. Fix at row 0, not row 3,000.\n2. `crm_contacts_bulk_create({ rows, on_duplicate?, auto_create_fields? })` / `crm_companies_bulk_create` —\n   **max 5,000 rows per call**; emails normalize to lowercase and (account, email) is unique.\n   `on_duplicate`: 'skip' (default — dupes dropped, counted in skipped_duplicates) or 'error' (whole batch 409s).\n   `auto_create_fields` defaults false so typos don't pollute the custom-field schema.\n\n## Email inbox (Gmail / Outlook)\n1. `email_connect_start({ platform: 'gmail'|'outlook' })` → `setup_url` you HAND TO THE USER (valid 5 min;\n   they must authorize in their own browser). Prereq: a Google OAuth app with product 'crm_email_calendar' —\n   on `no_oauth_app`, the owner registers one at /dashboard/settings/oauth-apps (dashboard).\n2. Verify: `crm_inbox_connections` shows the inbox with `is_active: true`.\n\n## Optional — sync from GoHighLevel / HubSpot\n1. Check link state: `crm_ghl_status` / `crm_hubspot_status` → `{ connected: false }` means the OAuth link\n   is done in the **dashboard** (dashboard), not from here.\n2. Once connected: `crm_integration_sync_configure({ source: 'ghl'|'hubspot', object?, enabled: true,\n   frequency_seconds })` — frequency clamps to [900, 86400], default 3600.\n\n## Verify\n`crm_create_contact` a throwaway test contact, confirm it appears via `crm_list_contacts`, then\n`crm_delete_contact` it. Then re-run \"Download Department Data → CRM\" to refresh `hiveku-data/crm/*.json`.\n",
+      "datasets": [
+        {
+          "id": "deals",
+          "label": "Deals",
+          "tool": "crm_list_deals",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "contacts",
+          "label": "Contacts",
+          "tool": "crm_list_contacts",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "companies",
+          "label": "Companies",
+          "tool": "crm_list_companies",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "pipelines",
+          "label": "Pipelines",
+          "tool": "crm_list_pipelines"
+        },
+        {
+          "id": "sequences",
+          "label": "Sequences",
+          "tool": "crm_list_sequences"
+        },
+        {
+          "id": "activities",
+          "label": "Activities",
+          "tool": "crm_list_activities",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "users",
+          "label": "Users (owner ids)",
+          "tool": "crm_list_users"
+        },
+        {
+          "id": "custom_fields",
+          "label": "Custom fields",
+          "tool": "crm_list_custom_fields"
+        },
+        {
+          "id": "lead_status_options",
+          "label": "Lead status options",
+          "tool": "crm_list_lead_status_options"
+        },
+        {
+          "id": "lead_source_options",
+          "label": "Lead source options",
+          "tool": "crm_list_lead_source_options"
+        }
+      ]
+    },
+    {
+      "id": "outbound",
+      "label": "Outbound (BDR)",
+      "crud": "Create a lead: `outbound_create_lead`. After a reply, mark interest/stage with `outbound_update_lead({lead_id, is_interested, internal_status})`. New campaign: `outbound_create_campaign`. Lists: `outbound_list_campaigns` / `outbound_list_leads` (filters: status, is_interested, has_replied, campaign_id). For Smartlead/HeyReach two-way sync, drive sends from those tools and persist replies here.",
+      "setup": "# Outbound (cold email / LinkedIn) first-run: Smartlead + HeyReach — verified\n\nCheck current state FIRST: `integration_list` (account-level integrations) + `outbound_list_campaigns`\n(cold-email campaigns; each row carries the `integration_id` of its provider connection).\n\n## STEP 1 — connect Smartlead / HeyReach (dashboard)\n`integration_providers_list` shows valid slugs + `can_create_from_cli` — but `integration_create` only\naccepts API-key providers **bing_webmaster** and **dataforseo**; everything else 422s with a dashboard URL.\nCold-email providers (Smartlead, HeyReach) are connected in the **Hiveku dashboard** (dashboard —\nMarketing → Outbound → settings), which writes the provider row the outbound tools read.\nAfter connecting, `outbound_list_campaigns` rows expose the `integration_id` to pass to create calls.\nFor account integrations created here, `integration_test({ integration_id })` live-checks credentials.\n\n## STEP 2 — local reply-triage worker keys (workspace, not Hiveku)\nPut `SMARTLEAD_API_KEY` and `HEYREACH_API_KEY` into `automations/.env` (gitignored) so the local\nreply-triage automation can poll the providers directly. The framework is scaffolded by the\n\"Hiveku: Scaffold Local Automations\" command and documented in `.claude/AUTOMATION.md`; schedule with\n`node automations/manage.mjs create --id reply-triage --cron \"17 9-17 * * 1-5\" --worker reply-triage`.\n\n## STEP 3 — the first campaign + leads\n1. `outbound_create_campaign({ name, integration_id, sequences? })` — creates the campaign upstream too.\n   SmartLead is the only provider with a create path today; other providers return **412 unsupported_provider**.\n2. `outbound_create_lead({ campaign_id, email, first_name?, company_name?, linkedin_url?, ... })` per lead.\n   Update later with `outbound_update_lead`.\n\n## Reply events — webhook or polling\nThere is no Hiveku tool that subscribes to Smartlead/HeyReach reply events directly. Two options:\n- `workflow_provision_webhook({ name })` → `{ webhook_url, trigger_id }` in one shot; paste `webhook_url`\n  into the provider's own webhook settings (dashboard — on the Smartlead side) to push replies into a workflow.\n- Otherwise rely on polling via the local reply-triage automation worker (STEP 2).\n(`email_webhook_create` covers Hiveku's OWN email send events, not provider replies — don't use it for this.)\n\n## Verify\n`outbound_list_leads({ campaign_id })` returns the test leads, and the worker dry-runs clean:\n`node automations/manage.mjs run --id reply-triage`. Then re-run \"Download Department Data → Outbound\".\n",
+      "references": [
+        {
+          "id": "health",
+          "label": "Outbound health (readiness score, blockers, mailbox health, reply SLA)",
+          "tool": "outbound_health_status"
+        }
+      ],
+      "datasets": [
+        {
+          "id": "campaigns",
+          "label": "Campaigns",
+          "tool": "outbound_list_campaigns",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "leads",
+          "label": "Leads",
+          "tool": "outbound_list_leads",
+          "args": {
+            "limit": 500
+          }
+        },
+        {
+          "id": "inbox",
+          "label": "Inbox threads (BDR reply queue, pre-classified)",
+          "tool": "outbound_list_inbox",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "reply_drafts",
+          "label": "Pending reply drafts awaiting BDR approval",
+          "tool": "outbound_list_reply_drafts",
+          "args": {
+            "status": "pending",
+            "limit": 100
+          }
+        },
+        {
+          "id": "objections",
+          "label": "Objection library (patterns + counter-responses)",
+          "tool": "outbound_list_objections",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "sales_assets",
+          "label": "Sales assets (active only)",
+          "tool": "outbound_list_sales_assets",
+          "args": {
+            "is_active": "true",
+            "limit": 100
+          }
+        },
+        {
+          "id": "sequence_learnings",
+          "label": "Sequence performance learnings (A/B winners + losers)",
+          "tool": "outbound_list_sequence_learnings",
+          "args": {
+            "limit": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "social",
+      "label": "Social",
+      "crud": "Posts: `social_create_post` / `social_update_post` (content/media/schedule ONLY) / `social_delete_post` / `social_publish_post`. NOTE `social_update_post` IGNORES status/approval_status — drive status via `scheduled_at` (draft↔scheduled) and `social_publish_post`; approval is dashboard-only. Pillars: `social_pillar_create` / `_update` / `_delete`. Sync analytics: `social_post_sync_analytics`. Connect social accounts via the Hiveku dashboard (OAuth). For brand-aligned copy, prefer `talk_to_department({ domain: \"social\" })` then persist.",
+      "setup": "# Social first-run: accounts, pillars, first draft — verified\n\nCheck current state FIRST: `social_list_accounts` — connected platform accounts with `is_active`.\nIf accounts exist and pillars exist (`social_pillar_list`), skip to the verify step.\n\n## STEP 1 — connect the social accounts (dashboard)\nPlatform OAuth (Instagram / Facebook / LinkedIn / X / TikTok / YouTube) is **dashboard-initiated** — there is\nno MCP tool that starts a social consent flow. The user connects each account in the **Hiveku dashboard**\n(Marketing → Social → connect account). Back here, `social_list_accounts` shows each new row; treat\n`is_active: \"true\"` as connected. Account IDs from this list are what posts target.\n\n## STEP 2 — content pillars (the recurring themes posts hang off)\n1. `social_pillar_list` — see what already exists before creating.\n2. `social_pillar_create({ name, description?, cadence?, platforms? })` — e.g.\n   cadence \"2x/week\", platforms [\"instagram\", \"linkedin\"]. Create 3-5 pillars covering the brand's themes.\n\n## Verify with a DRAFT post (never publish during setup)\n1. `social_create_post({ title, content, target_platforms, target_accounts?, pillar_id? })` — omit\n   `scheduled_at` and do NOT call `social_publish_post`; the post stays an unpublished draft.\n2. Confirm it exists (`social_get_post` / `social_list_posts`), then clean up: `social_delete_post`.\n3. `social_analytics_summary({ from_date?, to_date? })` — returns totals across platforms; zeros are fine on\n   a fresh account, an error means the account connection is broken.\n\nAfter connecting, re-run \"Download Department Data → Social\" to refresh `hiveku-data/social/*.json`.\n",
+      "datasets": [
+        {
+          "id": "accounts",
+          "label": "Accounts",
+          "tool": "social_list_accounts"
+        },
+        {
+          "id": "posts",
+          "label": "Posts",
+          "tool": "social_list_posts",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "pillars",
+          "label": "Pillars",
+          "tool": "social_pillar_list"
+        }
+      ]
+    },
+    {
+      "id": "content",
+      "label": "Content",
+      "crud": "Content: `content_create` / `content_update` / `content_delete` / `content_schedule` (publish/unpublish at a time) / `content_link_tasks` / `content_unlink_tasks`. Templates + categories are dashboard-managed (read-only via MCP). For brand-aligned drafts, prefer `talk_to_department({ domain: \"content\" })` then persist with `content_create`.",
+      "datasets": [
+        {
+          "id": "content",
+          "label": "Content",
+          "tool": "content_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "templates",
+          "label": "Templates",
+          "tool": "marketing_content_templates"
+        }
+      ]
+    },
+    {
+      "id": "email",
+      "label": "Email Marketing",
+      "crud": "Campaigns: `email_campaign_create` / `_update` / `_schedule` / `_send_now` / `_pause` / `_resume` / `_cancel` / `_delete` / `_duplicate` / `_test_send` / `_resend_non_openers`; metrics: `email_campaign_metrics`. Audiences: `email_audience_create` / `_update` (edits filter_json) / `_archive` (soft-delete) + `email_audience_members_add` / `_remove`. Sequences: `email_sequence_create` / `_update` / `_add_step` / `_update_step` / `_delete_step` / `_activate` / `_pause` / `_archive`; enrollment `_enroll` / `_exit` / `_enrollments`. Suppressions (unsubscribes/bounces/compliance): `email_suppression_add` / `_remove` / `_list` — remove refuses on sticky bounce/complaint entries. Templates: `email_template_create` / `_update` / `_delete`. Sending domains: `email_domain_add` / `_verify` / `_set_default`.",
+      "setup": "# Email marketing first-run: sender domain, mailboxes, audiences — verified\n\nCheck current state FIRST: `email_domain_list` (verified sender domains) + `email_service_status`\n(providers, send capacity, reputation). A verified default domain means STEP 1 is already done.\n\n## STEP 1 — the sending domain (the gate for everything else)\n1. `email_domain_add({ domain })` (e.g. \"mail.example.com\") → returns the DNS records the user must add\n   (DKIM / SPF / MAIL FROM / DMARC). Idempotent.\n2. The user adds those records **at their DNS host** (dashboard/external — Cloudflare, Route53, registrar; not doable from here).\n3. `email_domain_verify({ id })` — re-checks SES; repeat until verification + DKIM pass (DNS can take minutes to hours).\n4. `email_domain_set_default({ id })` — mark it the account's default sender.\n\n## Mailbox identities (Gmail / Outlook for 1:1 send/reply)\n1. `email_connect_start({ platform: 'gmail'|'outlook' })` → `setup_url` for the user (valid 5 min; needs the\n   'crm_email_calendar' OAuth app — on `no_oauth_app` the owner registers one at /dashboard/settings/oauth-apps).\n2. Poll `email_connections_list` until the row shows `connection_status: 'connected'`.\n\n## First audience\n1. `email_audience_create({ name, kind })` — 'dynamic' (default) re-evaluates `filter_json`\n   ({ include_tags?, lifecycle_stages?, lead_sources?, ... }) at send time; 'static' is manually maintained.\n2. Static only: `email_audience_members_add({ id, contact_ids })`.\n\n## Deliverability event webhooks (optional but recommended)\n1. `email_webhook_create({ name, url, events })` — response includes `signing_secret` **ONCE**; record it\n   (HMAC-SHA256 over the raw body verifies X-Hiveku-Signature).\n2. `email_webhook_test({ id })` — sends a synthetic signed event to prove the receiver works.\n\n## Test send\n`email_send_test({ to, subject?, body?, from?, dry_run? })` — `dry_run: true` validates without sending;\na real send 502s with a hint if the `from` domain isn't verified (that's your domain check failing).\n\n## Verify\n`email_stats` shows the test send in today's counts and `email_domain_list` shows the domain verified +\ndefault. Then re-run \"Download Department Data → Email\" to refresh `hiveku-data/email/*.json`.\n",
+      "datasets": [
+        {
+          "id": "campaigns",
+          "label": "Campaigns",
+          "tool": "email_campaign_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "audiences",
+          "label": "Audiences",
+          "tool": "email_audience_list"
+        },
+        {
+          "id": "sequences",
+          "label": "Sequences",
+          "tool": "email_sequence_list"
+        },
+        {
+          "id": "templates",
+          "label": "Templates",
+          "tool": "email_template_list"
+        },
+        {
+          "id": "suppressions",
+          "label": "Suppressions",
+          "tool": "email_suppression_list"
+        }
+      ]
+    },
+    {
+      "id": "accounting",
+      "label": "Accounting & Finance",
+      "crud": "Bills (AP): `accounting_bill_create` → `accounting_bill_submit` → `accounting_bill_approve` → `accounting_bill_record_payment` / `accounting_bill_void`. Vendors: `accounting_vendor_create`. Payroll members: `accounting_member_create`; runs: `accounting_payroll_run_create` (computes from tracked time × rate). AR invoice payments: `accounting_invoice_record_payment` (invoice AUTHORING is CRM-side: `crm_estimate_convert_to_invoice`). All money fields are in CENTS. Aging + P&L are summary objects (the `*.json` references).",
+      "setup": "# Accounting first-run: vendors, payroll members, first bill cycle — verified\n\nCheck current state FIRST: `accounting_vendor_list` + `accounting_member_list`. Existing vendors/members\nmean the account is partially set up — only fill the gaps.\n\n## Vendors (accounts payable)\n`accounting_vendor_create({ name, email?, target_currency, default_payment_terms?, tax_id?, is_1099? })` —\n`target_currency` is the Wise payout currency (e.g. USD, PHP); `is_1099` flags year-end 1099 reporting\n(pair it with `tax_id`).\n\n## Payroll members\n`accounting_member_create({ name, email, pay_rate, pay_rate_type, pay_period, target_currency })` —\n`pay_rate` is in **DOLLARS** (per hour when pay_rate_type='hourly', per period when 'fixed');\n`pay_period`: weekly | bi_weekly | semi_monthly | monthly. Runs come later via `accounting_payroll_run_create`.\n\n## Expense categories (chart of accounts)\n`accounting_expense_category_list` — first call **auto-seeds** industry defaults for the account. Use these\ncategory ids on bill line items so the P&L groups correctly. There is NO create tool — adding custom\ncategories beyond the seeded set is (dashboard).\n\n## Payment processors (dashboard)\nCharging customers (Hiveku Payments / BYO Stripe / Authorize.net) is configured in the **Hiveku dashboard**\n(dashboard — Commerce/Billing settings); no MCP tool registers a processor.\n\n## Verify with a draft bill cycle (safe — void before any payment)\n1. `accounting_bill_create({ vendor_id, line_items: [{ description, quantity, unit_cents, category_id? }],\n   due_date? })` — creates a DRAFT bill; `unit_cents` is cents, `tax_bps` is basis points (875 = 8.75%),\n   bill_number auto-generates.\n2. `accounting_bill_void({ bill_id, reason? })` — voids it so it never hits expenses or A/P. (Void is refused\n   once a bill has payments — a fresh draft always voids cleanly.)\n3. `accounting_ap_aging` — the voided bill must NOT appear in any bucket.\n4. `accounting_pnl_summary({ period_start?, period_end? })` — returns revenue/expenses/profit in cents.\n\nThen re-run \"Download Department Data → Accounting\" to refresh `hiveku-data/accounting/*.json`.\n",
+      "references": [
+        {
+          "id": "ap-aging",
+          "label": "AP aging",
+          "tool": "accounting_ap_aging"
+        },
+        {
+          "id": "ar-aging",
+          "label": "AR aging",
+          "tool": "accounting_ar_aging"
+        },
+        {
+          "id": "pnl-summary",
+          "label": "P&L summary",
+          "tool": "accounting_pnl_summary"
+        }
+      ],
+      "datasets": [
+        {
+          "id": "bills",
+          "label": "Bills (AP)",
+          "tool": "accounting_bill_list",
+          "args": {
+            "status": "all",
+            "limit": 200
+          },
+          "detail": {
+            "detailTool": "accounting_bill_get",
+            "argKey": "bill_id",
+            "nameKey": "bill_number",
+            "dir": "bills-detail"
+          }
+        },
+        {
+          "id": "invoices",
+          "label": "Invoices (AR)",
+          "tool": "accounting_invoice_list",
+          "args": {
+            "status": "all",
+            "limit": 200
+          }
+        },
+        {
+          "id": "vendors",
+          "label": "Vendors",
+          "tool": "accounting_vendor_list",
+          "args": {
+            "limit": 500
+          }
+        },
+        {
+          "id": "members",
+          "label": "Payroll members",
+          "tool": "accounting_member_list"
+        },
+        {
+          "id": "payroll_runs",
+          "label": "Payroll runs",
+          "tool": "accounting_payroll_run_list"
+        },
+        {
+          "id": "expense_categories",
+          "label": "Expense categories",
+          "tool": "accounting_expense_category_list"
+        }
+      ]
+    },
+    {
+      "id": "creative",
+      "label": "Brand & Creative",
+      "crud": "Avatars / journeys / brand-guides / grids: `*_create` / `*_update` / `*_delete`. AI-fill with `*_populate` (avatars, journeys, grids — NOT brand guides); relate with `*_link_to_avatar` (journeys + grids only). Brand guide: delete is SOFT (`brand_guide_delete`) then `brand_guide_purge` for hard; logo via `brand_guide_set_logo`. Designs: READ the canvas FIRST via `design_get` / `design_state_get` (design_update REPLACES the whole canvasData — a blind overwrite otherwise); snapshot with `design_version_create` BEFORE destructive edits; export via `design_export_image` / `design_export_mp4`. The four marketing entities (avatars/journeys/brand-guides/grids) are dumped full to `<dataset>/<item>.json`; designs are list-only locally (use `design_state_get` for the canvas).",
+      "datasets": [
+        {
+          "id": "avatars",
+          "label": "Customer avatars",
+          "tool": "customer_avatar_list",
+          "args": {
+            "limit": 100
+          },
+          "detail": {
+            "detailTool": "customer_avatar_get",
+            "nameKey": "name"
+          }
+        },
+        {
+          "id": "journeys",
+          "label": "Customer journeys",
+          "tool": "customer_journey_list",
+          "detail": {
+            "detailTool": "customer_journey_get",
+            "nameKey": "name"
+          }
+        },
+        {
+          "id": "brand-guides",
+          "label": "Brand guides",
+          "tool": "brand_guide_list",
+          "detail": {
+            "detailTool": "brand_guide_get",
+            "nameKey": "name"
+          }
+        },
+        {
+          "id": "grids",
+          "label": "Before/after grids",
+          "tool": "before_after_grid_list",
+          "detail": {
+            "detailTool": "before_after_grid_get",
+            "nameKey": "name"
+          }
+        },
+        {
+          "id": "designs",
+          "label": "Designs",
+          "tool": "design_list",
+          "detail": {
+            "detailTool": "design_state_get",
+            "nameKey": "title"
+          }
+        }
+      ]
+    },
+    {
+      "id": "helpdesk",
+      "label": "Helpdesk",
+      "crud": "Tickets: `helpdesk_ticket_create`; update via `helpdesk_ticket_set_status` / `_set_priority` / `_assign` / `_add_message` / `_send_reply` (render a macro first with `helpdesk_macros_render`) / `_escalate_to_human` / `_transfer_to_voice` / `_merge` (no hard delete — close/merge). Queues: `helpdesk_queues_create` / `_update` / `_delete` (+ `_add_member` / `_remove_member`). Macros: `helpdesk_macros_create` / `_update` / `_delete` / `_render`. KB categories: `helpdesk_kb_categories_create` (list via `helpdesk_kb_categories_list`; no update/delete — create-only). KB articles: `helpdesk_kb_article_create` / `_update` / `_delete` (no list-all tool — find via `helpdesk_kb_search({ q })`).",
+      "datasets": [
+        {
+          "id": "tickets",
+          "label": "Tickets",
+          "tool": "helpdesk_ticket_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "queues",
+          "label": "Queues",
+          "tool": "helpdesk_queues_list"
+        },
+        {
+          "id": "macros",
+          "label": "Macros",
+          "tool": "helpdesk_macros_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "kb_categories",
+          "label": "KB categories",
+          "tool": "helpdesk_kb_categories_list"
+        },
+        {
+          "id": "csat",
+          "label": "CSAT",
+          "tool": "helpdesk_csat_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "automations",
+          "label": "Automations (read-only)",
+          "tool": "helpdesk_automations_get"
+        }
+      ]
+    },
+    {
+      "id": "pm",
+      "label": "Projects & Tasks",
+      "crud": "Projects: `pm_projects_create` / `_update` / `_delete`. Tasks: `pm_tasks_create` (+`_create_bulk`) / `_update` / `_delete` / `_complete` / `_uncomplete` / `_comment` / `_reassign_bulk`; attachments `pm_task_attachment_create` / `_delete`. Sections: `pm_sections_create` (project_id + name [+ sort_order]; no update/delete tool — create-only). Milestones: `pm_milestones_create` / `_update` / `_delete` / `_close`. Recurrences: `pm_task_recurrence_create` / `_update` / `_delete` / `_pause` / `_resume` / `_run_now`.",
+      "datasets": [
+        {
+          "id": "projects",
+          "label": "PM projects",
+          "tool": "pm_projects_list"
+        },
+        {
+          "id": "tasks",
+          "label": "Tasks",
+          "tool": "pm_tasks_list",
+          "args": {
+            "limit": 500
+          }
+        },
+        {
+          "id": "milestones",
+          "label": "Milestones",
+          "tool": "pm_milestones_list"
+        },
+        {
+          "id": "recurrences",
+          "label": "Recurring tasks",
+          "tool": "pm_task_recurrence_list"
+        },
+        {
+          "id": "sections",
+          "label": "Sections",
+          "tool": "pm_sections_list",
+          "scope": [
+            {
+              "parentTool": "pm_projects_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mc",
+      "label": "Mission Control",
+      "crud": "Mission Control is the account-wide operator QUEUE (distinct from PM projects). Signals: `mc_tasks_next` (what to work now), `mc_sla_breached`, `mc_tasks_stalled`, `mc_tasks_aged`. Cards: `mc_task_create({ title, lane_id?, priority?, decision_options? })` / `mc_task_transition({ id, to_status })` / `mc_task_comment` / `mc_task_decide` (resolve a HITL choice). HUMAN-IN-THE-LOOP: poll `mc_decisions_pending` → present each to the user → `mc_decision_check` / `mc_task_decide`; persist the ruling with `mc_decision_to_memory` so the agents learn it. Lanes (board columns): `mc_lane_create` / `_update` / `_delete`. RECURRING work: `mc_schedule_create({ name, cron, template_name, target_account_filter })` spawns one card per account on a cron; manage via `mc_schedule_update` / `_delete` / `_fire` (run now). Card templates: `mc_template_create` / `_update`; render with `mc_templates_render`. External intake (email/webhook → a card): `mc_intake_external` then `mc_intake_classify`. Turn a card into board work: `mc_task_spawn_pm` (create a linked PM task) / `mc_task_link_pm` / `mc_task_mirror_from_pm`.",
+      "datasets": [
+        {
+          "id": "tasks",
+          "label": "MC cards",
+          "tool": "mc_tasks_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "lanes",
+          "label": "Lanes",
+          "tool": "mc_lanes_list"
+        },
+        {
+          "id": "schedules",
+          "label": "Recurring-card schedules",
+          "tool": "mc_schedules_list"
+        },
+        {
+          "id": "templates",
+          "label": "Card templates",
+          "tool": "mc_templates_list"
+        },
+        {
+          "id": "decisions",
+          "label": "Pending decisions (HITL)",
+          "tool": "mc_decisions_pending",
+          "args": {
+            "limit": 100
+          }
+        }
+      ]
+    },
+    {
+      "id": "voice",
+      "label": "Communications (Voice)",
+      "read_only": true,
+      "datasets": [
+        {
+          "id": "numbers",
+          "label": "Numbers",
+          "tool": "voice_numbers_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "extensions",
+          "label": "Extensions",
+          "tool": "voice_extensions_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "ring_groups",
+          "label": "Ring groups",
+          "tool": "voice_ring_groups_list"
+        },
+        {
+          "id": "ivrs",
+          "label": "IVRs",
+          "tool": "voice_ivrs_list"
+        },
+        {
+          "id": "e911",
+          "label": "E911 addresses",
+          "tool": "voice_e911_addresses_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "calls",
+          "label": "Recent calls",
+          "tool": "voice_calls_list",
+          "args": {
+            "limit": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "hiveboards",
+      "label": "Hiveboards",
+      "crud": "Boards: `hiveboard_create` / `_update` / `_delete` / `_duplicate`. Elements: `hiveboard_element_create` / `_update` / `_delete` (+ `hiveboard_elements_bulk_create`, `hiveboard_sitemap_scaffold`). Each board's full element graph is in `boards/<board>.json`.",
+      "datasets": [
+        {
+          "id": "hiveboards",
+          "label": "Boards",
+          "tool": "hiveboard_list",
+          "args": {
+            "limit": 200
+          },
+          "detail": {
+            "detailTool": "hiveboard_get",
+            "argKey": "board_id",
+            "nameKey": "name",
+            "dir": "boards"
+          }
+        }
+      ]
+    },
+    {
+      "id": "knowledge",
+      "label": "Knowledge & Memory",
+      "crud": "Memory: `memory_create` / `memory_bulk_create` / `memory_update` / `memory_delete` (versioned, recoverable). KBs: `kb_create` / `kb_update` / `kb_delete`; documents: `kb_documents_index_text` (create+embed) / `kb_documents_delete`. Each memory's full markdown content is in `memory-detail/<domain>.json`.",
+      "datasets": [
+        {
+          "id": "memory",
+          "label": "AI memory (skills/rules/facts)",
+          "tool": "memory_list",
+          "detail": {
+            "detailTool": "memory_get",
+            "argKey": "memory_id",
+            "nameKey": "domain",
+            "dir": "memory-detail"
+          }
+        },
+        {
+          "id": "kbs",
+          "label": "Knowledge bases",
+          "tool": "kb_list"
+        },
+        {
+          "id": "kb_documents",
+          "label": "KB documents",
+          "tool": "kb_documents_list",
+          "scope": [
+            {
+              "parentTool": "kb_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "kb_id"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "surveys",
+      "label": "Surveys (NPS/CSAT)",
+      "crud": "Create a DRAFT with `survey_create` (omit `questions` to get the canonical NPS/CSAT wording — changing it breaks score comparability). Edit or activate with `survey_update`; status=\"active\" is what makes a survey sendable and requires at least one active question. `survey_results` returns the delivery funnel, the metric, and the latest free-text answers — quote those verbatim as real customer language rather than inventing testimonials. `survey_send` REALLY SENDS email/SMS: it takes contact_ids (from the crm_* tools) and/or raw emails, enforces the throttle window, dedupes, respects SMS quiet hours, and caps a single call at 200 recipients. Confirm with the user before calling it.",
+      "datasets": [
+        {
+          "id": "surveys",
+          "label": "Surveys",
+          "tool": "survey_list",
+          "detail": {
+            "detailTool": "survey_results",
+            "argKey": "survey_id",
+            "nameKey": "name",
+            "dir": "survey-results"
+          }
+        }
+      ]
+    },
+    {
+      "id": "media",
+      "label": "Media Library",
+      "crud": "Assets: `media_upload` (base64) / `media_library_register_external_url`, `media_update` (metadata only — bytes are immutable, delete+re-upload), `media_delete` (`force:true` to orphan an in-use asset). Folders: `media_folder_create` / `_update` / `_delete`. Collections: `media_collection_create` / `_update` / `_delete` (+ `_add_item` / `_remove_item`).",
+      "datasets": [
+        {
+          "id": "assets",
+          "label": "Assets",
+          "tool": "media_library_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "folders",
+          "label": "Folders",
+          "tool": "media_folders_list"
+        },
+        {
+          "id": "collections",
+          "label": "Collections",
+          "tool": "media_collections_list"
+        }
+      ]
+    },
+    {
+      "id": "localseo",
+      "label": "Local SEO (GBP, GSC, Bing)",
+      "crud": "Local SEO data is read + sync. GBP review replies + posts happen in the GBP UI; rank tracking via `seo_track_keyword`. CONNECT a source: `seo_connection_create({ platform: \"bing_webmaster\"|\"google_search_console\"|\"google_business_profile\", site_url, ... })` (Bing needs only { platform, site_url, api_key } — no OAuth), then `seo_connection_update` to bind + `seo_sync`. Bing organic tools: `seo_bing_query_stats` / `_pages` / `_crawl_stats` / `_backlinks` / `_stats` / `_period_comparison`. Submit sitemaps/URLs: `seo_gsc_submit_sitemap` / `seo_bing_submit_sitemap` / `seo_bing_submit_url`. Refresh: `seo_sync`. See SETUP.md to connect Google Business Profile / Search Console / Bing Webmaster.",
+      "setup": "# Connecting Local SEO sources (GBP, Search Console, Bing Webmaster) — verified\n\nConnected sources: `seo_connections_list`. Local rank/query data comes from synced GSC + Bing.\nEach Google source needs a per-account OAuth app (BYOK) — same pattern as Google Ads.\n\n## STEP 0 (once per product) — the OAuth app\n`oauth_app_list({ provider: 'google' })`; if none for the product, create it. The user first does Google Cloud\nConsole setup (project → enable the product's API [Search Console API / Business Profile API] → OAuth consent\nscreen → Web-app client → Authorized redirect URI must include `https://app.hiveku.com/api/oauth/google/callback`),\nthen: `oauth_app_create({ provider: 'google', name, client_id, client_secret, products: ['google_search_console'] })`\n(or `['google_business_profile']`). Missing app → `integration_oauth_initiate` returns 412.\n\n## Google Business Profile (core of Local SEO)\n1. `integration_oauth_initiate({ provider_slug: 'google_business_profile' })` → `{ setup_url, setup_token, connection_id }`; user authorizes.\n2. Poll `integration_oauth_check({ setup_token })` until `status: 'completed'`.\n3. `seo_gbp_discover_locations({ id: connection_id })` → accounts[].locations[] (location_id + title).\n4. `seo_connection_update({ id: connection_id, gbp_account_id, gbp_location_id })` → status flips to **connected** once BOTH set.\n5. Then `seo_gbp_insights({ connection_id })` (clicks/calls/directions) + `seo_gbp_reviews({ connection_id })` work.\n\n## Google Search Console (organic + local queries)\n1. `integration_oauth_initiate({ provider_slug: 'google_search_console' })` → connection_id; user authorizes; poll `integration_oauth_check`.\n2. `seo_gsc_discover_sites({ id: connection_id })` → pick a verified site (or use `sc-domain:<domain>` if 0 listed).\n3. `seo_connection_update({ id: connection_id, site_url })` → **connected**. Then `seo_gsc_search_queries`, `seo_gsc_top_pages`, etc.\n\n## Bing Webmaster (API key — fully connectable from here, no dashboard)\n`integration_create({ provider_slug: 'bing_webmaster', credentials: { api_key } })` (the user's Bing Webmaster\nAPI key from bing.com/webmasters → Settings → API access). Then `seo_bing_keywords`, `seo_bing_pages`, `seo_bing_stats`\npopulate, and the `seo_local_*` aggregates pick up `source: bing|all`.\n\n## After connecting\n`seo_sync` to pull fresh data, then \"Download Department Data → Local SEO\" to refresh `hiveku-data/localseo/*.json`.\n",
+      "references": [
+        {
+          "id": "search-performance",
+          "label": "Search performance (GSC+Bing summary)",
+          "tool": "seo_local_search_performance",
+          "args": {
+            "days": 90,
+            "source": "all"
+          }
+        }
+      ],
+      "datasets": [
+        {
+          "id": "connections",
+          "label": "SEO data sources",
+          "tool": "seo_connections_list"
+        },
+        {
+          "id": "top_queries",
+          "label": "Top queries (GSC+Bing)",
+          "tool": "seo_local_top_queries",
+          "args": {
+            "days": 90,
+            "source": "all",
+            "limit": 200
+          }
+        },
+        {
+          "id": "top_pages",
+          "label": "Top pages",
+          "tool": "seo_local_top_pages",
+          "args": {
+            "days": 90,
+            "limit": 200
+          }
+        },
+        {
+          "id": "rank_changes",
+          "label": "Rank drops",
+          "tool": "seo_local_rank_changes",
+          "args": {
+            "days": 30,
+            "min_drop": 3
+          }
+        },
+        {
+          "id": "gbp_insights",
+          "label": "GBP insights",
+          "tool": "seo_gbp_insights",
+          "args": {
+            "limit": 90
+          },
+          "scope": [
+            {
+              "parentTool": "seo_connections_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "platform",
+              "argKey": "connection_id"
+            }
+          ]
+        },
+        {
+          "id": "gbp_reviews",
+          "label": "GBP reviews",
+          "tool": "seo_gbp_reviews",
+          "args": {
+            "limit": 100
+          },
+          "scope": [
+            {
+              "parentTool": "seo_connections_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "platform",
+              "argKey": "connection_id"
+            }
+          ]
+        },
+        {
+          "id": "bing_query_stats",
+          "label": "Bing query stats",
+          "tool": "seo_bing_query_stats"
+        },
+        {
+          "id": "bing_pages",
+          "label": "Bing pages",
+          "tool": "seo_bing_pages"
+        },
+        {
+          "id": "bing_crawl_stats",
+          "label": "Bing crawl stats",
+          "tool": "seo_bing_crawl_stats"
+        },
+        {
+          "id": "bing_backlinks",
+          "label": "Bing backlinks",
+          "tool": "seo_bing_backlinks"
+        }
+      ]
+    },
+    {
+      "id": "aeo",
+      "label": "AEO (Answer Engine Optimization)",
+      "crud": "Run a fresh audit: `seo_aeo_audit_run({ domain, keywords:[...], max_keywords:25 })` (DataForSEO cost ~1/keyword). Read latest (free): `seo_aeo_audit_get({ domain })`. Sync tracked AEO ranks: `seo_aeo_rankings_sync`. Use the per-keyword AI-Overview/snippet/PAA gaps to prioritize content + schema; see SETUP.md.",
+      "setup": "# AEO (Answer Engine Optimization) — running audits\n\nAEO measures whether the domain appears in AI Overviews, Featured Snippets, and People-Also-Ask for target keywords.\n\n1. **Run an audit** (costs DataForSEO calls — ~1 per keyword, cap ~25):\n   `seo_aeo_audit_run({ domain: 'acme.com', keywords: ['...'], max_keywords: 25, location_code: 2840 })`.\n   It probes each SERP, records AI-overview / snippet / PAA presence + whether the domain is cited, and PERSISTS to history.\n2. **Read the latest results** (no cost — DB read): `seo_aeo_audit_get({ domain })` → per-keyword presence + readiness %.\n   This is what the `audit.json` dataset here mirrors.\n3. **Sync rankings**: `seo_aeo_rankings_sync` to refresh tracked AEO positions.\n4. Use the readiness % + per-keyword gaps to prioritize content/schema changes, then re-run to measure lift.\n",
+      "datasets": [
+        {
+          "id": "audit",
+          "label": "AEO audit (AI Overview / snippets / PAA)",
+          "tool": "seo_aeo_audit_get",
+          "args": {
+            "limit": 300
+          }
+        }
+      ]
+    },
+    {
+      "id": "commerce",
+      "label": "Commerce (Shopify + quotes)",
+      "crud": "Shopify products/orders are managed in Shopify Admin (read here; drafts via `shopify_admin({admin_action:\"create_product_draft\"})`). Estimates: `crm_estimate_create` / `_update` (draft; 409 on accepted/converted) / `_send` / `_mark_accepted` / `_convert_to_invoice` / `_delete` (soft-delete a draft). Contracts: `crm_envelope_create` / `_update` (draft only — retitle, swap layout, edit signer roster) / `_send` / `_void` (add signers via `crm_envelope_add_signer`). See SETUP.md to connect a Shopify store.",
+      "setup": "# Connecting a Shopify store\n\nHiveku is headless: a connected store renders live on the site (products/inventory aren't copied in).\nShopify uses a bring-your-own-app OAuth model (app client_id/secret live per-account).\n\n1. **Register the Shopify app** (once) — in the **Hiveku dashboard** at Commerce → Settings → Shopify, register\n   the app inline (client_id + client_secret from the user's Shopify Partner/custom app; the connect dialog there\n   walks through it). OAuth apps for Shopify are dashboard-registered (not via oauth_app_create).\n2. **Start the install**: `shopify_connect_start` → returns the Shopify install/authorize URL; give it to the user to approve on their store.\n3. **Poll**: `shopify_connection_status({ shop_domain })` until a row appears with `disconnected_at = null` (approval done).\n4. **Verify**: `shopify_status({ project_id })` and `shopify_catalog_list({ project_id })` (per website project — get project_id from `sites_list`).\n\nProducts/orders stay in Shopify Admin; this department reads catalog + inventory and supports draft-product creation.\n",
+      "datasets": [
+        {
+          "id": "shopify_connections",
+          "label": "Shopify stores",
+          "tool": "shopify_connection_status"
+        },
+        {
+          "id": "products",
+          "label": "Products",
+          "tool": "shopify_catalog_list",
+          "args": {
+            "params": {
+              "first": 100
+            }
+          },
+          "scope": [
+            {
+              "parentTool": "sites_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        },
+        {
+          "id": "estimates",
+          "label": "Estimates",
+          "tool": "crm_estimate_list"
+        },
+        {
+          "id": "contracts",
+          "label": "Contracts (e-sign)",
+          "tool": "crm_envelope_list"
+        }
+      ]
+    },
+    {
+      "id": "pages",
+      "label": "Website Pages",
+      "crud": "Pages are per website project (project_id from sites_list). Create: `pages_create({project_id, name, slug, page_type})`; update/SEO/nav: `pages_update`; homepage: `pages_set_homepage`. Hard delete: `pages_delete({project_id, page_id})` (destructive — removes the row; prefer unpublishing via `pages_update` when you only want it off the live site). For page CODE, download the project and edit files; for CMS-driven content use the Website Content (CMS) department.",
+      "datasets": [
+        {
+          "id": "pages",
+          "label": "Pages",
+          "tool": "pages_list",
+          "scope": [
+            {
+              "parentTool": "sites_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "analytics",
+      "label": "Analytics & Visitors",
+      "read_only": true,
+      "datasets": [
+        {
+          "id": "visitors",
+          "label": "Visitor intelligence",
+          "tool": "analytics_visitors",
+          "args": {
+            "limit": 100,
+            "sort_by": "last_seen"
+          }
+        },
+        {
+          "id": "top_pages",
+          "label": "Top pages (90d)",
+          "tool": "analytics_pages",
+          "args": {
+            "limit": 200
+          },
+          "dyn_args": {
+            "from_date": 90,
+            "to_date": 0
+          },
+          "scope": [
+            {
+              "parentTool": "sites_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        },
+        {
+          "id": "sessions",
+          "label": "Sessions (90d)",
+          "tool": "analytics_sessions",
+          "args": {
+            "limit": 200
+          },
+          "dyn_args": {
+            "from_date": 90,
+            "to_date": 0
+          },
+          "scope": [
+            {
+              "parentTool": "sites_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cms",
+      "label": "Website Content (CMS)",
+      "crud": "Collections (per project_id from sites_list): `cms_create_collection` / `cms_delete_collection`; fields via `cms_add_field` / `cms_update_field` / `cms_remove_field` (types from `cms_field_types`); full schema `cms_read_manifest`. ENTRIES are downloaded too (`entries.json`, tagged `_parent` = \"site / collection\"). Read full bodies / edit with `cms_read_entry` → `cms_write_entry` (upsert by slug) / `cms_delete_entry` (versioned via `cms_list_entry_versions` / `cms_restore_entry_version`). PUBLISH/SCHEDULE: `cms_write_entry` takes top-level status=draft|published|scheduled + publish_at (ISO); publish a saved draft live with `cms_promote_draft` (force:true overrides the 409 lost-update guard). Site code date-gates on publishAt — no cron flips status. BULK-create in ONE call with `cms_bulk_import` (entries:[{slug?,fields}], on_conflict=skip|overwrite) instead of N `cms_write_entry` calls. collection_id is the collection slug from the manifest, not a UUID.",
+      "datasets": [
+        {
+          "id": "collections",
+          "label": "Collections",
+          "tool": "cms_list_collections",
+          "scope": [
+            {
+              "parentTool": "sites_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        },
+        {
+          "id": "entries",
+          "label": "Entries",
+          "tool": "cms_list_entries",
+          "args": {
+            "limit": 200
+          },
+          "scope": [
+            {
+              "parentTool": "sites_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            },
+            {
+              "parentTool": "cms_list_collections",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "collection_id"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "database",
+      "label": "Project Database",
+      "crud": "Per website project (project_id from sites_list). Inspect: `database_status`, `database_tables`, `database_describe({project_id, table})` (columns/types). Read: `database_query({project_id, sql})` (SELECT only). WRITE: `database_execute({project_id, sql})` — INSERT/UPDATE/DELETE/DDL, NOT sandboxed (destructive; no per-table guardrails). Provision: `database_provision`. The full SCHEMA is downloaded (`schema.json` = every column/type/nullable per table, tagged \"site / table\"); ROW data is arbitrary SQL, so `database_query` it live rather than expecting pre-baked files.",
+      "datasets": [
+        {
+          "id": "tables",
+          "label": "Tables",
+          "tool": "database_tables",
+          "scope": [
+            {
+              "parentTool": "sites_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            }
+          ]
+        },
+        {
+          "id": "schema",
+          "label": "Schema (columns)",
+          "tool": "database_describe",
+          "scope": [
+            {
+              "parentTool": "sites_list",
+              "parentIdKey": "id",
+              "parentLabelKey": "name",
+              "argKey": "project_id"
+            },
+            {
+              "parentTool": "database_tables",
+              "parentIdKey": "table_name",
+              "parentLabelKey": "table_name",
+              "argKey": "table"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

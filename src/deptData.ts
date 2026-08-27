@@ -563,10 +563,20 @@ export const DEPARTMENTS: Department[] = [
     id: 'outbound',
     label: 'Outbound (BDR)',
     setup: OUTBOUND_SETUP,
+    references: [{ id: 'health', label: 'Outbound health (readiness score, blockers, mailbox health, reply SLA)', tool: 'outbound_health_status' }],
     gate: 'marketing_outbound',
     datasets: [
       { id: 'campaigns', label: 'Campaigns', tool: 'outbound_list_campaigns', args: { limit: 200 }, columns: [{ key: ['name', 'campaign_name'], label: 'campaign' }, { key: 'status' }, { key: ['provider', 'integration_provider', 'integration_id'], label: 'provider' }, { key: ['lead_count', 'total_leads', 'leads_count'], label: 'leads' }, { key: ['reply_count', 'replied_count', 'replies'], label: 'replies' }] },
       { id: 'leads', label: 'Leads', tool: 'outbound_list_leads', args: { limit: 500 }, columns: [{ key: ['first_name', 'name'], label: 'name' }, { key: 'last_name' }, { key: 'email' }, { key: ['company', 'company_name'], label: 'company' }, { key: ['internal_status', 'status'], label: 'status' }, { key: 'is_interested', label: 'interested' }, { key: ['has_replied', 'replied'], label: 'replied' }, { key: ['campaign_name', 'campaign_id'], label: 'campaign' }] },
+      // The BDR reply rails. These shipped in the Claude Code plugin's manifest
+      // first and were missing here, so an extension user pulling `outbound` got
+      // campaigns and leads only — no inbox, no drafts, no objection library —
+      // with nothing indicating the department was half-empty.
+      { id: 'inbox', label: 'Inbox threads (BDR reply queue, pre-classified)', tool: 'outbound_list_inbox', args: { limit: 200 }, columns: [{ key: ['subject', 'thread_subject'], label: 'subject' }, { key: ['from_email', 'lead_email'], label: 'from' }, { key: ['classification', 'category'], label: 'class' }, { key: ['received_at', 'created_at'], label: 'when', date: true }] },
+      { id: 'reply_drafts', label: 'Pending reply drafts awaiting BDR approval', tool: 'outbound_list_reply_drafts', args: { status: 'pending', limit: 100 }, columns: [{ key: ['lead_email', 'to_email'], label: 'to' }, { key: 'status' }, { key: ['created_at'], label: 'drafted', date: true }] },
+      { id: 'objections', label: 'Objection library (patterns + counter-responses)', tool: 'outbound_list_objections', args: { limit: 200 }, columns: [{ key: ['pattern', 'objection'], label: 'objection' }, { key: ['category', 'type'], label: 'category' }, { key: ['times_seen', 'count'], label: 'seen' }] },
+      { id: 'sales_assets', label: 'Sales assets (active only)', tool: 'outbound_list_sales_assets', args: { is_active: 'true', limit: 100 }, columns: [{ key: ['name', 'title'], label: 'asset' }, { key: ['asset_type', 'type'], label: 'type' }, { key: 'is_active', label: 'active' }] },
+      { id: 'sequence_learnings', label: 'Sequence performance learnings (A/B winners + losers)', tool: 'outbound_list_sequence_learnings', args: { limit: 200 }, columns: [{ key: ['sequence_name', 'sequence_id'], label: 'sequence' }, { key: ['outcome', 'verdict'], label: 'outcome' }, { key: ['created_at'], label: 'when', date: true }] },
     ],
     crud:
       'Create a lead: `outbound_create_lead`. After a reply, mark interest/stage with ' +
