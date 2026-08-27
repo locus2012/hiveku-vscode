@@ -1016,8 +1016,11 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "vscode:prepublish": "npm run check:permissions && npm run compile",
-    "check:permissions": "node scripts/check-permission-rules.mjs"
+    "vscode:prepublish": "npm run check:permissions && npm run check:connect-departments && npm run gen:registry && npm run compile",
+    "check:permissions": "node scripts/check-permission-rules.mjs",
+    "check:connect-departments": "node --import ./scripts/register-ts.mjs scripts/check-connect-departments.mjs",
+    "gen:registry": "node --import ./scripts/register-ts.mjs scripts/gen-dept-manifest.mjs",
+    "check:registry": "npm run gen:registry && node --import ./scripts/register-ts.mjs scripts/check-dept-manifest-drift.mjs"
   },
   "dependencies": {
     "tar": "^7.4.3"
