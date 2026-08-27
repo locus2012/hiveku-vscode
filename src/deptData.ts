@@ -423,7 +423,7 @@ Hiveku is headless. A connected store renders live on the site, and products and
 
 **Reads after connect.** \`shopify_catalog_list({ project_id })\` returns product-level fields including the \`totalInventory\` aggregate and takes an optional \`params: { first }\`. \`shopify_inventory_get({ project_id })\` returns per-variant \`inventoryQuantity\`, \`price\`, \`sku\`, \`title\`, and \`options\`, and takes \`params: { handle }\` for one product or \`params: { first }\` for recent products. \`shopify_admin({ project_id, admin_action })\` covers the named handlers \`ping\`, \`get_shop\`, \`list_products\`, \`list_installed_apps\`, \`app_compat_check\`, \`list_orders\`, and \`product_inventory\`, all gated \`any-member\`, so agent calls pass the role gate. \`list_orders\` and \`product_inventory\` are absent from the \`shopify_admin\` description's action list, but both handlers exist and \`admin_action\` carries no enum, so do not assume they are unsupported. The registry has no \`commerce_\`-prefixed tool; reach orders through \`shopify_admin\` with \`admin_action: 'list_orders'\`.
 
-**Writes.** Catalog writes are a handoff to the merchant in Shopify Admin. \`create_product_draft\` is not a tool name; it exists only as an \`admin_action\` value, it is gated \`policy: 'admin'\`, and the Olympus proxy forwards no \`x-builder-user-id\`, so the acting role resolves to null and the call returns 403 "Write actions require a forwarded x-builder-user-id with admin or owner role". The writes that do reach from here are \`shopify_storefront_scaffold\`, which writes project files, and \`shopify_admin({ project_id, admin_action: 'invalidate_cache', params: { tags: ['<cache-tag>'] } })\`, which is gated \`any-member\` and dispatches a cache-tag invalidation across the deployed sites on that connection. \`tags\` is required and must hold 1 to 20 strings of 1 to 64 characters; calling \`invalidate_cache\` without \`params\` sends an empty body and returns 400 "Invalid arguments". Skip \`shopify_eject_manifest\`: its mapping POSTs to a builder route that exports only a \`GET\` handler, so the call cannot succeed, and that route computes a read-only migration plan rather than performing an eject.`;
+**Writes.** Catalog writes are a handoff to the merchant in Shopify Admin. \`create_product_draft\` is not a tool name; it exists only as an \`admin_action\` value, it is gated \`policy: 'admin'\`, and the Olympus proxy forwards no \`x-builder-user-id\`, so the acting role resolves to null and the call returns 403 "Write actions require a forwarded x-builder-user-id with admin or owner role". The writes that do reach from here are \`shopify_storefront_scaffold\`, which writes project files, and \`shopify_admin({ project_id, admin_action: 'invalidate_cache', params: { tags: ['<cache-tag>'] } })\`, which is gated \`any-member\` and dispatches a cache-tag invalidation across the deployed sites on that connection. \`tags\` is required and must hold 1 to 20 strings of 1 to 64 characters; calling \`invalidate_cache\` without \`params\` sends an empty body and returns 400 "Invalid arguments". \`shopify_eject_manifest\` is a READ despite its name: it returns a migration plan for moving the project to a stand-alone Hydrogen and Oxygen repo, computed on demand, and performs no eject (the eject runner is not built). Safe to call to show a merchant what leaving would involve.`;
 
 export const DEPARTMENTS: Department[] = [
   {
@@ -708,26 +708,31 @@ export const DEPARTMENTS: Department[] = [
       '(requires `name`). Payroll members: `accounting_member_create` (requires `name`); runs: ' +
       '`accounting_payroll_run_create` (requires `period_start`, `period_end`), which computes hourly members ' +
       'from tracked time times rate and gives fixed members the flat rate. AR payments: ' +
-      '`accounting_invoice_record_payment`, which needs `method` as well as `invoice_id` and `amount_cents` ' +
-      'even though its own schema does not list `method` as required, because the AR route has no default for ' +
-      'it while the AP one defaults to check; invoice AUTHORING is CRM-side via ' +
-      '`crm_estimate_convert_to_invoice` (requires `estimate_id`), which is the first of two hand-offs out of ' +
-      'this department. MONEY UNITS ARE NOT UNIFORM: arguments named `*_cents` are cents, but `pay_rate` on ' +
-      '`accounting_member_create` and `accounting_member_update`, and `bill_rate` on ' +
-      '`accounting_member_update`, are DOLLARS and are multiplied by 100 at the route edge, so read the ' +
-      'argument name before you convert. `accounting_member_create` does not declare `bill_rate`, and the proxy ' +
-      'drops any argument a tool does not declare, so a bill rate passed at create time is silently discarded ' +
-      'while the call still succeeds; set it with `accounting_member_update`, which does declare it. Aging and ' +
-      'P&L are read-only summaries: `accounting_ap_aging`, `accounting_ar_aging`, `accounting_pnl_summary` (the ' +
-      '`*.json` references). Recording a payment is a ONE-WAY DOOR. No accounting tool deletes, voids or ' +
-      'reverses a recorded payment; `amount_cents` must be an integer of 1 or more, so no negative entry can ' +
-      'undo one; and once a bill carries any payment, both `accounting_bill_void` and `accounting_bill_delete` ' +
-      'refuse it with 409, which makes the delete error\'s advice to void it instead dead. Confirm the party, ' +
-      'the document and the exact cents integer before every payment call. The second hand-off is payroll: ' +
-      '`accounting_payroll_run_create` only ever creates a `draft` run, no finalize tool is registered on this ' +
-      'surface, and the Wise CSV export is a dashboard session route that refuses a draft run with 409, so a ' +
-      'run created from here cannot be paid out until a human finalizes it in the dashboard. Never report ' +
-      'payroll as done from here.',
+      '`accounting_invoice_record_payment`, which requires `method` alongside `invoice_id` and `amount_cents` ' +
+      'because the AR route has no default for it while the AP one defaults to check, and whose allowed methods ' +
+      'are NOT the same list as AP\'s; invoice AUTHORING is CRM-side via `crm_estimate_convert_to_invoice` ' +
+      '(requires `estimate_id`), which is the first of two hand-offs out of this department. MONEY UNITS ARE ' +
+      'NOT UNIFORM: arguments named `*_cents` are cents, but `pay_rate` on `accounting_member_create` and ' +
+      '`accounting_member_update`, and `bill_rate` on `accounting_member_update`, are DOLLARS and are ' +
+      'multiplied by 100 at the route edge, so read the argument name before you convert. ' +
+      '`accounting_member_create` does not declare `bill_rate`, and the proxy drops any argument a tool does ' +
+      'not declare, so a bill rate passed at create time is silently discarded while the call still succeeds; ' +
+      'set it with `accounting_member_update`, which does declare it. Aging and P&L are read-only summaries: ' +
+      '`accounting_ap_aging`, `accounting_ar_aging`, `accounting_pnl_summary` (the `*.json` references). ' +
+      'Recording a payment is a ONE-WAY DOOR. No accounting tool deletes, voids or reverses a recorded payment; ' +
+      '`amount_cents` must be an integer of 1 or more, so no negative entry can undo one; and once a bill ' +
+      'carries any payment, both `accounting_bill_void` and `accounting_bill_delete` refuse it with 409, which ' +
+      'makes the delete error\'s advice to void it instead dead. Confirm the party, the document and the exact ' +
+      'cents integer before every payment call. Retries are already deduplicated: the MCP proxy sends an ' +
+      'Idempotency-Key derived from the account, path and body, and the builder replays the first response for ' +
+      'an hour, so a timed-out call that you repeat verbatim will not book twice. The corollary is the real ' +
+      'hazard: two GENUINELY separate payments on the same document with the same amount, method and reference ' +
+      'inside that hour hash to the same key, so the second silently returns the first one\'s success and is ' +
+      'never recorded. Vary `reference` (or the amount or date) between real payments so they cannot collide. ' +
+      'The second hand-off is payroll: `accounting_payroll_run_create` only ever creates a `draft` run, no ' +
+      'finalize tool is registered on this surface, and the Wise CSV export is a dashboard session route that ' +
+      'refuses a draft run with 409, so a run created from here cannot be paid out until a human finalizes it ' +
+      'in the dashboard. Never report payroll as done from here.',
   },
   {
     id: 'creative',
