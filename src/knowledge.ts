@@ -689,7 +689,12 @@ Tip: in VS Code, the Source Control view's "Push Local Changes" button does all 
 description: Resolve a LOCAL visual review — read the on-disk annotations (boxes/pins + comments on a screenshot), fix the code each points at, mark them resolved. Optionally capture a page first.
 allowed-tools: mcp__hiveku__preview_overview, mcp__hiveku__preview_sync, mcp__plugin_playwright_playwright__browser_navigate, mcp__plugin_playwright_playwright__browser_resize, mcp__plugin_playwright_playwright__browser_take_screenshot, mcp__plugin_playwright_playwright__browser_evaluate, mcp__hiveku__project_files_search, mcp__hiveku__verify_typecheck, mcp__hiveku__verify_lint, Read, Write, Edit, Grep, Bash
 ---
-Resolve a LOCAL visual review for THIS project. ${idLine} Everything lives on disk under \`.hiveku/review/\` — no app chat, no annotation server, and it is gitignored so it never leaves the machine.
+Resolve a LOCAL visual review for THIS project. (For the CLIENT-FACING rail - reviewers pinning
+the deployed site through the share page - the loop is: \`project_hosting_options_get\` to check
+the tier flag, \`project_annotation_settings_set\` to enable (then REDEPLOY that tier - injection
+is deploy-time), \`project_review_link_get\` for the annotate URL (never the raw site URL; pins
+only work on the share page), then \`project_annotations_list\` to read pins back - each is 2-way
+linked to a PM task, and completing the task resolves the pin.) ${idLine} Everything lives on disk under \`.hiveku/review/\` — no app chat, no annotation server, and it is gitignored so it never leaves the machine.
 
 STEP 0 — CAPTURE (only if the user asks to "capture <path>", or \`.hiveku/review/\` has no screenshots yet):
 1. Get the live preview URL: \`preview_overview({ project_id: "${pid}" })\` → \`preview_url\`. If it is not ready, \`preview_sync({ project_id: "${pid}" })\` then re-poll.
@@ -799,9 +804,9 @@ Browser-test THIS project via the \`playwright\` MCP. ${idLine}
    are the "Hiveku Browser" links in the VS Code sidebar (open externally).
 `,
     'hiveku-logs': `---
-description: Show build/deploy logs for an environment of this project (to debug a failed build).
+description: Show build/deploy/runtime logs for an environment of this project (failed builds, live-site errors).
 argument-hint: "[preview|development|staging|production]"
-allowed-tools: mcp__hiveku__project_build_error_get, mcp__hiveku__deploy_status, mcp__hiveku__deploy_get, mcp__hiveku__preview_logs, Read
+allowed-tools: mcp__hiveku__project_build_error_get, mcp__hiveku__deploy_status, mcp__hiveku__deploy_get, mcp__hiveku__preview_logs, mcp__hiveku__project_logs_get, Read
 ---
 Get build/deploy logs for THIS project's **$ARGUMENTS** environment (default development). ${idLine}
 
@@ -814,6 +819,10 @@ Get build/deploy logs for THIS project's **$ARGUMENTS** environment (default dev
      If the filtered query returns no rows, retry WITHOUT \`environment\` — legacy deployments store
      other tokens (e.g. "cloudfront") and the filter misses them.
    - Live Preview (Fly) → \`preview_logs({ project_id: "${pid}" })\` (runtime; no build phase).
+   - RUNTIME logs of a deployed tier (the live site erroring, not the build) →
+     \`project_logs_get({ project_id: "${pid}", source: "runtime", level: "error", environment: "$ARGUMENTS" })\`.
+     ★ environment DEFAULTS TO PRODUCTION - always pass it, or a dev triage silently reads
+     production's logs. \`filter\` takes CloudWatch FilterPattern text; \`since\` is minutes (max 1440).
 3. Summarize the failure and propose a concrete fix.
 `,
     'hiveku-env': `---
