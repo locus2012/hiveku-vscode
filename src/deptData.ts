@@ -309,7 +309,7 @@ export function resolveDynArgs(dyn?: Record<string, number>): Record<string, str
 const PPC_SETUP = `# Connecting Google Ads & Microsoft (Bing) Ads — exact, verified steps
 
 Connections live in \`ppc_connections\`. Check current state any time: \`ppc_connection_list\`.
-Hiveku has NO platform-shared OAuth — every account brings its own OAuth client (BYOK).
+Prefer \`integration_connect_link_create({ connector: 'google_ads' })\` (one Hiveku link, valid 24h, uses the account's own OAuth app if tagged, else Hiveku's platform app; confirm with \`integration_connect_link_status\`). The steps below are the legacy setup-token lane.
 
 ## STEP 0 (once per account) — the OAuth app
 Check for an existing app: \`oauth_app_list({ provider: 'google' })\`. If none is enabled for the product
@@ -346,8 +346,8 @@ Path B — discover the customer_id (user doesn't know it):
 Re-auth a dead connection (refresh_token died): \`integration_oauth_initiate({ provider_slug: 'google_ads', target_connection_id })\`.
 
 ## Microsoft / Bing Ads
-Microsoft Ads OAuth is **dashboard-initiated** — \`integration_oauth_initiate\` is Google-only, so an agent cannot
-start the Microsoft consent from here. Steps:
+Microsoft Ads: mint a link with \`integration_connect_link_create({ connector: 'microsoft_ads' })\` and confirm with
+\`integration_connect_link_status\` (Hiveku's platform app fronts the consent when the account has no Azure app). Legacy steps:
 1. (Once) register the Azure app: \`oauth_app_create({ provider: 'microsoft', name, client_id, client_secret, products: ['microsoft_ads'] })\`
    (client_id/secret from Azure AD app registration; redirect URI → \`https://app.hiveku.com/api/oauth/microsoft/callback\`).
 2. The user connects Microsoft Ads in the **Hiveku dashboard** (Marketing → Ads → connect Microsoft). The
@@ -490,7 +490,8 @@ export const DEPARTMENTS: Department[] = [
       'BUILDER project_id from `list_projects` — NOT the `seo_list_projects` id. ' +
       'Tracked keywords: `seo_track_keyword` to add, `seo_tracked_keyword_delete` to remove (id from `tracked_keywords.json`, ' +
       'NOT keywords.json — different table). Competitors: `seo_add_competitor`. ' +
-      'Audits: `seo_run_audit` / `seo_audit_start` → `seo_audit_get`. Sitemaps: `seo_generate_sitemap` / `seo_gsc_submit_sitemap` ' +
+      'Audits: `seo_run_audit` → `seo_audit_get` by audit_id; `seo_audit_start` returns { task_id, status } for the `seo_research` ' +
+      'crawl actions (pass the task_id as target). Sitemaps: `seo_generate_sitemap` / `seo_gsc_submit_sitemap` ' +
       '(remove `seo_gsc_delete_sitemap`); Bing: `seo_bing_submit_sitemap` / `seo_bing_submit_url`. ' +
       'Deliverables/reports: `seo_deliverable_save` / `seo_deliverable_update` / `seo_deliverable_delete`; ' +
       'report sections `seo_report_add_section` / `seo_report_update_section` / `seo_report_clear`. Refresh data: `seo_sync`. ' +
@@ -584,49 +585,99 @@ export const DEPARTMENTS: Department[] = [
       { id: 'sequence_learnings', label: 'Sequence performance learnings (A/B winners + losers)', tool: 'outbound_list_sequence_learnings', args: { limit: 200 }, columns: [{ key: ['sequence_name', 'sequence_id'], label: 'sequence' }, { key: ['outcome', 'verdict'], label: 'outcome' }, { key: ['created_at'], label: 'when', date: true }] },
     ],
     crud:
-      'Ten of the 18 `outbound_*` tools write. Campaigns and leads mirror SmartLead; objections, sales assets, ' +
-      'sequence learnings and reply drafts are Hiveku-local tables. `outbound_create_campaign` requires `name` ' +
-      'and `integration_id`, and no `outbound_*` tool returns that id: `connections_status` reports cold-email ' +
-      '`provider`, `is_active`, `sync_status` and `last_synced_at` but omits `id`, and `integration_list` reads ' +
-      'the unrelated `account_integrations` table, so lift `integration_id` off an existing ' +
-      '`outbound_list_campaigns` row, which selects it. On an account with no campaigns yet there is no ' +
-      'tool-side source for it, so the first campaign is dashboard work. Provider gating answers with more than ' +
-      'one code, so do not branch on `unsupported_provider` alone: campaign create 404s when the integration id ' +
-      'is not found, not active, or not owned by the account; `outbound_create_lead` checks the campaign\'s ' +
-      'integration for inactive FIRST (412 `integration_inactive`) and only then the provider (412 ' +
-      '`unsupported_provider`); both can also return 412 `integration_missing_key`. ' +
-      '`outbound_create_lead({campaign_id, email})` writes to SmartLead BEFORE the local row and additionally ' +
-      'declares the profile fields `outbound_update_lead` does not (first_name, last_name, company_name, ' +
-      'job_title, phone, linkedin_url, website, location, custom_fields); its 201 body returns only `{id, ' +
-      'email, campaign_id, status}` plus a `note`, while the row itself is stamped `status: \'pending_sync\'` ' +
+      '32 `outbound_*` tools. The writes are `outbound_create_campaign`, `outbound_create_lead`, ' +
+      '`outbound_leads_bulk_create`, `outbound_update_lead`, `outbound_push_lead_to_crm`, `outbound_save_reply_draft`, ' +
+      '`outbound_reply_draft_send`, `outbound_campaign_status_set`, `outbound_campaign_sequences_save`, ' +
+      '`outbound_log_objection`, `outbound_update_objection`, `outbound_add_sales_asset`, `outbound_update_sales_asset` ' +
+      'and `outbound_record_sequence_learning`; everything else reads. Campaigns, leads and campaign steps mirror ' +
+      'SmartLead; objections, sales assets, sequence learnings and reply drafts are Hiveku-local tables. ' +
+      '`outbound_create_campaign` requires `name` and `integration_id`; read that id from `outbound_list_integrations` ' +
+      '(id, provider, is_active per its registry description; arguments not verified here), which works on an account ' +
+      'with zero campaigns. Neither `connections_status` (reports cold-email `provider`, `is_active`, `sync_status` and ' +
+      '`last_synced_at` but omits `id`) nor `integration_list` (reads the unrelated `account_integrations` table) ' +
+      'substitutes; an existing `outbound_list_campaigns` row also carries it. Provider gating answers with more than ' +
+      'one code, so do not branch on `unsupported_provider` alone: campaign create 404s when the integration id is not ' +
+      'found, not active, or not owned by the account; `outbound_create_lead` checks the campaign\'s integration for ' +
+      'inactive FIRST (412 `integration_inactive`) and only then the provider (412 `unsupported_provider`); both can ' +
+      'also return 412 `integration_missing_key`. `outbound_create_lead({campaign_id, email})` writes to SmartLead ' +
+      'BEFORE the local row and additionally declares the profile fields `outbound_update_lead` does not (first_name, ' +
+      'last_name, company_name, job_title, phone, linkedin_url, website, location, custom_fields); its 201 body returns ' +
+      'only `{id, email, campaign_id, status}` plus a `note`, while the row itself is stamped `status: \'pending_sync\'` ' +
       'with a `pending-<timestamp>` external id that blocks upstream patches until the sync reconciles it. ' +
       '`outbound_update_lead` requires `lead_id` and declares only status, internal_status, is_interested, ' +
-      'internal_notes, custom_fields; the proxy DROPS undeclared args before the request leaves, so passing ' +
-      'name, email, company or phone through this tool changes nothing, and with no declared field riding along ' +
-      'the route answers 400 "Provide at least one field to update." Use internal_status, is_interested and ' +
-      'internal_notes for agent-side state; `status` writes the local mirror only. `custom_fields` is the one ' +
-      'declared field forwarded to SmartLead, and an upstream refusal still returns 200 with a `warning` field, ' +
-      'so read it. `outbound_push_lead_to_crm({lead_id})` is idempotent (a re-push appends only new email ' +
-      'activities) and FAILS BY RESOLVING: the route answers 422 with the failed result under `data`, and the ' +
-      'proxy hands non-2xx back as an ordinary tool result carrying `error`, `status` and `details` (the ' +
-      'outcome lands at `details.data.outcome`), never as an exception, so branch on the returned payload and ' +
-      'not on the absence of a throw. `outbound_save_reply_draft({thread_id, body_text})` saves a PENDING draft ' +
-      'for human review; no `outbound_*` tool sends mail, and a re-call on a thread that already has a pending ' +
-      'draft returns the existing row with `action: \'existing_pending\'`. ' +
-      '`outbound_log_objection({objection_type, objection_text})` soft-dedupes: an exact case-insensitive text ' +
-      'match within the same account and type increments `times_seen` instead of inserting a row; refine or ' +
-      'approve with `outbound_update_objection({objection_id})`, which declares response_text, ' +
-      'response_outcome, is_approved, industry, persona, increment_seen, increment_overcome. Create assets with ' +
-      '`outbound_add_sales_asset({asset_type, name})` and edit them with ' +
+      'internal_notes, custom_fields; the proxy DROPS undeclared args before the request leaves, so passing name, ' +
+      'email, company or phone through this tool changes nothing, and with no declared field riding along the route ' +
+      'answers 400 "Provide at least one field to update." Use internal_status, is_interested and internal_notes for ' +
+      'agent-side state; `status` writes the local mirror only. `custom_fields` is the one declared field forwarded to ' +
+      'SmartLead, and an upstream refusal still returns 200 with a `warning` field, so read it. ' +
+      '`outbound_push_lead_to_crm({lead_id})` is idempotent (a re-push appends only new email activities) and FAILS BY ' +
+      'RESOLVING: the route answers 422 with the failed result under `data`, and the proxy hands non-2xx back as an ' +
+      'ordinary tool result carrying `error`, `status` and `details` (the outcome lands at `details.data.outcome`), ' +
+      'never as an exception, so branch on the returned payload and not on the absence of a throw. ' +
+      '`outbound_save_reply_draft({thread_id, body_text})` saves a PENDING draft; saving never sends, and a re-call on ' +
+      'a thread that already has a pending draft returns the existing row with `action: \'existing_pending\'`. The send ' +
+      'is `outbound_reply_draft_send({draft_id, confirm?})`. Without `confirm: true` it returns a preview `{preview: ' +
+      'true, confirm_required: true, draft:{id,status,subject,body_text}, to:{email,name,company}, ' +
+      'in_reply_to:{message_id,received_at,from,preview}, campaign, warnings[]}` and sends nothing; every refusal a ' +
+      'real send would hit runs in the preview too (warnings: draft never marked approved in the dashboard - your ' +
+      'confirm IS the approval; thread already shows replied). With `confirm: true` it sends a pending or approved ' +
+      'draft through the provider as a reply to the thread\'s MOST RECENT inbound message: compare-and-swap claim ' +
+      'pending|approved -> sending (a second send of the same draft 409s `not_sendable`), provider send, revert on ' +
+      'failure, then status \'sent\' with `reviewed_at` stamped and an edit_history entry `{sent_via:\'olympus\'}`; the ' +
+      'whole call is idempotent (the same idempotency key replays the first answer). Errors: 404; 409 `not_sendable` ' +
+      '(sent/discarded/sending); 400 no body or no inbound message; 412 provider; 422 `missing_provider_ids` (the ' +
+      'thread needs a dashboard re-sync first); 502 `send_failed`. It writes the outbound message row and flips the ' +
+      'thread to `replied`; it does NOT mirror a `crm_activities` row (neither does the dashboard) - ' +
+      '`outbound_push_lead_to_crm` carries the history. The flow is save draft -> show it -> operator says yes -> ' +
+      '`outbound_reply_draft_send({draft_id, confirm: true})`. `outbound_log_objection({objection_type, ' +
+      'objection_text})` soft-dedupes: an exact case-insensitive text match within the same account and type increments ' +
+      '`times_seen` instead of inserting a row; refine or approve with `outbound_update_objection({objection_id})`, ' +
+      'which declares response_text, response_outcome, is_approved, industry, persona, increment_seen, ' +
+      'increment_overcome. Create assets with `outbound_add_sales_asset({asset_type, name})` and edit them with ' +
       '`outbound_update_sales_asset({asset_id})`, which retires via `is_active: false` and bumps usage via ' +
       '`times_used_increment` after an asset is cited in a reply. ' +
-      '`outbound_record_sequence_learning({external_campaign_id, sequence_number})` takes the PROVIDER campaign ' +
-      'id and raw counts in `stats`; rates are computed server-side. The paired read ' +
-      '`outbound_list_sequence_learnings({campaign_id})` also expects the provider id despite its argument ' +
-      'name, since the route assigns it to `external_campaign_id`, so a Hiveku campaign UUID returns an empty ' +
-      'list with a 200. No `outbound_*` tool maps to campaign pause/resume, mailbox settings, warmup, sending ' +
-      'schedules, inbox thread detail or pipeline-stage config; those routes exist but nothing wraps them, so ' +
-      'they are dashboard work.',
+      '`outbound_record_sequence_learning({external_campaign_id, sequence_number})` takes the PROVIDER campaign id and ' +
+      'raw counts in `stats`; rates are computed server-side. The paired read ' +
+      '`outbound_list_sequence_learnings({campaign_id})` also expects the provider id despite its argument name, since ' +
+      'the route assigns it to `external_campaign_id`, so a Hiveku campaign UUID returns an empty list with a 200. ' +
+      'Campaign state: `outbound_campaign_status_set({campaign_id, status, confirm?})` with `status` PAUSED | START | ' +
+      'STOPPED (the provider verbs; START is the resume/activate verb, there is no ACTIVE verb). PAUSED executes ' +
+      'immediately (the emergency brake). START and STOPPED without `confirm: true` return `{preview: true, ' +
+      'confirm_required: true, note, campaign:{id,name,current_status,total_leads}, transition:{provider_verb, ' +
+      'local_status_after}, upstream_steps_with_content, warnings[]}` and change nothing: show that preview, get the ' +
+      'yes, then re-call with `confirm: true`. START refuses 409 `no_sequence_steps` when the provider holds no step ' +
+      'with content (preview and confirm alike). Warnings: 0 leads loaded; already ACTIVE; STOPPED is terminal for the ' +
+      'run (resume is a new START and mid-sequence leads do not resume). The local mirror status follows START -> ' +
+      'ACTIVE else the verb; the next stats sync re-reads the provider\'s value, which wins. Errors: 404 campaign; 412 ' +
+      '`unsupported_provider` (non-SmartLead); 412 `integration_missing_key`; 422 `campaign_not_synced` (no numeric ' +
+      'provider id); 502 `upstream_failed` / 404 `upstream_not_found` from the provider. Campaign steps: ' +
+      '`outbound_campaign_sequences_get({campaign_id})` reads what the PROVIDER holds - `{campaign_id, campaign_status, ' +
+      'source: \'provider\', step_count, steps_with_content, steps:[{provider_step_id, seq_number, seq_type, ' +
+      'delay_in_days, subject, body_html, variants:[{provider_variant_id, label, subject, body_html, ' +
+      'distribution_pct}]}], mirrored_at}` - and refreshes the local `sequences` mirror, so `outbound_get_campaign`\'s ' +
+      '`sequences` is truthful after any read; this is the read that answers whether steps exist upstream. ' +
+      '`outbound_campaign_sequences_save({campaign_id, sequences, confirm?})` is a FULL REPLACE of the provider\'s ' +
+      'steps: `sequences: [{seq_number?, delay_in_days?, subject, body, variants?: [{label?, subject?, body}]}]`, ' +
+      'bodies PLAIN TEXT (newlines become HTML the way the dashboard converts them), a step needs a non-empty body or ' +
+      'at least one variant with a body, seq_number defaults to position, delay_in_days to 0, variants get MANUAL_EQUAL ' +
+      'distribution and labels A/B/C when omitted. Without `confirm: true` it previews `{preview: true, ' +
+      'confirm_required: true, campaign, replacing:{current_step_count, current_steps_with_content}, with:{step_count, ' +
+      'sequences}, merge_tags_used[], warnings[]}` (warnings: campaign ACTIVE - steps replace the live sending copy on ' +
+      'save; merge tags used - each needs a value on every lead or a fallback). On confirm it saves, re-reads the ' +
+      'provider and refreshes the mirror; if the read-back fails the response says saved-but-unverified and to call the ' +
+      'GET. 400 on an empty or content-less list. Date-windowed numbers: `outbound_campaign_analytics_get({campaign_id, ' +
+      'start_date?, end_date?, timezone?})` returns the provider\'s own `lifetime` counts (sent_count, ' +
+      'unique_sent_count, open_count, unique_open_count, click_count, unique_click_count, reply_count, bounce_count, ' +
+      'unsubscribe_count, total_lead_count) and, when BOTH start_date and end_date (YYYY-MM-DD) are given, ' +
+      '`window.sequence_analytics`, the per-step breakdown inside those dates - the ONLY date-windowed sending figure; ' +
+      'Hiveku\'s mirrored counters stay lifetime totals, and complaint rate is still not here. Inbox thread detail is ' +
+      '`outbound_get_inbox_thread`, board stages are `outbound_list_pipeline_stages` and the mailbox inventory is ' +
+      '`outbound_list_email_accounts` (all read-only; stage config, mailbox settings and warmup stay dashboard work). ' +
+      'STILL dashboard/provider-only: mailbox settings, warmup control, sending schedules, connecting a new provider, ' +
+      'and lead profile-field edits. The approval gate did not go away, it moved: the exact draft, steps or transition ' +
+      'is shown, the operator says yes, then the confirmed call is made. The local automations worker still never sends ' +
+      'and never calls `outbound_reply_draft_send`, `outbound_campaign_status_set` or ' +
+      '`outbound_campaign_sequences_save`.',
   },
   {
     id: 'social',
@@ -917,10 +968,18 @@ export const DEPARTMENTS: Department[] = [
     ],
     references: [{ id: 'search-performance', label: 'Search performance (GSC+Bing summary)', tool: 'seo_local_search_performance', args: { days: 90, source: 'all' } }],
     crud:
-      'Local SEO data is read + sync. GBP review replies + posts happen in the GBP UI; rank tracking via `seo_track_keyword`. ' +
+      'Local SEO reads are free. Every GBP write publishes PUBLICLY on the live listing and is two-step: the first call previews with ' +
+      'requires_confirm: true, the identical call with confirm: true applies - one write per confirmed yes. ' +
+      'Review replies: `seo_gbp_review_reply` (review_id from `seo_gbp_reviews`; replaces any existing owner reply) and ' +
+      '`seo_gbp_review_reply_delete`. Listing fields (name, phone, hours, categories, address): `seo_gbp_location_update`. ' +
+      'Attributes: `seo_gbp_attributes_update` (gaps from `seo_gbp_attributes`). Services: `seo_gbp_services_update` (REPLACES the whole menu). ' +
+      'Media: `seo_gbp_media_add` / `seo_gbp_media_delete` (media_id from `seo_gbp_media`). ' +
+      'GBP posts publish via `social_create_post` with platform google_business_profile. ' +
+      'Citations: `seo_citations_get` (free stored snapshot) / `seo_citations_audit` (spends one DataForSEO Business Listings search, ' +
+      '24h cooldown, audit only - it never submits to a directory). Local-pack rank tracking: `seo_track_keyword` with ranking_type local and business_name. ' +
       'CONNECT a source: `seo_connection_create({ platform: "bing_webmaster"|"google_search_console"|"google_business_profile", site_url, ... })` ' +
-      '(Bing needs only { platform, site_url, api_key } — no OAuth), then `seo_connection_update` to bind + `seo_sync`. ' +
-      'Bing organic tools: `seo_bing_query_stats` / `_pages` / `_crawl_stats` / `_backlinks` / `_stats` / `_period_comparison`. ' +
+      '(Bing needs only { platform, site_url, api_key } - no OAuth), then `seo_connection_update` to bind + `seo_sync`. ' +
+      'Bing organic tools: `seo_bing_query_stats` / `seo_bing_pages` / `seo_bing_crawl_stats` / `seo_bing_backlinks` / `seo_bing_stats` / `seo_bing_period_comparison`. ' +
       'Submit sitemaps/URLs: `seo_gsc_submit_sitemap` / `seo_bing_submit_sitemap` / `seo_bing_submit_url`. Refresh: `seo_sync`. ' +
       'See SETUP.md to connect Google Business Profile / Search Console / Bing Webmaster.',
     setup: LOCALSEO_SETUP,
