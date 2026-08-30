@@ -1691,22 +1691,24 @@ these local files.
 (\`ppc_connection_list\`, \`social_list_accounts\`, \`seo_connections_list\`, \`email_connections_list\`).
 If a platform the work needs is missing or dead, do NOT stall or improvise — give the user the exact
 clickable link to connect it, then continue with what IS connected. Which link:
-- **Google products** (Google Ads, GSC, GA, GBP): you can MINT the auth link yourself —
-  \`integration_oauth_initiate({ provider_slug, oauth_app_id })\` returns a \`setup_url\` the user clicks
-  (on 412 \`integration_not_configured\`, register the shared client first with \`oauth_app_create\`).
-- **Social** (Meta/Instagram, LinkedIn, X, TikTok, GBP posting): dashboard only —
-  \`https://app.hiveku.com/<accountId>/dashboard/marketing/social/accounts\` (Quick connect appears for
-  platforms with a Hiveku-native app; others get a guided wizard).
-- **Meta Ads / Amazon Ads / TikTok Ads / Bing Ads**: dashboard only —
-  \`https://app.hiveku.com/<accountId>/dashboard/marketing/ppc\`. Meta Ads is a SEPARATE app from social
-  Meta (a social connect does not grant ads) and has no refresh token — a dead one is reconnected with
-  the same click.
+- **Any connector** (Google Ads, GSC, GA, GBP, Gmail, Calendar, Outlook, Bing Ads, and the social /
+  commerce providers as they are ported): MINT a Hiveku connect link yourself —
+  \`integration_connectors_list\` first (is it \`ready\`? which existing connection id to re-auth?), then
+  \`integration_connect_link_create({ connector, target_connection_id?, source: 'vscode' })\` returns a
+  \`url\` (https://app.hiveku.com/connect/oauth/..., valid 24h) the user clicks; confirm with
+  \`integration_connect_link_status({ link_id, wait_seconds: 8 })\`. It uses the account's own OAuth app
+  when one is tagged, else Hiveku's platform app — a missing app is only a dead end when the catalog says
+  \`ready: false\` (then read \`client.how_to_get_ready\`). Gmail/Outlook always need the account's own app.
+- **Not yet linkable** (\`linkable: false\` in the catalog): dashboard —
+  \`https://app.hiveku.com/<accountId>/dashboard/marketing/social/accounts\` for social,
+  \`https://app.hiveku.com/<accountId>/dashboard/marketing/ppc\` for ads. Meta Ads is a SEPARATE app
+  from social Meta (a social connect does not grant ads).
 Always the ACCOUNT-SCOPED \`/<accountId>/dashboard/...\` form — never a bare \`/dashboard\` link.
 \`/hiveku-connect [google-ads|meta-ads|amazon-ads|gsc|ga|gbp|bing|social|meta|linkedin|x|tiktok|all]\`
-runs the whole flow — diagnose what is dead, register/reuse the shared OAuth app, mint or hand off the
-link, poll, sync, verify, re-pull. For Google/Microsoft BYOK the human's only jobs are the one-time
-cloud app (redirect URI \`https://app.hiveku.com/api/oauth/google/callback\` in *Authorized redirect
-URIs*, not JavaScript origins) and one consent click per account.
+runs the whole flow — diagnose what is dead, mint the connect link, hand it off, poll, sync, verify,
+re-pull. On Hiveku's platform apps the human's only job is one consent click; a bring-your-own client
+additionally needs the one-time cloud app (redirect URI \`https://app.hiveku.com/api/oauth/google/callback\`
+in *Authorized redirect URIs*, not JavaScript origins).
 The shared client lives in your agency's OAuth file — \`../.hiveku/agency-oauth.env\` (fleet root) or
 \`./.hiveku/agency-oauth.env\` (this folder) — keys:
 GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET / GOOGLE_ADS_DEVELOPER_TOKEN (from your agency MCC API

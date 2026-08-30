@@ -28,9 +28,15 @@ Then walk me through this EXACT flow, explaining each step and asking me for wha
 }
 
 const GOOGLE_OAUTH_APP = (product: string, apiName: string) =>
-  `1. OAuth app (once per account). Call oauth_app_list({ provider: 'google' }). If nothing is enabled for product '${product}', help me create one:
+  `1. Check readiness with integration_connectors_list. If the '${product}' connector is ready (client.would_use is 'hiveku' or 'byok'), skip to step 2 — no Google Cloud work is needed. Only if it is NOT ready, help me register our own Google OAuth client:
    - In Google Cloud Console: create/pick a project, enable the ${apiName}, configure the OAuth consent screen (External; add me as a test user), then Credentials → Create OAuth client ID → Web application whose Authorized redirect URI INCLUDES https://app.hiveku.com/api/oauth/google/callback.
    - Collect the Client ID + Client Secret from me, then call oauth_app_create({ provider: 'google', name: '${product} app', client_id, client_secret, products: ['${product}'] }).`;
+
+const CONNECT_LINK = (connector: string, extra = '') =>
+  `Call integration_connect_link_create({ connector: '${connector}', source: 'vscode'${extra} }) and give me the returned url on its own line (it is a Hiveku page valid for 24 hours that sends me to the provider's consent screen when I press Continue). Tell me which account to pick. If a connection already exists and is dead or missing a scope, pass target_connection_id (its id from integration_connectors_list) to re-authenticate it in place instead of creating a second one.`;
+
+const CONNECT_STATUS =
+  `When I say I am through, call integration_connect_link_status({ link_id, wait_seconds: 8 }) until status is 'completed' (connection_id is the connection row; needs_binding lists anything still to choose) or 'failed' (read me the error; the same link can be retried).`;
 
 export const SETUP_PROMPTS: SetupPrompt[] = [
   {
@@ -41,14 +47,14 @@ export const SETUP_PROMPTS: SetupPrompt[] = [
       `${head(a, 'Google Ads')}
 
 ${GOOGLE_OAUTH_APP('google_ads', 'Google Ads API')}
-2. Ask me for three things: developer_token (from my Google Ads MCC → Tools & Settings → API Center), customer_id (the client ad account — 10 digits, no dashes), and manager_id (the MCC/manager account id — ONLY if the client account sits under an MCC).
-3. Call integration_oauth_initiate({ provider_slug: 'google_ads', customer_id, manager_id (if any), developer_token }). Give me the returned setup_url to open in my browser and authorize.
-4. Poll integration_oauth_check({ setup_token }) every ~5 seconds until status is 'completed' (re-initiate if it expires after 15 min).
+2. Only if the connector uses our OWN Google app (client.would_use 'byok'): ask me for developer_token (from my Google Ads MCC → Tools & Settings → API Center), customer_id (the client ad account — 10 digits, no dashes), and manager_id (the MCC id — ONLY if the client account sits under an MCC). On Hiveku's app none of these are needed up front.
+3. ${CONNECT_LINK('google_ads', ", customer_id, manager_id, developer_token (only when collected)")}
+4. ${CONNECT_STATUS}
 5. ppc_connection_test({ id: connection_id }) to verify OAuth + permissions.
 6. ppc_sync({ connection_id }) to pull campaigns + metrics (use ppc_sync_async + job_status_get for a full 5-year backfill).
 7. Confirm it worked: ppc_account_settings_get({ connection_id }), ppc_campaign_list, and ppc_conversion_tracking_status({ connection_id }).
 
-If I don't know the customer_id: initiate with just the developer_token, then ppc_ads_discover_customers({ id: connection_id }) to list my accessible accounts, then ppc_connection_update({ id: connection_id, customer_id, manager_id (if any) }).`,
+If the status reports needs_binding: ['customer_id'] (or I don't know the customer_id): ppc_ads_discover_customers({ id: connection_id }) to list my accessible accounts, then ppc_connection_update({ id: connection_id, customer_id, manager_id (if any) }).`,
   },
   {
     id: 'microsoft_ads',
@@ -57,11 +63,10 @@ If I don't know the customer_id: initiate with just the developer_token, then pp
     build: (a) =>
       `${head(a, 'Microsoft (Bing) Ads')}
 
-Note: Microsoft Ads OAuth can't be started from the MCP (integration_oauth_initiate is Google-only), so part of this is done in the Hiveku dashboard.
-1. OAuth app (once). Call oauth_app_list({ provider: 'microsoft' }). If none has product 'microsoft_ads', help me register an Azure AD app (App registrations → New; Redirect URI = Web → https://app.hiveku.com/api/oauth/microsoft/callback; copy the Application/client ID + a client secret), then oauth_app_create({ provider: 'microsoft', name: 'Microsoft Ads app', client_id, client_secret, products: ['microsoft_ads'] }).
-2. Tell me to connect Microsoft Ads in the Hiveku dashboard (Marketing → Ads → connect Microsoft) and complete the Microsoft consent screen. (No developer token is needed for Microsoft Ads.)
-3. Once I confirm, call ppc_connection_list({ platform: 'microsoft' }) to find the new connection (platform microsoft_ads).
-4. ppc_sync({ connection_id }) to pull data, then confirm with ppc_campaign_list. All the ppc_* read/CRUD tools then work the same as Google Ads.`,
+1. Check readiness with integration_connectors_list. If 'microsoft_ads' is ready, skip to step 2. Only if it is NOT ready, help me register an Azure AD app (App registrations → New; Redirect URI = Web → https://app.hiveku.com/api/oauth/microsoft/callback; copy the Application/client ID + a client secret), then oauth_app_create({ provider: 'microsoft', name: 'Microsoft Ads app', client_id, client_secret, products: ['microsoft_ads'] }).
+2. ${CONNECT_LINK('microsoft_ads')} (No developer token is needed for Microsoft Ads.)
+3. ${CONNECT_STATUS}
+4. If needs_binding lists the ad account: ppc_microsoft_discover_accounts / ppc_connection_update as the status hint says. Then ppc_sync({ connection_id }) to pull data, and confirm with ppc_campaign_list. All the ppc_* read/CRUD tools then work the same as Google Ads.`,
   },
   {
     id: 'google_search_console',
@@ -71,8 +76,8 @@ Note: Microsoft Ads OAuth can't be started from the MCP (integration_oauth_initi
       `${head(a, 'Google Search Console')}
 
 ${GOOGLE_OAUTH_APP('google_search_console', 'Search Console API')}
-2. Call integration_oauth_initiate({ provider_slug: 'google_search_console' }); give me the setup_url to authorize.
-3. Poll integration_oauth_check({ setup_token }) until status is 'completed'.
+2. ${CONNECT_LINK('google_search_console')}
+3. ${CONNECT_STATUS}
 4. seo_gsc_discover_sites({ id: connection_id }) → show me the verified sites and let me pick one (use sc-domain:<domain> if none are listed).
 5. seo_connection_update({ id: connection_id, site_url: '<the one I pick>' }) → this flips status to connected.
 6. Confirm with seo_gsc_search_queries and seo_gsc_top_pages.`,
@@ -85,8 +90,8 @@ ${GOOGLE_OAUTH_APP('google_search_console', 'Search Console API')}
       `${head(a, 'Google Business Profile (Google My Business)')}
 
 ${GOOGLE_OAUTH_APP('google_business_profile', 'Business Profile API')}
-2. Call integration_oauth_initiate({ provider_slug: 'google_business_profile' }); give me the setup_url to authorize.
-3. Poll integration_oauth_check({ setup_token }) until status is 'completed'.
+2. ${CONNECT_LINK('google_business_profile')}
+3. ${CONNECT_STATUS}
 4. seo_gbp_discover_locations({ id: connection_id }) → show me the accounts + locations and let me pick the right location.
 5. seo_connection_update({ id: connection_id, gbp_account_id, gbp_location_id }) → set BOTH; status flips to connected.
 6. Confirm with seo_gbp_insights({ connection_id }) and seo_gbp_reviews({ connection_id }).`,

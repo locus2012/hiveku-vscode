@@ -76,6 +76,21 @@ export class ConnectFlow {
   }
 
   private async handleUri(uri: vscode.Uri): Promise<void> {
+    if (uri.path === '/connected') {
+      // The "Return to VS Code" button on app.hiveku.com/connect/oauth/done.
+      // Purely informational: the connection was written server-side by the
+      // provider callback, and Claude Code learns the outcome by polling
+      // integration_connect_link_status. Nothing here is trusted as proof.
+      const q = new URLSearchParams(uri.query);
+      const connector = (q.get('connector') ?? 'integration').replace(/[^a-z0-9_]/gi, '');
+      const ok = q.get('ok') === '1';
+      void vscode.window.showInformationMessage(
+        ok
+          ? `Hiveku: ${connector} connected. Back in Claude Code, say you are through so it confirms the connection.`
+          : `Hiveku: the ${connector} connection did not complete. Tell Claude Code what the page said; it can issue a new link.`,
+      );
+      return;
+    }
     if (uri.path !== '/auth') return;
     const params = new URLSearchParams(uri.query);
     const code = params.get('code');
