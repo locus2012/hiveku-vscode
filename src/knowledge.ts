@@ -466,6 +466,12 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__preview_overview',
   'mcp__hiveku__preview_logs',
   'mcp__hiveku__preview_screenshot',
+  // The annotated review screenshot. A GET that only renders the reviewer's own
+  // pin onto their own screenshot, so it is a read - but it is named _screenshot,
+  // which no glob above matches, and prompting for the one call that lets an
+  // agent SEE what the client pointed at defeats the purpose. Listed by name for
+  // the same reason preview_screenshot is.
+  'mcp__hiveku__project_annotation_screenshot',
   'mcp__hiveku__analytics_*',
   'mcp__hiveku__talk_to_department',
   // Role daily-brief signals (read-only reports the /hiveku-daily commands chain).

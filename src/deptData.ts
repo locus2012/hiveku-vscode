@@ -1043,6 +1043,44 @@ export const DEPARTMENTS: Department[] = [
       'For page CODE, download the project and edit files; for CMS-driven content use the Website Content (CMS) department.',
   },
   {
+    id: 'review',
+    label: 'Client Review & Annotations',
+    gate: 'websites',
+    datasets: [
+      {
+        id: 'annotations',
+        label: 'Open annotations',
+        tool: 'project_annotations_list',
+        args: { state: 'open', limit: 200 },
+        scope: siteScope,
+        columns: [
+          { key: '_parent', label: 'site' },
+          { key: 'annotation_text', label: 'request' },
+          { key: 'page_url', label: 'page' },
+          { key: 'deployment_branch', label: 'branch' },
+          { key: 'priority' },
+          { key: 'annotation_type', label: 'type' },
+          { key: 'created_by_name', label: 'from' },
+          { key: 'created_at', label: 'left', date: true },
+        ],
+      },
+    ],
+    crud:
+      'The client-request engine: a reviewer drops a pin on a DEPLOYED page (development or staging) and it becomes a ' +
+      'PM task. Work one with `project_annotation_get({project_id, annotation_id})` \u2014 it returns the comment thread, ' +
+      'the linked task status, and `deployment_branch`, which is the only reliable statement of WHICH CODE the reviewer ' +
+      'saw (fix the wrong branch and nothing the client can see changes).\n' +
+      'To SEE the pin, `project_annotation_screenshot({project_id, annotation_id})` returns the screenshot with the ' +
+      "reviewer's marker composited on it \u2014 the amber dot and crosshair are HIVEKU'S MARKER, not part of the site, so " +
+      'never "fix" them. Do not do the {xPct,yPct} arithmetic by hand; on a long page that is a guess.\n' +
+      'Reply with `project_annotation_comment` (the client reads this thread). Close with ' +
+      '`project_annotation_resolve({project_id, annotation_id, note})` \u2014 it completes the linked PM task and the ' +
+      'two-way sync clears the annotation, so the item crosses off for the client. That is the client-facing DONE; ' +
+      '`pm_task_submit_for_review` is the other intent (writes `qa`, "agent finished, no human looked", and deliberately ' +
+      'does NOT resolve). Fix and verify the code before resolving.\n' +
+      'Annotations have no status column \u2014 resolved IS `resolved_at != null`.',
+  },
+  {
     id: 'analytics',
     label: 'Analytics & Visitors',
     gate: 'visitor_intelligence',
