@@ -376,6 +376,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.createBranch', () => withScm((s) => createBranch(s), true)),
     vscode.commands.registerCommand('hiveku.switchBranch', () => withScm((s) => switchBranch(s), true)),
     vscode.commands.registerCommand('hiveku.merge', () => withScm((s) => merge(s), true)),
+    vscode.commands.registerCommand('hiveku.pullRequests', () => withScm((s) => pullRequests(s), true)),
+    vscode.commands.registerCommand('hiveku.environments', () => withScm((s) => environments(s), true)),
+    vscode.commands.registerCommand('hiveku.stash', () => withScm((s) => stashPending(s), true)),
+    vscode.commands.registerCommand('hiveku.deleteBranch', () => withScm((s) => deleteBranch(s), true)),
     vscode.commands.registerCommand('hiveku.previewBranch', () => withScm((s) => previewBranch(s))),
     vscode.commands.registerCommand('hiveku.compare', () => withScm((s) => compare(s))),
     vscode.commands.registerCommand('hiveku.prune', () => withScm((s) => prune(s), true)),
@@ -2814,23 +2818,48 @@ async function switchBranch(scm: HivekuScm): Promise<void> {
 }
 
 async function merge(scm: HivekuScm): Promise<void> {
-  if (scm.branch === 'main') {
-    vscode.window.showInformationMessage('Switch to a branch first to merge it into main.');
+  const client = await clientForAccount(scm.link.account_id);
+  const branches = await api.vcsBranches(client, scm.link.project_id);
+  const targets = branches.filter((b) => b.branch_name !== scm.branch);
+  if (targets.length === 0) {
+    vscode.window.showInformationMessage(
+      `"${scm.branch}" is the only branch — nothing to merge it into.`,
+    );
     return;
   }
+  // Target picker. `main` IS production's source, so it is labelled as such
+  // rather than sitting anonymously in the list.
+  const pick = await vscode.window.showQuickPick(
+    targets.map((b) => ({
+      label: b.branch_name,
+      description: b.branch_name === 'main' ? 'production source — changes the live project' : '',
+    })),
+    { placeHolder: `Merge "${scm.branch}" into…` },
+  );
+  if (!pick) return;
+  const into = pick.label;
+  const intoMain = into === 'main';
   const confirm = await vscode.window.showWarningMessage(
-    `Merge "${scm.branch}" into main? Non-conflicting changes apply to the live project; conflicts are flagged, not overwritten.`,
-    { modal: true },
+    `Merge "${scm.branch}" into "${into}"?`,
+    {
+      modal: true,
+      detail: intoMain
+        ? 'main is what production deploys from, so this changes the LIVE project source. ' +
+          'Non-conflicting changes apply; conflicting files are flagged, never overwritten.'
+        : `Only the "${into}" branch changes — nothing goes live until you deploy it. ` +
+          'Non-conflicting changes apply; conflicting files are flagged, never overwritten.',
+    },
     'Merge',
   );
   if (confirm !== 'Merge') return;
-  const client = await clientForAccount(scm.link.account_id);
   const result = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Merging ${scm.branch} into main…` },
-    () => api.vcsMerge(client, scm.link.project_id, scm.branch),
+    { location: vscode.ProgressLocation.Notification, title: `Merging ${scm.branch} into ${into}…` },
+    () => api.vcsMerge(client, scm.link.project_id, scm.branch, undefined, intoMain ? undefined : into),
   );
+  // merged_into is the server's own answer; trust it over our request when present.
+  const landed = result.merged_into || into;
   log.appendLine(
-    `[merge] ${scm.branch}→main applied=${result.applied.length} (auto-merged=${result.auto_merged.length}) deleted=${result.deleted.length} conflicts=${result.conflicts.length}`,
+    `[merge] ${scm.branch}→${landed} applied=${result.applied.length} (auto-merged=${result.auto_merged.length}) deleted=${result.deleted.length} conflicts=${result.conflicts.length}`,
   );
   const autoNote = result.auto_merged.length ? `, ${result.auto_merged.length} auto-merged line-by-line` : '';
   if (result.conflicts.length > 0) {
@@ -2838,11 +2867,26 @@ async function merge(scm: HivekuScm): Promise<void> {
     const choice = await vscode.window.showWarningMessage(
       `Merged ${result.applied.length} file(s)${autoNote}, but ${result.conflicts.length} need manual resolution: ` +
         `${result.conflicts.slice(0, 4).join(', ')}${result.conflicts.length > 4 ? '…' : ''}.`,
-      'Resolve on main',
+      `Resolve on ${landed}`,
     );
-    if (choice === 'Resolve on main') {
-      // Switch the workspace to main, drop the conflict-marked merges in, and open them.
-      await scm.switchBranch('main');
+    if (choice === `Resolve on ${landed}`) {
+      // Switch to the branch the merge ACTUALLY landed on and drop the
+      // conflict-marked files there. This used to be hardcoded to main, which
+      // would have written another branch's conflict markers onto production's
+      // source the moment a non-main target was possible.
+      await scm.switchBranch(landed);
+      // switchBranch returns silently when the operator declines its
+      // "uncommitted changes will be LOST" prompt. Writing the markers anyway
+      // would put THIS merge's conflicts on whatever branch is still checked
+      // out — including main — while the toast claims otherwise.
+      if (scm.branch !== landed) {
+        vscode.window.showWarningMessage(
+          `Still on "${scm.branch}", so no conflict markers were written. ` +
+            `The merge into "${landed}" already applied its clean files; ` +
+            `switch to "${landed}" and merge again to resolve the rest.`,
+        );
+        return;
+      }
       const details = result.conflict_details ?? {};
       await scm.writeFiles(details);
       await scm.refresh();
@@ -2851,14 +2895,352 @@ async function merge(scm: HivekuScm): Promise<void> {
         await vscode.window.showTextDocument(vscode.Uri.file(`${scm.root}/${first}`));
       }
       vscode.window.showInformationMessage(
-        'Conflict markers written on main. Resolve <<<<<<< ======= >>>>>>> markers, then commit.',
+        `Conflict markers written on ${landed}. Resolve <<<<<<< ======= >>>>>>> markers, then commit.`,
       );
     }
   } else {
     vscode.window.showInformationMessage(
-      `Merged "${scm.branch}" into main — ${result.applied.length} file(s) applied${autoNote}.`,
+      `Merged "${scm.branch}" into "${landed}" — ${result.applied.length} file(s) applied${autoNote}.` +
+        (landed === 'main' ? ' Deploy production to put it live.' : ''),
     );
   }
+}
+
+// ── Native pull requests ─────────────────────────────────────────────────────
+
+/** A thrown MCP error carries the route's JSON body inside its message; pull the
+ *  conflict list back out so a refused strict merge can be shown properly. */
+function conflictsFromError(err: unknown): string[] {
+  const text = err instanceof Error ? err.message : String(err);
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) return [];
+  try {
+    // The proxy nests the route body under `details`, and the route itself
+    // puts the conflict list under `data` — so the list is two levels down
+    // (details.data.conflicts). Walk every level rather than guessing one.
+    const seen = new Set<unknown>();
+    const walk = (node: unknown, depth: number): string[] => {
+      if (!node || typeof node !== 'object' || depth > 4 || seen.has(node)) return [];
+      seen.add(node);
+      const obj = node as Record<string, unknown>;
+      if (Array.isArray(obj.conflicts)) return (obj.conflicts as unknown[]).map(String);
+      for (const key of ['details', 'data', 'result', 'merge']) {
+        const found = walk(obj[key], depth + 1);
+        if (found.length) return found;
+      }
+      return [];
+    };
+    return walk(JSON.parse(match[0]), 0);
+  } catch {
+    return [];
+  }
+}
+
+async function pullRequests(scm: HivekuScm): Promise<void> {
+  const client = await clientForAccount(scm.link.account_id);
+  const open = await api.vcsPrList(client, scm.link.project_id, 'open');
+  const items: Array<{ label: string; description: string; detail?: string; pr?: api.PullRequest; action?: 'create' }> = [
+    { label: '$(git-pull-request-create) Open a pull request…', description: `from "${scm.branch}"`, action: 'create' },
+    ...open.map((pr) => ({
+      label: `#${pr.number} ${pr.title}`,
+      description: `${pr.source_branch} → ${pr.target_branch}`,
+      detail: pr.target_branch === 'main' ? 'Merging this changes the live project' : undefined,
+      pr,
+    })),
+  ];
+  const pick = await vscode.window.showQuickPick(items, {
+    placeHolder: open.length ? `${open.length} open pull request(s)` : 'No open pull requests',
+  });
+  if (!pick) return;
+  if (pick.action === 'create') return createPullRequest(scm, client);
+  if (pick.pr) return pullRequestActions(scm, client, pick.pr);
+}
+
+async function createPullRequest(scm: HivekuScm, client: HivekuMcpClient): Promise<void> {
+  if (scm.branch === 'main') {
+    vscode.window.showInformationMessage('Switch to a branch first — a pull request proposes merging a branch.');
+    return;
+  }
+  const branches = await api.vcsBranches(client, scm.link.project_id);
+  const target = await vscode.window.showQuickPick(
+    branches
+      .filter((b) => b.branch_name !== scm.branch)
+      .map((b) => ({
+        label: b.branch_name,
+        description: b.branch_name === 'main' ? 'production source' : '',
+      })),
+    { placeHolder: `Merge "${scm.branch}" into… (the pull request target)` },
+  );
+  if (!target) return;
+  const title = await vscode.window.showInputBox({
+    prompt: `Pull request title (${scm.branch} → ${target.label})`,
+    validateInput: (v) => (v.trim() ? null : 'A title is required'),
+  });
+  if (!title?.trim()) return;
+  const description = await vscode.window.showInputBox({ prompt: 'Description (optional)' });
+  const pr = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'Opening pull request…' },
+    () =>
+      api.vcsPrCreate(client, scm.link.project_id, scm.branch, title.trim(), target.label, description?.trim() || undefined),
+  );
+  vscode.window.showInformationMessage(
+    `Opened pull request #${pr.number}: ${pr.source_branch} → ${pr.target_branch}. Nothing merges until you merge it.`,
+  );
+}
+
+async function pullRequestActions(scm: HivekuScm, client: HivekuMcpClient, pr: api.PullRequest): Promise<void> {
+  const detail = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Window, title: `Loading PR #${pr.number}…` },
+    () => api.vcsPrGet(client, scm.link.project_id, pr.number),
+  );
+  const d = detail.diff;
+  // pr_get nests the PR under `pr`; prefer the server's fresh copy over the
+  // list row we were called with.
+  const fresh = detail.pr ?? pr;
+  const summary = d
+    ? `${d.added} added, ${d.modified} modified, ${d.removed} removed`
+    : `diff unavailable${detail.diff_error ? ` (${detail.diff_error})` : ''}`;
+  const action = await vscode.window.showQuickPick(
+    [
+      { label: '$(git-merge) Merge', description: summary, act: 'merge' as const },
+      { label: '$(x) Close without merging', description: 'the source branch is untouched', act: 'close' as const },
+    ],
+    { placeHolder: `#${fresh.number} ${fresh.title} — ${fresh.source_branch} → ${fresh.target_branch}` },
+  );
+  if (!action) return;
+
+  if (action.act === 'close') {
+    await api.vcsPrClose(client, scm.link.project_id, fresh.number);
+    vscode.window.showInformationMessage(`Closed #${fresh.number}. The branch "${fresh.source_branch}" is unchanged.`);
+    return;
+  }
+
+  const intoMain = fresh.target_branch === 'main';
+  const confirm = await vscode.window.showWarningMessage(
+    `Merge pull request #${fresh.number}: "${fresh.source_branch}" into "${fresh.target_branch}"?`,
+    {
+      modal: true,
+      detail:
+        (intoMain
+          ? 'main is what production deploys from, so this changes the LIVE project source. '
+          : `Only the "${fresh.target_branch}" branch changes — nothing goes live until you deploy it. `) +
+        'This merge is all-or-nothing: if any file conflicts, NOTHING is merged and the pull request stays open.',
+    },
+    'Merge',
+  );
+  if (confirm !== 'Merge') return;
+  try {
+    const { merge: result } = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Merging #${fresh.number}…` },
+      () => api.vcsPrMerge(client, scm.link.project_id, fresh.number),
+    );
+    const applied = result?.applied?.length ?? 0;
+    log.appendLine(`[pr-merge] #${fresh.number} ${fresh.source_branch}→${fresh.target_branch} applied=${applied}`);
+    vscode.window.showInformationMessage(
+      `Merged #${fresh.number} — ${applied} file(s) applied.` +
+        (intoMain ? ' Deploy production to put it live.' : ''),
+    );
+  } catch (err) {
+    // A strict merge refuses atomically: surface the conflict list rather than
+    // withScm's generic "Hiveku: <json>" so the user knows nothing was applied.
+    const conflicts = conflictsFromError(err);
+    if (conflicts.length === 0) throw err;
+    log.appendLine(`[pr-merge] #${fresh.number} refused, conflicts: ${conflicts.join(', ')}`);
+    vscode.window.showWarningMessage(
+      `Nothing was merged — ${conflicts.length} file(s) conflict: ` +
+        `${conflicts.slice(0, 4).join(', ')}${conflicts.length > 4 ? '…' : ''}. ` +
+        `Resolve them on "${fresh.source_branch}", commit, then merge again.`,
+    );
+  }
+}
+
+// ── Environment → branch bindings ────────────────────────────────────────────
+
+async function environments(scm: HivekuScm): Promise<void> {
+  const client = await clientForAccount(scm.link.account_id);
+  const bindings = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Window, title: 'Loading environments…' },
+    () => api.vcsEnvBindings(client, scm.link.project_id),
+  );
+  const row = (label: string, b: api.EnvBinding) =>
+    `${label}: ${b.branch}${b.bound ? '' : ' (tracks main)'}${b.locked ? ' — locked' : ''}`;
+  const pick = await vscode.window.showQuickPick(
+    [
+      { label: '$(server) Development', description: row('serves', bindings.development), env: 'development' as const },
+      { label: '$(server) Staging', description: row('serves', bindings.staging), env: 'staging' as const },
+      {
+        label: '$(lock) Production',
+        description: `${row('serves', bindings.production)} — main IS production, permanently`,
+        env: null,
+      },
+    ],
+    { placeHolder: 'Environment → branch. Pick development or staging to change it.' },
+  );
+  if (!pick) return;
+  if (!pick.env) {
+    vscode.window.showInformationMessage(
+      'Production always deploys from main and cannot be pointed at another branch.',
+    );
+    return;
+  }
+  const current = pick.env === 'development' ? bindings.development : bindings.staging;
+  const branches = await api.vcsBranches(client, scm.link.project_id);
+  const choice = await vscode.window.showQuickPick(
+    [
+      { label: 'main', description: current.bound ? 'stop serving a branch — track main again' : 'current' },
+      ...branches
+        .filter((b) => b.branch_name !== 'main')
+        .map((b) => ({
+          label: b.branch_name,
+          description: current.bound && current.branch === b.branch_name ? 'current' : '',
+        })),
+    ],
+    { placeHolder: `${pick.env} currently serves ${current.branch} — change to…` },
+  );
+  if (!choice || choice.label === current.branch) return;
+  const clearing = choice.label === 'main';
+  const confirm = await vscode.window.showWarningMessage(
+    clearing
+      ? `Point ${pick.env} back at main?`
+      : `Serve branch "${choice.label}" on ${pick.env}?`,
+    {
+      modal: true,
+      detail:
+        `This does NOT deploy. The ${pick.env} environment keeps serving what it has now until its next deploy, ` +
+        'which will then ship ' +
+        (clearing ? 'main.' : `"${choice.label}".`) +
+        ' Production is unaffected either way.',
+    },
+    clearing ? 'Track main' : 'Serve this branch',
+  );
+  if (!confirm) return;
+  const updated = await api.vcsEnvBind(client, scm.link.project_id, pick.env, choice.label);
+  const now = pick.env === 'development' ? updated.development : updated.staging;
+  vscode.window.showInformationMessage(
+    `${pick.env} will serve ${now.branch} from its next deploy.`,
+  );
+}
+
+// ── Stash: scoop pending work onto a branch ──────────────────────────────────
+
+async function stashPending(scm: HivekuScm): Promise<void> {
+  const client = await clientForAccount(scm.link.account_id);
+  const envPick = await vscode.window.showQuickPick(
+    [
+      { label: 'Production', description: 'edits not live on production yet', env: 'production' as const },
+      { label: 'Development', description: 'a bound branch\'s undeployed work', env: 'development' as const },
+      { label: 'Staging', description: 'a bound branch\'s undeployed work', env: 'staging' as const },
+    ],
+    { placeHolder: 'Find pending changes that differ from what is LIVE on…' },
+  );
+  if (!envPick) return;
+
+  // Always dry-run first — this reports, writes nothing, and is what the
+  // confirmation is based on.
+  const report = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: `Comparing against live ${envPick.env}…` },
+    () => api.vcsStash(client, scm.link.project_id, envPick.env, true),
+  );
+  const r = report.result;
+  if (r.status === 'clean') {
+    vscode.window.showInformationMessage(`Nothing pending — ${envPick.env} already matches what is live.`);
+    return;
+  }
+  if (r.status !== 'stashed') {
+    vscode.window.showWarningMessage(`Nothing was moved: ${r.reason ?? r.status}`);
+    return;
+  }
+  const c = api.stashCounts(r);
+  const suggested = r.branch ?? '';
+  const branchName = await vscode.window.showInputBox({
+    prompt: `Move ${c.total} pending file(s) to which branch?`,
+    value: suggested,
+    validateInput: (v) =>
+      !v.trim()
+        ? 'A branch name is required'
+        : v.trim() === 'main'
+          ? 'Cannot be main'
+          : /^[A-Za-z0-9._/-]+$/.test(v.trim())
+            ? null
+            : 'Letters, numbers, . _ / - only',
+  });
+  if (!branchName?.trim()) return;
+  const confirm = await vscode.window.showWarningMessage(
+    `Move ${c.total} pending file(s) to "${branchName.trim()}"?`,
+    {
+      modal: true,
+      detail:
+        `${c.modified} modified, ${c.added} added, ${c.deleted} deleted. ` +
+        (envPick.env === 'production'
+          ? 'The pending edits move to that branch and main is reset to exactly what production serves. '
+          : `The pending work moves to that branch and the ${envPick.env} branch is reset to exactly what it serves. `) +
+        'Nothing is deleted and nothing is deployed — merge the branch back whenever you are ready.',
+    },
+    'Move to branch',
+  );
+  if (confirm !== 'Move to branch') return;
+  const applied = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: 'Moving pending work…' },
+    () => api.vcsStash(client, scm.link.project_id, envPick.env, false, branchName.trim()),
+  );
+  const a = applied.result;
+  if (a.status === 'stashed') {
+    // Count from the APPLY, not the dry run — the server re-plans at apply
+    // time, so the two can legitimately differ if anything changed between.
+    const moved = api.stashCounts(a).total;
+    log.appendLine(`[stash] ${envPick.env} → ${a.branch} (${moved} files)`);
+    vscode.window.showInformationMessage(
+      `Moved ${moved} file(s) to "${a.branch}". Merge that branch back into ` +
+        (envPick.env === 'production' ? 'main' : `"${a.boundBranch ?? envPick.env}"`) +
+        ' when you want the work again.',
+    );
+    await scm.refresh();
+  } else {
+    vscode.window.showWarningMessage(`Nothing was moved: ${a.reason ?? a.status}`);
+  }
+}
+
+// ── Branch delete ────────────────────────────────────────────────────────────
+
+async function deleteBranch(scm: HivekuScm): Promise<void> {
+  const client = await clientForAccount(scm.link.account_id);
+  const branches = await api.vcsBranches(client, scm.link.project_id);
+  const pick = await vscode.window.showQuickPick(
+    branches
+      .filter((b) => b.branch_name !== 'main' && !b.is_default)
+      .map((b) => ({ label: b.branch_name, description: b.branch_name === scm.branch ? 'current' : '' })),
+    { placeHolder: 'Delete which branch? (main cannot be deleted)' },
+  );
+  if (!pick) return;
+  const confirm = await vscode.window.showWarningMessage(
+    `Delete branch "${pick.label}"?`,
+    {
+      modal: true,
+      detail:
+        'This removes the branch pointer. Any work only on this branch stops being reachable, ' +
+        'and a later storage prune can discard it for good. Hiveku refuses if the branch serves ' +
+        'an environment or has an open pull request.',
+    },
+    'Delete',
+  );
+  if (confirm !== 'Delete') return;
+  // Order matters: leave the branch FIRST. Deleting the checked-out branch and
+  // then switching strands the workspace on a ref that no longer exists — the
+  // switch itself 404s on checkout, so the success message never runs and every
+  // later refresh/commit fails until the link is hand-repaired. Switching first
+  // also means a cancelled switch (uncommitted work) aborts the delete.
+  if (scm.branch === pick.label) {
+    await scm.switchBranch('main');
+    if (scm.branch === pick.label) {
+      vscode.window.showInformationMessage(
+        `Still on "${pick.label}" — nothing was deleted. Commit or discard your changes first.`,
+      );
+      return;
+    }
+  }
+  await api.vcsBranchDelete(client, scm.link.project_id, pick.label);
+  vscode.window.showInformationMessage(`Deleted branch "${pick.label}".`);
+  refreshStatusBar();
 }
 
 async function compare(scm: HivekuScm): Promise<void> {

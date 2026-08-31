@@ -239,7 +239,11 @@ Then `npx @vscode/vsce publish patch` to update the live listing.
 | `project_vcs_checkout` | Get a branch's full tree (switch branches) |
 | `project_vcs_commit` | Commit to `main` or a `branch` |
 | `project_vcs_history` | Commit history |
-| `project_vcs_merge` | 3-way merge a branch into main (conflict-flagging) |
+| `project_vcs_merge` | 3-way merge a branch into any target (`into`, default main; conflict-flagging) |
+| `project_vcs_pr_create` / `_list` / `_get` / `_merge` / `_close` | native pull requests (PR merge is strict/atomic) |
+| `project_vcs_env_bindings` / `project_vcs_env_bind` | which branch development/staging serve (production is locked to main) |
+| `project_vcs_stash` | move pending work to a branch (dry-run by default) |
+| `project_vcs_branch_delete` | delete a branch ref (confirm required) |
 | `project_vcs_branch_preview` | Fly preview of a branch at its own URL |
 | `project_vcs_compare` | File-level diff between two branches |
 | `project_vcs_prune` | Reclaim orphaned branch-tree storage (dry-run default) |

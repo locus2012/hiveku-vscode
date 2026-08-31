@@ -434,6 +434,11 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__redesign_status',
   'mcp__hiveku__verify_*',
   'mcp__hiveku__hiveku_docs_*',
+  // Native-VCS reads. Listed by NAME, never as a 'project_vcs_*' glob: that
+  // glob would also auto-approve project_vcs_merge / _stash / _branch_delete /
+  // _env_bind, which change the live project. (_pr_get and _pr_list already
+  // match the *_get / *_list globs above; _env_bindings matches neither.)
+  'mcp__hiveku__project_vcs_env_bindings',
   'mcp__hiveku__account_context_get',
   'mcp__hiveku__project_files_search',
   'mcp__hiveku__project_files_bulk_get',

@@ -42,6 +42,14 @@ const MAX_CONCURRENT = 6;
 const SLOW_TOOL_TIMEOUT_MS: Record<string, number> = {
   // Matches maxDuration = 180 on the files-snapshot route.
   project_files_snapshot: 180_000,
+  // The stash route is maxDuration = 180 and its apply path verifies branch
+  // content against S3 before committing. At the 60s default a slow apply
+  // aborts CLIENT-side while the server keeps going and rewrites main — the
+  // operator would be told it failed after it succeeded.
+  project_vcs_stash: 300_000,
+  // Strict PR merge reads both trees and commits; same reasoning, smaller job.
+  project_vcs_pr_merge: 180_000,
+  project_vcs_merge: 180_000,
 };
 let inFlight = 0;
 const waiters: Array<() => void> = [];

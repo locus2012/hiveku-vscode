@@ -44,6 +44,8 @@ export interface CheckoutTree {
 
 export interface MergeResult {
   merged_branch: string;
+  /** The branch the merge landed ON (`main` unless `into` was passed). */
+  merged_into: string;
   applied: string[];
   auto_merged: string[];
   deleted: string[];
@@ -390,11 +392,14 @@ export async function vcsMerge(
   projectId: string,
   branch: string,
   message?: string,
+  /** Merge target. Omitted means `main` — which changes the LIVE project. */
+  into?: string,
 ): Promise<MergeResult> {
   const res = await client.callToolJson<unknown>('project_vcs_merge', {
     project_id: projectId,
     branch,
     ...(message ? { message } : {}),
+    ...(into ? { into } : {}),
   });
   return unwrap<MergeResult>(res);
 }
@@ -462,6 +467,207 @@ export async function vcsBranches(client: HivekuMcpClient, projectId: string): P
   const res = await client.callToolJson<unknown>('project_vcs_branches', { project_id: projectId });
   const list = unwrap<BranchRef[]>(res);
   return Array.isArray(list) ? list : [];
+}
+
+// ── Native pull requests, environment bindings, stash ────────────────────────
+// All Hiveku-native (project_pull_requests / vcs_*_branch bindings) — they work
+// on every project, GitHub or not. Unrelated to the github_* PR surface.
+
+export interface PullRequest {
+  id: string;
+  /** Per-project number — how every other PR call addresses it. */
+  number: number;
+  status: 'open' | 'merged' | 'closed';
+  source_branch: string;
+  target_branch: string;
+  title: string;
+  description: string | null;
+  created_at: string;
+  merged_at: string | null;
+  closed_at: string | null;
+}
+
+/** pr_get returns the PR NESTED under `pr`, alongside a diff recomputed on
+ *  every read (null when the source branch is gone). */
+export interface PullRequestDetail {
+  pr: PullRequest;
+  diff: CompareResult | null;
+  diff_error?: string | null;
+}
+
+export interface EnvBinding {
+  branch: string;
+  bound: boolean;
+  /** production only: `main` IS production and can never be rebound. */
+  locked?: boolean;
+}
+
+export interface EnvBindings {
+  development: EnvBinding;
+  staging: EnvBinding;
+  production: EnvBinding;
+}
+
+/** One shape for both stash lanes; the branch lane adds boundBranch/added/deleted,
+ *  the main lane adds pendingAdds/pendingDeletes. Read via stashCounts(). */
+export interface StashResult {
+  status: 'clean' | 'stashed' | 'skipped' | 'failed';
+  reason?: string;
+  branch?: string;
+  boundBranch?: string | null;
+  fileCount?: number;
+  modified?: number;
+  added?: number;
+  deleted?: number;
+  pendingAdds?: number;
+  pendingDeletes?: number;
+  dryRun?: boolean;
+}
+
+/** The stash route is the ONE vcs route with no `{data}` envelope. */
+export interface StashResponse {
+  kind: 'main' | 'branch';
+  result: StashResult;
+}
+
+/** Normalizes the two lanes' differently-named add/delete counts. */
+export function stashCounts(r: StashResult): { modified: number; added: number; deleted: number; total: number } {
+  const modified = r.modified ?? 0;
+  const added = r.added ?? r.pendingAdds ?? 0;
+  const deleted = r.deleted ?? r.pendingDeletes ?? 0;
+  return { modified, added, deleted, total: r.fileCount ?? modified + added + deleted };
+}
+
+export async function vcsPrList(
+  client: HivekuMcpClient,
+  projectId: string,
+  status?: 'open' | 'merged' | 'closed',
+): Promise<PullRequest[]> {
+  const res = await client.callToolJson<unknown>('project_vcs_pr_list', {
+    project_id: projectId,
+    ...(status ? { status } : {}),
+  });
+  const list = unwrap<PullRequest[]>(res);
+  return Array.isArray(list) ? list : [];
+}
+
+export async function vcsPrGet(
+  client: HivekuMcpClient,
+  projectId: string,
+  num: number,
+): Promise<PullRequestDetail> {
+  const res = await client.callToolJson<unknown>('project_vcs_pr_get', {
+    project_id: projectId,
+    number: num,
+  });
+  return unwrap<PullRequestDetail>(res);
+}
+
+export async function vcsPrCreate(
+  client: HivekuMcpClient,
+  projectId: string,
+  sourceBranch: string,
+  title: string,
+  targetBranch?: string,
+  description?: string,
+): Promise<PullRequest> {
+  const res = await client.callToolJson<unknown>('project_vcs_pr_create', {
+    project_id: projectId,
+    source_branch: sourceBranch,
+    title,
+    ...(targetBranch ? { target_branch: targetBranch } : {}),
+    ...(description ? { description } : {}),
+  });
+  return unwrap<PullRequest>(res);
+}
+
+/**
+ * STRICT: any conflict refuses the whole merge (thrown, with conflicts in the
+ * message). NOTE the envelope differs from vcsMerge: this route returns
+ * `{data: {pr, merge}}`, so the MergeResult is one level deeper. Casting the
+ * whole body to MergeResult made `applied` undefined and turned a SUCCESSFUL
+ * merge into a TypeError the operator read as failure.
+ */
+export async function vcsPrMerge(
+  client: HivekuMcpClient,
+  projectId: string,
+  num: number,
+  message?: string,
+): Promise<{ pr: PullRequest; merge: MergeResult }> {
+  const res = await client.callToolJson<unknown>('project_vcs_pr_merge', {
+    project_id: projectId,
+    number: num,
+    ...(message ? { message } : {}),
+  });
+  return unwrap<{ pr: PullRequest; merge: MergeResult }>(res);
+}
+
+export async function vcsPrClose(
+  client: HivekuMcpClient,
+  projectId: string,
+  num: number,
+): Promise<PullRequest> {
+  const res = await client.callToolJson<unknown>('project_vcs_pr_close', {
+    project_id: projectId,
+    number: num,
+  });
+  return unwrap<PullRequest>(res);
+}
+
+export async function vcsEnvBindings(client: HivekuMcpClient, projectId: string): Promise<EnvBindings> {
+  const res = await client.callToolJson<unknown>('project_vcs_env_bindings', { project_id: projectId });
+  return unwrap<EnvBindings>(res);
+}
+
+/** `branch` of 'main' (or '') clears the binding. production is refused server-side. */
+export async function vcsEnvBind(
+  client: HivekuMcpClient,
+  projectId: string,
+  environment: 'development' | 'staging',
+  branch: string,
+): Promise<EnvBindings> {
+  const res = await client.callToolJson<unknown>('project_vcs_env_bind', {
+    project_id: projectId,
+    environment,
+    branch,
+  });
+  return unwrap<EnvBindings>(res);
+}
+
+/**
+ * Scoop pending work onto a branch. dryRun defaults TRUE and writes NOTHING —
+ * only an explicit false moves anything. No `{data}` envelope on this route.
+ */
+export async function vcsStash(
+  client: HivekuMcpClient,
+  projectId: string,
+  environment: 'production' | 'development' | 'staging',
+  dryRun = true,
+  branchName?: string,
+): Promise<StashResponse> {
+  const res = await client.callToolJson<unknown>('project_vcs_stash', {
+    project_id: projectId,
+    environment,
+    dry_run: dryRun,
+    ...(branchName ? { branch_name: branchName } : {}),
+  });
+  return unwrap<StashResponse>(res);
+}
+
+/** Irreversible for the ref. Refused for main, env-bound branches, and open-PR branches. */
+export async function vcsBranchDelete(
+  client: HivekuMcpClient,
+  projectId: string,
+  branch: string,
+  force = false,
+): Promise<{ deleted: string }> {
+  const res = await client.callToolJson<unknown>('project_vcs_branch_delete', {
+    project_id: projectId,
+    branch,
+    confirm: true,
+    ...(force ? { force: true } : {}),
+  });
+  return unwrap<{ deleted: string }>(res);
 }
 
 export async function deploySite(
