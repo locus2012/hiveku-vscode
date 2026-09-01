@@ -824,8 +824,11 @@ export const DEPARTMENTS: Department[] = [
       '`_transfer_to_voice` / `_merge` (no hard delete — close/merge). ' +
       'Queues: `helpdesk_queues_create` / `_update` / `_delete` (+ `_add_member` / `_remove_member`). ' +
       'Macros: `helpdesk_macros_create` / `_update` / `_delete` / `_render`. ' +
-      'KB categories: `helpdesk_kb_categories_create` (list via `helpdesk_kb_categories_list`; no update/delete — create-only). ' +
-      'KB articles: `helpdesk_kb_article_create` / `_update` / `_delete` (no list-all tool — find via `helpdesk_kb_search({ q })`).',
+      'KB categories: `helpdesk_kb_categories_create` / `_update` / `_delete` (list via `helpdesk_kb_categories_list`; ' +
+      'renaming does NOT change the slug — pass `slug` or `regenerate_slug: true`; delete refuses a non-empty category ' +
+      'unless you pass `reassign_to` or `force`). ' +
+      'KB articles: `helpdesk_kb_article_create` / `_update` / `_delete` (no list-all tool — find via `helpdesk_kb_search({ q })`; ' +
+      'moving visibility to `public` auto-publishes).',
   },
   {
     id: 'pm',
