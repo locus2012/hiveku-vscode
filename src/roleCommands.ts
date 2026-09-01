@@ -266,6 +266,7 @@ USE THE RESULT:
 - Site: for website projects use \`assets_upload\` (the S3/CDN lane) — the marketing Media Library and
   website-project assets are SEPARATE stores; download + re-upload when moving between them.
 - Close the loop in the PM task (what was created, asset ids, where it was used) + owner update.
+For editable, layered design projects (the designer lane), follow the hiveku-creative-agency skill: \`design_create\`, not a flat PNG.
 `;
 
 const PULL_DATA_COMMAND = `---
@@ -557,6 +558,45 @@ Social report. 1. \`social_analytics_summary\` + \`social_list_posts\` (recent, 
 3. ${PERSIST_STEP}
 `,
       };
+    case 'designer':
+      return {
+        'hiveku-design-brief': `---
+description: Design queue brief - active designs, unresolved client threads, storyboards awaiting approval, brand gaps, ranked.
+---
+Design brief. Context FIRST: \`account_context_get({ domain: "branding" })\` (branding is the visual-system
+domain; there is no "creative" chat domain).
+1. \`design_list\` → the active / mid-revision designs. Per active design, \`design_comments_list({ id })\`
+   → the unresolved client threads. Resolved comments come back too: filter on \`isResolved\` yourself or
+   your count will disagree with the "N unresolved" badge the client sees.
+2. Storyboards awaiting approval: there is no storyboard list tool, so read the branding memory ledger
+   (\`memory_list({ domain: "branding" })\`) for recorded storyboard ids, then check each with
+   \`marketing_storyboard_get({ storyboard_id })\`. Approval is a human click in the dashboard: you report
+   what is waiting, you never approve.
+3. Brand gaps: \`brand_guide_list\` (no guide / no logo / no fonts means foundation work comes first; the
+   playbook is \`hiveku-data/creative/SETUP.md\`).
+4. Rank the queue: unresolved client revisions first, then approvals blocking a video run, then new
+   briefs, then brand foundation. One next action per item.
+5. ${PERSIST_STEP}
+`,
+        'hiveku-design-produce': `---
+description: Produce a design deliverable from a brief - brand first, reuse first, editable layered designs with dashboard links, self-judged before hand-off.
+argument-hint: "[campaign brief]"
+---
+Produce: $ARGUMENTS. Brand FIRST: \`account_context_get({ domain: "branding" })\` + \`brand_guide_get\` -
+colors, fonts, logo URLs and voice come from there, never from a previous account.
+1. Reuse first: \`media_library_list\` (the client's real photos beat generated ones) and
+   \`stock_photos_search\` before generating anything.
+2. One shared direction for the whole set via \`talk_to_department({ domain: "branding", message })\`, then
+   \`design_templates_list\` (brand-substituted starting points) → \`design_create({ title, designType,
+   artboard, initialCanvasData })\` per artboard / variant. Text and logos are canvas LAYERS; never
+   generate them into an image.
+3. Self-judge before hand-off: \`design_export_image({ id, canvas_json, width, height })\` → download the
+   PNG → look at it → fix the canvas (\`design_update\`) → export again. Iterate until it reads right.
+4. Hand off every \`dashboardUrl\` (the client edits there); register exports the client will reuse with
+   \`media_library_register_external_url({ file_url, title, tags })\`.
+5. ${PERSIST_STEP}
+`,
+      };
     default:
       return {};
   }
@@ -588,6 +628,11 @@ function cadenceCommands(role: Role): Record<string, string> {
       skill: 'hiveku-content-agency',
       weekly: 'last week\'s post performance (`social_analytics_summary`, `social_list_posts`), pillar balance, next week\'s queue',
       report: 'by-platform and by-pillar performance + next bets → `reports/<YYYY-MM>-social.md`',
+    },
+    designer: {
+      skill: 'hiveku-creative-agency',
+      weekly: 'revision sweep (`design_list` → `design_comments_list` per active design, unresolved threads first), storyboard approvals outstanding (ids from branding memory; there is no storyboard list tool on this key yet), brand audit (`brand_guide_list` gaps: logo, fonts, voice), export/register hygiene',
+      report: 'deliverables shipped (designs created/revised with dashboard links), video clips consumed vs the monthly cap (`design_video_capabilities_get`), generation spend ledger, media library growth + top reused assets → `reports/<YYYY-MM>-creative.md`',
     },
     sales: {
       skill: 'hiveku-sales-agency',

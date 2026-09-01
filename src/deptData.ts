@@ -14,7 +14,7 @@
 import type { PageAccessKey } from './pageAccessKeys';
 
 import { HivekuMcpClient } from './mcpClient';
-import { SEO_SETUP, CRM_SETUP, EMAIL_SETUP, SOCIAL_SETUP, OUTBOUND_SETUP, ACCOUNTING_SETUP } from './setupPlaybooks';
+import { SEO_SETUP, CRM_SETUP, EMAIL_SETUP, SOCIAL_SETUP, OUTBOUND_SETUP, ACCOUNTING_SETUP, CREATIVE_SETUP } from './setupPlaybooks';
 
 export type Row = Record<string, unknown>;
 
@@ -805,6 +805,7 @@ export const DEPARTMENTS: Department[] = [
       '`design_export_image` / `design_export_mp4`. ' +
       'The four marketing entities (avatars/journeys/brand-guides/grids) are dumped full to `<dataset>/<item>.json`; ' +
       'designs are list-only locally (use `design_state_get` for the canvas).',
+    setup: CREATIVE_SETUP,
   },
   {
     id: 'helpdesk',

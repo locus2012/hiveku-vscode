@@ -32,6 +32,7 @@ export type RoleId =
   | 'outbound'
   | 'helpdesk'
   | 'social'
+  | 'designer'
   | 'owner';
 
 export interface Role {
@@ -128,6 +129,17 @@ export const ROLES: Role[] = [
     deptIds: ['social', 'creative', 'content', 'media', 'analytics', 'pm'],
     knowledgeDomains: ['social', 'branding'],
     briefTools: ['social_analytics_summary'],
+  },
+  {
+    id: 'designer',
+    label: 'Designer / Creative',
+    blurb: 'Designs, brand system, media library, video approvals',
+    deptIds: ['creative', 'media', 'content', 'social', 'pm'],
+    // 'branding' MUST stay at index 0: dailyCommand + cadenceCommands read
+    // knowledgeDomains[0], and there is no 'creative' chat domain (chatDomains.ts
+    // aliases creative → branding).
+    knowledgeDomains: ['branding', 'marketing'],
+    briefTools: ['design_list', 'brand_guide_list', 'media_library_list', 'social_list_posts'],
   },
   {
     id: 'owner',

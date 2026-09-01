@@ -18,6 +18,7 @@ import {
   CONTENT_AGENCY_SKILL,
   SALES_AGENCY_SKILL,
   OUTBOUND_AGENCY_SKILL,
+  CREATIVE_AGENCY_SKILL,
 } from './agencySkillsContent';
 
 const SKILLS: Record<string, string> = {
@@ -26,6 +27,7 @@ const SKILLS: Record<string, string> = {
   'hiveku-content-agency': CONTENT_AGENCY_SKILL,
   'hiveku-sales-agency': SALES_AGENCY_SKILL,
   'hiveku-outbound-agency': OUTBOUND_AGENCY_SKILL,
+  'hiveku-creative-agency': CREATIVE_AGENCY_SKILL,
 };
 
 /** Which agency skills each role receives. Roles absent here get none. */
@@ -34,8 +36,11 @@ const ROLE_SKILLS: Record<string, string[]> = {
   // list to an outbound campaign (see "Backlink outreach campaigns").
   seo: ['hiveku-seo-agency', 'hiveku-outbound-agency'],
   ppc: ['hiveku-ppc-agency'],
-  marketer: ['hiveku-content-agency', 'hiveku-seo-agency'],
-  social: ['hiveku-content-agency'],
+  marketer: ['hiveku-content-agency', 'hiveku-seo-agency', 'hiveku-creative-agency'],
+  social: ['hiveku-content-agency', 'hiveku-creative-agency'],
+  // Designer carries content too: campaign creative briefs, captions, and the
+  // editorial calendar the visuals serve live in the content methodology.
+  designer: ['hiveku-creative-agency', 'hiveku-content-agency'],
   sales: ['hiveku-sales-agency'],
   outbound: ['hiveku-outbound-agency', 'hiveku-sales-agency'],
   owner: Object.keys(SKILLS),

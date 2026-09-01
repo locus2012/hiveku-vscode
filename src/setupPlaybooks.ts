@@ -230,3 +230,50 @@ Charging customers (Hiveku Payments, your own Stripe, Authorize.Net) is configur
 Do not record a payment against the test bill. Once \`amount_paid_cents\` is above 0, \`accounting_bill_void\` returns 409 with \`This bill has payments recorded and cannot be voided. Reverse the payments first.\`, and \`accounting_bill_delete\` refuses on the same condition. The tool registry has no payment reversal, refund or payment-delete tool, so that advice cannot be followed from MCP and the bill stays in the books.
 
 Then re-run "Download Department Data -> Accounting" to refresh \`hiveku-data/accounting/*.json\`.`;
+
+export const CREATIVE_SETUP = `# Brand & Creative first-run: brand guide, logo, fonts, voice, avatars - verified
+
+Check current state FIRST: \`brand_guide_list\` + \`customer_avatar_list\` + \`media_library_list({ limit: 1 })\`.
+Existing rows mean the account is partly set up - fill the gaps only. The brand guide comes before ANY
+visual work: it is what \`account_context_get({ domain: "branding" })\` and every brand-aware image, design
+and video call reads (there is no "creative" chat domain - \`branding\` is the visual-system domain).
+
+## STEP 1 - the brand guide (the foundation everything else reads)
+Two ladders - pick by what exists:
+1. **Scrape-grounded** (preferred when the business has a live site): \`web_scrape({ url,
+   formats: ["branding", "markdown"] })\` on the homepage and /about - the \`branding\` format extracts the
+   site's colors, fonts and logo candidates; the markdown carries the voice. Then
+   \`brand_guide_create({ name, color_primary, color_secondary?, color_accent?, brand_voice?,
+   brand_personality?, font_heading_family?, font_body_family?, tagline?, industry?, is_default: true })\` -
+   \`name\` and \`color_primary\` (hex \`#rrggbb\`) are the two required fields.
+2. **Manual interview** (no site, or a rebrand): ask for the primary + supporting colors, heading/body
+   fonts, three personality words and a one-line voice note, then the same \`brand_guide_create\`.
+Refine anytime with \`brand_guide_update({ guide_id, ... })\`. Delete is SOFT (\`brand_guide_delete\` flips
+is_active=false, restorable via \`brand_guide_update\`), then \`brand_guide_purge\` for hard - never purge a
+guide that existing designs reference.
+
+## STEP 2 - the logo (nothing DRAWS a logo)
+Upload the user's real logo files: \`media_upload({ file_name, content: <base64>, mime_type })\` per variant
+(primary, icon, dark/light) → \`brand_guide_set_logo({ guide_id, logo_primary_url, logo_icon_url?,
+logo_dark_url?, logo_light_url? })\` with the returned URLs. No tool draws a logo and \`generate_image\` must
+not be used for one - a missing logo is a design project first (the designer lane's \`design_create\`,
+approved by the human in the dashboard), then upload the exported file here.
+
+## STEP 3 - fonts + voice
+Standard families: \`brand_guide_update({ guide_id, font_heading_family, font_body_family })\`. Self-hosted
+fonts: \`brand_guide_font_create({ guide_id, font_family, display_name, weight?, style?, css_font_face })\` -
+\`css_font_face\` is the ONLY field the generated brand CSS emits; file URLs alone register a font no page
+ever loads. Written voice: \`brand_guide_update({ guide_id, brand_voice, brand_personality })\`. Approved
+video narrators are read-only here: \`brand_guide_voiceovers_get({ brand_id? })\`.
+
+## STEP 4 - customer avatars, grounded
+Per avatar: \`customer_avatar_create({ name, description? })\` → \`customer_avatar_populate({ entity_id,
+urls_to_scrape: [homepage, /about, service pages], search_queries?, agent_notes: <interview notes> })\` -
+populate refuses without grounding, which is why research comes first. 2-3 avatars cover most accounts.
+
+## Verify
+1. \`brand_guide_get({ guide_id })\` shows the colors, fonts and \`logo_primary_url\`.
+2. One test asset: \`generate_image({ prompt })\` - brand-aware by default, auto-registers a media_asset -
+   then confirm the row appears via \`media_library_list({ source_type: "ai_generated", limit: 5 })\`.
+Then re-run "Download Department Data → Brand & Creative" to refresh \`hiveku-data/creative/*.json\`.
+`;

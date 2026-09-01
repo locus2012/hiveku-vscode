@@ -1740,6 +1740,15 @@ Generated media registers in the Media Library and attaches to posts/ads via its
   FREE lane instead: \`marketing_design_export_mp4\` renders an existing Creative Studio design.
 - The marketing Media Library and website-project assets (\`assets_upload\`) are SEPARATE stores —
   move files between them explicitly.
+- **Brand first:** \`account_context_get({ domain: "branding" })\` + \`brand_guide_get\` before ANY visual
+  work. There is NO "creative" chat domain; \`branding\` is the visual-system domain.
+- **Editable beats flat:** a layered design project (\`design_create\`) hands back a \`dashboardUrl\` the
+  user edits in; text and logos are canvas LAYERS (text rendered inside a generated image is garbage).
+- **Never clobber:** \`design_update\` replaces the WHOLE canvasData: \`design_state_get\` → reason → update,
+  and \`design_version_create\` before destructive edits.
+- **Video approval is a human dashboard gate:** \`marketing_storyboard_submit_for_approval\` then STOP. No
+  tool approves, and assembling single clips around the gate is refused.
+- **Self-judge:** \`design_export_image\` → fetch the PNG → look at it → iterate before handing off.
 
 ## Work tracking — PM tasks are REQUIRED, attributed to YOU (the authenticated user)
 **If the work isn't documented in a PM task, it didn't happen.** This applies to EVERY department you
