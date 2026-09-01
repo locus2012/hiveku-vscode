@@ -50,6 +50,11 @@ const SLOW_TOOL_TIMEOUT_MS: Record<string, number> = {
   // Strict PR merge reads both trees and commits; same reasoning, smaller job.
   project_vcs_pr_merge: 180_000,
   project_vcs_merge: 180_000,
+  // A board render drives a headless browser: ~5-15s warm, and the route is
+  // maxDuration = 180. At the 60s default the extension would abort a capture
+  // that is still running and will still be billed, and report a failure for a
+  // render that then succeeds.
+  hiveboard_render: 180_000,
 };
 let inFlight = 0;
 const waiters: Array<() => void> = [];
