@@ -409,7 +409,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.checkRemote', () => withScm((s) => checkRemote(s))),
     vscode.commands.registerCommand('hiveku.openPreview', () => withScm((s) => resources.openPreview(s, clientForAccount))),
     vscode.commands.registerCommand('hiveku.syncPreview', () => withScm((s) => resources.syncPreview(s, clientForAccount))),
-    vscode.commands.registerCommand('hiveku.rebuildPreview', () => withScm((s) => resources.rebuildPreview(s, clientForAccount))),
+    vscode.commands.registerCommand('hiveku.rebuildPreview', (node?: { record?: AccountRecord; project?: api.ProjectSummary; env?: resources.EnvKind }) => {
+      // From the projects tree the preview-environment node carries the ids;
+      // from the SCM title bar there is no node, so resolve via the active scm.
+      if (node?.record && node?.project) {
+        if (node.env && node.env !== 'preview') {
+          void vscode.window.showInformationMessage('Rebuild applies to the live preview environment - deployed tiers redeploy instead.');
+          return;
+        }
+        return resources.rebuildPreviewFor({ accountId: node.record.accountId, projectId: node.project.id }, clientForAccount);
+      }
+      return withScm((s) => resources.rebuildPreview(s, clientForAccount));
+    }),
     vscode.commands.registerCommand('hiveku.previewLogs', () => withScm((s) => resources.previewLogs(s, clientForAccount, log))),
     vscode.commands.registerCommand('hiveku.previewScreenshot', () => withScm((s) => resources.previewScreenshot(s, clientForAccount))),
     vscode.commands.registerCommand('hiveku.secrets', () => withScm((s) => resources.manageSecrets(s, clientForAccount))),

@@ -113,7 +113,17 @@ export async function openPreview(scm: HivekuScm, clientFor: ClientFor): Promise
   if (ov.preview_url) {
     await vscode.env.openExternal(vscode.Uri.parse(ov.preview_url));
   } else {
-    vscode.window.showInformationMessage(`Preview ${ov.status ?? 'unavailable'} — try "Sync to Preview" first.`);
+    // Name the boot phase instead of a bare status - a 2-5 minute dependency
+    // install reads as "broken" without it. previewHealth never wakes a
+    // stopped machine (server-side guard), so this probe is always safe.
+    const phase = (await api.previewHealth(client, scm.link.project_id))?.phase;
+    vscode.window.showInformationMessage(
+      phase === 'installing' || phase === 'downloading'
+        ? 'Preview is installing dependencies (2-5 min after a dependency change) - try again shortly.'
+        : phase === 'stopped'
+          ? 'Preview machine is stopped - "Sync to Preview" or "Rebuild Preview from Saved Project" will bring it back.'
+          : `Preview ${ov.status ?? 'unavailable'} — try "Sync to Preview" first.`,
+    );
   }
 }
 
@@ -124,17 +134,26 @@ export async function syncPreview(scm: HivekuScm, clientFor: ClientFor): Promise
 }
 
 export async function rebuildPreview(scm: HivekuScm, clientFor: ClientFor): Promise<void> {
+  return rebuildPreviewFor({ accountId: scm.link.account_id, projectId: scm.link.project_id }, clientFor);
+}
+
+// Also reachable from the projects tree's preview-environment node, where
+// there is no SCM provider - same flow, addressed by ids.
+export async function rebuildPreviewFor(
+  opts: { accountId: string; projectId: string },
+  clientFor: ClientFor,
+): Promise<void> {
   const ok = await vscode.window.showWarningMessage(
     'Rebuild the preview from the saved project? The preview machine restarts (about 90 seconds; a dependency install can add 2-5 minutes).',
     { modal: true },
     'Rebuild',
   );
   if (ok !== 'Rebuild') return;
-  const client = await clientFor(scm.link.account_id);
+  const client = await clientFor(opts.accountId);
   const ready = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Window, title: 'Hiveku: rebuilding preview…' },
     async (progress) => {
-      const result = await api.previewForceRecompile(client, scm.link.project_id);
+      const result = await api.previewForceRecompile(client, opts.projectId);
       // The route can recreate the machine and then fail the post-recreate file
       // sync - it reports that as success:false + warning. Silence here would
       // leave the operator polling a machine that holds stale files.
@@ -144,7 +163,7 @@ export async function rebuildPreview(scm: HivekuScm, clientFor: ClientFor): Prom
       const deadline = Date.now() + 3 * 60 * 1000;
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 5000));
-        const health = await api.previewHealth(client, scm.link.project_id);
+        const health = await api.previewHealth(client, opts.projectId);
         if (health?.ready === true) return true;
         const phase = health?.phase;
         progress.report({
@@ -160,7 +179,7 @@ export async function rebuildPreview(scm: HivekuScm, clientFor: ClientFor): Prom
   if (ready) {
     let url: string | undefined;
     try {
-      url = (await api.previewOverview(client, scm.link.project_id)).preview_url;
+      url = (await api.previewOverview(client, opts.projectId)).preview_url;
     } catch {
       /* the rebuild succeeded either way — the URL is a nicety */
     }

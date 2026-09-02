@@ -813,6 +813,11 @@
           "group": "inline"
         },
         {
+          "command": "hiveku.rebuildPreview",
+          "when": "view == hiveku.projects && viewItem == hivekuSiteEnv",
+          "group": "hiveku@1"
+        },
+        {
           "command": "hiveku.setRole",
           "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
           "group": "1_role@0"
