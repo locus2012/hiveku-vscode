@@ -237,6 +237,11 @@
         "icon": "$(sync)"
       },
       {
+        "command": "hiveku.rebuildPreview",
+        "title": "Hiveku: Rebuild Preview from Saved Project",
+        "icon": "$(debug-restart)"
+      },
+      {
         "command": "hiveku.previewLogs",
         "title": "Hiveku: Preview Logs",
         "icon": "$(output)"
@@ -585,6 +590,11 @@
         },
         {
           "command": "hiveku.syncPreview",
+          "group": "3_resources",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.rebuildPreview",
           "group": "3_resources",
           "when": "scmProvider == hiveku"
         },

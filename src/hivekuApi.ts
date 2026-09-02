@@ -1187,6 +1187,44 @@ export async function previewSync(client: HivekuMcpClient, projectId: string): P
   return client.callToolJson<unknown>('preview_sync', { project_id: projectId });
 }
 
+export async function previewForceRecompile(
+  client: HivekuMcpClient,
+  projectId: string,
+  refreshImage = false,
+): Promise<{ success?: boolean; warning?: string }> {
+  const res = await client.callToolJson<unknown>('preview_force_recompile', {
+    project_id: projectId,
+    refresh_image: refreshImage,
+    wait_for_ready: false,
+  });
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  return {
+    success: typeof d.success === 'boolean' ? d.success : undefined,
+    warning: typeof d.warning === 'string' ? d.warning : undefined,
+  };
+}
+
+/**
+ * Boot-phase probe for the preview machine, via the `preview_health` tool.
+ * Returns undefined if the tool isn't available (older server) or the call
+ * fails — callers should treat that as "unknown", not as unhealthy.
+ */
+export async function previewHealth(
+  client: HivekuMcpClient,
+  projectId: string,
+): Promise<{ ready?: boolean; phase?: string } | undefined> {
+  try {
+    const res = await client.callToolJson<unknown>('preview_health', { project_id: projectId });
+    const d = unwrap<Record<string, unknown>>(res) ?? {};
+    return {
+      ready: typeof d.ready === 'boolean' ? d.ready : undefined,
+      phase: typeof d.phase === 'string' ? d.phase : undefined,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 export async function previewLogs(client: HivekuMcpClient, projectId: string, limit = 200): Promise<string> {
   const res = await client.callToolJson<unknown>('preview_logs', { project_id: projectId, limit });
   const d = unwrap<Record<string, unknown>>(res) ?? {};

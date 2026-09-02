@@ -409,6 +409,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.checkRemote', () => withScm((s) => checkRemote(s))),
     vscode.commands.registerCommand('hiveku.openPreview', () => withScm((s) => resources.openPreview(s, clientForAccount))),
     vscode.commands.registerCommand('hiveku.syncPreview', () => withScm((s) => resources.syncPreview(s, clientForAccount))),
+    vscode.commands.registerCommand('hiveku.rebuildPreview', () => withScm((s) => resources.rebuildPreview(s, clientForAccount))),
     vscode.commands.registerCommand('hiveku.previewLogs', () => withScm((s) => resources.previewLogs(s, clientForAccount, log))),
     vscode.commands.registerCommand('hiveku.previewScreenshot', () => withScm((s) => resources.previewScreenshot(s, clientForAccount))),
     vscode.commands.registerCommand('hiveku.secrets', () => withScm((s) => resources.manageSecrets(s, clientForAccount))),

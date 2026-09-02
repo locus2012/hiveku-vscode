@@ -123,6 +123,55 @@ export async function syncPreview(scm: HivekuScm, clientFor: ClientFor): Promise
   vscode.window.showInformationMessage('Synced the project to its live Fly preview.');
 }
 
+export async function rebuildPreview(scm: HivekuScm, clientFor: ClientFor): Promise<void> {
+  const ok = await vscode.window.showWarningMessage(
+    'Rebuild the preview from the saved project? The preview machine restarts (about 90 seconds; a dependency install can add 2-5 minutes).',
+    { modal: true },
+    'Rebuild',
+  );
+  if (ok !== 'Rebuild') return;
+  const client = await clientFor(scm.link.account_id);
+  const ready = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Window, title: 'Hiveku: rebuilding preview…' },
+    async (progress) => {
+      const result = await api.previewForceRecompile(client, scm.link.project_id);
+      // The route can recreate the machine and then fail the post-recreate file
+      // sync - it reports that as success:false + warning. Silence here would
+      // leave the operator polling a machine that holds stale files.
+      if (result.warning) void vscode.window.showWarningMessage(`Hiveku: ${result.warning}`);
+      // Poll boot phase every 5s for up to 3 minutes — a dependency install can
+      // legitimately run past that, so a timeout is "still going", not a failure.
+      const deadline = Date.now() + 3 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const health = await api.previewHealth(client, scm.link.project_id);
+        if (health?.ready === true) return true;
+        const phase = health?.phase;
+        progress.report({
+          message:
+            phase === 'installing' || phase === 'downloading'
+              ? 'Installing dependencies (2-5 min after a dependency change)'
+              : 'Starting preview',
+        });
+      }
+      return false;
+    },
+  );
+  if (ready) {
+    let url: string | undefined;
+    try {
+      url = (await api.previewOverview(client, scm.link.project_id)).preview_url;
+    } catch {
+      /* the rebuild succeeded either way — the URL is a nicety */
+    }
+    vscode.window.showInformationMessage(url ? `Preview rebuilt - ${url}` : 'Preview rebuilt.');
+  } else {
+    vscode.window.showInformationMessage(
+      'The preview rebuild continues in the background - check again shortly (a dependency install can take 2-5 minutes).',
+    );
+  }
+}
+
 export async function previewLogs(scm: HivekuScm, clientFor: ClientFor, output: vscode.OutputChannel): Promise<void> {
   const client = await clientFor(scm.link.account_id);
   const logs = await busy('Hiveku: fetching preview logs…', () => api.previewLogs(client, scm.link.project_id, 300));

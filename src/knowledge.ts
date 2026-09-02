@@ -466,6 +466,12 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__preview_overview',
   'mcp__hiveku__preview_logs',
   'mcp__hiveku__preview_screenshot',
+  // The preview-divergence triage reads. Pure GETs/reads that no glob above
+  // matches; the triage bullet in the generated docs routes agents at them,
+  // and prompting on every poll of a boot phase defeats the triage.
+  'mcp__hiveku__preview_health',
+  'mcp__hiveku__preview_client_errors',
+  'mcp__hiveku__preview_runtime_errors',
   // The annotated review screenshot. A GET that only renders the reviewer's own
   // pin onto their own screenshot, so it is a read - but it is named _screenshot,
   // which no glob above matches, and prompting for the one call that lets an
@@ -1465,6 +1471,12 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   \`/app\`) and quoted metacharacters are fine (\`grep -E "a|b"\`, \`node -e 'x => x'\`). After editing
   package.json or \`preview_force_recompile({ refresh_image: true })\`, run \`preview_reinstall_deps\` —
   a recreated machine boots with the scaffold's baked node_modules, not yours.
+- **Preview error triage (four branches):** error names a file NOT in the project →
+  \`preview_force_recompile\` (never add the starter's package to package.json, never delete the
+  container file by hand; persists → \`refresh_image: true\` once); error inside node_modules →
+  \`preview_reinstall_deps\`; error in a project-owned file → fix the code; blank page with dead
+  interactivity → \`preview_client_errors\`. \`preview_health\` phase \`installing\`/\`downloading\` →
+  wait 2-5 minutes; a healthy install is not a failure.
 - **SEE the preview, don't guess:** \`preview_screenshot({ project_id, path })\` returns the rendered
   page AS AN IMAGE in your thread (plus full-res URLs in the metadata). Use it to visually verify
   layout/branding changes before deploying — one call replaces a blind "did it render?" loop.

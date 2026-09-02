@@ -55,6 +55,12 @@ const SLOW_TOOL_TIMEOUT_MS: Record<string, number> = {
   // that is still running and will still be billed, and report a failure for a
   // render that then succeeds.
   hiveboard_render: 180_000,
+  // Even with wait_for_ready: false the route stops the machine, waits for
+  // stopped, starts (or destroy+recreates), and runs the post-start sync
+  // before responding - routinely past 60s. The MCP proxy budgets this exact
+  // call 240s; at the 60s default the client aborts a rebuild that is still
+  // running and a retry lands 409 preview_lifecycle_busy.
+  preview_force_recompile: 240_000,
 };
 let inFlight = 0;
 const waiters: Array<() => void> = [];
