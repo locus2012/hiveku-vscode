@@ -263,8 +263,13 @@ approved by the human in the dashboard), then upload the exported file here.
 Standard families: \`brand_guide_update({ guide_id, font_heading_family, font_body_family })\`. Self-hosted
 fonts: \`brand_guide_font_create({ guide_id, font_family, display_name, weight?, style?, css_font_face })\` -
 \`css_font_face\` is the ONLY field the generated brand CSS emits; file URLs alone register a font no page
-ever loads. Written voice: \`brand_guide_update({ guide_id, brand_voice, brand_personality })\`. Approved
-video narrators are read-only here: \`brand_guide_voiceovers_get({ brand_id? })\`.
+ever loads. Uploaded fonts render in server exports (\`design_export_image\` / \`design_export_mp4\` /
+\`design_publish_to_library\` / the storyboard final render): a font that fails to load degrades to the
+fallback stack with a line in the export's \`warnings\`, never a failed render, so prove a new font with one
+export and read \`warnings\`. \`css_font_face\` is screened at the worker: only \`@font-face\` blocks with
+http(s) or \`data:\` font URLs survive. Written voice: \`brand_guide_update({ guide_id, brand_voice,
+brand_personality })\`. Approved video narrators are read-only here:
+\`brand_guide_voiceovers_get({ brand_id? })\`.
 
 ## STEP 4 - customer avatars, grounded
 Per avatar: \`customer_avatar_create({ name, description? })\` → \`customer_avatar_populate({ entity_id,
@@ -273,7 +278,10 @@ populate refuses without grounding, which is why research comes first. 2-3 avata
 
 ## Verify
 1. \`brand_guide_get({ guide_id })\` shows the colors, fonts and \`logo_primary_url\`.
-2. One test asset: \`generate_image({ prompt })\` - brand-aware by default, auto-registers a media_asset -
-   then confirm the row appears via \`media_library_list({ source_type: "ai_generated", limit: 5 })\`.
+2. \`media_image_quota\` first (no arguments; a null \`remaining\` is unlimited or a failed read, never
+   zero), then ONE test asset: \`generate_image({ prompt })\` - brand-aware by default; the response's
+   \`brand_applied\` says whether the guide landed, and \`brand_skipped_reason: "no_active_brand_guide"\`
+   means STEP 1 is not active yet - it auto-registers a media_asset, so confirm the row appears via
+   \`media_library_list({ source_type: "ai_generated", limit: 5 })\`.
 Then re-run "Download Department Data → Brand & Creative" to refresh \`hiveku-data/creative/*.json\`.
 `;

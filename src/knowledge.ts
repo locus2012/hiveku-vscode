@@ -1861,6 +1861,8 @@ Generated media registers in the Media Library and attaches to posts/ads via its
 - **Images are cheap — iterate freely:** \`generate_image\` (brand-aware, auto-registered) /
   \`generate_image_set\` (up to 10 consistent variants — load \`account_context_get\` first) /
   \`stock_photos_search\`. Prefer the user's real photos when they exist (\`marketing_media_list\`).
+- **Read the meter before a batch:** \`media_image_quota\` before any \`generate_image_set\` or \`media_upscale\`; a null \`remaining\` is unlimited or a failed read, never zero.
+- **Media ops make NEW rows, bytes are immutable:** \`media_import_url\` (copy bytes in), \`media_transform\` (free crop/resize), \`media_upscale\` (a slot plus fal dollars); \`media_update\` is metadata only.
 - **Video is EXPENSIVE — generate deliberately:** \`marketing_generate_video\` makes a ~10s AI clip
   (9:16 or 16:9). **Always \`dry_run: true\` first** — it returns \`{ allowed, used, limit }\` (Premium
   plan, 20 clips/month, ~$1/clip). Never re-generate a clip that succeeded. Image-to-video: pass a

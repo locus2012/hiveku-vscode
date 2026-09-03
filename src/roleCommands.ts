@@ -233,37 +233,69 @@ const MEDIA_COMMAND = `---
 description: Create images and AI video for ads, social posts, and pages — brand-aware, registered to the Media Library, ready to attach.
 argument-hint: "[what to create, e.g. 'a 9:16 reel clip for the spring promo' or '4 ad images for the roofing campaign']"
 ---
-Create the media$ARGUMENTS. Everything you generate lands in the account's Media Library and attaches
-to posts/ads via its asset id — never paste raw URLs into content when an asset id exists.
+Create the media$ARGUMENTS. Generated images and clips auto-register in the account's Media Library and
+attach to posts via their file URL plus MIME type (\`media_urls\` + \`media_types\`); design exports and
+stock URLs do NOT auto-register, so register those yourself before attaching them anywhere.
 
-REUSE FIRST. \`marketing_media_list\` / \`stock_photos_search\` before generating — the user's real photos
+REUSE FIRST. \`media_library_list\` / \`stock_photos_search\` before generating: the user's real photos
 beat AI for authenticity (products, team, location shots), and generation costs money.
 
-IMAGES — cheap, iterate freely:
-- One image: \`generate_image({ prompt, ... })\` — brand-aware by default, auto-registers a media_asset.
-- A SET that must look consistent (ad variations, hero + before/after, carousel):
-  \`generate_image_set\` (up to 10 prompts, one shared brand context). Load \`account_context_get\` first
-  and write all prompts from the same visual language.
-- Stock: \`stock_photos_search\` → \`stock_photos_download\` (registers to the library).
+METER FIRST. \`media_image_quota\` (no arguments, always 200) before any set or upscale: \`remaining\` is
+what the next call can still produce; null means unlimited or a failed read (\`reason: "read_failed"\`),
+never zero, so say "unknown" and retry rather than "nothing left".
 
-VIDEO — EXPENSIVE, generate deliberately:
-- \`marketing_generate_video({ prompt, aspect_ratio })\` — ~10s clip, 720p. **ALWAYS call with
+IMAGES: cheap, iterate freely:
+- One image: \`generate_image({ prompt, ... })\`: brand-aware by default (\`use_brand: false\` opts out),
+  auto-registers a media_asset and returns \`media_asset_id\` plus \`brand_applied\` (and
+  \`brand_skipped_reason: "no_active_brand_guide"\` when the account has no active guide: the image is
+  unbranded and the slot was spent, say so). Exact frame via \`target_width\` / \`target_height\`;
+  \`mode: "modify"\` with \`reference_media_asset_ids\` edits an existing library image.
+- A SET that must look consistent (ad variations, hero + before/after, carousel):
+  \`generate_image_set\` (up to 10 prompts, one shared brand context; top-level \`use_brand\` and
+  \`target_width\` / \`target_height\` set the batch default, a per-prompt frame replaces them). Load
+  \`account_context_get({ domain: "branding" })\` first and write all prompts from the same visual
+  language. Read \`errors[]\` and \`summary\`, not the HTTP status.
+- Import: \`media_import_url({ url, folder_id?, title?, tags? })\` copies an external image's BYTES into
+  the library as a NEW row (no quota slot; SSRF-guarded, 25MB, image-only): use it for a client's file or
+  a chosen stock URL so the asset outlives its origin (\`stock_photos_download\` is the website-project
+  lane, not the library).
+- Transform: \`media_transform({ asset_id, resize?, crop?, format?, quality? })\` crops, resizes or
+  re-encodes an owned image into a NEW row for free (crop in source pixels, \`fit\` "cover" | "contain",
+  4096px a side): every slot resize starts here, never with a regeneration.
+- Upscale: \`media_upscale({ asset_id, scale? })\` (1-4x, 32 output-megapixel cap) makes a NEW row and
+  costs one image slot PLUS real fal dollars per output megapixel, billed once the worker accepts the
+  job: confirm per asset, and after a timeout check \`media_library_list\` before calling again.
+- Every operation is a new asset; bytes are immutable (\`media_update\` is metadata only and refuses
+  file_url / file_path / width / height / duration / ai_metadata with 400 \`immutable_field\`).
+
+VIDEO: EXPENSIVE, generate deliberately:
+- \`marketing_generate_video({ prompt, aspect_ratio })\`: a 2-10s clip, 720p. **ALWAYS call with
   \`dry_run: true\` first**: it returns \`{ allowed, used, limit }\` (Premium plan, 20 clips/month). Tell
-  the user the remaining quota before spending. Each clip is paid work — one good prompt beats three
-  retries; NEVER re-generate a clip that succeeded (the asset is already in the library).
+  the user the remaining quota before spending. \`duration_seconds\` is a HINT the lane snaps (kling 5s or
+  10s, the veo fal lanes 4/6/8s, omni-flash any 1-10s) and billing follows the rendered length: the
+  response's \`duration_effective\` (null when unmeasured, never 0) and \`duration_note\` are the truth.
+  Each clip is paid work: one good prompt beats three retries; NEVER re-generate a clip that succeeded
+  (the asset is already in the library).
 - "Animate this": generate or pick a still, then pass it as \`reference_media_asset_id\` for
-  image-to-video. Keep the motion prompt gentle (subtle camera drift, ambient motion).
+  image-to-video (\`reference_mode: "animate"\`; \`"compose"\` builds a branded still first and spends one
+  image credit). Keep the motion prompt gentle (subtle camera drift, ambient motion).
 - Shape by destination: 9:16 → Stories/Reels/TikTok/Shorts; 16:9 → YouTube/X/LinkedIn/site heroes.
   Duration ceilings at post time: Shorts 60s, Reels 90s, X 140s.
-- 429 \`video_quota_exhausted\` = platform capacity, resets overnight — schedule and move on, don't spin.
-- Animated DESIGNS (text/layout/branded cards) are a different lane: \`marketing_design_export_mp4\`
-  renders an existing Creative Studio design — no generation cost. Prefer it for text-heavy promos.
+- 429 \`video_quota_exhausted\` = platform capacity, resets overnight: schedule and move on, don't spin.
+  A 504 loses the response, not the paid job: \`design_render_job_get({ job_id })\` with the returned
+  \`render_job_id\` before any second spend.
+- Animated DESIGNS (text/layout/branded cards) are a different lane: \`design_export_mp4\` renders an
+  existing Creative Studio design, no generation cost. Prefer it for text-heavy promos. Brand custom
+  fonts render in exports; read \`warnings\` on the response for any font that degraded.
 
 USE THE RESULT:
-- Social post: attach via \`media_asset_ids\` on the post-create call; check the platform's media rules
-  first (TikTok posts land as inbox drafts; X posting is Premium-gated).
-- Ads: image sets sized per placement; note ad platforms re-crop — keep the subject centered.
-- Site: for website projects use \`assets_upload\` (the S3/CDN lane) — the marketing Media Library and
+- Social post: \`social_create_post\` takes \`media_urls\` + \`media_types\` (index-aligned, one MIME per
+  entry: "image/png", "image/jpeg", "video/mp4"); a finished creative goes onto an existing or scheduled
+  post with \`social_update_post({ post_id, media_urls, media_types })\`, which replaces the post's whole
+  media list (send every URL; a published or publishing post is edit-locked). Check the platform's media
+  rules first (TikTok posts land as inbox drafts; X posting is Premium-gated).
+- Ads: image sets sized per placement; note ad platforms re-crop: keep the subject centered.
+- Site: for website projects use \`assets_upload\` (the S3/CDN lane): the marketing Media Library and
   website-project assets are SEPARATE stores; download + re-upload when moving between them.
 - Close the loop in the PM task (what was created, asset ids, where it was used) + owner update.
 For editable, layered design projects (the designer lane), follow the hiveku-creative-agency skill: \`design_create\`, not a flat PNG.
@@ -561,40 +593,67 @@ Social report. 1. \`social_analytics_summary\` + \`social_list_posts\` (recent, 
     case 'designer':
       return {
         'hiveku-design-brief': `---
-description: Design queue brief - active designs, unresolved client threads, storyboards awaiting approval, brand gaps, ranked.
+description: Design queue brief - inbox ears, active designs, unresolved client threads, storyboards awaiting approval, the image meter, brand gaps, ranked.
 ---
 Design brief. Context FIRST: \`account_context_get({ domain: "branding" })\` (branding is the visual-system
 domain; there is no "creative" chat domain).
-1. \`design_list\` → the active / mid-revision designs. Per active design, \`design_comments_list({ id })\`
+1. The ears: \`agent_inbox_list({ category: "design.comment" })\` (one open item per design + thread),
+   \`agent_inbox_list({ category: "design.video_completed" })\` and
+   \`agent_inbox_list({ category: "design.video_failed" })\` (one item per finished or failed storyboard
+   run). \`agent_inbox_get({ item_id })\` for the body; the fix happens on the design or the pipeline, and
+   \`agent_inbox_resolve({ item_id })\` only closes the row after it is fixed (the producer re-files on
+   new activity).
+2. \`design_list\` → the active / mid-revision designs. Per active design, \`design_comments_list({ id })\`
    → the unresolved client threads. Resolved comments come back too: filter on \`isResolved\` yourself or
-   your count will disagree with the "N unresolved" badge the client sees.
-2. Storyboards awaiting approval: there is no storyboard list tool, so read the branding memory ledger
-   (\`memory_list({ domain: "branding" })\`) for recorded storyboard ids, then check each with
-   \`marketing_storyboard_get({ storyboard_id })\`. Approval is a human click in the dashboard: you report
-   what is waiting, you never approve.
-3. Brand gaps: \`brand_guide_list\` (no guide / no logo / no fonts means foundation work comes first; the
+   your count will disagree with the "N unresolved" badge the client sees. A \`featuredImageUrl\` of null
+   with \`featured_image_inline: true\` is an inline thumbnail, not a missing one.
+3. Storyboards: \`marketing_video_pipeline_list\` (summaries: pipelineId, status, approvedAt,
+   resultMediaAssetId; listing approves nothing), reconciled against the branding memory ledger
+   (\`memory_list({ domain: "branding" })\`); \`marketing_video_pipeline_status({ pipeline_id })\` for one
+   board. Approval is a human click in the dashboard: you report what is waiting, you never approve.
+   \`design_render_jobs_list({ status })\` finds renders that died between export and registration.
+4. The meter: \`media_image_quota\` (no arguments). Report \`remaining\` of \`limit\`; a null \`remaining\`
+   is unlimited or a failed read (\`reason: "read_failed"\`), never zero, so say which.
+5. Brand gaps: \`brand_guide_list\` (no guide / no logo / no fonts means foundation work comes first; the
    playbook is \`hiveku-data/creative/SETUP.md\`).
-4. Rank the queue: unresolved client revisions first, then approvals blocking a video run, then new
-   briefs, then brand foundation. One next action per item.
-5. ${PERSIST_STEP}
+6. Rank the queue: failed video runs and unresolved client revisions first, then approvals blocking a
+   video run, then new briefs, then brand foundation. One next action per item.
+7. ${PERSIST_STEP}
 `,
         'hiveku-design-produce': `---
-description: Produce a design deliverable from a brief - brand first, reuse first, editable layered designs with dashboard links, self-judged before hand-off.
+description: Produce a design deliverable from a brief - brand first, reuse and transform first, the meter before any batch, editable layered designs with dashboard links, self-judged, then handed to the post.
 argument-hint: "[campaign brief]"
 ---
 Produce: $ARGUMENTS. Brand FIRST: \`account_context_get({ domain: "branding" })\` + \`brand_guide_get\` -
 colors, fonts, logo URLs and voice come from there, never from a previous account.
 1. Reuse first: \`media_library_list\` (the client's real photos beat generated ones) and
-   \`stock_photos_search\` before generating anything.
-2. One shared direction for the whole set via \`talk_to_department({ domain: "branding", message })\`, then
-   \`design_templates_list\` (brand-substituted starting points) → \`design_create({ title, designType,
-   artboard, initialCanvasData })\` per artboard / variant. Text and logos are canvas LAYERS; never
-   generate them into an image.
-3. Self-judge before hand-off: \`design_export_image({ id, canvas_json, width, height })\` → download the
-   PNG → look at it → fix the canvas (\`design_update\`) → export again. Iterate until it reads right.
-4. Hand off every \`dashboardUrl\` (the client edits there); register exports the client will reuse with
-   \`media_library_register_external_url({ file_url, title, tags })\`.
-5. ${PERSIST_STEP}
+   \`stock_photos_search\` before generating anything. An owned asset at the wrong size or crop is a
+   \`media_transform({ asset_id, resize | crop | format })\` (free, a NEW row); a client's or stock URL that
+   must outlive its origin is \`media_import_url({ url })\` (bytes copied, no quota slot); a source that
+   is genuinely too small is \`media_upscale({ asset_id, scale })\` (a NEW row that costs one image slot
+   PLUS fal dollars per output megapixel, 32-megapixel cap): confirm per asset, never batch it.
+2. The meter before any batch: \`media_image_quota\`. Tell the user \`remaining\` (null = unlimited or
+   unknown, never zero) before a \`generate_image_set\`; both generators are brand-aware by default and
+   report \`brand_applied\` / \`brand_skipped_reason\`, and a 503 \`brand_unavailable\` spent nothing.
+3. One shared direction for the whole set via \`talk_to_department({ domain: "branding", message })\`, then
+   \`design_templates_list\` (brand-substituted starting points, including the 1200x600 email headers,
+   the 1200x630 OG card, 1280x720 YouTube, 1584x396 LinkedIn and 1500x500 X formats) →
+   \`design_create({ title, designType, artboard, initialCanvasData })\` per artboard / variant. Text and
+   logos are canvas LAYERS; never generate them into an image.
+4. Self-judge before hand-off: \`design_export_image({ id, canvas_json, width, height })\` → read
+   \`warnings\` (a font that degraded makes the PNG brand-wrong) → download the PNG → look at it → fix the
+   canvas with \`design_update({ id, canvasData, expectedSectionsVersion })\` (the token from
+   \`design_state_get\`; a 409 \`sections_version_conflict\` means re-read and re-apply your intent onto
+   \`serverCanvasData\`, never resend the same body) → export again. Two or three passes, then hand off.
+5. Finish: \`design_publish_to_library({ id, set_as_featured: true })\` once per finished design (the
+   thumbnail path; never retried blind), hand off every \`dashboardUrl\` (the client edits there), and
+   register exports the client will reuse with \`media_library_register_external_url({ file_url, title,
+   tags })\`.
+6. Attach: a finished creative goes onto the post with \`social_update_post({ post_id, media_urls,
+   media_types })\` (index-aligned, one MIME per entry, replaces the post's whole media list; a
+   published post is edit-locked) or on \`social_create_post\` at create time, under the social lane's own
+   confirm rules; site slots go through \`assets_upload\` (a separate store: download + re-upload).
+7. ${PERSIST_STEP}
 `,
       };
     default:
@@ -631,8 +690,8 @@ function cadenceCommands(role: Role): Record<string, string> {
     },
     designer: {
       skill: 'hiveku-creative-agency',
-      weekly: 'revision sweep (`design_list` → `design_comments_list` per active design, unresolved threads first), storyboard approvals outstanding (ids from branding memory; there is no storyboard list tool on this key yet), brand audit (`brand_guide_list` gaps: logo, fonts, voice), export/register hygiene',
-      report: 'deliverables shipped (designs created/revised with dashboard links), video clips consumed vs the monthly cap (`design_video_capabilities_get`), generation spend ledger, media library growth + top reused assets → `reports/<YYYY-MM>-creative.md`',
+      weekly: 'inbox ears (`agent_inbox_list` for design.comment / design.video_completed / design.video_failed, `agent_inbox_resolve` only what is fixed), revision sweep (`design_list` → `design_comments_list` per active design, unresolved threads first), storyboard approvals outstanding (`marketing_video_pipeline_list` reconciled against branding memory; you never approve), lost renders (`design_render_jobs_list`), the image meter (`media_image_quota`: a null remaining is unknown or unlimited, never zero), brand audit (`brand_guide_list` gaps: logo, fonts, voice), export/register hygiene',
+      report: 'deliverables shipped (designs created/revised with dashboard links), inbox items handled, video clips consumed vs the monthly cap (`design_video_capabilities_get`), image generations used of limit (`media_image_quota`) plus upscale dollars, generation spend ledger, media library growth + top reused assets → `reports/<YYYY-MM>-creative.md`',
     },
     sales: {
       skill: 'hiveku-sales-agency',

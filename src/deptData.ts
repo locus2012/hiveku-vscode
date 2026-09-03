@@ -802,7 +802,11 @@ export const DEPARTMENTS: Department[] = [
       'Brand guide: delete is SOFT (`brand_guide_delete`) then `brand_guide_purge` for hard; logo via `brand_guide_set_logo`. ' +
       'Designs: READ the canvas FIRST via `design_get` / `design_state_get` (design_update REPLACES the whole canvasData — ' +
       'a blind overwrite otherwise); snapshot with `design_version_create` BEFORE destructive edits; export via ' +
-      '`design_export_image` / `design_export_mp4`. ' +
+      '`design_export_image` / `design_export_mp4`. `design_update` takes `expectedSectionsVersion` (a 409 ' +
+      'sections_version_conflict means re-read and re-apply); a `data:` thumbnail reads as `featuredImageUrl` null + ' +
+      '`featured_image_inline` true (a real one is `design_publish_to_library` with set_as_featured); client comments and ' +
+      'finished/failed video runs arrive as agent-ops inbox items (`agent_inbox_list` category design.comment / ' +
+      'design.video_completed / design.video_failed). ' +
       'The four marketing entities (avatars/journeys/brand-guides/grids) are dumped full to `<dataset>/<item>.json`; ' +
       'designs are list-only locally (use `design_state_get` for the canvas).',
     setup: CREATIVE_SETUP,
