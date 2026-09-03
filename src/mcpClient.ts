@@ -281,7 +281,26 @@ export class HivekuMcpClient {
     if (parsed && typeof parsed === 'object') {
       const p = parsed as Record<string, unknown>;
       if (typeof p.error === 'string' && typeof p.status === 'number' && p.status >= 400) {
-        throw new Error(`Tool ${name} failed (${p.status}): ${p.error}${p.details ? ` — ${JSON.stringify(p.details).slice(0, 200)}` : ''}`);
+        // A deploy refusal (422 engines_unsatisfied / lockfile_out_of_sync)
+        // carries the FIX in `hint` and the exact versions in `mismatches`
+        // ([{package, declared, locked}]). The error alone names the
+        // disagreement; without these the user sees the verdict but not the
+        // fix, so both ride along in the one message the command surfaces.
+        // The MCP proxy nests the route body under `details` ({error, status, details: {error, code, hint, mismatches}});
+        // a direct route body carries them at the top level. Read whichever is present.
+        const d = (p.details && typeof p.details === 'object' ? (p.details as Record<string, unknown>) : p);
+        const mismatchLines = Array.isArray(d.mismatches)
+          ? (d.mismatches as Array<{ package?: unknown; declared?: unknown; locked?: unknown } | null>)
+              .filter((m): m is { package: string; declared?: unknown; locked?: unknown } => !!m && typeof m.package === 'string')
+              .map((m) => `${m.package}: declared ${String(m.declared ?? '?')} vs locked ${String(m.locked ?? '?')}`)
+          : [];
+        const hint = typeof d.hint === 'string' && d.hint.trim() ? ` Fix: ${d.hint.trim()}` : '';
+        throw new Error(
+          `Tool ${name} failed (${p.status}): ${p.error}` +
+            `${mismatchLines.length ? ` (${mismatchLines.join('; ')})` : ''}` +
+            `${p.details ? ` — ${JSON.stringify(p.details).slice(0, 200)}` : ''}` +
+            hint,
+        );
       }
     }
     return parsed;
