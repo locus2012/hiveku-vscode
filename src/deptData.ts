@@ -1094,6 +1094,10 @@ export const DEPARTMENTS: Department[] = [
       { id: 'visitors', label: 'Visitor intelligence', tool: 'analytics_visitors', args: { limit: 100, sort_by: 'last_seen' }, columns: [{ key: ['name', 'email'], label: 'visitor' }, { key: 'email' }, { key: 'icp_match_confidence', label: 'ICP fit' }, { key: 'event_count', label: 'events' }, { key: 'last_seen_at', label: 'last seen', date: true }] },
       { id: 'top_pages', label: 'Top pages (90d)', tool: 'analytics_pages', args: { limit: 200 }, dynArgs: { from_date: 90, to_date: 0 }, scope: siteScope, columns: [{ key: '_parent', label: 'site' }, { key: ['path', 'url', 'page'], label: 'page' }, { key: ['pageviews', 'views'], label: 'views' }, { key: 'sessions' }, { key: ['bounce_rate', 'bounce'], label: 'bounce' }] },
       { id: 'sessions', label: 'Sessions (90d)', tool: 'analytics_sessions', args: { limit: 200 }, dynArgs: { from_date: 90, to_date: 0 }, scope: siteScope, columns: [{ key: '_parent', label: 'site' }, { key: 'country' }, { key: ['device_category', 'device'], label: 'device' }, { key: ['source', 'referrer'], label: 'source' }, { key: ['started_at', 'created_at'], label: 'started', date: true }] },
+      // Files visitors uploaded through captured forms (metadata only; a download
+      // link is minted per file with marketing_form_attachment_download_url on an
+      // explicit ask, never from a sweep).
+      { id: 'form_attachments', label: 'Form attachments', tool: 'marketing_form_attachments_list', args: { limit: 100 }, columns: [{ key: ['file_name', 'name'], label: 'file name' }, { key: ['size_bytes', 'size'], label: 'size' }, { key: ['form_label', 'form_key'], label: 'form' }, { key: ['submitted_at', 'created_at'], label: 'submitted', date: true }, { key: 'state' }] },
     ],
   },
   {
