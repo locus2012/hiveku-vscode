@@ -47,6 +47,17 @@ export interface ProjectLink {
   base_url: string;
   last_pull_at?: string;
   last_commit_id?: string;
+  /**
+   * Working-tree fingerprint of `branch` as of the last pull/switch/push
+   * (project_vcs_branches.working_tree_etag). Compared against the live value
+   * before a branch commit/push: a change means someone else saved on this
+   * branch since. Meaningless on main (main's guard is the base manifest).
+   */
+  last_tree_etag?: string | null;
+  /** previewSessionId of the branch preview this folder started (for status/teardown). */
+  preview_session_id?: string;
+  /** The branch that preview session was started for. */
+  preview_session_branch?: string;
 }
 
 export interface ManifestEntry {

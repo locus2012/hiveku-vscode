@@ -146,6 +146,10 @@
         "title": "Hiveku: Preview Branch on Fly…"
       },
       {
+        "command": "hiveku.teardownBranchPreview",
+        "title": "Hiveku: Stop Branch Preview…"
+      },
+      {
         "command": "hiveku.compare",
         "title": "Hiveku: Compare Branches…"
       },
@@ -550,6 +554,11 @@
         },
         {
           "command": "hiveku.previewBranch",
+          "group": "1_hiveku",
+          "when": "scmProvider == hiveku"
+        },
+        {
+          "command": "hiveku.teardownBranchPreview",
           "group": "1_hiveku",
           "when": "scmProvider == hiveku"
         },

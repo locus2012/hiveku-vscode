@@ -61,6 +61,17 @@ const SLOW_TOOL_TIMEOUT_MS: Record<string, number> = {
   // call 240s; at the 60s default the client aborts a rebuild that is still
   // running and a retry lands 409 preview_lifecycle_busy.
   preview_force_recompile: 240_000,
+  // The server mapping budgets this exact call 290s (up to 500 files through
+  // saveProjectFile plus the checkpoint and preview fan-out). At the 60s
+  // default the extension aborted a batch the server went on to finish, then
+  // re-sent it on retry.
+  project_files_bulk_save: 290_000,
+  // A full branch tree read out of S3/Postgres; maxDuration = 180 on the route.
+  project_vcs_checkout: 180_000,
+  // Spawns an isolated Fly app and syncs the branch tree into it before
+  // answering; route maxDuration = 180. Aborting client-side leaves the app
+  // running with no previewSessionId to poll or tear down.
+  project_vcs_branch_preview: 180_000,
 };
 let inFlight = 0;
 const waiters: Array<() => void> = [];

@@ -29,17 +29,33 @@ export interface CommitSummary {
   files_committed: number;
   files_deleted: number;
   created_at: string;
+  /** True when a branch commit with NO files promoted the branch's working
+   *  tree (edits made through the branch-aware file tools) into this commit. */
+  promoted?: boolean;
+  /** 'commit' | 'merge' | 'revert' on newer servers. */
+  kind?: string;
+  revertable?: boolean;
 }
 
 export interface BranchRef {
   branch_name: string;
   head_commit_id: string | null;
   is_default: boolean;
+  ahead?: number | null;
+  behind?: number | null;
+  /** The branch's WORKING TREE has edits not yet promoted into a commit. */
+  uncommitted?: boolean;
+  /** Short fingerprint of the working tree; null when unknown. Record it at
+   *  pull, compare it before push: a change means someone else saved here. */
+  working_tree_etag?: string | null;
 }
 
 export interface CheckoutTree {
   branch_name: string;
   files: Array<{ path: string; content: string; encoding: 'utf-8' | 'base64' }>;
+  head_commit_id?: string | null;
+  working_tree_etag?: string | null;
+  uncommitted?: boolean;
 }
 
 export interface MergeResult {
@@ -82,7 +98,17 @@ export interface BranchPreviewResult {
   status: string;
   filesSynced: number;
   filesFailed: number;
+  /** Handle for project_vcs_branch_preview_status / _teardown. Keep it: calling
+   *  project_vcs_branch_preview again while one is starting spawns a second app. */
+  previewSessionId?: string | null;
   error?: string;
+}
+
+export interface BranchPreviewStatus {
+  status: string;
+  ready: boolean;
+  previewUrl: string | null;
+  branch?: string;
 }
 
 function unwrap<T>(payload: unknown): T {
@@ -91,6 +117,38 @@ function unwrap<T>(payload: unknown): T {
     return (payload as { data: T }).data;
   }
   return payload as T;
+}
+
+/** `{ branch }` for a non-main branch, `{}` for main/empty. Every branch-aware
+ *  tool treats an omitted branch as main, so main is never sent explicitly and
+ *  the wire bytes for main callers stay byte-identical to before. */
+export function branchArg(branch?: string | null): { branch?: string } {
+  const b = (branch ?? '').trim();
+  return b && b !== 'main' ? { branch: b } : {};
+}
+
+/**
+ * `promoted` from a project_vcs_commit response. The route puts it on the
+ * commit inside `data`; older servers omit it, and a future envelope could hoist
+ * it beside `data` (unwrap would then drop it). Read both, never fabricate: an
+ * absent flag is false, not "unknown".
+ */
+export function readPromoted(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  const root = raw as Record<string, unknown>;
+  const data = root.data && typeof root.data === 'object' ? (root.data as Record<string, unknown>) : undefined;
+  return data?.promoted === true || root.promoted === true;
+}
+
+/** A sibling of `data` (e.g. `preview_effect`, `working_tree_etag`) that
+ *  unwrap() drops; checked inside `data` first, then at the root. */
+export function readSibling<T>(raw: unknown, key: string): T | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const root = raw as Record<string, unknown>;
+  const data = root.data && typeof root.data === 'object' ? (root.data as Record<string, unknown>) : undefined;
+  if (data && key in data) return data[key] as T;
+  if (key in root) return root[key] as T;
+  return undefined;
 }
 
 /** PM (project-management) projects — tasks/owners, NOT buildable sites. */
@@ -264,6 +322,15 @@ export async function filesStatus(
   };
 }
 
+/**
+ * Hiveku-native commit. On `main`, `files`/`deletedFiles` are the commit. On a
+ * BRANCH with NO files and NO deletions this is a PROMOTE: the branch's working
+ * tree (edits made through the branch-aware file tools, e.g. a push from this
+ * extension or an agent's project_files_bulk_save({branch})) becomes a commit
+ * without re-uploading bytes; the result carries `promoted: true`. A clean
+ * branch answers 409 nothing_to_commit (thrown here). On main an empty commit
+ * is refused up front rather than sent.
+ */
 export async function vcsCommit(
   client: HivekuMcpClient,
   projectId: string,
@@ -272,14 +339,19 @@ export async function vcsCommit(
   deletedFiles: string[],
   branch?: string,
 ): Promise<CommitSummary> {
+  const onBranch = 'branch' in branchArg(branch);
+  if (!onBranch && files.length === 0 && deletedFiles.length === 0) {
+    throw new Error('Nothing to commit on main (a commit with no files only promotes a branch working tree).');
+  }
   const res = await client.callToolJson<unknown>('project_vcs_commit', {
     project_id: projectId,
     message,
     files,
     deletedFiles,
-    ...(branch && branch !== 'main' ? { branch } : {}),
+    ...branchArg(branch),
   });
-  return unwrap<CommitSummary>(res);
+  const commit = unwrap<CommitSummary>(res);
+  return { ...commit, promoted: readPromoted(res) };
 }
 
 export interface BulkSaveSummary {
@@ -294,6 +366,10 @@ export interface BulkSaveSummary {
 export interface BulkSaveResult {
   summary: BulkSaveSummary;
   results: Array<{ path: string; ok: boolean; error?: string; version?: number }>;
+  /** Branch saves only: the working-tree fingerprint after this batch. */
+  working_tree_etag?: string | null;
+  /** Branch saves only: whether a live branch preview was synced, or a hint to start one. */
+  preview_effect?: unknown;
 }
 
 /**
@@ -310,11 +386,18 @@ export async function filesBulkSave(
   projectId: string,
   files: CommitFile[],
   message?: string,
+  /**
+   * Non-main branch: the batch lands in that branch's WORKING TREE (not a
+   * commit, never main, never builder_code_versions.is_current). Promote it
+   * with vcsCommit(..., [], [], branch). Omitted/main = the live project.
+   */
+  branch?: string,
 ): Promise<BulkSaveResult> {
   const res = await client.callToolJson<unknown>('project_files_bulk_save', {
     project_id: projectId,
     files: files.map((f) => ({ path: f.path, content: f.content, encoding: f.encoding })),
     ...(message ? { commit_message: message } : {}),
+    ...branchArg(branch),
   });
   const data = unwrap<Partial<BulkSaveResult>>(res);
   const s = (data.summary ?? {}) as Partial<BulkSaveSummary>;
@@ -329,12 +412,25 @@ export async function filesBulkSave(
       duplicates_dropped: s.duplicates_dropped ?? 0,
     },
     results: Array.isArray(data.results) ? data.results : [],
+    working_tree_etag: readSibling<string | null>(res, 'working_tree_etag'),
+    preview_effect: readSibling<unknown>(res, 'preview_effect'),
   };
 }
 
-/** Soft-delete a single file (tombstone — is_current flipped to false). */
-export async function fileDelete(client: HivekuMcpClient, projectId: string, filePath: string): Promise<void> {
-  await client.callToolJson<unknown>('project_file_delete', { project_id: projectId, file_path: filePath });
+/** Soft-delete a single file (tombstone — is_current flipped to false). On a
+ *  non-main branch, removes the path from that branch's working tree instead
+ *  (main untouched; not a commit until promoted). */
+export async function fileDelete(
+  client: HivekuMcpClient,
+  projectId: string,
+  filePath: string,
+  branch?: string,
+): Promise<void> {
+  await client.callToolJson<unknown>('project_file_delete', {
+    project_id: projectId,
+    file_path: filePath,
+    ...branchArg(branch),
+  });
 }
 
 /**
@@ -416,6 +512,99 @@ export async function vcsBranchPreview(
   return unwrap<BranchPreviewResult>(res);
 }
 
+/** Poll a branch preview started by vcsBranchPreview instead of starting another
+ *  (a repeat start spawns a SECOND app). Re-probes the container each call. */
+export async function vcsBranchPreviewStatus(
+  client: HivekuMcpClient,
+  projectId: string,
+  sessionId: string,
+): Promise<BranchPreviewStatus> {
+  const res = await client.callToolJson<unknown>('project_vcs_branch_preview_status', {
+    project_id: projectId,
+    session_id: sessionId,
+  });
+  const d = unwrap<Partial<BranchPreviewStatus>>(res) ?? {};
+  return {
+    status: typeof d.status === 'string' ? d.status : 'unknown',
+    ready: d.ready === true,
+    previewUrl: typeof d.previewUrl === 'string' ? d.previewUrl : null,
+    branch: typeof d.branch === 'string' ? d.branch : undefined,
+  };
+}
+
+/** Destroy a branch preview and its isolated app now. Irreversible. */
+export async function vcsBranchPreviewTeardown(
+  client: HivekuMcpClient,
+  projectId: string,
+  sessionId: string,
+): Promise<void> {
+  await client.callToolJson<unknown>('project_vcs_branch_preview_teardown', {
+    project_id: projectId,
+    session_id: sessionId,
+  });
+}
+
+/** One side of a per-file branch diff. `tooLarge` replaces content over 1 MB. */
+export interface DiffFileSide {
+  content?: string;
+  encoding?: 'utf-8' | 'base64';
+  hash?: string;
+  tooLarge?: boolean;
+}
+
+export interface DiffFileResult {
+  from: string;
+  to: string;
+  path: string;
+  /** The compare route's vocabulary; `unchanged`/`missing` come back when neither side differs or both are absent. */
+  status: 'added' | 'removed' | 'modified' | 'unchanged' | 'missing' | 'same';
+  /** The file on `from` (a PR's TARGET branch); null when absent there. */
+  base: DiffFileSide | null;
+  /** The file on `to` (a PR's SOURCE branch); null when absent there. */
+  head: DiffFileSide | null;
+}
+
+/**
+ * Both sides of ONE file across two branches' working trees — the per-file
+ * drill-down for vcsCompare / a PR diff (from = target, to = source).
+ * Uncommitted working-tree edits on either side are included.
+ */
+export async function vcsDiffFile(
+  client: HivekuMcpClient,
+  projectId: string,
+  from: string,
+  to: string,
+  filePath: string,
+): Promise<DiffFileResult> {
+  const res = await client.callToolJson<unknown>('project_vcs_diff_file', {
+    project_id: projectId,
+    from,
+    to,
+    path: filePath,
+  });
+  const d = unwrap<Partial<DiffFileResult>>(res) ?? {};
+  return {
+    from: d.from ?? from,
+    to: d.to ?? to,
+    path: d.path ?? filePath,
+    status: d.status ?? 'same',
+    base: d.base ?? null,
+    head: d.head ?? null,
+  };
+}
+
+/**
+ * Text to show for one side of a vcsDiffFile result. Binary and oversized
+ * sides get a placeholder rather than garbage; an absent side is empty (so an
+ * added/removed file diffs against nothing, as git does).
+ */
+export function diffSideText(side: DiffFileSide | null): string {
+  if (!side) return '';
+  if (side.tooLarge) return '(file over 1 MB — too large to show)';
+  if (side.encoding === 'base64') return '(binary file — no text diff)';
+  return typeof side.content === 'string' ? side.content : '';
+}
+
 export async function vcsCompare(
   client: HivekuMcpClient,
   projectId: string,
@@ -442,14 +631,40 @@ export async function vcsPrune(
   return unwrap<PruneResult>(res);
 }
 
+/**
+ * Move a BRANCH back to one of its own earlier commits: writes a new 'revert'
+ * commit whose tree is the target's and discards the branch's uncommitted
+ * working-tree edits. Refused for main (use checkpointRestore there) and for a
+ * commit from another branch. Pass `expectedHeadCommitId` (the head you showed
+ * the user) so a concurrent save answers 409 branch_changed instead of being
+ * thrown away silently.
+ */
+export async function vcsRevert(
+  client: HivekuMcpClient,
+  projectId: string,
+  branch: string,
+  commitId: string,
+  expectedHeadCommitId?: string | null,
+  message?: string,
+): Promise<CommitSummary> {
+  const res = await client.callToolJson<unknown>('project_vcs_revert', {
+    project_id: projectId,
+    branch,
+    commit_id: commitId,
+    ...(expectedHeadCommitId ? { expected_head_commit_id: expectedHeadCommitId } : {}),
+    ...(message ? { message } : {}),
+  });
+  return unwrap<CommitSummary>(res);
+}
+
 export async function vcsHistory(
   client: HivekuMcpClient,
   projectId: string,
   limit = 100,
   /**
    * Scope to one branch. Callers that act on a commit MUST pass this: an
-   * unscoped history mixes branches, and revert can only act on main (branch
-   * commits carry no checkpoint_hash and have no server-side restore primitive).
+   * unscoped history mixes branches. Main commits revert via checkpointRestore
+   * (checkpoint_hash); branch commits via vcsRevert (no checkpoint, by design).
    */
   branch?: string,
 ): Promise<CommitSummary[]> {
@@ -588,18 +803,29 @@ export async function vcsPrCreate(
  * whole body to MergeResult made `applied` undefined and turned a SUCCESSFUL
  * merge into a TypeError the operator read as failure.
  */
+export interface PrMergeResult {
+  pr: PullRequest;
+  merge: MergeResult;
+  /** The merge LANDED but the PR's open->merged relabel lost a status race
+   *  (the server retries it). `pr` may still read `open`; a branch delete
+   *  right now is refused as "open pull request", so callers must not offer
+   *  one until the label settles. Absent (never false) on a clean merge. */
+  relabel_failed?: true;
+}
+
 export async function vcsPrMerge(
   client: HivekuMcpClient,
   projectId: string,
   num: number,
   message?: string,
-): Promise<{ pr: PullRequest; merge: MergeResult }> {
+): Promise<PrMergeResult> {
   const res = await client.callToolJson<unknown>('project_vcs_pr_merge', {
     project_id: projectId,
     number: num,
     ...(message ? { message } : {}),
   });
-  return unwrap<{ pr: PullRequest; merge: MergeResult }>(res);
+  const out = unwrap<PrMergeResult>(res);
+  return readSibling<boolean>(res, 'relabel_failed') === true ? { ...out, relabel_failed: true } : out;
 }
 
 export async function vcsPrClose(
@@ -614,9 +840,54 @@ export async function vcsPrClose(
   return unwrap<PullRequest>(res);
 }
 
+/** Reopen a CLOSED PR (merged ones are terminal). 409 if not closed, or if
+ *  another PR for the same source→target pair is now open. */
+export async function vcsPrReopen(
+  client: HivekuMcpClient,
+  projectId: string,
+  num: number,
+): Promise<PullRequest> {
+  const res = await client.callToolJson<unknown>('project_vcs_pr_reopen', {
+    project_id: projectId,
+    number: num,
+  });
+  return unwrap<PullRequest>(res);
+}
+
+/**
+ * Picker label for a deploy tier: which tree its next deploy ships. The
+ * bindings decide, never the caller — production is always main.
+ */
+export function bindingLabel(env: 'development' | 'staging' | 'production', bindings?: EnvBindings | null): string {
+  if (env === 'production') return 'production - always main';
+  const b = bindings?.[env];
+  if (!b) return `${env} - binding unknown`;
+  return b.bound && b.branch && b.branch !== 'main' ? `${env} - serves branch ${b.branch}` : `${env} - serves main`;
+}
+
+/** The tiers currently bound to `branch` (never production). */
+export function tiersBoundTo(bindings: EnvBindings | null | undefined, branch: string): Array<'development' | 'staging'> {
+  const out: Array<'development' | 'staging'> = [];
+  for (const env of ['development', 'staging'] as const) {
+    const b = bindings?.[env];
+    if (b?.bound && b.branch === branch) out.push(env);
+  }
+  return out;
+}
+
 export async function vcsEnvBindings(client: HivekuMcpClient, projectId: string): Promise<EnvBindings> {
   const res = await client.callToolJson<unknown>('project_vcs_env_bindings', { project_id: projectId });
   return unwrap<EnvBindings>(res);
+}
+
+/** The bindings after a bind, plus the route's consequence warning. The
+ *  route returns `{ data: bindings, warning?, warning_code? }` — the warning
+ *  is a SIBLING of `data` (unwrap drops it), so it is read from the raw
+ *  payload like readPromoted. `cms_writes_to_main` means every CMS write
+ *  still goes to main and will not show on the tier now serving a branch. */
+export interface EnvBindResult extends EnvBindings {
+  warning?: string;
+  warning_code?: string;
 }
 
 /** `branch` of 'main' (or '') clears the binding. production is refused server-side. */
@@ -625,13 +896,20 @@ export async function vcsEnvBind(
   projectId: string,
   environment: 'development' | 'staging',
   branch: string,
-): Promise<EnvBindings> {
+): Promise<EnvBindResult> {
   const res = await client.callToolJson<unknown>('project_vcs_env_bind', {
     project_id: projectId,
     environment,
     branch,
   });
-  return unwrap<EnvBindings>(res);
+  const bindings = unwrap<EnvBindings>(res);
+  const warning = readSibling<unknown>(res, 'warning');
+  const warningCode = readSibling<unknown>(res, 'warning_code');
+  return {
+    ...bindings,
+    ...(typeof warning === 'string' && warning.trim() ? { warning: warning.trim() } : {}),
+    ...(typeof warningCode === 'string' && warningCode ? { warning_code: warningCode } : {}),
+  };
 }
 
 /**
@@ -670,17 +948,42 @@ export async function vcsBranchDelete(
   return unwrap<{ deleted: string }>(res);
 }
 
+export interface DeployStart {
+  /** Normalized: the olympus deploy route returns `deploy_id`; older
+   *  envelopes used `deployment_id`. Whichever arrived is copied here. */
+  deployment_id?: string;
+  deploy_id?: string;
+  status?: string;
+  /** The branch that actually ships (a bound tier's branch, else main). */
+  branch?: string;
+  vcs_commit_id?: string | null;
+  promoted_commit_id?: string | null;
+  /** Present when the bound branch had uncommitted edits that were promoted
+   *  into a commit for this deploy — say it, the operator did not ask for a commit. */
+  note?: string;
+}
+
+/** `deploy_id ?? deployment_id` from a deploy_site body — never fabricated. */
+export function readDeployId(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const b = body as Record<string, unknown>;
+  const id = typeof b.deploy_id === 'string' && b.deploy_id ? b.deploy_id : typeof b.deployment_id === 'string' && b.deployment_id ? b.deployment_id : undefined;
+  return id;
+}
+
 export async function deploySite(
   client: HivekuMcpClient,
   projectId: string,
   environment: 'development' | 'staging' | 'production',
-): Promise<{ deployment_id?: string; status?: string }> {
+): Promise<DeployStart> {
   const res = await client.callToolJson<unknown>('deploy_site', {
     project_id: projectId,
     environment,
     agent_codename: 'vscode-ext',
   });
-  return unwrap(res);
+  const body = (unwrap<DeployStart>(res) as DeployStart | null | undefined) ?? {};
+  const id = readDeployId(body);
+  return id ? { ...body, deployment_id: id } : body;
 }
 
 // ── Environments (deployed tiers) — URLs + per-env build/deploy logs ──────────
@@ -852,13 +1155,17 @@ export async function fileContent(
   client: HivekuMcpClient,
   projectId: string,
   filePath: string,
+  /** Non-main branch: that branch's working-tree copy (uncommitted edits included). */
+  branch?: string,
 ): Promise<string> {
   const res = await client.callToolJson<unknown>('project_file_get', {
     project_id: projectId,
     file_path: filePath,
+    ...branchArg(branch),
   });
   const data = unwrap<Record<string, unknown>>(res) as Record<string, unknown> | undefined;
-  const content = data?.content;
+  // The route's field is file_content; `content` was an alias older servers sent.
+  const content = typeof data?.file_content === 'string' ? data.file_content : data?.content;
   if (typeof content !== 'string') return '';
   // Binary files come back base64-tagged; there is nothing useful to diff.
   return data?.encoding === 'base64' ? '(binary file — no text diff)' : content;

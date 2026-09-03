@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.75.0
+- **Push on a branch now writes the branch.** "Push Local Changes" from a checked-out branch used to save code into `main` (the live project) while the progress title named the branch. The code lane and deletions now target the branch's working tree; binary assets are still uploaded to the project's shared asset store (logged as such).
+- **Pull, diff and discard are branch-aware.** "Pull Latest" on a branch materializes that branch's tree (code only; the main-only snapshot tarball is no longer used there). Clicking a changed file diffs against the branch's copy, and "Discard Changes" restores the branch's copy instead of main's.
+- **"You're behind" guard on branches.** Before a commit or push off main, the extension compares the working-tree fingerprint recorded at your last pull/switch with the live one; if someone else saved on the branch since, you get the same Pull first / continue prompt main has. A folder checked out on a branch before this version has no recorded fingerprint yet, so the guard stays quiet there until your next Pull Latest or Switch Branch.
+- **Commit with nothing local promotes.** On a branch with no local changes but uncommitted edits in its working tree (an agent's push, for example), Commit offers to promote those edits into a commit.
+- **Pull requests: Review files, Reopen, Delete branch.** A PR now lists its changed files and opens a side-by-side diff per file (target vs source, working trees included; binary and oversized files are labelled). Closed PRs can be reopened. After a merge you can delete the source branch in one step, with any development/staging binding cleared first.
+- **Deploy shows what each tier ships.** The environment picker reads the branch bindings first: "development - serves branch feat/x", "production - always main", and warns when the tier you picked does not serve the branch you are on.
+- **Branch previews are tracked.** "Preview Branch on Fly" keeps the session, polls its status (up to ~4 minutes) instead of spawning a second app, and a new "Hiveku: Stop Branch Preview" command tears it down.
+- **Revert on a branch.** "Revert to a Commit" now works off main: it moves the branch back to one of its own commits (a new revert commit; nothing is deleted) and refuses if the branch moved since you looked.
+- **Branch in the status bar.** A second status-bar item shows the checked-out branch; clicking it opens Switch Branch. It refreshes on every switch, including the ones triggered from Create Branch and Merge.
+- **Deploy production asks first.** The post-merge "Deploy production" button confirms in a modal before anything ships; a click on a passing notification can no longer go live on its own.
+- **Post-merge "Delete branch" puts bindings back when the delete is refused.** The extension clears a development/staging binding before deleting the branch; if the delete is then refused (a stash branch that needs force, a pull request still labelled open) or fails, the cleared tiers are rebound to the branch and the message names which tiers came back and which could not.
+- **Environments relays the CMS warning.** When a tier is pointed at a branch on a project with a CMS, the server's warning (CMS edits keep writing to main and will not show on that tier) is now shown with the confirmation instead of being dropped.
+- **Deploy reports its id and the promotion note.** The deploy id was logged as "(no id)" on every deploy (the route calls it `deploy_id`); it now shows, and a bound-tier deploy that committed uncommitted branch edits says so.
+- **Merge reports a late label.** When a merge lands but the pull request's label is still settling, the message says so and the "Delete branch" offer is withheld until the label is settled (the delete would be refused as an open pull request).
+- Longer timeouts for large pushes, branch checkouts and branch previews, so a batch the server finishes is no longer reported as a timeout.
+- Claude Code scaffold: `/hiveku-commit`, `/hiveku-pull`, `/hiveku-push` and `/hiveku-deploy` now describe the branch flow (the link's branch, promote-with-no-files, bindings before deploy), and new `/hiveku-branch` and `/hiveku-pr` commands cover branches, bindings and pull requests. The scaffold's read-only permission list covers the new per-file diff and preview-status reads.
+
 ## 0.25.0
 - **Account search/filter** in the sidebar title bar — type to filter the account list by name or ID (essential for agencies / SaaS owners with many accounts). A clear-filter button appears while a filter is active.
 
