@@ -26,6 +26,12 @@ export interface FieldSpec {
   /** Value is in integer cents (e.g. total_cents) — divide by 100 before formatting. */
   cents?: boolean;
   date?: boolean;
+  /**
+   * A DATE column (no time of day), serialized as UTC midnight. Rendered in the
+   * viewer's zone that reads as the day BEFORE for everyone west of Greenwich,
+   * so format it in UTC. Implies date.
+   */
+  dateOnly?: boolean;
 }
 export interface InputSpec {
   key: string;
@@ -51,12 +57,32 @@ export interface ActionSpec {
   successReload?: boolean;
   /** kind 'copy' — build a Claude-Code-ready prompt from the row, copied to clipboard. */
   copyTemplate?: (row: Row) => string;
+  /**
+   * kind 'tool' - refuse BEFORE the confirm modal and before any input prompt.
+   * Return the reason (shown as a warning; the tool is not called) or null to
+   * proceed. Mirrors the server's own refusals so the user reads "This post is
+   * scheduled and approved; the cron publishes it at its slot." instead of a
+   * raw 409 after already having said Confirm.
+   */
+  guard?: (row: Row) => string | null;
+  /**
+   * kind 'tool' - the completion message, built from the tool's response. The
+   * default "<label> - done." is wrong for tools whose outcome depends on state:
+   * social_publish_post either stages a post into the approval queue or
+   * publishes it, and only the response says which.
+   */
+  done?: (result: unknown) => string;
 }
 export interface SectionSpec {
   id: string;
   label: string;
   tool: string;
-  args?: Record<string, unknown>;
+  /**
+   * Static args, or a function evaluated on EVERY load. A rolling window such as
+   * "the next 60 days" must not freeze at the moment the module registry was
+   * evaluated, which is extension activation, not the click.
+   */
+  args?: Record<string, unknown> | (() => Record<string, unknown>);
   /** pageAccess gate key — section hidden when the account's plan/role doesn't entitle it. */
   gate?: string;
   titleKeys: string[];
@@ -177,9 +203,10 @@ function fmt(v: unknown, f: FieldSpec): string {
       return `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
     }
   }
-  if (f.date && (typeof v === 'string' || typeof v === 'number')) {
+  if ((f.date || f.dateOnly) && (typeof v === 'string' || typeof v === 'number')) {
     const t = Date.parse(String(v));
-    return Number.isNaN(t) ? String(v) : new Date(t).toLocaleDateString();
+    if (Number.isNaN(t)) return String(v);
+    return f.dateOnly ? new Date(t).toLocaleDateString(undefined, { timeZone: 'UTC' }) : new Date(t).toLocaleDateString();
   }
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
   return String(v);
@@ -231,7 +258,8 @@ export function openModulePanel(
     if (!section) return;
     try {
       const client = await clientFor(account.accountId);
-      const res = await client.callToolJson<unknown>(section.tool, { ...context, ...(section.args ?? {}) });
+      const sectionArgs = typeof section.args === 'function' ? section.args() : section.args ?? {};
+      const res = await client.callToolJson<unknown>(section.tool, { ...context, ...sectionArgs });
       let rows: Row[];
       let recognised = true;
       if (section.transform) {
@@ -295,6 +323,13 @@ export function openModulePanel(
       return;
     }
     // tool action
+    if (action.guard) {
+      const refusal = action.guard(row ?? {});
+      if (refusal) {
+        void vscode.window.showWarningMessage(refusal);
+        return;
+      }
+    }
     if (action.confirm) {
       // Name the SUBJECT and the ACCOUNT. A VS Code modal is window-level and
       // visually detached from the panel that raised it, so "Send this campaign
@@ -343,11 +378,11 @@ export function openModulePanel(
         args[input.key] = input.csv ? val.split(',').map((s) => s.trim()).filter(Boolean) : val;
       }
     }
-    await vscode.window.withProgress(
+    const result = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `${action.label}…` },
-      () => client.callToolJson(action.tool as string, args),
+      () => client.callToolJson<unknown>(action.tool as string, args),
     );
-    vscode.window.showInformationMessage(`${action.label} — done.`);
+    vscode.window.showInformationMessage(action.done ? action.done(result) : `${action.label} - done.`);
     if (action.successReload !== false) await loadSection(section.id);
   }
 

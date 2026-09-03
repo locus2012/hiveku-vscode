@@ -14,10 +14,11 @@
  * anywhere — the user believes they selected a department and simply never
  * receives that data.
  *
- * Four such checkboxes exist today (see KNOWN_DEAD). This check does not fix
- * them, because what they SHOULD map to is a product decision, not a rename.
- * It stops a fifth from appearing silently, which is the failure mode that
- * produced these four.
+ * Four such checkboxes existed until 2026-09-03 (customer_avatar,
+ * customer_journey, before_after_grid -> `creative`, whose datasets are exactly
+ * those three artifacts; website_design -> `pages`). None remain (see
+ * KNOWN_DEAD). This check stops a new one from appearing silently, which is the
+ * failure mode that produced those four.
  *
  * It also REPORTS (without failing) the departments that exist but can never be
  * selected at consent time. That list includes `commerce`, and it is the reason
@@ -43,22 +44,19 @@ if (!existsSync(BUILDER_DEPTS)) {
 
 /**
  * Consent slugs that resolve to nothing. Each is a checkbox a user can tick
- * that pulls no data. Listed rather than fixed because the right target is a
- * product call — `website_design` plausibly means `pages`, but the three brand
- * artifacts have no data department at all and inventing a mapping would make
- * the checkbox lie in a new way instead of an old one.
+ * that pulls no data. Empty since 2026-09-03: the last four were mapped in
+ * src/roles.ts BUILDER_TO_CONSOLE once a data department actually carried
+ * their data (the `creative` department's avatars / journeys / grids datasets;
+ * `pages` for website_design). A slug is listed here only while the right
+ * target is still an open product call - never to make a dead checkbox look
+ * handled.
  *
  * A BASELINE, not an allowlist. Adding to it is a deliberate act with a review
  * attached; the check fails if an entry here starts resolving (stale baseline)
  * or stops existing (renamed out from under us), so the list cannot rot into
  * permanent cover for a growing problem.
  */
-const KNOWN_DEAD = new Set([
-  'before_after_grid',
-  'customer_avatar',
-  'customer_journey',
-  'website_design',
-]);
+const KNOWN_DEAD = new Set([]);
 
 // ── the three registries ────────────────────────────────────────────────────
 

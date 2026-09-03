@@ -4,11 +4,14 @@
  *   /hiveku-daily        — morning brief: context → role signals → today's tasks
  *   /hiveku-new-command  — capture THIS account's process as a new account command
  *                          (saved locally AND to Hiveku via memory_create type=command)
- * plus up to two role loops. All commands share one skeleton: account_context_get
+ * plus the role's loops (the social role's ten are the Claude Code plugin's own
+ * command files, vendored into assets/commands/ - see vendoredCommand). All
+ * commands share one skeleton: account_context_get
  * FIRST → do the work → persist learnings (memory) → reflect work in Hiveku PM
  * (source of truth). Writes are confirmed per-step, never auto-approved.
  */
 
+import { readFileSync } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ROLES, roleById, type Role } from './roles';
@@ -351,6 +354,74 @@ source of truth; local edits to synced files are skipped by sync and reported.
 `;
 
 /** Per-role loop commands. Keyed by command name (without the hiveku- prefix). */
+/**
+ * Slash commands vendored byte-for-byte from the Claude Code plugin:
+ * ../hiveku-claude-plugin/commands/<name>.md -> assets/commands/<name>.md by
+ * `npm run gen:skills`, with `npm run check:skills` (in vscode:prepublish)
+ * failing on drift. Compiled output runs from out/, so assets/ is one level up.
+ * A missing asset yields undefined after one warning per name - a scaffold must
+ * never crash over a command file, and the caller decides on a fallback.
+ */
+const ASSETS_COMMANDS_DIR = path.join(__dirname, '..', 'assets', 'commands');
+const vendoredCommandCache = new Map<string, string | undefined>();
+
+function vendoredCommand(name: string): string | undefined {
+  if (vendoredCommandCache.has(name)) return vendoredCommandCache.get(name);
+  let body: string | undefined;
+  try {
+    body = readFileSync(path.join(ASSETS_COMMANDS_DIR, `${name}.md`), 'utf8');
+  } catch (err) {
+    console.warn(`[hiveku] vendored command ${name}.md is missing from ${ASSETS_COMMANDS_DIR} - run npm run gen:skills (${String(err)})`);
+    body = undefined;
+  }
+  vendoredCommandCache.set(name, body);
+  return body;
+}
+
+/**
+ * The social role's commands, written as /hiveku-<name>. Mirror of
+ * VENDORED_COMMANDS in scripts/agency-skills-set.mjs (the generator's list) -
+ * keep the two identical, or a command is vendored but never written, or listed
+ * here and never vendored (warned about and skipped at scaffold time).
+ */
+const SOCIAL_COMMANDS = [
+  'social-plan',
+  'social-report',
+  'engage',
+  'social-onboard',
+  'social-post',
+  'repurpose',
+  'social-calendar',
+  'social-audit',
+  'social-proof',
+  'creative-brief',
+] as const;
+
+/**
+ * Inline fallbacks for a build whose assets are missing - the two commands the
+ * extension shipped before vendoring, so a broken build still scaffolds them.
+ * Drafts only: setting `scheduled_at` IS the publish, so the plan never
+ * proposes times on a create; the schedule is its own confirmed step.
+ */
+const SOCIAL_FALLBACKS: Partial<Record<(typeof SOCIAL_COMMANDS)[number], string>> = {
+  'social-plan': `---
+description: Plan a week of posts from pillars + analytics, drafted on-brand and persisted as DRAFTS only.
+---
+Social week plan. Follow the **hiveku-social-agency** skill. Context: \`account_context_get({ domain: "social" })\`.
+1. \`social_list_accounts\` (connection health: \`token_state\`, \`connection_status\`, \`quota.x\`) + \`social_analytics_summary\` (what worked) + \`social_pillar_list\` (what we stand for).
+2. Draft the week via \`talk_to_department({ domain: "social", message })\` - per-platform variants, each naming its persona, stage, hook and format.
+3. Persist as DRAFTS: \`social_create_post\` with \`target_platforms\` + \`target_accounts\`, OMITTING \`scheduled_at\` (setting a schedule is not a proposal - it writes status 'scheduled' and the cron publishes). Scheduling is a separate step the user confirms per post.
+4. ${PERSIST_STEP}
+`,
+  'social-report': `---
+description: Social performance report - by platform, by pillar, next bets, every number with the call behind it.
+---
+Social report. Follow the **hiveku-social-agency** skill. 1. \`social_analytics_summary\` + \`social_list_posts\` (recent, with metrics).
+2. By platform and pillar: what over/under-performed; 3 next bets. Name the call behind every figure.
+3. ${PERSIST_STEP}
+`,
+};
+
 function roleLoops(role: Role): Record<string, string> {
   switch (role.id) {
     case 'seo':
@@ -571,25 +642,19 @@ KB coverage (\`helpdesk_kb_search\` per theme).
 3. ${PERSIST_STEP}
 `,
       };
-    case 'social':
-      return {
-        'hiveku-social-plan': `---
-description: Plan a week of posts from pillars + analytics, drafted on-brand.
----
-Social week plan. Context: \`account_context_get({ domain: "social" })\`.
-1. \`social_analytics_summary\` (what worked) + \`social_pillar_list\` (what we stand for).
-2. Draft the week via \`talk_to_department({ domain: "social", message })\` — per-platform variants.
-3. Persist as DRAFTS: \`social_create_post\` (scheduled times proposed, publishing only on approval).
-4. ${PERSIST_STEP}
-`,
-        'hiveku-social-report': `---
-description: Social performance report — by platform, by pillar, next bets.
----
-Social report. 1. \`social_analytics_summary\` + \`social_list_posts\` (recent, with metrics).
-2. By platform and pillar: what over/under-performed; 3 next bets.
-3. ${PERSIST_STEP}
-`,
-      };
+    case 'social': {
+      // All ten social commands are the plugin's own files, verbatim. The
+      // extension used to carry a two-line /hiveku-social-plan that said
+      // "scheduled times proposed" on the create - contradicting the draft-only
+      // rule (setting scheduled_at IS the publish). The vendored body is the
+      // fix; SOCIAL_FALLBACKS only covers a build whose assets are missing.
+      const loops: Record<string, string> = {};
+      for (const name of SOCIAL_COMMANDS) {
+        const body = vendoredCommand(name) ?? SOCIAL_FALLBACKS[name];
+        if (body) loops[`hiveku-${name}`] = body;
+      }
+      return loops;
+    }
     case 'designer':
       return {
         'hiveku-design-brief': `---
@@ -684,8 +749,8 @@ function cadenceCommands(role: Role): Record<string, string> {
       report: 'published inventory + per-piece performance + avatar/journey coverage map + next month calendar → `reports/<YYYY-MM>-content.md`',
     },
     social: {
-      skill: 'hiveku-content-agency',
-      weekly: 'last week\'s post performance (`social_analytics_summary`, `social_list_posts`), pillar balance, next week\'s queue',
+      skill: 'hiveku-social-agency',
+      weekly: 'connection health FIRST (`social_list_accounts`: `connection_status` and `token_state` per account, `quota.x` for the X cap - a connected-but-erroring account is a silent publish failure, so raise a reconnect task before scheduling anything), last week\'s post performance (`social_analytics_summary`, `social_list_posts`), comments awaiting a reply (`social_comments_digest`: SLA breaches and hot threads), pillar balance, next week\'s queue',
       report: 'by-platform and by-pillar performance + next bets → `reports/<YYYY-MM>-social.md`',
     },
     designer: {
@@ -854,13 +919,23 @@ export function roleClaudeMdBlock(roleId: string | undefined): string {
   if (!role) return '';
   const loops = Object.keys({ ...roleLoops(role), ...cadenceCommands(role) });
   const skills = skillsForRole(roleId);
+  // hiveku-orient is how to operate the account, not a discipline - every role
+  // gets it, and it is introduced on its own line rather than as a methodology.
+  const orient = skills.includes('hiveku-orient');
+  const methodology = skills.filter((s) => s !== 'hiveku-orient');
   return `
 ### Your role here: ${role.label}
 Daily loop: start with \`/hiveku-daily\` (context → ${role.blurb.toLowerCase()} → today's tasks).
 ${loops.length ? `Role commands: ${loops.map((l) => `\`/${l}\``).join(' · ')}.` : ''}
 ${
-  skills.length
-    ? `**Agency methodology:** the ${skills.map((s) => `\`${s}\``).join(' + ')} skill${skills.length > 1 ? 's' : ''} in \`.claude/skills/\` ` +
+  orient
+    ? '**Operate safely:** read the `hiveku-orient` skill in `.claude/skills/` before any Hiveku work - ' +
+      'which account you are on, the you-are-not-the-only-writer rule, scratch and secrets hygiene, the approval rails.'
+    : ''
+}
+${
+  methodology.length
+    ? `**Agency methodology:** the ${methodology.map((s) => `\`${s}\``).join(' + ')} skill${methodology.length > 1 ? 's' : ''} in \`.claude/skills/\` ` +
       'carry the full engagement playbook — research, strategy, execution plays with exact tool chains, weekly cadence, ' +
       'monthly reporting, benchmarks. Follow them for any substantive work; `/hiveku-weekly` and `/hiveku-report` run the cadence.'
     : ''

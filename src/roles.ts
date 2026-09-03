@@ -167,6 +167,13 @@ const BUILDER_TO_CONSOLE: Record<string, string[]> = {
   ppc: ['ppc'],
   outbound: ['outbound'],
   branding: ['creative'],
+  // The three foundation artifacts live in the creative department's datasets
+  // (avatars, journeys, grids); the consent page labels website_design
+  // "Graphic Design" but the closest data department is the site's pages.
+  customer_avatar: ['creative'],
+  customer_journey: ['creative'],
+  before_after_grid: ['creative'],
+  website_design: ['pages'],
   sales: ['crm', 'outbound'],
   email: ['email'],
   helpdesk: ['helpdesk'],

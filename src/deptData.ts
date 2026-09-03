@@ -685,16 +685,40 @@ export const DEPARTMENTS: Department[] = [
     setup: SOCIAL_SETUP,
     gate: 'marketing_social',
     datasets: [
-      { id: 'accounts', label: 'Accounts', tool: 'social_list_accounts', columns: [{ key: ['display_name', 'name', 'username'], label: 'account' }, { key: 'platform' }, { key: 'follower_count', label: 'followers' }] },
-      { id: 'posts', label: 'Posts', tool: 'social_list_posts', args: { limit: 200 }, columns: [{ key: ['title', 'content', 'caption'], label: 'post' }, { key: 'status' }, { key: ['scheduled_at', 'created_at'], label: 'when', date: true }] },
+      // Presence is not health: publishable = is_active AND connection_status connected AND can_post.
+      // token_state is derived server-side (expired | expiring_soon | ok | unknown - Meta page tokens and GBP record no expiry).
+      { id: 'accounts', label: 'Accounts', tool: 'social_list_accounts', columns: [{ key: ['display_name', 'name', 'username'], label: 'account' }, { key: 'platform' }, { key: 'follower_count', label: 'followers' }, { key: 'connection_status', label: 'status' }, { key: 'is_active', label: 'active' }, { key: 'can_post', label: 'can post' }, { key: 'token_state', label: 'token' }, { key: 'last_error', label: 'error' }, { key: 'last_sync_at', label: 'synced', date: true }] },
+      { id: 'posts', label: 'Posts', tool: 'social_list_posts', args: { limit: 200 }, columns: [{ key: ['title', 'content', 'caption'], label: 'post' }, { key: 'status' }, { key: 'approval_status', label: 'approval' }, { key: 'target_platforms', label: 'platforms' }, { key: ['scheduled_at', 'created_at'], label: 'when', date: true }] },
       { id: 'pillars', label: 'Pillars', tool: 'social_pillar_list', columns: [{ key: ['name', 'title'], label: 'pillar' }] },
+      { id: 'calendar', label: 'Calendar events (plans, not posts)', tool: 'social_calendar_list', args: { limit: 200 }, columns: [{ key: 'title' }, { key: 'event_type', label: 'type' }, { key: 'status' }, { key: ['start_date', 'start_time'], label: 'start', date: true }, { key: 'target_platforms', label: 'platforms' }, { key: 'linked_post_id', label: 'post' }] },
+      { id: 'comments', label: 'Comments (engagement inbox)', tool: 'social_comments_list', args: { limit: 200 }, columns: [{ key: 'content', label: 'comment' }, { key: 'author_name', label: 'author' }, { key: 'status' }, { key: 'sentiment' }, { key: 'requires_response', label: 'needs reply' }, { key: ['platform_created_at', 'created_at'], label: 'when', date: true }] },
+      { id: 'hashtags', label: 'Hashtags (tracked, by engagement)', tool: 'social_hashtags_list', args: { limit: 200, sort_by: 'engagement' }, columns: [{ key: 'hashtag' }, { key: 'platform' }, { key: 'times_used', label: 'used' }, { key: 'avg_engagement', label: 'avg engagement' }, { key: 'is_branded', label: 'branded' }] },
+      { id: 'slots', label: 'Schedule slots (recurring posting times; they schedule nothing)', tool: 'social_schedule_slot_list', columns: [{ key: 'label' }, { key: 'weekday', label: 'weekday (0=Sun)' }, { key: 'minute_of_day', label: 'minute of day' }, { key: 'timezone' }, { key: 'social_account_id', label: 'account' }, { key: 'is_active', label: 'active' }] },
+    ],
+    references: [
+      // The tool advertises from_date/to_date but the route reads only `period`, which the proxy never
+      // sends: the answer is always the last 7 days of published posts vs the 7 before, plus active accounts.
+      { id: 'analytics-summary', label: 'Analytics summary (last 7 days vs the 7 before; date args are ignored by the route)', tool: 'social_analytics_summary' },
     ],
     crud:
-      'Posts: `social_create_post` / `social_update_post` (content/media/schedule ONLY) / `social_delete_post` / ' +
-      '`social_publish_post`. NOTE `social_update_post` IGNORES status/approval_status — drive status via `scheduled_at` ' +
-      '(draft↔scheduled) and `social_publish_post`; approval is dashboard-only. ' +
-      'Pillars: `social_pillar_create` / `_update` / `_delete`. Sync analytics: `social_post_sync_analytics`. ' +
-      'Connect social accounts via the Hiveku dashboard (OAuth). For brand-aligned copy, prefer `talk_to_department({ domain: "social" })` then persist.',
+      'Posts: `social_create_post` is a DRAFT when `scheduled_at` is omitted. Setting `scheduled_at` IS the publish - ' +
+      'the every-minute cron ships the post on the first tick after that instant with no further confirmation; a true ' +
+      'draft omits it. `social_update_post` edits title, content, targets, media (send `media_urls` WITH `media_types`, ' +
+      'the FULL list - it replaces wholesale), link card, first comment, `platform_overrides`, tags, pillar, the ' +
+      'foundation refs and the schedule (`scheduled_at: null` unschedules); it CANNOT change status or approval_status. ' +
+      '`social_delete_post` removes a row. `social_publish_post` does not publish an unapproved post: it moves the post ' +
+      'into the dashboard approval queue (`pending_approval`) where a human approves it; there is deliberately no ' +
+      'approve tool. `social_post_reject({ post_id, reason })` returns a held post to draft. Before ANY schedule, ' +
+      'dry-run with `social_post_validate` (same body as create, writes nothing, reports every platform problem at once). ' +
+      'Pillars: `social_pillar_create` / `social_pillar_update` / `social_pillar_delete`. ' +
+      'Calendar events are plans, not posts (nothing on the calendar publishes): `social_calendar_create` / ' +
+      '`social_calendar_update` / `social_calendar_delete`, bound to a post with `linked_post_id`. ' +
+      'Slots: `social_schedule_slot_create` / `social_schedule_slot_update` / `social_schedule_slot_delete`; ' +
+      '`social_schedule_slot_next_open` offers the next open times. Hashtags: `social_hashtags_create` (upsert). ' +
+      'Comments: `social_comment_reply` PUBLISHES a public reply (Facebook, Instagram, LinkedIn only) - confirmed per ' +
+      'comment, never retried. Analytics refresh: `social_analytics_sync` / `social_post_sync_analytics`. ' +
+      'Connect social accounts via the Hiveku dashboard (OAuth); no MCP tool connects, activates or disconnects one. ' +
+      'For brand-aligned copy, prefer `talk_to_department({ domain: "social" })` then persist with `social_create_post`.',
   },
   {
     id: 'content',

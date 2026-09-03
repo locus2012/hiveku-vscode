@@ -8,13 +8,116 @@
  * so this is safe to ship broad and tighten against a live account.
  */
 
-import type { ModuleSpec } from './panel';
+import type { ActionSpec, ModuleSpec } from './panel';
 import { maskSecret } from './hivekuApi';
 
 const open = (label = 'Open in Hiveku', sub?: string) =>
   ({ id: 'open', label, kind: 'open' as const, ...(sub ? { sub } : {}) });
 const chat = (department: string, label = 'Ask agent') =>
   ({ id: 'chat', label, kind: 'chat' as const, department });
+
+// ============================================================
+// Social publishing is a GOVERNANCE GATE, not a button.
+//
+// social_publish_post on a post no person has approved does NOT publish: the
+// route moves the post into the dashboard approval queue and returns
+// { pending_approval: true }. It publishes immediately only when
+// approval_status is already 'approved' and there is no live future schedule
+// (a scheduled + approved post is the cron's; the route answers 409 and this
+// surface has no override). The label, confirm text, guards and completion
+// message below say exactly that. There is deliberately NO approve action in
+// this panel: the MCP server exposes none, because a tool that approves would
+// let the same agent, in the same turn, release what it just staged. Releasing
+// a held post is a human act in the dashboard (Marketing > Social > Approvals).
+// social_post_reject only ever moves a post backwards, to draft.
+//
+// Values come from the social_posts columns: status is draft | scheduled |
+// pending_approval | publishing | published | failed | archived, approval_status
+// is not_required | pending | approved | rejected.
+// ============================================================
+
+const asString = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+const isFutureDate = (value: unknown): boolean => {
+  if (typeof value !== 'string' && typeof value !== 'number') return false;
+  const parsed = Date.parse(String(value));
+  return !Number.isNaN(parsed) && parsed > Date.now();
+};
+
+/** The route returns { pending_approval: true } bare; read it under `data` too in case a proxy wraps it. */
+const isPendingApproval = (result: unknown): boolean => {
+  if (!result || typeof result !== 'object') return false;
+  const top = result as Record<string, unknown>;
+  if (top.pending_approval === true) return true;
+  const data = top.data;
+  return !!data && typeof data === 'object' && (data as Record<string, unknown>).pending_approval === true;
+};
+
+/** publishPost returns { success, errors[] } under `data`; a partial failure must not read as "Published". */
+const publishErrors = (result: unknown): string[] => {
+  if (!result || typeof result !== 'object') return [];
+  const top = result as Record<string, unknown>;
+  const data = top.data && typeof top.data === 'object' ? (top.data as Record<string, unknown>) : top;
+  return Array.isArray(data.errors) ? data.errors.filter((e): e is string => typeof e === 'string') : [];
+};
+
+/** YYYY-MM-DD from the local calendar, for the calendar's DATE-typed start_date filter. */
+const localDateOnly = (date: Date): string => {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+const APPROVALS_PATH = 'Marketing > Social > Approvals';
+
+const SOCIAL_SEND_TO_APPROVAL: ActionSpec = {
+  id: 'send_to_approval',
+  label: 'Send to approval queue',
+  kind: 'tool',
+  tool: 'social_publish_post',
+  args: (r) => ({ post_id: r.id }),
+  guard: (r) => {
+    const status = asString(r.status);
+    const approval = asString(r.approval_status);
+    if (status === 'published' || status === 'publishing') return 'Already published.';
+    // Mirrors the route's isScheduledInFuture (status scheduled AND a future
+    // scheduled_at): a past-due scheduled post is not the cron's any more and
+    // the route publishes it, so the guard must not claim otherwise.
+    if (approval === 'approved' && status === 'scheduled' && isFutureDate(r.scheduled_at)) {
+      return 'This post is scheduled and approved; the cron publishes it at its slot.';
+    }
+    if (status === 'pending_approval' || approval === 'pending') {
+      return `Already in the approval queue. A person approves it in the dashboard (${APPROVALS_PATH}).`;
+    }
+    return null;
+  },
+  confirm:
+    `Send this post to the Hiveku approval queue? Nothing publishes from here: a person approves it in the dashboard (${APPROVALS_PATH}). ` +
+    'If it is ALREADY approved and has no future schedule, it publishes NOW to every target account.',
+  done: (result) => {
+    if (isPendingApproval(result)) return 'Moved to the approval queue. Nothing was published.';
+    const errors = publishErrors(result);
+    if (errors.length) {
+      return `Publish ran but ${errors.length} target(s) failed: ${errors.join('; ').slice(0, 300)}. Check the post in the dashboard before retrying.`;
+    }
+    return "Published to the post's target accounts.";
+  },
+};
+
+const SOCIAL_REJECT: ActionSpec = {
+  id: 'reject',
+  label: 'Reject (back to draft)',
+  kind: 'tool',
+  tool: 'social_post_reject',
+  args: (r) => ({ post_id: r.id }),
+  guard: (r) =>
+    asString(r.status) === 'pending_approval' || asString(r.approval_status) === 'pending'
+      ? null
+      : 'Only a post waiting in the approval queue can be rejected.',
+  inputs: [{ key: 'reason', label: 'Reason for rejecting (stored on the post; the author sees it)' }],
+  done: () => 'Rejected. The post is back in draft with the reason recorded; nothing was published.',
+};
+
+const SOCIAL_POST_TITLE_KEYS = ['title', 'content', 'caption'];
 
 export const MODULES: ModuleSpec[] = [
   {
@@ -276,8 +379,77 @@ export const MODULES: ModuleSpec[] = [
     icon: 'broadcast',
     sections: [
       { id: 'accounts', label: 'Accounts', tool: 'social_list_accounts', titleKeys: ['name', 'username', 'platform'], fields: [{ keys: ['platform'] }], rowActions: [chat('social')], empty: 'No social accounts.' },
-      { id: 'posts', label: 'Posts', tool: 'social_list_posts', titleKeys: ['title', 'content', 'caption'], fields: [{ keys: ['status'] }, { keys: ['scheduled_at', 'created_at'], date: true }], rowActions: [{ id: 'publish', label: 'Publish', kind: 'tool', tool: 'social_publish_post', args: (r) => ({ post_id: r.id }), inputs: [{ key: 'platforms', label: 'Platforms (comma-separated, e.g. facebook, instagram, linkedin)', csv: true }], confirm: 'Publish this post now?' }], empty: 'No posts.' },
+      {
+        id: 'posts',
+        label: 'Posts',
+        tool: 'social_list_posts',
+        titleKeys: SOCIAL_POST_TITLE_KEYS,
+        fields: [
+          { keys: ['status'] },
+          { keys: ['approval_status'], label: 'approval' },
+          { keys: ['scheduled_at', 'created_at'], date: true },
+        ],
+        // The deprecated `platforms` input is gone: the route ignores it and
+        // publishes to every configured target account regardless.
+        rowActions: [SOCIAL_SEND_TO_APPROVAL, SOCIAL_REJECT],
+        empty: 'No posts.',
+      },
       { id: 'pillars', label: 'Pillars', tool: 'social_pillar_list', titleKeys: ['name', 'title'], empty: 'No content pillars.' },
+      {
+        id: 'approvals',
+        label: 'Approval queue',
+        tool: 'social_list_posts',
+        args: { status: 'pending_approval', limit: 100 },
+        titleKeys: SOCIAL_POST_TITLE_KEYS,
+        fields: [
+          { keys: ['approval_status'], label: 'approval' },
+          { keys: ['scheduled_at'], label: 'scheduled', date: true },
+          { keys: ['created_at'], label: 'created', date: true },
+        ],
+        // Reject and chat only. Approving is a human act in the dashboard.
+        rowActions: [SOCIAL_REJECT, chat('social')],
+        empty: `Nothing is waiting for approval. Approving happens in the dashboard (${APPROVALS_PATH}), never from here.`,
+      },
+      {
+        id: 'calendar',
+        label: 'Calendar (next 60 days)',
+        tool: 'social_calendar_list',
+        // Evaluated on every load so the window rolls with the clock. The route
+        // caps limit at 100 (and the panel shows at most 100 rows).
+        args: () => {
+          const from = new Date();
+          const to = new Date(from.getTime() + 60 * 24 * 60 * 60 * 1000);
+          return { from_date: localDateOnly(from), to_date: localDateOnly(to), limit: 100 };
+        },
+        titleKeys: ['title'],
+        fields: [
+          { keys: ['event_type'], label: 'type' },
+          { keys: ['start_date'], label: 'start', dateOnly: true },
+          { keys: ['status'] },
+          { keys: ['linked_post.title'], label: 'post' },
+        ],
+        rowActions: [chat('social')],
+        detail: { tool: 'social_calendar_get', idKeys: ['id'], idArg: 'event_id' },
+        empty: 'Nothing on the calendar for the next 60 days. A calendar event is a plan, not a post: nothing here publishes.',
+      },
+      {
+        id: 'comments',
+        label: 'Comments needing a reply',
+        tool: 'social_comments_list',
+        args: { requires_response: 'true', limit: 100 },
+        titleKeys: ['content'],
+        fields: [
+          { keys: ['author_name', 'author_username'], label: 'from' },
+          { keys: ['post_version.platform'], label: 'platform' },
+          { keys: ['sentiment'] },
+          { keys: ['post_version.post.title'], label: 'on' },
+          { keys: ['platform_created_at', 'created_at'], date: true },
+        ],
+        // Chat only: a public reply is outward-facing with no undo, so it stays
+        // a confirmed act in department chat or the CLI, never a row button.
+        rowActions: [chat('social', 'Draft a reply (chat)')],
+        empty: 'No comments are waiting for a reply.',
+      },
     ],
   },
   {

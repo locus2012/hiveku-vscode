@@ -509,8 +509,15 @@
     {
       "id": "social",
       "label": "Social",
-      "crud": "Posts: `social_create_post` / `social_update_post` (content/media/schedule ONLY) / `social_delete_post` / `social_publish_post`. NOTE `social_update_post` IGNORES status/approval_status — drive status via `scheduled_at` (draft↔scheduled) and `social_publish_post`; approval is dashboard-only. Pillars: `social_pillar_create` / `_update` / `_delete`. Sync analytics: `social_post_sync_analytics`. Connect social accounts via the Hiveku dashboard (OAuth). For brand-aligned copy, prefer `talk_to_department({ domain: \"social\" })` then persist.",
-      "setup": "# Social first-run: accounts, pillars, first draft — verified\n\nCheck current state FIRST: `social_list_accounts` — connected platform accounts with `is_active`.\nIf accounts exist and pillars exist (`social_pillar_list`), skip to the verify step.\n\n## STEP 1 — connect the social accounts (dashboard)\nPlatform OAuth (Instagram / Facebook / LinkedIn / X / TikTok / YouTube) is **dashboard-initiated** — there is\nno MCP tool that starts a social consent flow. The user connects each account in the **Hiveku dashboard**\n(Marketing → Social → connect account). Back here, `social_list_accounts` shows each new row; treat\n`is_active: \"true\"` as connected. Account IDs from this list are what posts target.\n\n## STEP 2 — content pillars (the recurring themes posts hang off)\n1. `social_pillar_list` — see what already exists before creating.\n2. `social_pillar_create({ name, description?, cadence?, platforms? })` — e.g.\n   cadence \"2x/week\", platforms [\"instagram\", \"linkedin\"]. Create 3-5 pillars covering the brand's themes.\n\n## Verify with a DRAFT post (never publish during setup)\n1. `social_create_post({ title, content, target_platforms, target_accounts?, pillar_id? })` — omit\n   `scheduled_at` and do NOT call `social_publish_post`; the post stays an unpublished draft.\n2. Confirm it exists (`social_get_post` / `social_list_posts`), then clean up: `social_delete_post`.\n3. `social_analytics_summary({ from_date?, to_date? })` — returns totals across platforms; zeros are fine on\n   a fresh account, an error means the account connection is broken.\n\nAfter connecting, re-run \"Download Department Data → Social\" to refresh `hiveku-data/social/*.json`.\n",
+      "crud": "Posts: `social_create_post` is a DRAFT when `scheduled_at` is omitted. Setting `scheduled_at` IS the publish - the every-minute cron ships the post on the first tick after that instant with no further confirmation; a true draft omits it. `social_update_post` edits title, content, targets, media (send `media_urls` WITH `media_types`, the FULL list - it replaces wholesale), link card, first comment, `platform_overrides`, tags, pillar, the foundation refs and the schedule (`scheduled_at: null` unschedules); it CANNOT change status or approval_status. `social_delete_post` removes a row. `social_publish_post` does not publish an unapproved post: it moves the post into the dashboard approval queue (`pending_approval`) where a human approves it; there is deliberately no approve tool. `social_post_reject({ post_id, reason })` returns a held post to draft. Before ANY schedule, dry-run with `social_post_validate` (same body as create, writes nothing, reports every platform problem at once). Pillars: `social_pillar_create` / `social_pillar_update` / `social_pillar_delete`. Calendar events are plans, not posts (nothing on the calendar publishes): `social_calendar_create` / `social_calendar_update` / `social_calendar_delete`, bound to a post with `linked_post_id`. Slots: `social_schedule_slot_create` / `social_schedule_slot_update` / `social_schedule_slot_delete`; `social_schedule_slot_next_open` offers the next open times. Hashtags: `social_hashtags_create` (upsert). Comments: `social_comment_reply` PUBLISHES a public reply (Facebook, Instagram, LinkedIn only) - confirmed per comment, never retried. Analytics refresh: `social_analytics_sync` / `social_post_sync_analytics`. Connect social accounts via the Hiveku dashboard (OAuth); no MCP tool connects, activates or disconnects one. For brand-aligned copy, prefer `talk_to_department({ domain: \"social\" })` then persist with `social_create_post`.",
+      "setup": "# Social first-run: accounts, pillars, slots, first draft - verified\n\nCheck current state FIRST: `account_context_get({ domain: 'social', include: 'identity,brand,memory,rules,social' })`\n(the `social` section carries the scheduling timezone, pillars, connected accounts and schedule slots; read\n`sections_included` before calling anything empty), then `social_list_accounts` with no filter so picker rows\ncome back beside the connections. If publishable accounts exist and `social_pillar_list` returns pillars, skip\nto the verify step.\n\n## STEP 1 - connect the social accounts (dashboard)\nPlatform OAuth is **dashboard-initiated** - no MCP tool starts a social consent flow, and no tool activates or\ndisconnects a row (by design). The user connects each account in the Hiveku dashboard (Marketing -> Social ->\nconnect account). The six publisher slugs, which are both the `platform` value on a row and the entries of a\npost's `target_platforms`: `linkedin`, `twitter`, `facebook`, `instagram`, `tiktok`,\n`google_business_profile`. There is no YouTube publisher.\n\nBack here, `social_list_accounts` shows each row. Presence is not health - classify every row:\n- publishable: `is_active` true AND `connection_status: 'connected'` AND `can_post` true. Only these ids go\n  in `target_accounts`.\n- picker: `pending_selection: true` - the login administers several Pages or organizations and a human still\n  has to pick one in the dashboard. List it by name; never target it.\n- broken: anything else. Read `last_error` and `last_sync_at`; `social_account_get({ social_account_id })`\n  shows the granted scopes. `token_state` `expired` or `expiring_soon` (under 7 days) means reconnect before\n  scheduling; `unknown` is normal for Meta page tokens and GBP (no expiry is recorded, so it cannot be predicted).\nA platform the client wants that has no row: `social_provider_list` - `hiveku_native: false` means the client\nregisters their own OAuth app (BYOK). When an X row exists the response carries `quota.x` (60 published X posts\nper Hiveku account per calendar month on the required plan; a soft cap that fails open, so `remaining` is\nadvisory).\n\n## STEP 2 - content pillars (the recurring themes posts hang off)\n1. `social_pillar_list` - see what already exists; refine what is there rather than create a rival set.\n2. `social_pillar_create({ name, description?, color?, icon?, target_posts_per_week?, target_percentage?,\n   auto_tags?, example_topics?, hashtags?, content_guidelines? })` - only `name` is required;\n   `target_posts_per_week` defaults to 1 and `target_percentage` (share of all content) to 20, so set both\n   explicitly for 4-6 pillars whose percentages sum to 100. There is no `cadence` or `platforms` field: the\n   proxy sends only the declared fields, so anything else is dropped with no error.\n\n## STEP 3 - schedule slots (when the account wants to post)\n`social_schedule_slot_list`, then `social_schedule_slot_create({ weekday, minute_of_day, timezone, label?,\nsocial_account_id? })` - weekday 0-6 (0 = Sunday), minute_of_day 0-1439 local to the IANA timezone (9:30am is\n570); `social_account_id` null applies to every connection. Slots describe WHEN; they schedule nothing.\n`social_schedule_slot_next_open` later offers these times to a plan.\n\n## Verify with a DRAFT post (never publish or schedule during setup)\n1. `social_post_validate({ content, target_platforms: [<one slug>], target_accounts: [<publishable id>] })` -\n   a dry run: writes nothing and reports every platform problem in one round trip. Run it before ANY post is\n   ever scheduled, not only here.\n2. `social_create_post({ title, content, target_platforms: [<one slug>], target_accounts: [<publishable id>],\n   pillar_id? })` - pass `target_accounts`, OMIT `scheduled_at`. Setting `scheduled_at` IS the publish: the\n   every-minute cron ships the post on the first tick after that instant with no further confirmation. Do NOT\n   call `social_publish_post` either - it does not publish an unapproved post, it stages it into the dashboard\n   approval queue (`pending_approval`), and there is deliberately no approve tool.\n3. Confirm it exists (`social_get_post` / `social_list_posts({ status: 'draft' })`), then clean up:\n   `social_delete_post`.\n4. `social_analytics_summary` - the tool advertises `from_date` / `to_date`, but the route reads only a\n   `period` the proxy never sends, so the answer is ALWAYS the last 7 days of published posts (with the previous\n   7 days for comparison) plus the active accounts. Zeros are fine on a fresh account; an error means the\n   account connection is broken. For a real window use `social_posts_analytics_list` (per post) or\n   `social_analytics_by_dimension({ from_date })`.\n\nAfter connecting, re-run \"Download Department Data -> Social\" to refresh `hiveku-data/social/*.json`\n(accounts, posts, pillars, calendar, comments, hashtags, slots, analytics-summary).\n",
+      "references": [
+        {
+          "id": "analytics-summary",
+          "label": "Analytics summary (last 7 days vs the 7 before; date args are ignored by the route)",
+          "tool": "social_analytics_summary"
+        }
+      ],
       "datasets": [
         {
           "id": "accounts",
@@ -529,6 +536,36 @@
           "id": "pillars",
           "label": "Pillars",
           "tool": "social_pillar_list"
+        },
+        {
+          "id": "calendar",
+          "label": "Calendar events (plans, not posts)",
+          "tool": "social_calendar_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "comments",
+          "label": "Comments (engagement inbox)",
+          "tool": "social_comments_list",
+          "args": {
+            "limit": 200
+          }
+        },
+        {
+          "id": "hashtags",
+          "label": "Hashtags (tracked, by engagement)",
+          "tool": "social_hashtags_list",
+          "args": {
+            "limit": 200,
+            "sort_by": "engagement"
+          }
+        },
+        {
+          "id": "slots",
+          "label": "Schedule slots (recurring posting times; they schedule nothing)",
+          "tool": "social_schedule_slot_list"
         }
       ]
     },

@@ -1078,12 +1078,15 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "vscode:prepublish": "npm run check:permissions && npm run check:connect-departments && npm run gen:registry && npm run compile",
+    "vscode:prepublish": "npm run check:permissions && npm run check:connect-departments && npm run check:skills && npm run gen:registry && npm run compile",
     "check:permissions": "node scripts/check-permission-rules.mjs",
     "check:connect-departments": "node --import ./scripts/register-ts.mjs scripts/check-connect-departments.mjs",
     "gen:registry": "node --import ./scripts/register-ts.mjs scripts/gen-dept-manifest.mjs",
     "check:registry": "npm run gen:registry && node --import ./scripts/register-ts.mjs scripts/check-dept-manifest-drift.mjs",
-    "sync:registry": "npm run gen:registry && cp src/dept-manifest.json ../hiveku-claude-plugin/lib/dept-manifest.json && npm run check:registry"
+    "sync:registry": "npm run gen:registry && cp src/dept-manifest.json ../hiveku-claude-plugin/lib/dept-manifest.json && npm run check:registry",
+    "gen:skills": "node scripts/gen-agency-skills.mjs",
+    "check:skills": "node scripts/check-agency-skills-drift.mjs",
+    "sync:skills": "npm run gen:skills && npm run check:skills"
   },
   "dependencies": {
     "tar": "^7.4.3"
