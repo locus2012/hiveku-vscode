@@ -64,7 +64,9 @@ const SLOW_TOOL_TIMEOUT_MS: Record<string, number> = {
   // The server mapping budgets this exact call 290s (up to 500 files through
   // saveProjectFile plus the checkpoint and preview fan-out). At the 60s
   // default the extension aborted a batch the server went on to finish, then
-  // re-sent it on retry.
+  // re-sent it on retry. Since 2026-09-04 the route itself stops applying
+  // files at 85s and answers partial:true + remaining_paths (scm.ts continues
+  // from them), so this ceiling is only ever reached by the pre-loop work.
   project_files_bulk_save: 290_000,
   // A full branch tree read out of S3/Postgres; maxDuration = 180 on the route.
   project_vcs_checkout: 180_000,

@@ -688,7 +688,14 @@ export class HivekuScm implements vscode.Disposable {
         const flush = async (): Promise<void> => {
           if (batch.length === 0) return;
           batchNo++;
-          const files = batch;
+          // A batch can come back PARTIAL: the route stops applying files at its
+          // 85s wall budget (under the edge's ~100-120s 524) and names the paths
+          // it never attempted. Those are not failures and must not be re-sent
+          // as the whole batch (that rewrites every already-saved file and hits
+          // the budget again); the loop continues with exactly remaining_paths,
+          // bounded so a route that made no progress cannot spin.
+          let files = batch;
+          let continuations = 0;
           batch = [];
           batchBytes = 0;
           for (let attempt = 1; attempt <= 2; attempt++) {
@@ -706,6 +713,17 @@ export class HivekuScm implements vscode.Disposable {
             }
             saved += r.summary.succeeded;
             if (r.working_tree_etag !== undefined) lastEtag = r.working_tree_etag;
+            if (r.partial && r.remaining_paths.length > 0 && r.remaining_paths.length < files.length && continuations < 20) {
+              const remaining = new Set(r.remaining_paths);
+              this.log.appendLine(
+                `[push] code batch ${batchNo}: server stopped at its wall budget after ${r.summary.succeeded}/${files.length}; continuing with ${remaining.size} remaining`,
+              );
+              files = files.filter((f) => remaining.has(f.path));
+              continuations++;
+              attempt--; // a continuation is progress, not a retry
+              progress.report({ message: `code ${saved}/${codeFiles.length}` });
+              continue;
+            }
             if (r.summary.succeeded === files.length) return;
             const bad = r.results.filter((x) => !x.ok).map((x) => x.path);
             this.log.appendLine(

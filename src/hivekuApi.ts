@@ -370,6 +370,14 @@ export interface BulkSaveResult {
   working_tree_etag?: string | null;
   /** Branch saves only: whether a live branch preview was synced, or a hint to start one. */
   preview_effect?: unknown;
+  /**
+   * The route stops applying files at its wall budget (85s, under the edge's
+   * ~100-120s 524) and answers 207 with the paths it did NOT attempt. Files in
+   * results[] are written; the caller re-sends only remaining_paths. Before
+   * 2026-09-04 a long batch simply died at the edge with an ambiguous 524.
+   */
+  partial: boolean;
+  remaining_paths: string[];
 }
 
 /**
@@ -414,6 +422,11 @@ export async function filesBulkSave(
     results: Array.isArray(data.results) ? data.results : [],
     working_tree_etag: readSibling<string | null>(res, 'working_tree_etag'),
     preview_effect: readSibling<unknown>(res, 'preview_effect'),
+    partial: readSibling<boolean>(res, 'partial') === true,
+    remaining_paths: (() => {
+      const raw = readSibling<unknown>(res, 'remaining_paths');
+      return Array.isArray(raw) ? raw.filter((p): p is string => typeof p === 'string') : [];
+    })(),
   };
 }
 
