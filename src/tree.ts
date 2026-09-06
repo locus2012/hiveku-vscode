@@ -19,6 +19,7 @@ import * as vscode from 'vscode';
 import { AccountStore, type AccountRecord } from './accounts';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
+import { externalPlatform, isExternalProject } from './projectKind';
 import {
   fetchKnowledge,
   selectEntries,
@@ -489,7 +490,7 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
         return item;
       }
       case 'project': {
-        const external = node.project.project_type === 'external';
+        const external = isExternalProject(node.project);
         const item = new vscode.TreeItem(
           node.project.name || node.project.slug || node.project.id,
           external ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed,
@@ -498,7 +499,17 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
         item.description = [node.project.project_type, host].filter(Boolean).join(' · ');
         item.iconPath = new vscode.ThemeIcon(external ? 'link-external' : 'repo');
         item.contextValue = external ? 'hivekuProjectExternal' : 'hivekuProject';
-        if (external) {
+        if (externalPlatform(node.project) === 'webflow') {
+          // A Webflow-hosted site: edited through the Hiveku Webflow workspace
+          // and the webflow_* tools. The label opens the live site; the inline
+          // globe (hiveku.openSite) offers the site and the workspace.
+          const url = node.project.external_website_url || (node.project.custom_domain ? `https://${node.project.custom_domain}` : undefined);
+          item.description = ['Webflow', host].filter(Boolean).join(' · ');
+          item.iconPath = new vscode.ThemeIcon('globe');
+          item.contextValue = 'hivekuProjectWebflow';
+          if (url) item.command = { command: 'hiveku.openSiteEnv', title: 'Open Site', arguments: [{ url }] };
+          item.tooltip = 'Webflow site — edited through the Hiveku Webflow workspace and the webflow_* tools; no code here';
+        } else if (external) {
           const url = node.project.custom_domain ? `https://${node.project.custom_domain}` : undefined;
           if (url) item.command = { command: 'hiveku.openSiteEnv', title: 'Open Site', arguments: [{ url }] };
           item.tooltip = `External site${url ? ` — ${url}` : ''} (tracked in Hiveku; code lives elsewhere)`;
@@ -695,7 +706,7 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
       }));
     }
     if (node.kind === 'project') {
-      if (node.project.project_type === 'external') return [];
+      if (isExternalProject(node.project)) return [];
       // sites_list already resolved every environment URL — build links locally.
       const children: HivekuNode[] = api.envDescriptorsFromSite(node.project).map((d) => ({
         kind: 'siteEnv',

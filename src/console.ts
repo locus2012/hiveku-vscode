@@ -16,6 +16,7 @@ import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
 import type { AccountRecord } from './accounts';
 import { departmentById, extractRows, fetchDataset, mapLimit, type Column, type Row } from './deptData';
+import { isExternalProject } from './projectKind';
 import { moduleById } from './modules';
 import { openModulePanel } from './panel';
 import { openTaskDetail } from './taskDetail';
@@ -295,7 +296,7 @@ async function loadCmsTab(client: HivekuMcpClient): Promise<Record<string, unkno
   const sitesRaw = await client.callToolJson<unknown>('sites_list', { limit: 50 }).catch(() => ({}));
   // Caps keep the fan-out inside the shared MCP rate budget (worst case
   // 1 + 6 + 60 calls, memoized for 60s).
-  const sites = extractRows(sitesRaw).filter((s) => s.project_type !== 'external').slice(0, 6);
+  const sites = extractRows(sitesRaw).filter((s) => !isExternalProject(s)).slice(0, 6);
   const out = await mapLimit(sites, 3, async (site) => {
     const projectId = String(site.id ?? '');
     let collections: api.CmsCollection[] = [];
@@ -406,7 +407,7 @@ async function loadAnalyticsDashboard(client: HivekuMcpClient): Promise<Record<s
   const start28 = isoDaysAgo(28);
   const start56 = isoDaysAgo(56);
   const sitesRaw = await client.callToolJson<unknown>('sites_list', { limit: 50 }).catch(() => ({}));
-  const sites = extractRows(sitesRaw).filter((x) => x.project_type !== 'external').slice(0, 10);
+  const sites = extractRows(sitesRaw).filter((x) => !isExternalProject(x)).slice(0, 10);
   interface Ov { total_sessions: number; unique_visitors: number; total_page_views: number; bounce_rate: number; }
   const zero: Ov = { total_sessions: 0, unique_visitors: 0, total_page_views: 0, bounce_rate: 0 };
   const readOv = (raw: unknown): { m: Ov; landing: Array<{ page: string; count: number }>; sources?: unknown } => {

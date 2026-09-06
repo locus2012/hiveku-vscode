@@ -817,6 +817,11 @@
           "group": "inline@0"
         },
         {
+          "command": "hiveku.openSite",
+          "when": "view == hiveku.projects && viewItem == hivekuProjectWebflow",
+          "group": "inline@0"
+        },
+        {
           "command": "hiveku.showEnvLogs",
           "when": "view == hiveku.projects && viewItem == hivekuSiteEnv",
           "group": "inline"

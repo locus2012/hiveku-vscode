@@ -26,6 +26,7 @@
     "review",
     "analytics",
     "cms",
+    "webflow",
     "database"
   ],
   "departments": [
@@ -1337,6 +1338,18 @@
               "argKey": "collection_id"
             }
           ]
+        }
+      ]
+    },
+    {
+      "id": "webflow",
+      "label": "Webflow sites",
+      "crud": "External sites hosted on Webflow (sites_list rows with external_platform \"webflow\"). Pages: `webflow_page_list` / `webflow_page_get` / `webflow_page_metadata_update`; CMS: `webflow_cms_collection_list` / `webflow_cms_item_list` / `webflow_cms_item_create` / `webflow_cms_item_update` / `webflow_cms_item_publish`; assets `webflow_asset_upload`; custom code and the analytics snippet `webflow_hiveku_snippet_install` (OAuth connections only); redirects and robots are Enterprise-only. Every write is STAGED until `webflow_cms_item_publish` or `webflow_site_publish` (confirm). No code, no deploy.",
+      "datasets": [
+        {
+          "id": "sites",
+          "label": "Sites",
+          "tool": "webflow_site_list"
         }
       ]
     },

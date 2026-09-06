@@ -234,6 +234,13 @@ Publishing without distribution is where in-house content programs die; agencies
    page up). Imports: `content_create_from_cms_entry`. **Load `references/site-publishing.md`
    before any of these.** The `cms_*` / `pages_*` tools in older notes are `dev` /
    `marketing-seo` lanes - do not route a content operator onto tools their key cannot see.
+4. **On-site publishing (Webflow-hosted sites).** When the `sites_list` row carries
+   `external_platform: "webflow"`, `content_publish_to_site` is still the lane: it maps the
+   item through the Webflow provider and lands it STAGED on Webflow, recording the CMS link
+   on the content row. Entries with no content item go through the `cms_*` tools, then
+   `cms_publish` makes the staged items live (there is no deploy). Never write the same entry
+   a second time through `webflow_cms_item_create`; a delete on Webflow has no restore.
+   Deeper doctrine: `hiveku-web-agency/references/webflow-sites.md`.
 
 ## Play 5 - Measurement + refresh (the retainer-justifying loop)
 

@@ -42,6 +42,7 @@ const VENDORED_SKILLS = [
   'hiveku-outbound-agency',
   'hiveku-creative-agency',
   'hiveku-social-agency',
+  'hiveku-web-agency',
   'hiveku-orient',
 ] as const;
 
@@ -67,7 +68,9 @@ const ROLE_SKILLS: Record<RoleId, VendoredSkill[]> = {
   // list to an outbound campaign (see "Backlink outreach campaigns").
   seo: ['hiveku-seo-agency', 'hiveku-outbound-agency'],
   ppc: ['hiveku-ppc-agency'],
-  dev: [],
+  // The web agency methodology: the code lane plays and, through its
+  // references/webflow-sites.md, the Webflow-hosted site doctrine.
+  dev: ['hiveku-web-agency'],
   bookkeeper: [],
   pm: [],
   // Marketer carries social too: the content calendar it runs is what the

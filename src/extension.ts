@@ -27,6 +27,7 @@ import { pullEnv, pushEnv } from './env';
 import { openMediaGallery } from './gallery';
 import { openReviewAnnotator } from './reviewAnnotator';
 import { openDashboard } from './dashboard';
+import { externalPlatform, isExternalProject } from './projectKind';
 import { openAccountConsole, refreshConsoleTab } from './console';
 import { openModulePanel, isEntitled } from './panel';
 import { MODULES, PROJECT_MODULE, moduleById, moduleGroupGate } from './modules';
@@ -1255,7 +1256,7 @@ async function cloneProject(): Promise<void> {
     { location: vscode.ProgressLocation.Notification, title: 'Loading Hiveku site projects…' },
     () => api.sitesList(client),
   );
-  const projects = sites.filter((p) => p.project_type !== 'external'); // external sites have no code here
+  const projects = sites.filter((p) => !isExternalProject(p)); // external sites have no code here
   if (projects.length === 0) {
     vscode.window.showInformationMessage('No downloadable site projects on this account.');
     return;
@@ -1614,7 +1615,7 @@ async function downloadEverything(node?: { record?: AccountRecord }): Promise<vo
         // (this is the one-button account bootstrap).
         const client = await clientForAccount(record.accountId);
         const sites = (await api.sitesList(client).catch(() => [] as api.SiteSummary[])).filter(
-          (p) => p.project_type !== 'external',
+          (p) => !isExternalProject(p),
         );
         for (const p of sites) {
           const label = p.name || p.slug || p.id;
@@ -2336,6 +2337,21 @@ async function openSite(node: { record?: AccountRecord; project?: api.ProjectSum
   let accountId: string;
   let projectId: string;
   let projectName: string;
+  if (node?.record && node?.project && externalPlatform(node.project) === 'webflow') {
+    // A Webflow-hosted site has no Hiveku environments to resolve: offer the
+    // live site (when the customer recorded a URL) and the Hiveku Webflow
+    // workspace, which is where the site is edited.
+    const site = node.project as Partial<api.SiteSummary>;
+    const liveUrl = site.external_website_url || (site.custom_domain ? `https://${site.custom_domain}` : undefined);
+    const workspaceUrl = `${appUrl().replace(/\/+$/, '')}/${node.record.accountId}/dashboard/${node.project.id}/webflow`;
+    const choices = [
+      ...(liveUrl ? [{ label: 'Live site', description: liveUrl.replace(/^https?:\/\//, ''), url: liveUrl }] : []),
+      { label: 'Hiveku Webflow workspace', description: 'pages, SEO, CMS, custom code, publish', url: workspaceUrl },
+    ];
+    const pick = await vscode.window.showQuickPick(choices, { placeHolder: `Open ${node.project.name} (Webflow)` });
+    if (pick) await vscode.env.openExternal(vscode.Uri.parse(pick.url));
+    return;
+  }
   if (node?.record && node?.project) {
     accountId = node.record.accountId;
     projectId = node.project.id;

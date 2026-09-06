@@ -36,6 +36,10 @@ export const VENDORED_SKILLS = [
   'hiveku-outbound-agency',
   'hiveku-creative-agency',
   'hiveku-social-agency',
+  // 2026-09-06: the web agency skill (the code lane and, in
+  // references/webflow-sites.md, the Webflow-hosted site doctrine) for the
+  // dev role.
+  'hiveku-web-agency',
   'hiveku-orient',
 ];
 

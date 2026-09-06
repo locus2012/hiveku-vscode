@@ -1150,6 +1150,24 @@ export const DEPARTMENTS: Department[] = [
       'instead of N `cms_write_entry` calls. collection_id is the collection slug from the manifest, not a UUID.',
   },
   {
+    // External sites hosted on Webflow, reached through the webflow_* tools
+    // (one bound site per Hiveku project). Per-site page datasets wait until
+    // the runner can filter sites_list parents by platform: today every
+    // non-Webflow project would answer no_webflow_connection.
+    id: 'webflow',
+    label: 'Webflow sites',
+    gate: 'websites',
+    datasets: [
+      { id: 'sites', label: 'Sites', tool: 'webflow_site_list', columns: [{ key: 'id' }, { key: 'displayName', label: 'site' }, { key: 'shortName', label: 'short name' }, { key: 'lastPublished', label: 'published', date: true }] },
+    ],
+    crud:
+      'External sites hosted on Webflow (sites_list rows with external_platform "webflow"). Pages: `webflow_page_list` / ' +
+      '`webflow_page_get` / `webflow_page_metadata_update`; CMS: `webflow_cms_collection_list` / `webflow_cms_item_list` / ' +
+      '`webflow_cms_item_create` / `webflow_cms_item_update` / `webflow_cms_item_publish`; assets `webflow_asset_upload`; custom code and ' +
+      'the analytics snippet `webflow_hiveku_snippet_install` (OAuth connections only); redirects and robots are Enterprise-only. ' +
+      'Every write is STAGED until `webflow_cms_item_publish` or `webflow_site_publish` (confirm). No code, no deploy.',
+  },
+  {
     id: 'database',
     label: 'Project Database',
     gate: 'websites',

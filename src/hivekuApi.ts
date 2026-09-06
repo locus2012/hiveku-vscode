@@ -12,6 +12,13 @@ export interface ProjectSummary {
   name: string;
   slug?: string;
   project_type?: string;
+  /** Where an `external` project lives (sites_list / project_get). Null before
+   *  the builder's platform columns exist; read it through projectKind.ts. */
+  external_platform?: 'url' | 'webflow' | 'wordpress' | null;
+  /** Where the project's CMS content lives; `webflow` for a Webflow-bound site. */
+  cms_provider?: 'native' | 'webflow' | null;
+  /** The live URL of an external site, when the customer recorded one. */
+  external_website_url?: string | null;
 }
 
 export interface StatusResult {

@@ -247,6 +247,12 @@ Field shapes, payloads and traps: `hiveku-automation-agency/references/node-rail
   outcome reads (`seo_ga4_conversion_audit`, `seo_ga4_report`) stay here, tag surgery does not.
 - **hiveku-web-agency** owns the code lane, redirects, domains, deploy tiers and staging headers. This
   skill says what to change and verifies the live URL.
+- **Webflow-hosted sites** (a `sites_list` row with `external_platform: "webflow"`): there is no code
+  lane and no deploy. Page titles, descriptions and Open Graph are `webflow_page_metadata_update`
+  (staged), then `webflow_site_publish` (confirm, one per minute) makes them live; schema markup and
+  llms.txt have their own Webflow writes, described in `hiveku-web-agency/references/webflow-sites.md`,
+  and redirects and robots.txt there are Enterprise-only. `pages_update` and `seo_task_implement`
+  do not reach a Webflow page. The doctrine for what to write stays here; the write path is that file.
 - **hiveku-content-agency** owns publishing and `content_*` (briefs drafted here, persisted there);
   **hiveku-outbound-agency** sends the link outreach (drafts here, nothing sends);
   **hiveku-commerce-agency** owns the Shopify catalog (not Hiveku-hosted: findings become tasks).
