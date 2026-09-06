@@ -261,7 +261,7 @@ Webflow's Data API has no call for these; say so and hand them to the designer:
   with id, slug, title and SEO fields; `webflow_page_get` for one. The workspace's SEO
   grid (`/dashboard/<project id>/webflow/seo`) shows the same rows with the on-page checks.
 - One page: `webflow_page_metadata_update({ project_id, page_id, title?, slug?, seo?,
-  open_graph? })` - only the fields passed change, and the edit is staged until a site
+  openGraph? })` - only the fields passed change, and the edit is staged until a site
   publish.
 - Many pages: the bulk metadata write (INCOMING in the table, up to 100 pages per call)
   or, until it lands, one `webflow_page_metadata_update` per page inside the rate budget.

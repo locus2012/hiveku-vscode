@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.78.0
+- **Webflow sites are first-class external projects.** A project whose site lives on Webflow is recognised through the new `external_platform` and `cms_provider` fields that Hiveku now returns on every site, and its tree node opens the Webflow workspace in the dashboard instead of an empty file tree. A shared `hasLocalCode` predicate replaces the six scattered "not external" checks, so every code lane (pull, push, branches, console) treats Webflow and tracked-URL sites the same way: nothing to pull, nothing to deploy.
+- **The site commands teach the real enum.** `site_create` offers `nextjs`, `vite`, `static-html` and `internal`, and `site_create_external` takes `external_platform` (`url`, `webflow`, `wordpress`).
+- **The Dev role vendors the web agency skill**, including its new Webflow sites reference: what the Webflow API can and cannot change, the stage-then-publish discipline, and the availability table for the `webflow_*` tools.
+- **Partial bulk saves resume from `remaining_paths`** instead of re-sending the whole batch.
+
 ## 0.77.0
 - **The Social Manager role gets the real social department.** `hiveku-social-agency` (with its thirteen references: hooks and formats, audience grounding, the anti-fluff rubric, repurpose, creative handoff, connection health and syncs, and the rest) and all ten social plays (`/hiveku-social-onboard`, `social-post`, `repurpose`, `social-calendar`, `social-audit`, `social-proof`, `creative-brief`, plus `social-plan`, `social-report`, `engage`) are scaffolded byte-identical to the Claude Code plugin. Every role now also receives `hiveku-orient`.
 - **Skills and commands are vendored, not retyped.** `assets/skills` and `assets/commands` are generated from the sibling plugin checkout by `npm run gen:skills` and byte-checked by `npm run check:skills`, which runs in `vscode:prepublish`; the 2,000-line `agencySkillsContent.ts` copy that had drifted from the plugin is gone.
