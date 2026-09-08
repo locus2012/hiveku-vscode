@@ -64,8 +64,15 @@ export function openDepartmentChat(
       // Refusals return session_id: null, so fall back to the id we already
       // hold rather than dropping it and silently restarting the conversation.
       sessionId = result.sessionId ?? sessionId;
+      // Three kinds of turn, three kinds of bubble. A department that ran tools
+      // and wrote no prose has not failed and has not answered — it acted — and
+      // rendering that as either one misleads: as a reply it looks like the
+      // agent narrated its own work, as an error it looks like the work did not
+      // happen. `reply` for that turn is a one-line "the X department acted
+      // without writing a reply" plus the tools it ran and the records it
+      // changed, so it gets its own quieter bubble.
       panel.webview.postMessage({
-        type: result.isError ? 'error' : 'reply',
+        type: result.isError ? 'error' : result.actedWithoutReply ? 'activity' : 'reply',
         text: result.reply,
       });
       // A truncated answer arrives as reply + warning. Show the reply, then say
@@ -98,6 +105,8 @@ function chatHtml(webview: vscode.Webview, deptLabel: string, accountLabel: stri
     .msg { max-width: 85%; padding: 8px 12px; border-radius: 10px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.45; font-size: 13px; }
     .user { align-self: flex-end; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
     .agent { align-self: flex-start; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-panel-border); }
+    .act { align-self: flex-start; background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-panel-border);
+      border-left: 3px solid var(--vscode-textLink-foreground); font-size: 12px; opacity: 0.9; }
     .err { align-self: flex-start; color: var(--vscode-errorForeground); font-size: 12px; }
     .typing { align-self: flex-start; opacity: 0.6; font-size: 12px; }
     footer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--vscode-panel-border); }
@@ -155,6 +164,10 @@ function chatHtml(webview: vscode.Webview, deptLabel: string, accountLabel: stri
       } else if (m.type === 'reply') {
         if (typingEl) { typingEl.remove(); typingEl = null; }
         bubble(m.text, 'agent');
+        setBusy(false);
+      } else if (m.type === 'activity') {
+        if (typingEl) { typingEl.remove(); typingEl = null; }
+        bubble(m.text, 'act');
         setBusy(false);
       } else if (m.type === 'error') {
         if (typingEl) { typingEl.remove(); typingEl = null; }

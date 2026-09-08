@@ -2024,13 +2024,134 @@ export interface DepartmentReply {
   /** True when the server refused outright (unknown domain, no access). */
   isError: boolean;
   /**
+   * True when the department DID the work and simply wrote no prose about it.
+   * The service marks that turn `response: null` (deliberately null, never '')
+   * and carries the substance in `note`, `tool_calls` and `data_updates`; here
+   * `reply` is a plain-language header plus a rendering of the last two, not
+   * something the department typed. The `note` itself is deliberately not
+   * shown: it is addressed to the model that called the tool, and tells the
+   * reader to go and read fields this panel does not display.
+   * It is neither an answer nor a failure, so the panel gives it its own kind
+   * of bubble — "it renamed three stages and attached two assets" must not
+   * look like an apology, and must not look like an error either.
+   */
+  actedWithoutReply: boolean;
+  /**
    * Set when the server returned a reply AND an error together. That happens
    * on the partial-streamError path, where a real but TRUNCATED answer carries
    * the stream fault alongside it — so it must not render as a complete answer.
-   * (The mid-stream-stall path returns an empty response, so it lands in the
-   * refusal branch above rather than here.)
+   * (A stall that collected nothing, or nothing but whitespace, has no real
+   * answer to truncate, so it lands in the refusal branch above rather than
+   * here and reports as an outright error.)
    */
   warning: string | null;
+}
+
+/**
+ * How many tools/records the summary names before it stops listing. A bulk
+ * turn can emit hundreds of data_updated frames and the point of the line is
+ * "here is what it touched", not a transcript — past a dozen the bubble stops
+ * being readable and starts being a wall.
+ */
+const WORK_SUMMARY_CAP = 12;
+
+function joinCapped(items: string[]): string {
+  if (items.length <= WORK_SUMMARY_CAP) return items.join(', ');
+  return `${items.slice(0, WORK_SUMMARY_CAP).join(', ')}, +${items.length - WORK_SUMMARY_CAP} more`;
+}
+
+/**
+ * `tool_calls` is one `{ name, input }` row per call in call order, so a turn
+ * that renames three stages lists the same tool three times. Collapsing to
+ * `name ×3` keeps the count (which is the interesting part) without printing
+ * the same word three times.
+ */
+function summarizeToolCalls(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const counts = new Map<string, number>();
+  for (const call of raw) {
+    const name = call && typeof call === 'object' ? (call as Record<string, unknown>).name : call;
+    const label = typeof name === 'string' && name.trim() ? name.trim() : 'tool';
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name));
+}
+
+/**
+ * `data_updates` rows are `{ entity, action, id? }` with entity and action
+ * both nullable — the collector keeps a row as long as one of the two is
+ * present, so both halves need a fallback word or the line reads "null null".
+ * The id rides along when the agent server sent one because it is what makes
+ * the change checkable ("stage updated (abc123)"), and it is absent, never '',
+ * when there was none.
+ */
+function summarizeDataUpdates(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const rows: string[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as Record<string, unknown>;
+    const entity = typeof r.entity === 'string' && r.entity.trim() ? r.entity.trim() : 'record';
+    const action = typeof r.action === 'string' && r.action.trim() ? r.action.trim() : 'changed';
+    const id =
+      (typeof r.id === 'string' && r.id.trim() && r.id.trim()) ||
+      (typeof r.entity_id === 'string' && r.entity_id.trim() && r.entity_id.trim()) ||
+      '';
+    rows.push(id ? `${entity} ${action} (${id})` : `${entity} ${action}`);
+  }
+  return rows;
+}
+
+/** The "Ran: …" / "Changed: …" lines for a turn, empty when it did nothing. */
+function describeWork(data: Record<string, unknown>): string[] {
+  const tools = summarizeToolCalls(data.tool_calls);
+  const updates = summarizeDataUpdates(data.data_updates);
+  const lines: string[] = [];
+  if (tools.length) lines.push(`Ran: ${joinCapped(tools)}`);
+  if (updates.length) lines.push(`Changed: ${joinCapped(updates)}`);
+  return lines;
+}
+
+/**
+ * Recover a talk_to_department payload from the exception mcpClient.callTool
+ * throws. The MCP server marks a department failure `isError: true` (it has to
+ * — the calling model otherwise reads a failure as "the department had nothing
+ * to say"), and callTool turns any isError result into
+ * `Tool talk_to_department errored: {json}`. That is the ONLY way a DEPARTMENT
+ * failure reaches us, and rethrowing it as-is puts the whole JSON blob in the
+ * panel. (Transport faults reach us by other routes and are not this.)
+ * Pull the payload back out so the department's own sentence is what the user
+ * reads.
+ *
+ * What it accepts is exactly `Tool <name> errored: {json}` — the envelope
+ * callTool builds around an isError tool result — carrying either the
+ * department service's own payload (every one of its returns sets
+ * `department`) or one of the dispatch's bare refusals (`{ error }` with no
+ * department: the scope gate, the tool-profile gate, `Tool execution failed:
+ * …`). Both of those are the server's words about THIS call and are worth
+ * showing on their own.
+ *
+ * Everything else returns null and is rethrown untouched, because swallowing a
+ * broken connection turns it into a polite non-answer. The anchored prefix is
+ * what makes that true: the old guard only looked for a '{' anywhere in the
+ * message and then accepted any object with a string `error`, so
+ * `MCP HTTP 401: {"error":"Invalid or expired MCP key"}` — a transport fault
+ * thrown before any tool ran — parsed, matched, and came back as an ordinary
+ * department error with the 401 stripped off it.
+ */
+function departmentPayloadFromToolError(err: unknown, toolName: string): string | null {
+  const message = err instanceof Error ? err.message : '';
+  const prefix = `Tool ${toolName} errored: `;
+  if (!message.startsWith(prefix)) return null;
+  const body = message.slice(prefix.length).trim();
+  if (!body.startsWith('{')) return null;
+  try {
+    const parsed = JSON.parse(body) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return typeof parsed.department === 'string' || typeof parsed.error === 'string' ? body : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Send a message to a department agent. Returns its reply plus session state. */
@@ -2050,35 +2171,113 @@ export async function talkToDepartment(
   // one-shots while looking like a chat.
   const args: Record<string, unknown> = { domain, message };
   if (sessionId) args.session_id = sessionId;
-  const result = await client.callTool('talk_to_department', args);
-  const text = result?.content?.[0]?.text;
-  if (typeof text !== 'string') return { reply: '(no response)', sessionId: sessionId ?? null, isError: true, warning: null };
+  let text: string | undefined;
+  try {
+    const result = await client.callTool('talk_to_department', args);
+    text = result?.content?.[0]?.text;
+  } catch (callErr) {
+    // A department failure arrives as a THROW, not as a result: the server sets
+    // isError on any payload carrying `error`, and callTool converts every
+    // isError result into an exception. The payload it carries is the same
+    // shape as the happy path, so unwrap it and let the branches below decide
+    // what it was; a genuine transport fault is not in that envelope at all and
+    // is rethrown with its HTTP status still attached.
+    const payload = departmentPayloadFromToolError(callErr, 'talk_to_department');
+    if (payload === null) throw callErr;
+    text = payload;
+  }
+  if (typeof text !== 'string') {
+    return { reply: '(no response)', sessionId: sessionId ?? null, isError: true, actedWithoutReply: false, warning: null };
+  }
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
     const data = (parsed.data && typeof parsed.data === 'object' ? parsed.data : parsed) as Record<string, unknown>;
-    const reply =
+    const rawReply =
       (typeof data.reply === 'string' && data.reply) ||
       (typeof data.message === 'string' && data.message) ||
       (typeof data.response === 'string' && data.response) ||
       (typeof data.text === 'string' && data.text) ||
       (typeof data.output === 'string' && data.output);
+    // "   " is not a reply. The server decides prose-vs-no-prose with
+    // `collectedText.trim().length > 0`, and the two paths that DON'T go
+    // through that test — the mid-stream stall and the stream error — hand back
+    // the raw, untrimmed collectedText alongside their `error`. So a payload of
+    // { response: '   ', tool_calls: [...] } is reachable, and under a bare
+    // truthiness check it took the has-a-reply path: a blank agent bubble, the
+    // Ran/Changed lines discarded, the stream fault never mentioned. Normalise
+    // here so the empty string, the null and the whitespace-only string all
+    // mean the same thing to every branch below.
+    const reply = typeof rawReply === 'string' && rawReply.trim() ? rawReply : '';
     // The server reports a refusal as an ordinary result carrying `error`, with
     // none of the reply keys set. Without this the raw JSON error object was
     // rendered into the panel as though the agent had said it.
     const err = typeof data.error === 'string' ? data.error : null;
     const nextSession = typeof data.session_id === 'string' ? data.session_id : null;
-    // Any empty reply is a failure, whether or not the server named an error.
-    // `error` is spread CONDITIONALLY server-side, so a turn that produced only
-    // tool calls and no content event comes back as
-    // { response: "", tool_calls: [...] } with no error key at all. Testing
-    // `!reply && err` let that fall through to `reply || text` and posted the
-    // raw JSON blob into the panel as though the agent had said it — the exact
-    // thing this was meant to stop.
+    // No prose is THREE outcomes, not one, and the old single branch flattened
+    // them into the same apology.
+    //
+    // `response` is null — deliberately null, never '' — on a tool-only turn:
+    // the department did the work and wrote nothing about it, which is the
+    // normal shape for customer_journey / customer_avatar work. Because
+    // `typeof null === 'object'` none of the reply extractors above match it,
+    // so it landed here and was answered with "returned no answer (it may have
+    // run tools without replying)", throwing away the `note`, `tool_calls` and
+    // `data_updates` the service had gone to the trouble of collecting. That
+    // branch used to be unreachable — the MCP server's SSE parser framed
+    // nothing, so every department returned empty — and it becomes routine the
+    // moment the parser works. (An older server shape,
+    // { response: "", tool_calls: [...] } with no note, lands here too, as does
+    // whitespace-only prose off a stream fault; the null, the empty string and
+    // the blank string are normalised to one thing above on purpose.)
+    //
+    // Order matters: `error` wins. A stream fault on a turn that had already
+    // called tools returns whatever prose it had collected — '' or blank — WITH
+    // an error, and that is a failure to report, not work to celebrate — but
+    // the tools it did get through are still named, because a half-finished
+    // write the user does not know about is worse than a blunt error.
     if (!reply) {
+      const work = describeWork(data);
+      // `note` is read as a SIGNAL, never rendered — see the branch below.
+      // The service sets it only on the tool-only path, so its mere presence
+      // says the turn did work even in the shapes where the frames it counted
+      // did not survive and `work` comes back empty.
+      const noteSignalsWork = typeof data.note === 'string' && data.note.trim().length > 0;
+      if (err) {
+        return {
+          reply: work.length ? `${err}\n\nIt did get this far:\n${work.join('\n')}` : err,
+          sessionId: nextSession ?? sessionId ?? null,
+          isError: true,
+          actedWithoutReply: false,
+          warning: null,
+        };
+      }
+      if (work.length || noteSignalsWork) {
+        // Our own header, not the service's `note`. The note is written for the
+        // model that called the tool, and it ends "The work is real — read
+        // tool_calls and data_updates for what happened, and re-read the
+        // affected records to confirm": two fields nobody in this panel can
+        // open, and an instruction nobody here can follow. The header says the
+        // one thing the reader needs, and the Ran/Changed lines below it spell
+        // out — by name, not as a count — exactly what the note was counting.
+        // The header stands alone when the payload named no calls or rows.
+        const header = `The ${domain} department acted without writing a reply.`;
+        return {
+          reply: [header, work.join('\n')].filter((part) => part.length > 0).join('\n\n'),
+          sessionId: nextSession ?? sessionId ?? null,
+          isError: false,
+          actedWithoutReply: true,
+          warning: null,
+        };
+      }
+      // Genuinely nothing: no prose, no tools, no record changes, and the
+      // server did not name a fault either. That is a failure, so say so
+      // plainly rather than guessing that tools might have run — we now know
+      // they did not.
       return {
-        reply: err ?? 'The department returned no answer (it may have run tools without replying). Try rephrasing.',
+        reply: 'The department returned no answer, and made no tool calls or record changes. Try rephrasing, or send it again.',
         sessionId: nextSession ?? sessionId ?? null,
         isError: true,
+        actedWithoutReply: false,
         warning: null,
       };
     }
@@ -2089,9 +2288,10 @@ export async function talkToDepartment(
       reply: reply || text,
       sessionId: nextSession ?? sessionId ?? null,
       isError: false,
+      actedWithoutReply: false,
       warning: reply && err ? err : null,
     };
   } catch {
-    return { reply: text, sessionId: sessionId ?? null, isError: false, warning: null }; // already plain text
+    return { reply: text, sessionId: sessionId ?? null, isError: false, actedWithoutReply: false, warning: null }; // already plain text
   }
 }
