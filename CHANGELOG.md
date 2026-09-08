@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.79.0
+- **Webflow automations in the department data.** The workflow surface a Hiveku site can drive now includes Webflow: thirteen triggers covering site publishes, the CMS item lifecycle, page creation, deletion and metadata changes, new comments and form submissions, plus an action node for every operation in the Webflow registry. Ask the AI for "when a CMS item is published, draft a social post" and the nodes it needs are in the catalog it reads.
+- **Webflow sites keep the treatment they got in 0.78.0**: recognised through `external_platform`, opened at their Hiveku workspace rather than an empty file tree, and skipped by every code lane that has nothing to pull or deploy.
+
 ## 0.78.0
 - **Webflow sites are first-class external projects.** A project whose site lives on Webflow is recognised through the new `external_platform` and `cms_provider` fields that Hiveku now returns on every site, and its tree node opens the Webflow workspace in the dashboard instead of an empty file tree. A shared `hasLocalCode` predicate replaces the six scattered "not external" checks, so every code lane (pull, push, branches, console) treats Webflow and tracked-URL sites the same way: nothing to pull, nothing to deploy.
 - **The site commands teach the real enum.** `site_create` offers `nextjs`, `vite`, `static-html` and `internal`, and `site_create_external` takes `external_platform` (`url`, `webflow`, `wordpress`).

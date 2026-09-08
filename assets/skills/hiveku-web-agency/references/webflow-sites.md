@@ -156,6 +156,13 @@ call a site token cannot make.
 | `webflow_wellknown_delete` | LIVE | Enterprise, confirm | - |
 | `webflow_activity_log_list` | LIVE | Enterprise | - |
 
+Webhooks in that table are for FOREIGN URLs only. Hiveku registers its own receiver on
+the site's connection (thirteen `webflow*Trigger` workflow nodes fire from it, verified,
+deduped and bound to the project), so reacting to a site event is an automation with
+`/hiveku:automate`, never a `webflow_webhook_create` pointed at Hiveku or at a
+`webhookTrigger` URL: that creates a second, unverified delivery of an event Hiveku
+already has.
+
 The nine INCOMING names are spelled here and nowhere else on purpose (the rule in
 `test/pending-tools.mjs`): the rest of this file, the hub and the commands describe those
 capabilities in words and point at this table, so a rename before they land is one edit.
@@ -359,7 +366,11 @@ status field:
   `webflow_form_submission_list` / `webflow_form_submission_get` (visitor data - treat
   it like `crm_list_contacts`), `webflow_form_submission_update` sets hidden fields,
   `webflow_form_submission_delete` (confirm) is irreversible on Webflow. Wire a form to
-  the CRM through the automation department, not by polling here.
+  the CRM through the automation department, not by polling here: the 13 Webflow
+  triggers (site publish, CMS item, page, comment and form submission events, plus a
+  catch-all) are registered on connect and workflows consume them as
+  `webflow*Trigger` nodes, with `webflowFormSubmissionTrigger` / `formSubmittedTrigger`
+  firing per submission through the Forms ledger.
 - Webhooks: `webflow_webhook_list`, `webflow_webhook_get`, `webflow_webhook_create`
   (OAuth), `webflow_webhook_update` (OAuth, confirm: Webflow re-creates the webhook, and a
   failed re-registration leaves none), `webflow_webhook_delete` (confirm).
