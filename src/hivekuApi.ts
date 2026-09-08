@@ -5,6 +5,7 @@
  */
 
 import { HivekuMcpClient } from './mcpClient';
+import type { CmsProviderKind, ExternalPlatform } from './projectKind';
 import type { CommitFile, ManifestEntry } from './workspace';
 
 export interface ProjectSummary {
@@ -14,9 +15,9 @@ export interface ProjectSummary {
   project_type?: string;
   /** Where an `external` project lives (sites_list / project_get). Null before
    *  the builder's platform columns exist; read it through projectKind.ts. */
-  external_platform?: 'url' | 'webflow' | 'wordpress' | null;
+  external_platform?: ExternalPlatform | null;
   /** Where the project's CMS content lives; `webflow` for a Webflow-bound site. */
-  cms_provider?: 'native' | 'webflow' | null;
+  cms_provider?: CmsProviderKind | null;
   /** The live URL of an external site, when the customer recorded one. */
   external_website_url?: string | null;
 }

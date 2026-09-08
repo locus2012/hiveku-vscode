@@ -12,7 +12,13 @@
 
 /** Which platform an `external` project lives on. `url` is the plain tracked
  *  site (the only value that exists before the platform columns land). */
-export type ExternalPlatform = 'url' | 'webflow' | 'wordpress';
+export type ExternalPlatform =
+  | 'url'
+  | 'webflow'
+  | 'wordpress'
+  | 'squarespace'
+  | 'wix'
+  | 'shopify';
 
 /** Where the project's CMS content lives. */
 export type CmsProviderKind = 'native' | 'webflow';
@@ -33,7 +39,44 @@ export interface ProjectKindRow {
  */
 export const NO_LOCAL_CODE_TYPES: ReadonlySet<string> = new Set(['external', 'python-lambda']);
 
-const EXTERNAL_PLATFORMS: ReadonlySet<string> = new Set<ExternalPlatform>(['url', 'webflow', 'wordpress']);
+/**
+ * The accepted `external_platform` values, in the builder's canonical order:
+ * the plain tracked site first, then the named platforms. A value this build
+ * does not know reads as `url`, so an extension that shipped before a platform
+ * was added still renders those rows rather than dropping them.
+ */
+export const EXTERNAL_PLATFORM_VALUES: readonly ExternalPlatform[] = [
+  'url',
+  'webflow',
+  'wordpress',
+  'squarespace',
+  'wix',
+  'shopify',
+];
+
+const EXTERNAL_PLATFORMS: ReadonlySet<string> = new Set<ExternalPlatform>(EXTERNAL_PLATFORM_VALUES);
+
+/**
+ * What each platform is called on a project row — the builder's `kindLabel`
+ * column ("what this project IS", the slot that otherwise reads 'nextjs' or
+ * 'static-html'). `url` is the plain tracked site, which has no platform name
+ * of its own.
+ *
+ * The builder's PLATFORM_META carries four more columns — the chooser word
+ * `label` ('Other website' for `url`), a one-line description, a "Coming soon"
+ * badge and `hasApiConnection` — for its platform chooser and project cards.
+ * The tree has no chooser and renders neither a sentence nor a chip, so those
+ * stay in the builder; Webflow, the one platform with an API connection today,
+ * is named directly by the two surfaces that open its workspace.
+ */
+export const PLATFORM_KIND_LABELS: Record<ExternalPlatform, string> = {
+  url: 'External site',
+  webflow: 'Webflow',
+  wordpress: 'WordPress',
+  squarespace: 'Squarespace',
+  wix: 'Wix',
+  shopify: 'Shopify',
+};
 
 function normalizedType(row: ProjectKindRow): string {
   return (row.project_type ?? '').trim().toLowerCase();

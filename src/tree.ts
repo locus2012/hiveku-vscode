@@ -19,7 +19,7 @@ import * as vscode from 'vscode';
 import { AccountStore, type AccountRecord } from './accounts';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
-import { externalPlatform, isExternalProject } from './projectKind';
+import { PLATFORM_KIND_LABELS, externalPlatform, isExternalProject } from './projectKind';
 import {
   fetchKnowledge,
   selectEntries,
@@ -491,6 +491,7 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
       }
       case 'project': {
         const external = isExternalProject(node.project);
+        const platform = externalPlatform(node.project);
         const item = new vscode.TreeItem(
           node.project.name || node.project.slug || node.project.id,
           external ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed,
@@ -499,20 +500,27 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
         item.description = [node.project.project_type, host].filter(Boolean).join(' · ');
         item.iconPath = new vscode.ThemeIcon(external ? 'link-external' : 'repo');
         item.contextValue = external ? 'hivekuProjectExternal' : 'hivekuProject';
-        if (externalPlatform(node.project) === 'webflow') {
+        if (platform === 'webflow') {
           // A Webflow-hosted site: edited through the Hiveku Webflow workspace
           // and the webflow_* tools. The label opens the live site; the inline
           // globe (hiveku.openSite) offers the site and the workspace.
           const url = node.project.external_website_url || (node.project.custom_domain ? `https://${node.project.custom_domain}` : undefined);
-          item.description = ['Webflow', host].filter(Boolean).join(' · ');
+          item.description = [PLATFORM_KIND_LABELS.webflow, host].filter(Boolean).join(' · ');
           item.iconPath = new vscode.ThemeIcon('globe');
           item.contextValue = 'hivekuProjectWebflow';
           if (url) item.command = { command: 'hiveku.openSiteEnv', title: 'Open Site', arguments: [{ url }] };
           item.tooltip = 'Webflow site — edited through the Hiveku Webflow workspace and the webflow_* tools; no code here';
-        } else if (external) {
+        } else if (platform) {
+          // Every other tracked site names the platform it is built on rather
+          // than the bare 'external' project_type, so a WordPress, Squarespace,
+          // Wix or Shopify row reads as itself; `url` keeps 'External site'.
+          // None of them has an API connection yet, so the row still just opens
+          // the live site.
+          const kind = PLATFORM_KIND_LABELS[platform];
           const url = node.project.custom_domain ? `https://${node.project.custom_domain}` : undefined;
+          item.description = [kind, host].filter(Boolean).join(' · ');
           if (url) item.command = { command: 'hiveku.openSiteEnv', title: 'Open Site', arguments: [{ url }] };
-          item.tooltip = `External site${url ? ` — ${url}` : ''} (tracked in Hiveku; code lives elsewhere)`;
+          item.tooltip = `${kind}${url ? ` — ${url}` : ''} (tracked in Hiveku; code lives elsewhere)`;
         } else {
           // No label command — the node expands to its environments; Download is
           // the inline cloud-download action (hiveku.cloneProjectItem).
