@@ -439,7 +439,7 @@ export const DEPARTMENTS: Department[] = [
     ],
     // Reference catalogs Claude Code needs to author valid graphs, triggers, and templating.
     references: [
-      { id: 'node-catalog', label: 'Node type catalog (260+ types)', tool: 'workflow_node_types_list' },
+      { id: 'node-catalog', label: 'Node type catalog (520+ types, incl. Webflow)', tool: 'workflow_node_types_list' },
       { id: 'trigger-types', label: 'Trigger types + config keys', tool: 'workflow_trigger_types_list' },
       { id: 'event-trigger-types', label: 'Event trigger types', tool: 'workflow_event_trigger_types_list' },
       { id: 'templating-syntax', label: 'Templating syntax reference', tool: 'workflow_templating_syntax' },

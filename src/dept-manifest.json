@@ -37,7 +37,7 @@
       "references": [
         {
           "id": "node-catalog",
-          "label": "Node type catalog (260+ types)",
+          "label": "Node type catalog (520+ types, incl. Webflow)",
           "tool": "workflow_node_types_list"
         },
         {
