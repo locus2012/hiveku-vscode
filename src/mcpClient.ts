@@ -39,7 +39,44 @@ const MAX_CONCURRENT = 6;
  * compress — the time goes to reading content out of Postgres and pushing the
  * archive to S3.
  */
-const SLOW_TOOL_TIMEOUT_MS: Record<string, number> = {
+/**
+ * The edge in front of Hiveku closes an idle connection at ~120-125s, so
+ * waiting longer than this buys nothing but a longer stare at a spinner.
+ */
+const EDGE_TIMEOUT_CEILING_MS = 135_000;
+
+/**
+ * ★ The DEFAULT, and the point of this whole block.
+ *
+ * It used to be 60s. Expanding the plugin's generated tool index: 262 tools
+ * declare a server-side budget above 60s and 259 of them are absent from the
+ * hand-maintained table below — ppc_sync (120s, wired to the "Sync from
+ * platform" button), talk_to_department (the chat panel; the server budgets it
+ * 110s), checkpoint_restore, cms_bulk_patch, cms_bulk_delete,
+ * history_restore_to_time, project_files_bulk_delete (290s each),
+ * ppc_experiment_create (200s). Several of those are WRITES, and the comment
+ * on project_vcs_stash below already spells out what that costs: "a slow apply
+ * aborts CLIENT-side while the server keeps going ... the operator would be
+ * told it failed after it succeeded."
+ *
+ * A hand-maintained list cannot track ~2,000 tools; the plugin hit this exact
+ * wall and stopped hand-listing (lib/upstream.mjs). Defaulting to the edge
+ * ceiling instead of 60s makes the rule "the client never gives up before the
+ * network in front of the server does", which needs no table to stay true.
+ * The table below survives only as explicit documentation of known-slow calls.
+ */
+const DEFAULT_TOOL_TIMEOUT_MS = EDGE_TIMEOUT_CEILING_MS;
+
+/**
+ * ★ A Map, not an object literal: a tool named `constructor`, `toString` or
+ * `valueOf` would otherwise resolve off Object.prototype and hand a FUNCTION
+ * to setTimeout. The plugin uses a Map for this reason.
+ *
+ * Every entry is clamped to EDGE_TIMEOUT_CEILING_MS on read — the numbers
+ * below record what the SERVER route allows, which is the useful thing to
+ * document, but the client cannot outlast the edge no matter what they say.
+ */
+const SLOW_TOOL_TIMEOUT_MS = new Map<string, number>(Object.entries({
   // Matches maxDuration = 180 on the files-snapshot route.
   project_files_snapshot: 180_000,
   // The stash route is maxDuration = 180 and its apply path verifies branch
@@ -74,7 +111,13 @@ const SLOW_TOOL_TIMEOUT_MS: Record<string, number> = {
   // answering; route maxDuration = 180. Aborting client-side leaves the app
   // running with no previewSessionId to poll or tear down.
   project_vcs_branch_preview: 180_000,
-};
+}));
+
+/** The budget for one tool call: its declared override, or the default, capped at the edge. */
+function toolTimeoutMs(name: string): number {
+  const declared = SLOW_TOOL_TIMEOUT_MS.get(name) ?? DEFAULT_TOOL_TIMEOUT_MS;
+  return Math.min(declared, EDGE_TIMEOUT_CEILING_MS);
+}
 let inFlight = 0;
 const waiters: Array<() => void> = [];
 async function acquireSlot(): Promise<void> {
@@ -194,13 +237,10 @@ export class HivekuMcpClient {
     // Hard timeout: a single stalled request must never hang a surface forever
     // (seen live: the Account Console stuck on "Loading…" behind one dead await).
     //
-    // The 60s default suits interactive reads. It is WRONG for the few tools
-    // that do real server-side work: project_files_snapshot tars, compresses
-    // and uploads the whole project, and the builder route is allowed 180s for
-    // it — so the client was giving up at a third of the budget the server was
-    // still legitimately using, and reporting it as a timeout rather than as
-    // "still working". See SLOW_TOOL_TIMEOUT_MS.
-    const budget = timeoutMs ?? 60_000;
+    // A tool call waits as long as the server may legitimately take — see
+    // DEFAULT_TOOL_TIMEOUT_MS. Giving up early does not stop the work; it only
+    // makes the extension report a failure for something that then succeeds.
+    const budget = timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), budget);
     let res: Response;
@@ -212,24 +252,40 @@ export class HivekuMcpClient {
         signal: ctrl.signal,
       });
     } catch (err) {
+      clearTimeout(timer);
       if (ctrl.signal.aborted) {
         throw new Error(`MCP request timed out after ${Math.round(budget / 1000)}s (${method})`);
       }
       throw err;
-    } finally {
-      clearTimeout(timer);
     }
+    // ★ The timer stays armed until the BODY is read, not just the headers.
+    // `fetch` resolves on headers; a server that answers 200 and then stalls
+    // mid-body left the read with no deadline at all, so the one thing the
+    // budget exists to bound — how long the extension can hang — was unbounded
+    // on exactly the slow responses it was written for.
 
     const sessionHeader = res.headers.get('mcp-session-id');
     if (sessionHeader) this.sessionId = sessionHeader;
 
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
+      const text = await res.text().catch(() => '').finally(() => clearTimeout(timer));
       throw new Error(`MCP HTTP ${res.status}: ${text.slice(0, 500)}`);
     }
     if (res.status === 204) return null as T;
 
-    const body = (await res.json()) as { error?: { code: number; message: string }; result?: T };
+    let body: { error?: { code: number; message: string }; result?: T };
+    try {
+      body = (await res.json()) as { error?: { code: number; message: string }; result?: T };
+    } catch (err) {
+      if (ctrl.signal.aborted) {
+        throw new Error(
+          `MCP response stalled after ${Math.round(budget / 1000)}s while reading the body (${method})`,
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
     if (body.error) {
       throw new Error(`MCP error ${body.error.code}: ${body.error.message}`);
     }
@@ -264,7 +320,7 @@ export class HivekuMcpClient {
     const result = await this.request<McpToolResult>(
       'tools/call',
       { name, arguments: args },
-      SLOW_TOOL_TIMEOUT_MS[name],
+      toolTimeoutMs(name),
     );
     noteRegistryStamp(result?._meta);
     if (result?.isError) {
