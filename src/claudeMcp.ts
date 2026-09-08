@@ -43,26 +43,94 @@ type ClaudeConfig = {
   projects?: Record<string, { mcpServers?: Record<string, unknown> }>;
 };
 
-async function readConfig(): Promise<ClaudeConfig> {
+/**
+ * Tolerant read, for QUESTIONS about the file.
+ *
+ * `unreadable` distinguishes "the file says no" from "the file could not be
+ * read" — collapsing those was how a corrupt config came to report, with
+ * confidence, that no shadowing server existed.
+ */
+async function readConfigTolerant(): Promise<{ cfg: ClaudeConfig; unreadable: boolean }> {
   try {
     const raw = await fs.readFile(claudeConfigPath(), 'utf8');
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as ClaudeConfig) : {};
-  } catch {
-    return {};
+    return { cfg: parsed && typeof parsed === 'object' ? (parsed as ClaudeConfig) : {}, unreadable: false };
+  } catch (err) {
+    // A missing file is a real, ordinary answer: there is no config yet.
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return { cfg: {}, unreadable: false };
+    return { cfg: {}, unreadable: true };
   }
 }
 
-/** Is there a local-scoped `hiveku` server for this folder (would shadow a .mcp.json)? */
+/**
+ * Strict read, for MODIFYING the file.
+ *
+ * ★ Everything here is a read-MODIFY-WRITE over the user's entire
+ * ~/.claude.json. The tolerant reader turns any failure into `{}` — a corrupt
+ * or truncated file, EACCES, EISDIR — and the writer then atomically renames a
+ * one-key object over the real file, destroying every other project's MCP
+ * config and every unrelated setting in it. The function's own doc comment
+ * promised the opposite ("preserving everything else").
+ *
+ * Only ENOENT may be swallowed: "no file yet" is the one failure where writing
+ * a fresh object is correct. Anything else throws, and the caller reports it
+ * rather than overwriting what it could not read.
+ */
+async function readConfigForWrite(): Promise<ClaudeConfig> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(claudeConfigPath(), 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return {};
+    throw new Error(
+      `Could not read ${claudeConfigPath()} (${(err as Error).message}). Refusing to write it: ` +
+      'this is a read-modify-write over your whole Claude Code config, and overwriting a file ' +
+      'we could not read would discard every other project in it.',
+    );
+  }
+  let parsed: unknown;
+  try {
+    // Note: JSON.parse('') throws a SyntaxError with no `.code`, so a
+    // zero-byte file lands here rather than being mistaken for ENOENT.
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `${claudeConfigPath()} is not valid JSON (${(err as Error).message}). Refusing to overwrite it — ` +
+      'fix or move the file and try again; rewriting it here would discard every other project in it.',
+    );
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(
+      `${claudeConfigPath()} does not contain a JSON object. Refusing to overwrite it.`,
+    );
+  }
+  return parsed as ClaudeConfig;
+}
+
+/**
+ * Is there a local-scoped `hiveku` server for this folder (would shadow a
+ * .mcp.json)? `unreadable` means the question could not be answered — callers
+ * must not render that as "no".
+ */
 export async function hasLocalHivekuServer(folderPath: string): Promise<boolean> {
-  const cfg = await readConfig();
+  const { cfg } = await readConfigTolerant();
   return Boolean(cfg.projects?.[folderPath]?.mcpServers?.hiveku);
 }
 
 /** Is there a user-scoped (global) `hiveku` server? (Lowest precedence, but worth noting.) */
 export async function hasUserHivekuServer(): Promise<boolean> {
-  const cfg = await readConfig();
+  const { cfg } = await readConfigTolerant();
   return Boolean(cfg.mcpServers?.hiveku);
+}
+
+/**
+ * Whether ~/.claude.json exists but could not be read or parsed. Reported by
+ * the "Which Account Is This?" diagnostic, whose whole job is to explain this
+ * file — it must say "could not read it", never imply it is empty.
+ */
+export async function claudeConfigUnreadable(): Promise<boolean> {
+  const { unreadable } = await readConfigTolerant();
+  return unreadable;
 }
 
 /**
@@ -72,7 +140,7 @@ export async function hasUserHivekuServer(): Promise<boolean> {
  * Returns true if the file was written.
  */
 export async function setLocalHivekuServer(folderPath: string, server: McpServerConfig): Promise<void> {
-  const cfg = await readConfig();
+  const cfg = await readConfigForWrite();
   if (!cfg.projects || typeof cfg.projects !== 'object') cfg.projects = {};
   if (!cfg.projects[folderPath] || typeof cfg.projects[folderPath] !== 'object') cfg.projects[folderPath] = {};
   const entry = cfg.projects[folderPath];
@@ -83,7 +151,7 @@ export async function setLocalHivekuServer(folderPath: string, server: McpServer
 
 /** Remove the local-scoped `hiveku` server for a folder (so a project .mcp.json wins). */
 export async function removeLocalHivekuServer(folderPath: string): Promise<boolean> {
-  const cfg = await readConfig();
+  const cfg = await readConfigForWrite();
   const servers = cfg.projects?.[folderPath]?.mcpServers;
   if (!servers || !servers.hiveku) return false;
   delete servers.hiveku;

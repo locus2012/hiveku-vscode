@@ -601,6 +601,24 @@ async function writeClaudeSettings(baseDir: string, mode: PermissionMode = confi
   // is already siloed per account — and a deny rule can't carry an exception,
   // so denying it would silently kill memory in every account folder.
   for (const rule of [
+    // ── Three live Microsoft Ads WRITES that ride in on '*_list_*' ──────────
+    // The glob is kept: it uniquely auto-approves 47 GET readers (crm_list_*,
+    // seo_list_*, outbound_list_*, cms_list_*, …), so dropping it would make
+    // Claude Code prompt on every CRM and SEO read. But '*' spans underscores,
+    // so it also matches these three POSTs, and the MCP server's own
+    // descriptions are explicit about what they do: items_add — "Every
+    // campaign already associated with the list starts blocking these terms
+    // IMMEDIATELY"; associate — "from that moment every term on the list stops
+    // triggering that campaign's ads".
+    //
+    // Deny, not omit: a standing settings.json allow is final — the plugin's
+    // PreToolUse hook can only ADD an allow, never subtract one — and deny
+    // beats allow and beats the permission mode, the same invariant the
+    // siloing rules below rely on. Same reasoning as the '_status' block
+    // above, which lists reads by name because '*_status' also matched a PATCH.
+    'mcp__hiveku__ppc_bing_shared_negative_list_create',
+    'mcp__hiveku__ppc_bing_shared_negative_list_items_add',
+    'mcp__hiveku__ppc_bing_shared_negative_list_associate',
     'Read(**/.env.local)',
     'Read(**/.env.*.local)',
     // The agency OAuth client file holds client ids/secrets. The scaffold points
@@ -1260,7 +1278,13 @@ export async function writeWindowIdentity(
   // `deny` rules in .claude/settings.json (e.g. .env*.local) still hard-block even
   // in bypass. We drive both keys from the hiveku.claudeCodePermissionMode setting.
   settings['claudeCode.initialPermissionMode'] = mode;
-  if (mode === 'bypassPermissions') settings['claudeCode.allowDangerouslySkipPermissions'] = true;
+  // ★ Two-way, like initialPermissionMode on the line above. This used to be
+  // set-only, so it was a one-way latch: a user who tried Autonomous once and
+  // switched back to "Ask every time" got initialPermissionMode: 'default' on
+  // the next refresh while allowDangerouslySkipPermissions stayed true forever
+  // — leaving bypassPermissions reachable in the mode cycle in a folder they
+  // had explicitly set back to confirming every edit and command.
+  settings['claudeCode.allowDangerouslySkipPermissions'] = mode === 'bypassPermissions';
   await writeAtomic(file, JSON.stringify(settings, null, 2) + '\n');
 }
 

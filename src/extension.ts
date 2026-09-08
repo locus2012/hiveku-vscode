@@ -48,7 +48,7 @@ import {
   setCodexSupport,
   type PermissionMode,
 } from './knowledge';
-import { setLocalHivekuServer, hasLocalHivekuServer, hasUserHivekuServer } from './claudeMcp';
+import { setLocalHivekuServer, hasLocalHivekuServer, hasUserHivekuServer, claudeConfigUnreadable } from './claudeMcp';
 import { syncAccountCommands } from './commandSync';
 import { DataRefresher } from './dataRefresh';
 import { ROLES, effectiveDepartments } from './roles';
@@ -2162,8 +2162,14 @@ async function whichAccount(): Promise<void> {
     } else {
       lines.push(`${folder.name}: key ${key.slice(0, 10)}... is not one of this machine's connected accounts`);
     }
-    const [localShadow, userShadow] = await Promise.all([hasLocalHivekuServer(fsPath), hasUserHivekuServer()]);
-    if (localShadow)
+    const [localShadow, userShadow, cfgUnreadable] = await Promise.all([
+      hasLocalHivekuServer(fsPath), hasUserHivekuServer(), claudeConfigUnreadable(),
+    ]);
+    if (cfgUnreadable)
+      // "No shadowing server" and "could not read the file that would say so"
+      // are different answers, and this command exists to explain that file.
+      lines.push('  WARNING: ~/.claude.json exists but could not be read or parsed, so whether a hiveku server shadows this folder is UNKNOWN. Fix the JSON, then re-run this check.');
+    else if (localShadow)
       lines.push('  WARNING: a LOCAL-scope hiveku server in ~/.claude.json OVERRIDES this folder\'s key - Claude Code here may talk to a different account. Fix via "Hiveku: Set Claude Code Account" or remove it.');
     else if (userShadow)
       lines.push('  Note: a user-scope hiveku server exists in ~/.claude.json (project .mcp.json takes precedence, but remove it if a session ever hits the wrong account).');
