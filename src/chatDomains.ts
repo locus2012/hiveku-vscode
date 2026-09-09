@@ -6,7 +6,7 @@
  *   1. builder memory slugs  (knowledge.ts DEPARTMENTS, 12)
  *   2. console ids           (deptData.ts DEPARTMENTS, 24) — drives the tree,
  *                            the console tabs, Operate, and the chat picker
- *   3. MCP chat domains      (this file, 13) — the only set the server accepts
+ *   3. MCP chat domains      (this file, 15) — the only set the server accepts
  *
  * The chat picker was built from (2) and passed the console id straight to the
  * tool, so 19 of the 24 offered departments hard-failed. Worse, the server
@@ -26,6 +26,7 @@ export const CHAT_DOMAINS: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'ppc', label: 'PPC' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'outbound', label: 'Outbound' },
+  { id: 'sales', label: 'Sales' },
   { id: 'branding', label: 'Branding' },
   { id: 'website_design', label: 'Website Design' },
   { id: 'customer_avatar', label: 'Customer Avatar' },
@@ -40,11 +41,15 @@ const VALID = new Set(CHAT_DOMAINS.map((d) => d.id));
 /**
  * Console ids (and a few legacy ids used by Operate row actions) that map onto
  * a real chat domain. Anything absent here has NO department agent behind it —
- * `sales`, `crm`, `email`, `helpdesk`, `accounting`, `pm`, `mc`, `voice`,
- * `hiveboards`, `media`, `commerce`, `pages`, `cms`, `database`.
+ * `email`, `helpdesk`, `accounting`, `pm`, `mc`, `voice`, `hiveboards`, `media`,
+ * `commerce`, `pages`, `cms`, `database`.
  * Those must surface a clear message rather than being sent to the server to
- * fail. (`account_context_get` documents `sales` and `helpdesk` as domains, but
- * `talk_to_department` does not accept them — the two tools disagree.)
+ * fail. (`account_context_get` documents `helpdesk` as a domain but
+ * `talk_to_department` does not accept it — the two tools still disagree there.
+ * `sales` was on that list until 2026-08-29: the sales department runs on its
+ * own agent server and the builder proxy now dispatches by domain, so
+ * `talk_to_department` accepts it and it is a first-class domain above. The
+ * console department id for that data is `crm`, hence the alias below.)
  */
 const ALIASES: Readonly<Record<string, string>> = {
   workflows: 'workflow',
@@ -52,9 +57,9 @@ const ALIASES: Readonly<Record<string, string>> = {
   creative: 'branding',
   localseo: 'seo',
   aeo: 'seo',
-  // Sales/CRM motion is handled by the outbound agent — the closest real domain.
-  sales: 'outbound',
-  crm: 'outbound',
+  // The console/tree department id for sales data is `crm`; the agent behind it
+  // is the Sales department, not Outbound.
+  crm: 'sales',
   design: 'website_design',
   avatar: 'customer_avatar',
   journey: 'customer_journey',

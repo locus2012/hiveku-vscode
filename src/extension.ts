@@ -54,7 +54,7 @@ import { DataRefresher } from './dataRefresh';
 import { ROLES, effectiveDepartments } from './roles';
 import { departmentById, DEPARTMENTS } from './deptData';
 import { CHAT_DOMAINS } from './chatDomains';
-import { exportDepartments, DATA_DIR } from './dataExport';
+import { exportDepartments, everyDepartmentFailed, failedDatasets, DATA_DIR, type DeptResult } from './dataExport';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
 import { setupLocalSupabase } from './localSupabase';
 import { scaffoldLocalAutomations, installAgencyCadence } from './localAutomations';
@@ -1292,6 +1292,12 @@ function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Trim a tool error to something a one-line notification can actually show. */
+function clipError(msg: string): string {
+  const oneLine = msg.replace(/\s+/g, ' ').trim();
+  return oneLine.length > 180 ? `${oneLine.slice(0, 180)}…` : oneLine;
+}
+
 /** Filter the sidebar account list (SaaS owners can have hundreds). */
 async function filterAccounts(): Promise<void> {
   const v = await vscode.window.showInputBox({
@@ -1525,8 +1531,12 @@ async function reconcileAccountFolders(): Promise<void> {
   await accounts.setFolders(pending);
 }
 
-async function offerOpenFolder(dir: string, note: string): Promise<void> {
-  const open = await vscode.window.showInformationMessage(note, 'Open Folder');
+/** `warn` when part of the download failed — a green toast over a failed pull is
+ *  exactly how an operator ends up trusting an empty folder. */
+async function offerOpenFolder(dir: string, note: string, warn = false): Promise<void> {
+  const open = await (warn
+    ? vscode.window.showWarningMessage(note, 'Open Folder')
+    : vscode.window.showInformationMessage(note, 'Open Folder'));
   if (open === 'Open Folder') {
     await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(dir), true);
   }
@@ -1587,6 +1597,9 @@ async function downloadEverything(node?: { record?: AccountRecord }): Promise<vo
     let count = 0;
     let siteCount = 0;
     let deptCount = 0;
+    let deptDatasetsFailed = 0;
+    let deptAllFailed = false;
+    let deptError: string | undefined;
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Downloading ${record.label}…` },
       async (progress) => {
@@ -1635,16 +1648,34 @@ async function downloadEverything(node?: { record?: AccountRecord }): Promise<vo
           ent?.page_access,
         );
         const depts = primary.length ? primary : other;
-        const results = await exportDepartments(client, depts, dir, record.label, (m) =>
-          progress.report({ message: m }),
-        ).catch(() => []);
+        // Never swallow this into an empty array: the summary below would then
+        // report "data for 0 department(s)" as though that were the plan.
+        let results: DeptResult[] = [];
+        try {
+          results = await exportDepartments(client, depts, dir, record.label, (m) =>
+            progress.report({ message: m }),
+          );
+        } catch (err) {
+          deptError = errMsg(err);
+          log.appendLine(`[everything] department data: ${deptError}`);
+        }
         deptCount = results.length;
+        deptDatasetsFailed = failedDatasets(results).length;
+        deptAllFailed = everyDepartmentFailed(results);
         await ensureDataGitignored(dir).catch(() => undefined);
       },
     );
+    const dataNote = deptError
+      ? ` Department data was NOT downloaded: ${deptError}`
+      : deptAllFailed
+        ? ` No department returned data — all ${deptCount} of them failed (${deptDatasetsFailed} datasets), which usually means this account's key is expired or revoked. Reconnect with the command "Hiveku: Connect Hiveku (sign in via browser)", then run this again.`
+        : deptDatasetsFailed
+          ? ` ${deptDatasetsFailed} dataset(s) failed and were not saved — they are listed in ${DATA_DIR}/STATUS.json under "failed".`
+          : '';
     await offerOpenFolder(
       dir,
-      `Downloaded ${record.label}: scaffold + ${count} knowledge file(s) + ${siteCount} site project(s) + data for ${deptCount} department(s).`,
+      `Downloaded ${record.label}: scaffold + ${count} knowledge file(s) + ${siteCount} site project(s) + data for ${deptCount} department(s).${dataNote}`,
+      Boolean(dataNote),
     );
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
@@ -1891,11 +1922,45 @@ async function downloadData(node: { record: AccountRecord } | undefined, only?: 
     );
     await ensureDataGitignored(baseDir);
     const total = results.reduce((n, d) => n + d.datasets.reduce((m, x) => m + x.count, 0), 0);
-    const open = await vscode.window.showInformationMessage(
-      `Saved ${total} rows across ${results.length} departments to ${DATA_DIR}/. Claude Code can now analyze it locally.`,
-      'Open index',
+    const datasetTotal = results.reduce((n, d) => n + d.datasets.length, 0);
+    // exportDepartments resolves even when every tool call 401s — the failures come
+    // back as per-dataset `error` fields. Read them, or a dead key gets reported as
+    // "Saved 0 rows ... Claude Code can now analyze it locally".
+    const failed = failedDatasets(results);
+    const detailFailed = results.reduce(
+      (n, d) => n + d.datasets.reduce((m, x) => m + (x.detailFailed ?? 0), 0),
+      0,
     );
-    if (open === 'Open index') {
+    const firstCause = failed.length ? `${failed[0].department}/${failed[0].dataset}: ${clipError(failed[0].error)}` : '';
+
+    let choice: string | undefined;
+    if (failed.length === 0 && detailFailed === 0) {
+      choice = await vscode.window.showInformationMessage(
+        `Saved ${total} rows across ${results.length} departments to ${DATA_DIR}/. Claude Code can now analyze it locally.`,
+        'Open index',
+      );
+    } else if (everyDepartmentFailed(results)) {
+      choice = await vscode.window.showWarningMessage(
+        `Nothing was downloaded for ${account.label}: no department returned data (${failed.length} of ${datasetTotal} datasets failed), so ${DATA_DIR}/ has no new data. ` +
+          `The usual cause is an expired or revoked account key — reconnect and run this again. First error — ${firstCause}`,
+        'Reconnect account',
+        'Open index',
+      );
+      if (choice === 'Reconnect account') await vscode.commands.executeCommand('hiveku.connect');
+    } else {
+      const what = [
+        failed.length ? `${failed.length} of ${datasetTotal} datasets failed` : '',
+        detailFailed ? `${detailFailed} full-object detail file(s) could not be fetched` : '',
+      ]
+        .filter(Boolean)
+        .join(' and ');
+      choice = await vscode.window.showWarningMessage(
+        `Saved ${total} rows to ${DATA_DIR}/, but ${what}.${firstCause ? ` First failure — ${firstCause}.` : ''} ` +
+          `A failed dataset is missing or still holds its previous snapshot; the full list is in ${DATA_DIR}/STATUS.json.`,
+        'Open index',
+      );
+    }
+    if (choice === 'Open index') {
       const doc = await vscode.workspace.openTextDocument(path.join(baseDir, DATA_DIR, 'README.md'));
       await vscode.window.showTextDocument(doc);
     }

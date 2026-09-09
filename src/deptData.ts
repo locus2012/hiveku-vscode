@@ -139,8 +139,22 @@ interface PagedResult {
   rows: Row[];
   /** Server's reported row count, when the envelope carries one. */
   total?: number;
-  /** True when the MAX_EXTRA_PAGES cap stopped us before the last page. */
+  /**
+   * True when the fetch itself fell short of what the server said existed: the
+   * MAX_EXTRA_PAGES cap, or a reported `total` we never reached. Rows beyond
+   * this were NOT retrieved, so absence proves nothing about the account.
+   *
+   * Deliberately NOT set by the caller's own `maxRows` cap — see
+   * `cappedByCaller`. Conflating the two told an operator with a perfectly
+   * healthy 1000-row table that "the server returned only part of this
+   * dataset", which is both false and alarming.
+   */
   truncated?: boolean;
+  /**
+   * True when the CALLER's `maxRows` stopped us and the server had more to
+   * give. Nothing is wrong: the console renders a slice and asks for one.
+   */
+  cappedByCaller?: boolean;
 }
 
 /**
@@ -164,7 +178,11 @@ async function fetchPaged(
   const totalPages = pg ? Number(pg.total_pages) || 1 : 1;
   const startPage = pg ? Number(pg.page) || 1 : 1;
   if (totalPages <= 1 || startPage >= totalPages) return { rows, total };
-  if (maxRows && rows.length >= maxRows) return { rows, total }; // enough for the caller
+  // Enough for the caller — but the server reported more pages, so this is a
+  // slice, not the whole table. Flag it: a silent cap reads downstream as
+  // "that is all there is". This is the caller's own cap, so it is not a
+  // truncated FETCH; the distinction is what the two flags are for.
+  if (maxRows && rows.length >= maxRows) return { rows, total, cappedByCaller: true };
   const last = Math.min(totalPages, startPage + MAX_EXTRA_PAGES);
   for (let p = startPage + 1; p <= last; p++) {
     let raw: unknown;
@@ -176,7 +194,13 @@ async function fetchPaged(
     const rpg = paginationOf(raw);
     if (!rpg || Number(rpg.page) !== p) break; // tool ignored `page` — stop before duplicating
     rows = rows.concat(extractRows(raw));
-    if (maxRows && rows.length >= maxRows) return { rows, total };
+    if (maxRows && rows.length >= maxRows) {
+      // Stopped on the caller's row cap, not on any server limit. More exists
+      // unless page `p` was the last one the server said existed (or it
+      // reported a total we have now reached).
+      const moreExists = p < totalPages || (total != null && rows.length < total);
+      return { rows, total, cappedByCaller: moreExists };
+    }
   }
   // Cap hit before the reported last page → the mirror is incomplete; say so.
   const truncated = last < totalPages || (total != null && rows.length < total);
@@ -190,12 +214,19 @@ export async function fetchDataset(
   client: HivekuMcpClient,
   ds: Dataset,
   maxRows?: number,
-): Promise<{ rows: Row[]; error?: string; parents?: number; total?: number; truncated?: boolean }> {
+): Promise<{
+  rows: Row[];
+  error?: string;
+  parents?: number;
+  total?: number;
+  truncated?: boolean;
+  cappedByCaller?: boolean;
+}> {
   try {
     const baseArgs = { ...(ds.args ?? {}), ...resolveDynArgs(ds.dynArgs) };
     if (!ds.scope) {
       const r = await fetchPaged(client, ds.tool, baseArgs, maxRows);
-      return { rows: r.rows, total: r.total, truncated: r.truncated };
+      return { rows: r.rows, total: r.total, truncated: r.truncated, cappedByCaller: r.cappedByCaller };
     }
     // Walk the scope chain: each step fans every current context out over its
     // parents, accumulating the arg + a label path. Works for 1, 2, or N levels.
@@ -229,10 +260,12 @@ export async function fetchDataset(
       if (contexts.length === 0) break;
     }
     let anyTruncated = false;
+    let anyCapped = false;
     const chunks = await mapLimit(contexts, 5, async (ctx) => {
       try {
         const r = await fetchPaged(client, ds.tool, { ...baseArgs, ...ctx.args }, maxRows);
         if (r.truncated) anyTruncated = true;
+        if (r.cappedByCaller) anyCapped = true;
         return r.rows.map((row) =>
           typeof row === 'string' ? ({ _parent: ctx.label, value: row } as Row) : ({ _parent: ctx.label, ...row } as Row),
         );
@@ -240,7 +273,12 @@ export async function fetchDataset(
         return [] as Row[]; // one leaf failing must not sink the dataset
       }
     });
-    return { rows: chunks.flat(), parents: contexts.length, truncated: anyTruncated || undefined };
+    return {
+      rows: chunks.flat(),
+      parents: contexts.length,
+      truncated: anyTruncated || undefined,
+      cappedByCaller: anyCapped || undefined,
+    };
   } catch (err) {
     return { rows: [], error: err instanceof Error ? err.message : String(err) };
   }

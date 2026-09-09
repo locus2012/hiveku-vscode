@@ -12,7 +12,7 @@ import * as fs from 'fs/promises';
 import * as vscode from 'vscode';
 import { AccountStore } from './accounts';
 import { HivekuMcpClient } from './mcpClient';
-import { exportDepartments } from './dataExport';
+import { everyDepartmentFailed, exportDepartments, failedDatasets } from './dataExport';
 import { effectiveDepartments } from './roles';
 
 const KEY = 'hiveku.autoRefresh';
@@ -111,10 +111,21 @@ export class DataRefresher {
           );
           // Role departments only by default — the full export stays a manual action.
           const depts = primary.length ? primary : other;
-          await vscode.window.withProgress(
+          const results = await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Window, title: `Hiveku: refreshing ${record.label} data…` },
             () => exportDepartments(client, depts, folder, record.label, () => undefined),
           );
+          // exportDepartments RESOLVES on a dead key: every tool call 401s and comes
+          // back as a per-dataset `error` field, never a rejection. Stamping lastRun
+          // on that would reset `failures` to 0 after every failed run, so the stale
+          // warning below could never fire. Treat "no department produced data" as
+          // the failure it is — the same rule the generated runner exits 1 on.
+          if (everyDepartmentFailed(results)) {
+            const first = failedDatasets(results)[0];
+            throw new Error(
+              `every dataset failed${first ? ` — ${first.department}/${first.dataset}: ${first.error}` : ''}`,
+            );
+          }
           map[accountId] = { ...p, lastRun: new Date().toISOString(), lastError: undefined, failures: 0 };
           await this.setPrefs(map);
           this.onRefreshed();
@@ -125,7 +136,7 @@ export class DataRefresher {
           // stale numbers with nobody aware. Record the failure and surface it
           // once it is no longer plausibly transient.
           const failures = (p.failures ?? 0) + 1;
-          const reason = err instanceof Error ? err.message : String(err);
+          const reason = (err instanceof Error ? err.message : String(err)).slice(0, 300);
           map[accountId] = { ...p, failures, lastError: reason, lastErrorAt: new Date().toISOString() };
           await this.setPrefs(map);
           if (failures === FAILURES_BEFORE_WARNING) {
@@ -134,12 +145,17 @@ export class DataRefresher {
               : 'ever since it was enabled';
             void vscode.window
               .showWarningMessage(
-                `Hiveku data refresh for "${record.label}" has failed ${failures} times — its hiveku-data export is stale (${staleFor}). Agents reading it are working from old numbers.`,
+                `Hiveku data refresh for "${record.label}" has failed ${failures} times — its hiveku-data export is stale (${staleFor}). Agents reading it are working from old numbers. Last error: ${reason}`,
+                'Reconnect account',
                 'Retry now',
                 'Turn off auto-refresh',
               )
               .then(async (choice) => {
-                if (choice === 'Retry now') {
+                if (choice === 'Reconnect account') {
+                  // The usual cause of a run of failures is an expired or revoked
+                  // account key — every call 401s and nothing else will fix it.
+                  await vscode.commands.executeCommand('hiveku.connect');
+                } else if (choice === 'Retry now') {
                   const cur = this.prefs();
                   cur[accountId] = { ...cur[accountId], failures: 0 };
                   await this.setPrefs(cur);

@@ -37,18 +37,85 @@ export function loadEnv() {
 }
 
 // Minimal MCP-over-HTTP client (initialize + tools/call). Free — no Claude turn.
+//
+// Ported from the extension's src/mcpClient.ts. The timeout is the whole point:
+// this client runs under launchd/cron with the editor closed, and Node's global
+// fetch has NO default request timeout — so one stalled connection used to hang
+// the worker forever with nobody watching. The budget sits just past the edge
+// timeout in front of Hiveku (~120-125s), so we never give up while the server
+// is still legitimately working, and it stays armed through the body read
+// because fetch resolves on headers, not on the body.
+const MCP_TIMEOUT_MS = 135000;
+const MCP_TIMEOUT_S = Math.round(MCP_TIMEOUT_MS / 1000);
+// The server's limiter is a fixed 60s window whose 429 advertises the true
+// remaining time, so a retry may legitimately have to wait a whole minute.
+const MCP_MAX_RETRY_SECONDS = 60;
+
 let _session = null, _inited = false, _id = 1;
-async function rpc(method, params) {
+
+function _clampRetry(n) {
+  if (!Number.isFinite(n)) return 15;
+  return Math.min(Math.max(Math.ceil(n), 1), MCP_MAX_RETRY_SECONDS);
+}
+// Fallback only — used when a 429 arrives without a Retry-After header.
+function _retryAfterFromProse(message) {
+  if (!/rate limit/i.test(message)) return null;
+  const m = String(message).match(/retry[_ ]after[_ :]*(\\d+)/i);
+  return _clampRetry(m ? Number(m[1]) : 15);
+}
+
+async function _rpcOnce(method, params) {
   const url = (process.env.HIVEKU_MCP_URL || 'https://core.hiveku.com/mcp');
   const headers = { Authorization: 'Bearer ' + process.env.HIVEKU_MCP_KEY, 'Content-Type': 'application/json', Accept: 'application/json' };
   if (_session) headers['Mcp-Session-Id'] = _session;
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ jsonrpc: '2.0', id: _id++, method, params }) });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), MCP_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ jsonrpc: '2.0', id: _id++, method, params }), signal: ctrl.signal });
+  } catch (err) {
+    clearTimeout(timer);
+    if (ctrl.signal.aborted) throw new Error('MCP request timed out after ' + MCP_TIMEOUT_S + 's (' + method + ')');
+    throw err;
+  }
   const sid = res.headers.get('mcp-session-id'); if (sid) _session = sid;
-  if (!res.ok) throw new Error('MCP HTTP ' + res.status + ': ' + (await res.text()).slice(0, 300));
-  if (res.status === 204) return null;
-  const body = await res.json();
+  if (!res.ok) {
+    let text = '';
+    try { text = await res.text(); } catch { text = ''; } finally { clearTimeout(timer); }
+    const detail = 'MCP HTTP ' + res.status + ': ' + text.slice(0, 300);
+    if (res.status === 429) {
+      // Retry-After is the limiter's own remaining-window figure; prefer it.
+      const header = Number(res.headers.get('retry-after'));
+      const limited = new Error(detail);
+      limited.retryAfterSeconds = header > 0 ? _clampRetry(header) : (_retryAfterFromProse(text) || 15);
+      throw limited;
+    }
+    throw new Error(detail);
+  }
+  if (res.status === 204) { clearTimeout(timer); return null; }
+  let body;
+  try {
+    body = await res.json();
+  } catch (err) {
+    if (ctrl.signal.aborted) throw new Error('MCP response stalled after ' + MCP_TIMEOUT_S + 's while reading the body (' + method + ')');
+    throw err;
+  } finally { clearTimeout(timer); }
   if (body.error) throw new Error('MCP error ' + body.error.code + ': ' + body.error.message);
   return body.result;
+}
+
+// One retry after the delay the SERVER asked for. An unattended worker should
+// not lose a whole run to a rate limit it was told exactly how to wait out.
+async function rpc(method, params) {
+  try {
+    return await _rpcOnce(method, params);
+  } catch (err) {
+    const wait = (err && err.retryAfterSeconds) || _retryAfterFromProse(err && err.message ? err.message : String(err));
+    if (!wait) throw err;
+    console.log(new Date().toISOString(), 'rate limited by Hiveku - waiting ' + wait + 's, then retrying once (' + method + ')');
+    await new Promise((r) => setTimeout(r, wait * 1000));
+    return await _rpcOnce(method, params);
+  }
 }
 /** Call a Hiveku tool; returns its JSON result. e.g. await hiveku('crm_list_deals', { limit: 20 }) */
 export async function hiveku(tool, args = {}) {
@@ -114,7 +181,7 @@ export async function http(url, opts = {}) {
 const DISPATCHER_MJS = `// Run by launchd/cron every minute. Reads registry.json, runs each due + enabled worker.
 import { readFileSync, writeFileSync, existsSync, mkdirSync, openSync } from 'node:fs';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { ROOT, loadEnv, cronMatches } from './lib.mjs';
 
 loadEnv();
@@ -125,17 +192,86 @@ const minuteKey = now.toISOString().slice(0, 16); // dedupe so a job fires once 
 const logDir = join(ROOT, 'logs'); if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
 let changed = false;
 
+// ── Reaping a hung worker ───────────────────────────────────────────────────
+// Workers are spawned detached and unref'd, so nothing in this process waits on
+// them. Before this, a worker that wedged (a stalled socket, a claude -p that
+// never returned) was never noticed, and every following tick started another
+// copy beside it. The dispatcher now records each run's pid and start time in
+// registry.json and, on a later tick, ends anything past its wall budget before
+// starting a replacement - and never starts one while the old run is alive.
+//
+// 30 minutes is double the longest budget any shipped worker sets (the cadence
+// workers cap claude -p at 15 minutes), so a slow-but-healthy run is never cut
+// off, while a genuinely stuck one is cleared within a tick of the half hour.
+// Raise or lower it per automation with "timeoutMinutes" in registry.json.
+const DEFAULT_RUN_BUDGET_MIN = 30;
+
+// The command line behind a pid, or '' if it is gone (or ps is unavailable).
+// This doubles as the identity check: a recorded pid can be REUSED by an
+// unrelated process after a reboot, and killing a stranger is far worse than
+// leaving a dead automation un-reaped, so we only ever signal a process whose
+// command line still names this worker file. If ps cannot answer, we treat the
+// run as finished - that risks a duplicate run, never a wrong kill.
+function processCommand(pid) {
+  try {
+    const r = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
+    return r.status === 0 ? String(r.stdout || '').trim() : '';
+  } catch { return ''; }
+}
+
 for (const a of reg.automations || []) {
   if (!a.enabled) continue;
+  const worker = join(ROOT, 'workers', a.worker + '.mjs');
+
+  // Account for the previous run before considering a new one.
+  let stillRunning = false;
+  if (a._pid) {
+    if (!processCommand(a._pid).includes(worker)) {
+      a._pid = null; a._startedAt = null; a._termAt = null; changed = true; // finished, or the pid is no longer ours
+    } else {
+      const budgetMin = Number(a.timeoutMinutes) > 0 ? Number(a.timeoutMinutes) : DEFAULT_RUN_BUDGET_MIN;
+      const startedMs = Date.parse(a._startedAt || '');
+      const ageMs = Number.isFinite(startedMs) ? now.getTime() - startedMs : Infinity;
+      if (ageMs > budgetMin * 60000) {
+        // SIGTERM first so the worker can flush its log; if it is still there on
+        // the next tick, SIGKILL. The pid is only forgotten once the process is
+        // actually gone - clearing it while the process lives is exactly how a
+        // replacement ends up running beside a hung run.
+        const sig = a._termAt ? 'SIGKILL' : 'SIGTERM';
+        let sent = true;
+        try { process.kill(a._pid, sig); } catch { sent = false; }
+        const ageText = !Number.isFinite(ageMs)
+          ? 'an unknown time'
+          : (ageMs >= 60000 ? Math.round(ageMs / 60000) + ' min' : Math.round(ageMs / 1000) + 's');
+        console.error(now.toISOString(), a.id + ': run (pid ' + a._pid + ') has been going ' + ageText + ', past its ' + budgetMin + ' min budget - sent ' + sig + (sent ? '' : ' but the signal failed') + '. Its output is in logs/' + a.id + '.log; raise the budget with "timeoutMinutes" in registry.json if the work really takes this long.');
+        a._lastKilled = now.toISOString();
+        if (sig === 'SIGKILL' || !sent) { a._pid = null; a._startedAt = null; a._termAt = null; }
+        else { a._termAt = now.toISOString(); stillRunning = true; }
+        changed = true;
+      } else {
+        stillRunning = true;
+      }
+    }
+  }
+
   if (a._lastMinute === minuteKey) continue;
   if (!cronMatches(a.cron, now)) continue;
-  const worker = join(ROOT, 'workers', a.worker + '.mjs');
+  if (stillRunning) {
+    // Due, but the last run has not finished. Say so - silence here would look
+    // exactly like a healthy tick.
+    console.error(now.toISOString(), a.id + ': due now, but the run started ' + a._startedAt + ' (pid ' + a._pid + ') has not finished. Not starting a second copy.');
+    continue;
+  }
   if (!existsSync(worker)) { console.error('missing worker', worker); continue; }
   const out = openSync(join(logDir, a.id + '.log'), 'a');
   const child = spawn(process.execPath, [worker], { cwd: ROOT, detached: true, stdio: ['ignore', out, out], env: { ...process.env, HVK_AUTOMATION_ID: a.id } });
   child.unref();
+  // _lastKilled is cleared here too: it records how the PREVIOUS run ended, and
+  // leaving it set made manage.mjs list report "last run ENDED by the
+  // dispatcher" forever after a single reap, long after healthy runs followed.
+  a._pid = child.pid; a._startedAt = now.toISOString(); a._termAt = null; a._lastKilled = null;
   a._lastMinute = minuteKey; a._lastRun = now.toISOString(); changed = true;
-  console.log(now.toISOString(), 'started', a.id);
+  console.log(now.toISOString(), 'started', a.id, 'pid', child.pid);
 }
 if (changed) writeFileSync(REG, JSON.stringify(reg, null, 2) + '\\n', 'utf8');
 `;
@@ -211,7 +347,14 @@ const find = (id) => reg.automations.find((a) => a.id === id);
 switch (cmd) {
   case 'list': {
     if (!reg.automations.length) console.log('(no automations) — create one: node manage.mjs create --id <id> --cron "<cron>" --worker <name>');
-    for (const a of reg.automations) console.log([a.enabled ? '●' : '○', a.id.padEnd(22), a.cron.padEnd(18), 'worker=' + a.worker, a._lastRun ? 'last=' + a._lastRun : ''].join('  '));
+    // 'last=' is when a run STARTED, so on its own it reads like a success.
+    // Surface a run still in flight, and one the dispatcher had to end.
+    for (const a of reg.automations) {
+      const state = a._pid
+        ? 'RUNNING since ' + a._startedAt
+        : (a._lastKilled ? 'last run ENDED by the dispatcher at ' + a._lastKilled : '');
+      console.log([a.enabled ? '●' : '○', a.id.padEnd(22), a.cron.padEnd(18), 'worker=' + a.worker, a._lastRun ? 'last=' + a._lastRun : '', state].join('  '));
+    }
     break;
   }
   case 'create': {
@@ -305,6 +448,13 @@ Cron is standard 5-field **local time** (\`17 9-17 * * 1-5\` = :17 past 9am–5p
 Use the helpers in \`lib.mjs\`: \`hiveku(tool, args)\` (any Hiveku MCP tool, free), \`http(url, opts)\`
 (Smartlead/HeyReach REST), \`claudeP(prompt)\` (one-shot Claude for judgment), \`loadSeen/saveSeen(id)\`
 (idempotency so a lead is never handled twice). See \`workers/example-reply-triage.mjs\`.
+
+## Run budgets (a worker that hangs)
+The dispatcher ends a run that overruns: SIGTERM once it has been going 30 minutes, SIGKILL on the next
+tick if it ignores that, with the reason written to \`logs/dispatcher.log\`. While a run is still alive the
+dispatcher will NOT start a second copy — it logs that the automation was due and was skipped. If a worker
+legitimately takes longer, set \`"timeoutMinutes": <n>\` on that automation in \`registry.json\`.
+\`node manage.mjs list\` shows a run still in flight, and the last run the dispatcher had to end.
 
 ## Safety
 Idempotent (track processed ids), respect Smartlead/HeyReach/LinkedIn rate caps, keep \`.env\` out of git,

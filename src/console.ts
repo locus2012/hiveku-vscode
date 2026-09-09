@@ -121,6 +121,15 @@ function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
 }
 
+/** A rejected probe's reason as one printable line.
+ *  A read that could not RUN is not a read that came back empty. Every caller
+ *  below carries this string to the webview so the panel can say the check
+ *  failed, instead of rendering the failure as a confident "none". */
+function reasonMessage(reason: unknown): string {
+  const m = reason instanceof Error ? reason.message : String(reason);
+  return m.trim() || 'no reason given';
+}
+
 async function loadPpcDashboard(client: HivekuMcpClient): Promise<Record<string, unknown>> {
   const [campaignsRaw, disapprovals] = await Promise.all([
     client.callToolJson<unknown>('ppc_campaign_list', { limit: 200 }).catch((e) => ({ error: String(e) })),
@@ -256,6 +265,23 @@ async function loadIntegrations(client: HivekuMcpClient): Promise<Record<string,
   const rows = (r: PromiseSettledResult<unknown>) => (r.status === 'fulfilled' ? extractRows(r.value) : []);
   const str = (v: unknown) => (v === undefined || v === null ? '' : String(v));
   const connected: Array<{ area: string; label: string; status: string; detail: string }> = [];
+  // A probe that could not run says NOTHING about whether that area is wired.
+  // Folding a rejection into zero rows is how a timeout on ppc_connection_list
+  // reported a live Google Ads account as absent, on the one tab whose whole
+  // job is to say what is connected. Unknown and not-connected are different
+  // answers and the renderer is given both.
+  const errors: Array<{ area: string; message: string }> = [];
+  const probes: Array<[string, PromiseSettledResult<unknown>]> = [
+    ['Ads (PPC)', ppc],
+    ['SEO / Local SEO', seoConn],
+    ['Email domains', domains],
+    ['Email inboxes', inbox],
+    ['Social', social],
+    ['Integrations', integ],
+  ];
+  for (const [area, settled] of probes) {
+    if (settled.status === 'rejected') errors.push({ area, message: reasonMessage(settled.reason) });
+  }
   for (const c of rows(ppc)) {
     connected.push({ area: 'Ads (PPC)', label: str(c.display_name || c.name || c.platform), status: str(c.connection_status || c.status || 'connected'), detail: [str(c.platform), c.customer_id ? `customer ${str(c.customer_id)}` : '', c.campaign_count !== undefined ? `${str(c.campaign_count)} campaigns` : ''].filter(Boolean).join(' · ') });
   }
@@ -282,7 +308,7 @@ async function loadIntegrations(client: HivekuMcpClient): Promise<Record<string,
   for (const c of rows(integ)) {
     connected.push({ area: 'Integrations', label: str(c.provider_slug || c.provider || c.name), status: str(c.status || (c.is_active === false ? 'inactive' : 'active')), detail: str(c.name && c.provider_slug ? c.name : '') });
   }
-  return { kind: 'connect', connected };
+  return { kind: 'connect', connected, errors };
 }
 
 
@@ -293,7 +319,13 @@ async function loadIntegrations(client: HivekuMcpClient): Promise<Record<string,
  * native dialogs + cms_* tools.
  */
 async function loadCmsTab(client: HivekuMcpClient): Promise<Record<string, unknown>> {
-  const sitesRaw = await client.callToolJson<unknown>('sites_list', { limit: 50 }).catch(() => ({}));
+  // A failed project listing used to fall through as {} and render as "No
+  // website projects" — an account with sites reading as an account with none.
+  let sitesError: string | undefined;
+  const sitesRaw = await client.callToolJson<unknown>('sites_list', { limit: 50 }).catch((err: unknown) => {
+    sitesError = reasonMessage(err);
+    return {};
+  });
   // Caps keep the fan-out inside the shared MCP rate budget (worst case
   // 1 + 6 + 60 calls, memoized for 60s).
   const sites = extractRows(sitesRaw).filter((s) => !isExternalProject(s)).slice(0, 6);
@@ -329,7 +361,7 @@ async function loadCmsTab(client: HivekuMcpClient): Promise<Record<string, unkno
     });
     return { id: projectId, name: String(site.name ?? site.slug ?? projectId), error, collections: cols };
   });
-  return { kind: 'cmsdash', sites: out };
+  return { kind: 'cmsdash', sites: out, sitesError };
 }
 
 /** Media Library tab — thumbnail grid over the account-wide library, with CRUD. */
@@ -798,7 +830,26 @@ export function openAccountConsole(
       // that pinned the tab to a transient error for the full TTL — a manual
       // retry inside the window just replayed the cached failure, which reads
       // as "still broken" when it may have recovered immediately.
-      const isFailure = !!payload && typeof payload === 'object' && 'error' in (payload as Record<string, unknown>);
+      // Partial failures count too: a payload carrying `errors` or one of the
+      // named probe-failure fields is a probe that did not fully run. Caching
+      // one makes the Retry button replay the same failure for the rest of the
+      // TTL while looking like a fresh check.
+      //
+      // The list is NAMED rather than matched on a `*Error` suffix, because the
+      // suffix also catches fields that mean "expected, tolerated absence" —
+      // `visitorsError` is set when analytics_visitors has not finished rolling
+      // out, is rendered as an informational note, and must not disable this
+      // tab's memo for the whole TTL.
+      const PROBE_FAILURE_FIELDS = ['workflowsError', 'runsError', 'sitesError', 'gscError'];
+      const asRecord = (payload ?? {}) as Record<string, unknown>;
+      const isFailure = !!payload && typeof payload === 'object' && (
+        'error' in asRecord
+        || (Array.isArray(asRecord.errors) && asRecord.errors.length > 0)
+        || PROBE_FAILURE_FIELDS.some((k) => {
+          const v = asRecord[k];
+          return v !== undefined && v !== null && v !== '';
+        })
+      );
       if (!raw && !isFailure) tabMemo.set(tab, { data: payload, at: Date.now() });
       if (isFailure) tabMemo.delete(tab);
       panel.webview.postMessage({ type: 'tab', tab, data: payload });
@@ -849,9 +900,14 @@ export function openAccountConsole(
         data = { tasks: await api.pmTasksAll(client) };
       } else if (tab === 'automations') {
         const [workflows, runs] = await Promise.allSettled([api.workflowList(client), api.workflowRunsRecent(client)]);
+        // Carry the rejection reasons through. Dropping them rendered a failed
+        // workflow_list as "Workflows (0) / No workflows.", which sends the
+        // operator to rebuild automations that are still there.
         data = {
           workflows: workflows.status === 'fulfilled' ? workflows.value : [],
           runs: runs.status === 'fulfilled' ? runs.value : [],
+          workflowsError: workflows.status === 'rejected' ? reasonMessage(workflows.reason) : undefined,
+          runsError: runs.status === 'rejected' ? reasonMessage(runs.reason) : undefined,
         };
       } else {
         const dept = departmentById(tab);
@@ -860,13 +916,19 @@ export function openAccountConsole(
             dept.datasets.map(async (ds) => {
               // The table only renders a 250-row slice — cap pagination to match
               // instead of fanning out up to 40 pages per dataset on tab open.
-              const { rows, error } = await fetchDataset(client, ds, 250);
+              const { rows, error, total, truncated, cappedByCaller } = await fetchDataset(client, ds, 250);
               return {
                 id: ds.id,
                 label: ds.label,
                 columns: ds.columns.map((c) => ({ label: c.label ?? (Array.isArray(c.key) ? c.key[0] : c.key) })),
                 rows: rows.slice(0, 250).map((r) => ds.columns.map((c) => fmt(pick(r, c.key), c))),
                 count: rows.length,
+                // The pagination cap the SERVER hit, and the total it reported.
+                // `count` only knows about rows we received, so without these
+                // the table cannot tell a complete dataset from a partial one.
+                total,
+                truncated,
+                cappedByCaller,
                 tool: ds.tool,
                 error,
               };
@@ -1303,8 +1365,16 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
     function renderIntegrations(d){
       clear(content);
       var conns=(d&&d.connected)||[];
+      var probeErrs=(d&&d.errors)||[];
       content.appendChild(el('div','sec','Connected'));
-      if(!conns.length){content.appendChild(el('div','muted','Nothing connected yet - use the setup prompts below; Claude Code walks through each connection.'));}
+      if(probeErrs.length){
+        var lines=probeErrs.map(function(e){return e.area+' ('+e.message+')';}).join('; ');
+        content.appendChild(el('div','alerts','Could not check: '+lines+'. These areas are UNKNOWN, not disconnected - anything wired there may still be live. Retry before reconnecting or changing anything.'));
+      }
+      if(!conns.length){
+        if(probeErrs.length)content.appendChild(el('div','muted','Nothing came back connected from the checks that did run. The areas above were not checked at all.'));
+        else content.appendChild(el('div','muted','Nothing connected yet - use the setup prompts below; Claude Code walks through each connection.'));
+      }
       else{
         var wrap=el('div','tablewrap');var table=el('table');
         var thead=el('tr');['area','integration','status','details'].forEach(function(h){thead.appendChild(el('th',null,h));});table.appendChild(thead);
@@ -1386,8 +1456,9 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
     function renderAuto(d){
       clear(content);
       var wfs=(d.workflows||[]);
-      content.appendChild(el('div','sec','Workflows ('+wfs.length+')'));
-      if(!wfs.length)content.appendChild(el('div','muted','No workflows.'));
+      content.appendChild(el('div','sec','Workflows'+(d.workflowsError?'':' ('+wfs.length+')')));
+      if(d.workflowsError){content.appendChild(el('div','err','Could not load workflows: '+d.workflowsError+'. This is not "no workflows" - the list never came back, so whatever this account has is still there. Retry, or check the account key.'));}
+      else if(!wfs.length)content.appendChild(el('div','muted','No workflows.'));
       wfs.forEach(function(w){
         var r=el('div','row');
         var on=(w.is_enabled!=null?w.is_enabled:w.enabled);
@@ -1400,7 +1471,8 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
       });
       content.appendChild(el('div','sec','Recent runs'));
       var runs=(d.runs||[]);
-      if(!runs.length)content.appendChild(el('div','muted','No recent runs.'));
+      if(d.runsError){content.appendChild(el('div','err','Could not load recent runs: '+d.runsError+'. Nothing here says a run did or did not happen - the run history was not readable.'));}
+      else if(!runs.length)content.appendChild(el('div','muted','No recent runs.'));
       runs.slice(0,15).forEach(function(run){
         var r=el('div','row');
         r.appendChild(el('div',null,run.workflow_name||run.workflow_id||'(run)'));
@@ -1764,6 +1836,10 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
     function renderCmsDash(d){
       clear(content);
       var sites=(d.sites||[]);
+      if(d.sitesError){
+        content.appendChild(el('div','err','Could not load website projects: '+d.sitesError+'. The project list never came back, so this is not an empty account. Retry.'));
+        content.appendChild(rawLink());return;
+      }
       if(!sites.length){content.appendChild(el('div','muted','No website projects.'));content.appendChild(rawLink());return;}
       content.appendChild(el('div','muted','Entries open as editable JSON in the editor - saving writes straight to the CMS (drafts stay drafts until promoted).'));
       sites.forEach(function(s){
@@ -1941,7 +2017,20 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
           table.appendChild(tr);
         });
         wrap.appendChild(table);content.appendChild(wrap);
-        if(ds.count>ds.rows.length)content.appendChild(el('div','muted','Showing '+ds.rows.length+' of '+ds.count+' — download for the full set.'));
+        if(ds.truncated){
+          // The FETCH stopped short of what the server said existed — the page
+          // cap, or a total we never reached. Rows beyond this were never
+          // retrieved, so absence here proves nothing about the account.
+          var totalTxt=(ds.total!=null?String(ds.total):'an unreported total');
+          content.appendChild(el('div','alerts','Showing '+ds.rows.length+' of '+totalTxt+' — this fetch stopped early, so a row missing here is not necessarily missing from the account. Download the dataset for the full set.'));
+        }
+        // Nothing is wrong here: the console asks for a slice and got one. Say
+        // so plainly rather than in the alert style, which reads as a fault.
+        else if(ds.cappedByCaller){
+          var capTotal=(ds.total!=null?String(ds.total):'more');
+          content.appendChild(el('div','muted','Showing '+ds.rows.length+' of '+capTotal+' — this view stops at 250 rows. Download for the full set.'));
+        }
+        else if(ds.count>ds.rows.length)content.appendChild(el('div','muted','Showing '+ds.rows.length+' of '+ds.count+' — download for the full set.'));
       });
       if(pendingFocus){
         var target=document.getElementById('ds-'+pendingFocus);

@@ -134,12 +134,48 @@ function releaseSlot(): void {
   if (next) next();
 }
 
-/** Parse the retry delay from a rate-limit rejection (error.data or prose). */
+/**
+ * ★ The ceiling on a rate-limit sleep, and why it is a full minute.
+ *
+ * The server's limiter is a FIXED 60-second window and its 429 advertises the
+ * true remaining time — `retryAfterMs = windowMs - (now - entry.windowStart)`
+ * in hiveku-mcp-api-server/src/middleware/rate-limiter.ts — so the wait it asks
+ * for is anything up to 60s. The old ceiling was 30s, which meant a burst
+ * landing early in a window ALWAYS woke while the window was still shut, spent
+ * its one retry on a second 429, and reported a failure the server had already
+ * told us how to avoid. Sleeping less than the server asked for is not caution;
+ * it is a retry timed to fail.
+ */
+const RATE_LIMIT_MAX_RETRY_SECONDS = 60;
+
+/** At least a second, never past a full window, always a whole number. */
+function clampRetrySeconds(seconds: number): number {
+  if (!Number.isFinite(seconds)) return 15;
+  return Math.min(Math.max(Math.ceil(seconds), 1), RATE_LIMIT_MAX_RETRY_SECONDS);
+}
+
+/**
+ * A 429 carrying the delay the SERVER asked for, rather than one parsed back
+ * out of the sentence it wrote. requestOnce throws this; request() sleeps it.
+ */
+class McpRateLimitError extends Error {
+  readonly retryAfterSeconds: number;
+  constructor(message: string, retryAfterSeconds: number) {
+    super(message);
+    this.name = 'McpRateLimitError';
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+/**
+ * Fallback for a rate-limit rejection that did NOT arrive as a 429 with a
+ * `Retry-After` header — a proxy that strips the header, or a limiter that
+ * answers 200 with a JSON-RPC error body. Reads the delay out of the prose.
+ */
 function rateLimitRetrySeconds(message: string): number | null {
   if (!/rate limit/i.test(message)) return null;
   const m = message.match(/retry[_ ]after[_ :]*(\d+)/i);
-  const n = m ? Number(m[1]) : 15;
-  return Math.min(Math.max(n, 1), 30);
+  return clampRetrySeconds(m ? Number(m[1]) : 15);
 }
 
 export interface McpToolResult {
@@ -211,8 +247,11 @@ export class HivekuMcpClient {
     try {
       return await this.requestOnce<T>(method, params, timeoutMs);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const retryAfter = rateLimitRetrySeconds(msg);
+      // A typed 429 already carries the server's own figure; anything else has
+      // to be read out of the message, which is strictly the weaker source.
+      const retryAfter = err instanceof McpRateLimitError
+        ? err.retryAfterSeconds
+        : rateLimitRetrySeconds(err instanceof Error ? err.message : String(err));
       if (retryAfter === null) throw err;
       // One polite retry after the advertised window — background UI surfaces
       // should self-heal a 429 instead of surfacing red toasts.
@@ -269,7 +308,16 @@ export class HivekuMcpClient {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '').finally(() => clearTimeout(timer));
-      throw new Error(`MCP HTTP ${res.status}: ${text.slice(0, 500)}`);
+      const detail = `MCP HTTP ${res.status}: ${text.slice(0, 500)}`;
+      if (res.status === 429) {
+        // `Retry-After` is the limiter's own remaining-window figure in whole
+        // seconds. Take it over the prose, which is the same number rendered
+        // into a sentence and can be reworded at any time.
+        const header = Number(res.headers.get('retry-after'));
+        const seconds = header > 0 ? clampRetrySeconds(header) : (rateLimitRetrySeconds(text) ?? 15);
+        throw new McpRateLimitError(detail, seconds);
+      }
+      throw new Error(detail);
     }
     if (res.status === 204) return null as T;
 

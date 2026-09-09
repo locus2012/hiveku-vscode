@@ -29,12 +29,50 @@ export interface DatasetResult {
   error?: string;
   detailDir?: string;
   detailCount?: number;
+  /**
+   * Detail fetches that produced NO file. `detailCount` counts successes only,
+   * so without this a half-written dump reads as a complete one.
+   */
+  detailFailed?: number;
+  /** Distinct reasons behind `detailFailed` (first few) — one dead key repeats itself. */
+  detailErrors?: string[];
   reference?: boolean;
 }
 export interface DeptResult {
   id: string;
   label: string;
   datasets: DatasetResult[];
+  /** List datasets attempted (references excluded — those are static docs). */
+  datasetCount: number;
+  /** How many of those came back with an error. */
+  failedCount: number;
+  /**
+   * Nothing usable came back for this department. Same rule as the generated
+   * runner (dataRunner.ts): a department is OK when it has no list datasets
+   * (references only) or at least one dataset that came back without an error.
+   * Kept identical on purpose so the extension and `node .hiveku/pull-data.mjs`
+   * never disagree about whether a refresh worked.
+   */
+  failed: boolean;
+}
+
+/** Every dataset that came back with an error, flattened across departments. */
+export function failedDatasets(
+  results: DeptResult[],
+): Array<{ department: string; dataset: string; label: string; error: string }> {
+  return results.flatMap((d) =>
+    d.datasets
+      .filter((x) => x.error)
+      .map((x) => ({ department: d.id, dataset: x.id, label: x.label, error: String(x.error) })),
+  );
+}
+
+/**
+ * True when NO department produced usable data — the signature of a dead account
+ * key rather than one flaky endpoint. Mirrors the runner's exit-1 condition.
+ */
+export function everyDepartmentFailed(results: DeptResult[]): boolean {
+  return results.length > 0 && results.every((d) => d.failed);
 }
 
 async function writeJson(file: string, value: unknown): Promise<void> {
@@ -61,7 +99,51 @@ export async function exportDepartment(
     onProgress?.(`${dept.label} · ${ds.label}`);
     const { rows, error, parents, total, truncated } = await fetchDataset(client, ds);
     if (truncated) onProgress?.(`${dept.label} · ${ds.label}: TRUNCATED at ${rows.length}${total ? ` of ${total}` : ''} rows`);
+    const result: DatasetResult = {
+      id: ds.id,
+      label: ds.label,
+      tool: ds.tool,
+      count: rows.length,
+      ...(truncated ? { truncated: true } : {}),
+      ...(total != null ? { total } : {}),
+      error,
+    };
+
+    // Rich-document dump: one full-object file per row (workflow graphs, avatars, …).
+    // A per-row failure writes no file, so it MUST be counted — otherwise 40 boards
+    // with 12 dead detail fetches report "28 full-object files" and read as complete.
+    if (ds.detail && rows.length) {
+      const det = ds.detail;
+      const subdir = path.join(dir, det.dir ?? ds.id);
+      const outcomes = await mapLimit(rows, 2, async (r): Promise<string | undefined> => {
+        const id = r[det.idKey ?? 'id'];
+        if (id == null) return `list row has no \`${det.idKey ?? 'id'}\` to fetch by`;
+        const { data, error: derr } = await fetchReference(client, det.detailTool, { [det.argKey ?? 'id']: id });
+        if (derr) return derr;
+        const name = String(r[det.nameKey ?? 'name'] ?? id);
+        try {
+          await writeJson(path.join(subdir, `${slugify(name)}-${String(id).slice(0, 8)}.json`), data);
+        } catch (err) {
+          // A disk-side failure (ENOSPC, EPERM, an unusable slug) is one more
+          // counted outcome, not an exception. Letting it escape mapLimit would
+          // abort the whole department BEFORE the list snapshot below is
+          // written, losing the very file this dump is an annex to.
+          return err instanceof Error ? err.message : String(err);
+        }
+        return undefined;
+      });
+      const failures = outcomes.filter((o): o is string => o != null);
+      result.detailDir = det.dir ?? ds.id;
+      result.detailCount = outcomes.length - failures.length;
+      if (failures.length) {
+        result.detailFailed = failures.length;
+        // Distinct reasons only: one revoked key produces the same message N times.
+        result.detailErrors = [...new Set(failures)].slice(0, 3);
+      }
+    }
+
     // A failed refresh must never clobber a good snapshot (mirrors the runner).
+    // Written AFTER the detail dump so the detail failures land in the file too.
     const dsFile = path.join(dir, `${ds.id}.json`);
     const hadSnapshot = error ? await fs.access(dsFile).then(() => true, () => false) : false;
     if (!hadSnapshot) await writeJson(dsFile, {
@@ -76,34 +158,10 @@ export async function exportDepartment(
       ...(truncated ? { truncated: true } : {}),
       fetched_at: fetchedAt,
       ...(error ? { error } : {}),
+      ...(result.detailDir ? { detail_dir: result.detailDir, detail_written: result.detailCount ?? 0 } : {}),
+      ...(result.detailFailed ? { detail_failed: result.detailFailed, detail_errors: result.detailErrors ?? [] } : {}),
       rows,
     });
-    const result: DatasetResult = {
-      id: ds.id,
-      label: ds.label,
-      tool: ds.tool,
-      count: rows.length,
-      ...(truncated ? { truncated: true } : {}),
-      ...(total != null ? { total } : {}),
-      error,
-    };
-
-    // Rich-document dump: one full-object file per row (workflow graphs, avatars, …).
-    if (ds.detail && rows.length) {
-      const det = ds.detail;
-      const subdir = path.join(dir, det.dir ?? ds.id);
-      const written = await mapLimit(rows, 2, async (r): Promise<boolean> => {
-        const id = r[det.idKey ?? 'id'];
-        if (id == null) return false;
-        const { data, error: derr } = await fetchReference(client, det.detailTool, { [det.argKey ?? 'id']: id });
-        if (derr) return false;
-        const name = String(r[det.nameKey ?? 'name'] ?? id);
-        await writeJson(path.join(subdir, `${slugify(name)}-${String(id).slice(0, 8)}.json`), data);
-        return true;
-      });
-      result.detailDir = det.dir ?? ds.id;
-      result.detailCount = written.filter(Boolean).length;
-    }
     results.push(result);
   }
 
@@ -118,7 +176,17 @@ export async function exportDepartment(
 
   if (dept.setup) await fs.writeFile(path.join(dir, 'SETUP.md'), dept.setup, 'utf8');
   await fs.writeFile(path.join(dir, 'README.md'), deptReadme(dept, results, refs, fetchedAt), 'utf8');
-  return { id: dept.id, label: dept.label, datasets: [...results, ...refs] };
+  const failedCount = results.filter((r) => r.error).length;
+  return {
+    id: dept.id,
+    label: dept.label,
+    datasets: [...results, ...refs],
+    datasetCount: results.length,
+    failedCount,
+    // dataRunner.ts's rule, verbatim: references-only departments are never "failed",
+    // and one surviving dataset means the department still produced something.
+    failed: results.length > 0 && failedCount === results.length,
+  };
 }
 
 /** Export several departments + write the top-level index. */
@@ -165,12 +233,25 @@ export async function exportDepartments(
     truncated: datasets
       .filter((d) => d.truncated)
       .map((d) => ({ department: d.department, dataset: d.id, returned: d.count, total: d.total ?? null })),
+    // Per-row detail dumps fail independently of their list. Without this an
+    // agent counts the files in the folder and reads the short count as the truth.
+    detail_failed: datasets
+      .filter((d) => d.detailFailed)
+      .map((d) => ({
+        department: d.department,
+        dataset: d.id,
+        dir: d.detailDir ?? null,
+        written: d.detailCount ?? 0,
+        failed: d.detailFailed,
+        errors: d.detailErrors ?? [],
+      })),
     note:
       'Snapshot, not live. `fetched_at` is when it was taken — re-run "Hiveku: Download Department Data" ' +
       '(or node .hiveku/pull-data.mjs) to refresh. Anything under `failed` was NOT fetched: its .json may be ' +
       'absent or a previous snapshot, so do not read an empty result there as "no data". Anything under ' +
       '`truncated` hit the source tool row cap — `returned` is a floor, not a total; call the live MCP tool ' +
-      'with paging if the real count matters.',
+      'with paging if the real count matters. Anything under `detail_failed` has FEWER files on disk than its ' +
+      'list has rows: the missing objects were not fetched, so do not treat that folder as the complete set.',
     // Mirrors the runner's field so either writer refreshes the same marker.
     updated_at: fetchedAt,
   });
@@ -180,7 +261,14 @@ export async function exportDepartments(
 function deptReadme(dept: Department, results: DatasetResult[], refs: DatasetResult[], fetchedAt: string): string {
   const lines = results.map((r) => {
     const status = r.error ? `error: ${r.error}` : `${r.count} rows`;
-    const detail = r.detailCount ? ` + \`${r.detailDir}/\` (${r.detailCount} full-object files)` : '';
+    const written = r.detailCount ?? 0;
+    const detail = !r.detailDir
+      ? ''
+      : r.detailFailed
+        ? ` + \`${r.detailDir}/\` (${written} of ${written + r.detailFailed} — ${r.detailFailed} failed: ${r.detailErrors?.[0] ?? 'no reason reported'})`
+        : written
+          ? ` + \`${r.detailDir}/\` (${written} full-object files)`
+          : '';
     return `- \`${r.id}.json\` — ${r.label} (${status})${detail}. Tool: \`${r.tool}\`.`;
   });
   const refLines = refs.map((r) => `- \`${r.id}.json\` — ${r.label} (reference). Tool: \`${r.tool}\`.`);
