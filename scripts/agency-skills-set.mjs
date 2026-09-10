@@ -59,6 +59,12 @@ export const VENDORED_COMMANDS = [
   'social-audit',
   'social-proof',
   'creative-brief',
+  // 2026-09-10: the dev role's two site plays. webflow.md is the command the
+  // vendored web-agency skill names (/hiveku:webflow) for a Webflow-hosted
+  // site; cms.md is the account-level CMS play, covering the native CMS and
+  // the Webflow provider seam. Written by DEV_COMMANDS in src/roleCommands.ts.
+  'webflow',
+  'cms',
 ];
 
 export const DEFAULT_PLUGIN_ROOT = join(EXTENSION_ROOT, '..', 'hiveku-claude-plugin');

@@ -109,3 +109,49 @@ export function externalPlatform(row: ProjectKindRow): ExternalPlatform | null {
 export function cmsProvider(row: ProjectKindRow): CmsProviderKind {
   return (row.cms_provider ?? '').trim().toLowerCase() === 'webflow' ? 'webflow' : 'native';
 }
+
+/**
+ * The fields that locate a tracked external site. `custom_domain` and
+ * `subdomain` exist on SiteSummary only, so every field is optional: the
+ * ProjectSummary the tree's globe action receives qualifies as-is.
+ */
+export interface ExternalSiteRow {
+  external_website_url?: string | null;
+  custom_domain?: string | null;
+  subdomain?: string | null;
+}
+
+/**
+ * Where a tracked external site opens: the URL the customer recorded
+ * (`https://` added when it was typed bare, as the builder's getProjectLiveUrl
+ * in lib/projects/site-url.ts does), else the custom domain. Undefined when
+ * the row records neither, so the caller renders an inert row rather than a
+ * dead link. One resolver for every platform: before 0.80.1 the Webflow branch
+ * read `external_website_url` while the other five platforms read only
+ * `custom_domain`, which the builder never sets on an external row, so a
+ * Squarespace, Wix, Shopify, WordPress or plain-URL site had nothing to open.
+ */
+export function externalSiteUrl(row: ExternalSiteRow): string | undefined {
+  const recorded = (row.external_website_url ?? '').trim();
+  if (recorded) return /^https?:\/\//i.test(recorded) ? recorded : `https://${recorded}`;
+  const domain = (row.custom_domain ?? '').trim();
+  return domain ? `https://${domain}` : undefined;
+}
+
+/**
+ * What the tree prints as a tracked site's host: the hostname of its live URL.
+ * The builder gives every external row a synthetic `ext-<slug>-<hex>` subdomain
+ * (an internal id with no DNS behind it), so the subdomain is the last resort,
+ * shown only when the row records no URL and no custom domain at all.
+ */
+export function externalSiteHost(row: ExternalSiteRow): string {
+  const url = externalSiteUrl(row);
+  if (url) {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      // A recorded URL that does not parse: fall through to the raw fields.
+    }
+  }
+  return row.custom_domain || row.subdomain || '';
+}

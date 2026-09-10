@@ -4,8 +4,9 @@
  *   /hiveku-daily        — morning brief: context → role signals → today's tasks
  *   /hiveku-new-command  — capture THIS account's process as a new account command
  *                          (saved locally AND to Hiveku via memory_create type=command)
- * plus the role's loops (the social role's ten are the Claude Code plugin's own
- * command files, vendored into assets/commands/ - see vendoredCommand). All
+ * plus the role's loops (the social role's ten and the dev role's two are the
+ * Claude Code plugin's own command files, vendored into assets/commands/ - see
+ * vendoredCommand). All
  * commands share one skeleton: account_context_get
  * FIRST → do the work → persist learnings (memory) → reflect work in Hiveku PM
  * (source of truth). Writes are confirmed per-step, never auto-approved.
@@ -379,10 +380,11 @@ function vendoredCommand(name: string): string | undefined {
 }
 
 /**
- * The social role's commands, written as /hiveku-<name>. Mirror of
- * VENDORED_COMMANDS in scripts/agency-skills-set.mjs (the generator's list) -
- * keep the two identical, or a command is vendored but never written, or listed
- * here and never vendored (warned about and skipped at scaffold time).
+ * The social role's commands, written as /hiveku-<name>. SOCIAL_COMMANDS plus
+ * DEV_COMMANDS mirror VENDORED_COMMANDS in scripts/agency-skills-set.mjs (the
+ * generator's list) - keep the union identical to it, or a command is vendored
+ * but never written, or listed here and never vendored (warned about and
+ * skipped at scaffold time).
  */
 const SOCIAL_COMMANDS = [
   'social-plan',
@@ -421,6 +423,36 @@ Social report. Follow the **hiveku-social-agency** skill. 1. \`social_analytics_
 3. ${PERSIST_STEP}
 `,
 };
+
+/**
+ * The dev role's commands, written as /hiveku-<name>; the other half of the
+ * VENDORED_COMMANDS mirror (see SOCIAL_COMMANDS). The vendored web-agency skill
+ * sends a Webflow-hosted site to `/hiveku:webflow`, and before 0.80.1 no such
+ * command was written anywhere, so the reference dangled in every dev
+ * workspace. No inline fallbacks: neither command existed here before it was
+ * vendored, so a build whose assets are missing warns and writes nothing.
+ */
+const DEV_COMMANDS = ['webflow', 'cms'] as const;
+
+/**
+ * Loop names a second scaffold writer also owns. knowledge.ts writes a
+ * project-scoped /hiveku-cms (this project's id baked in, the cms_* tools
+ * allowed) into every downloaded project folder one step before this runs.
+ * In such a folder the dev role's vendored /hiveku-cms must not overwrite it,
+ * and the role-switch cleanup must not delete it as another role's leftover -
+ * which it would, since allLoopNames() spans every role.
+ */
+const PROJECT_SCAFFOLD_COMMANDS: ReadonlySet<string> = new Set(['hiveku-cms']);
+
+/** A downloaded project folder carries the .hiveku/project.json link file. */
+async function isProjectFolder(baseDir: string): Promise<boolean> {
+  try {
+    await fs.access(path.join(baseDir, '.hiveku', 'project.json'));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function roleLoops(role: Role): Record<string, string> {
   switch (role.id) {
@@ -642,6 +674,16 @@ KB coverage (\`helpdesk_kb_search\` per theme).
 3. ${PERSIST_STEP}
 `,
       };
+    case 'dev': {
+      // The plugin's own files, verbatim: /hiveku-webflow for the Webflow lane
+      // and /hiveku-cms for the native CMS and the Webflow provider seam.
+      const loops: Record<string, string> = {};
+      for (const name of DEV_COMMANDS) {
+        const body = vendoredCommand(name);
+        if (body) loops[`hiveku-${name}`] = body;
+      }
+      return loops;
+    }
     case 'social': {
       // All ten social commands are the plugin's own files, verbatim. The
       // extension used to carry a two-line /hiveku-social-plan that said
@@ -864,10 +906,15 @@ export async function writeRoleSlashCommands(baseDir: string, roleId: string | u
     ];
   }
   const loops = { ...roleLoops(role), ...cadenceCommands(role) };
+  // In a project folder the project scaffold's copy of a shared name wins:
+  // neither written over nor cleaned up (see PROJECT_SCAFFOLD_COMMANDS).
+  const projectFolder = await isProjectFolder(baseDir);
+  if (projectFolder) for (const name of PROJECT_SCAFFOLD_COMMANDS) delete loops[name];
   // Clean up loop commands from a previous role.
   const mine = new Set(Object.keys(loops));
   for (const stale of allLoopNames()) {
     if (mine.has(stale)) continue;
+    if (projectFolder && PROJECT_SCAFFOLD_COMMANDS.has(stale)) continue;
     await fs.rm(path.join(baseDir, '.claude', 'commands', `${stale}.md`), { force: true }).catch(() => undefined);
   }
   const names: string[] = [];

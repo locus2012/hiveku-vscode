@@ -19,7 +19,7 @@ import * as vscode from 'vscode';
 import { AccountStore, type AccountRecord } from './accounts';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
-import { PLATFORM_KIND_LABELS, externalPlatform, isExternalProject } from './projectKind';
+import { PLATFORM_KIND_LABELS, externalPlatform, externalSiteHost, externalSiteUrl, isExternalProject } from './projectKind';
 import {
   fetchKnowledge,
   selectEntries,
@@ -496,7 +496,10 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
           node.project.name || node.project.slug || node.project.id,
           external ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed,
         );
-        const host = node.project.custom_domain || node.project.subdomain || '';
+        // A tracked site prints the host of its live URL: the builder's
+        // synthetic `ext-<slug>-<hex>` subdomain on those rows is an internal
+        // id, not a host anyone can visit.
+        const host = external ? externalSiteHost(node.project) : node.project.custom_domain || node.project.subdomain || '';
         item.description = [node.project.project_type, host].filter(Boolean).join(' · ');
         item.iconPath = new vscode.ThemeIcon(external ? 'link-external' : 'repo');
         item.contextValue = external ? 'hivekuProjectExternal' : 'hivekuProject';
@@ -504,7 +507,7 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
           // A Webflow-hosted site: edited through the Hiveku Webflow workspace
           // and the webflow_* tools. The label opens the live site; the inline
           // globe (hiveku.openSite) offers the site and the workspace.
-          const url = node.project.external_website_url || (node.project.custom_domain ? `https://${node.project.custom_domain}` : undefined);
+          const url = externalSiteUrl(node.project);
           item.description = [PLATFORM_KIND_LABELS.webflow, host].filter(Boolean).join(' · ');
           item.iconPath = new vscode.ThemeIcon('globe');
           item.contextValue = 'hivekuProjectWebflow';
@@ -515,9 +518,11 @@ export class HivekuTreeProvider implements vscode.TreeDataProvider<HivekuNode> {
           // than the bare 'external' project_type, so a WordPress, Squarespace,
           // Wix or Shopify row reads as itself; `url` keeps 'External site'.
           // None of them has an API connection yet, so the row still just opens
-          // the live site.
+          // the live site, resolved exactly as the Webflow row resolves its own
+          // (recorded URL first, then custom domain) - reading custom_domain
+          // alone left these rows inert, since external rows rarely carry one.
           const kind = PLATFORM_KIND_LABELS[platform];
-          const url = node.project.custom_domain ? `https://${node.project.custom_domain}` : undefined;
+          const url = externalSiteUrl(node.project);
           item.description = [kind, host].filter(Boolean).join(' · ');
           if (url) item.command = { command: 'hiveku.openSiteEnv', title: 'Open Site', arguments: [{ url }] };
           item.tooltip = `${kind}${url ? ` — ${url}` : ''} (tracked in Hiveku; code lives elsewhere)`;

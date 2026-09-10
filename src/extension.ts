@@ -27,7 +27,7 @@ import { pullEnv, pushEnv } from './env';
 import { openMediaGallery } from './gallery';
 import { openReviewAnnotator } from './reviewAnnotator';
 import { openDashboard } from './dashboard';
-import { externalPlatform, isExternalProject } from './projectKind';
+import { externalPlatform, externalSiteUrl, isExternalProject } from './projectKind';
 import { openAccountConsole, refreshConsoleTab } from './console';
 import { openModulePanel, isEntitled } from './panel';
 import { MODULES, PROJECT_MODULE, moduleById, moduleGroupGate } from './modules';
@@ -2412,8 +2412,7 @@ async function openSite(node: { record?: AccountRecord; project?: api.ProjectSum
     // A Webflow-hosted site has no Hiveku environments to resolve: offer the
     // live site (when the customer recorded a URL) and the Hiveku Webflow
     // workspace, which is where the site is edited.
-    const site = node.project as Partial<api.SiteSummary>;
-    const liveUrl = site.external_website_url || (site.custom_domain ? `https://${site.custom_domain}` : undefined);
+    const liveUrl = externalSiteUrl(node.project);
     const workspaceUrl = `${appUrl().replace(/\/+$/, '')}/${node.record.accountId}/dashboard/${node.project.id}/webflow`;
     const choices = [
       ...(liveUrl ? [{ label: 'Live site', description: liveUrl.replace(/^https?:\/\//, ''), url: liveUrl }] : []),

@@ -36,125 +36,131 @@ preview: the customer's live site is whatever Webflow last published.
 
 ## Availability
 
-Prose below is written for the final state. A tool name that does not resolve on your key
-has not shipped on this server yet - never say the capability does not exist; use the
-dashboard fallback and file the gap. `confirm` marks the tools that stage a confirmation
-(the plugin ask list carries them as well); `Enterprise` marks a family Webflow serves
-only to Enterprise workspaces (`402 not_enterprise_plan_site` elsewhere); `OAuth` marks a
-call a site token cannot make.
+Every row is LIVE. The builder's Webflow ops registry holds 111 actions, one `webflow_*`
+tool each, and the index carries all 111: the nine beta SEO actions (page query, bulk
+metadata, page schema, llms.txt) landed 2026-09-06 and the content-source switch
+2026-09-08. A name that does not resolve on your key is a server that has not redeployed
+yet, never a missing capability: say so and file the gap. The gates, re-derived from the
+ops modules on 2026-09-10: `confirm` marks the 32 actions that stage a confirmation
+(`412 confirm_required` without `confirm: true`; the plugin ask list carries the same 32
+names); `OAuth` marks the 15 calls a site token cannot make; `Enterprise` marks the 14
+that Webflow serves only to Enterprise workspaces (`402 not_enterprise_plan_site`
+elsewhere); `secondary locale only` marks the 3 DOM writes that refuse the primary
+locale.
 
-| Tool | Status | Gate | Fallback until live |
-|---|---|---|---|
-| `webflow_site_list` | LIVE | - | - |
-| `webflow_site_get` | LIVE | - | - |
-| `webflow_site_domains_list` | LIVE | - | - |
-| `webflow_site_publish` | LIVE | confirm | - |
-| `webflow_token_introspect` | LIVE | - | - |
-| `webflow_token_authorized_by` | LIVE | OAuth | - |
-| `webflow_page_list` | LIVE | - | - |
-| `webflow_page_get` | LIVE | - | - |
-| `webflow_page_metadata_update` | LIVE | - | - |
-| `webflow_page_query` | INCOMING (WEBFLOW-3) | - | `webflow_page_list` and sort the rows yourself |
-| `webflow_page_metadata_update_bulk` | INCOMING (WEBFLOW-3) | - | `webflow_page_metadata_update` per page, or the SEO grid in the Webflow workspace |
-| `webflow_page_dom_get` | LIVE | - | - |
-| `webflow_page_dom_update` | LIVE | secondary locale only | - |
-| `webflow_page_customcode_get` | LIVE | OAuth | - |
-| `webflow_page_customcode_set` | LIVE | OAuth | - |
-| `webflow_page_customcode_delete` | LIVE | OAuth, confirm | - |
-| `webflow_page_schema_get` | INCOMING (WEBFLOW-3) | - | read the schema in the Designer's page settings |
-| `webflow_page_schema_set` | INCOMING (WEBFLOW-3) | - | paste the JSON-LD in the Designer's page settings |
-| `webflow_page_schema_query` | INCOMING (WEBFLOW-3) | - | read the schema in the Designer, page by page |
-| `webflow_page_schema_update_bulk` | INCOMING (WEBFLOW-3) | - | paste the JSON-LD in the Designer, page by page |
-| `webflow_llms_txt_get` | INCOMING (WEBFLOW-3) | Enterprise | read the file in Site settings |
-| `webflow_llms_txt_set` | INCOMING (WEBFLOW-3) | Enterprise | paste the file in Site settings |
-| `webflow_llms_txt_delete` | INCOMING (WEBFLOW-3) | Enterprise, confirm | remove the file in Site settings |
-| `webflow_component_list` | LIVE | - | - |
-| `webflow_component_content_get` | LIVE | - | - |
-| `webflow_component_content_update` | LIVE | secondary locale only | - |
-| `webflow_component_properties_get` | LIVE | - | - |
-| `webflow_component_properties_update` | LIVE | secondary locale only | - |
-| `webflow_cms_collection_list` | LIVE | - | - |
-| `webflow_cms_collection_get` | LIVE | - | - |
-| `webflow_cms_collection_create` | LIVE | - | - |
-| `webflow_cms_collection_update` | LIVE | - | - |
-| `webflow_cms_collection_delete` | LIVE | confirm | - |
-| `webflow_cms_field_create` | LIVE | - | - |
-| `webflow_cms_field_update` | LIVE | - | - |
-| `webflow_cms_field_delete` | LIVE | confirm | - |
-| `webflow_cms_item_list` | LIVE | - | - |
-| `webflow_cms_item_live_list` | LIVE | - | - |
-| `webflow_cms_item_get` | LIVE | - | - |
-| `webflow_cms_item_query` | LIVE | - | - |
-| `webflow_cms_item_create` | LIVE | - | - |
-| `webflow_cms_item_create_bulk` | LIVE | - | - |
-| `webflow_cms_item_update` | LIVE | - | - |
-| `webflow_cms_item_update_bulk` | LIVE | - | - |
-| `webflow_cms_item_delete` | LIVE | confirm | - |
-| `webflow_cms_item_delete_bulk` | LIVE | confirm | - |
-| `webflow_cms_item_publish` | LIVE | - | - |
-| `webflow_cms_item_unpublish` | LIVE | - | - |
-| `webflow_cms_item_unpublish_bulk` | LIVE | - | - |
-| `webflow_asset_list` | LIVE | - | - |
-| `webflow_asset_get` | LIVE | - | - |
-| `webflow_asset_upload` | LIVE | - | - |
-| `webflow_asset_update` | LIVE | - | - |
-| `webflow_asset_delete` | LIVE | confirm | - |
-| `webflow_asset_folder_list` | LIVE | - | - |
-| `webflow_asset_folder_create` | LIVE | - | - |
-| `webflow_script_list` | LIVE | OAuth | - |
-| `webflow_script_register_hosted` | LIVE | OAuth | - |
-| `webflow_script_register_inline` | LIVE | OAuth | - |
-| `webflow_site_customcode_get` | LIVE | OAuth | - |
-| `webflow_site_customcode_set` | LIVE | OAuth | - |
-| `webflow_site_customcode_delete` | LIVE | OAuth, confirm | - |
-| `webflow_customcode_blocks_list` | LIVE | OAuth | - |
-| `webflow_hiveku_snippet_install` | LIVE | OAuth | - |
-| `webflow_hiveku_snippet_remove` | LIVE | OAuth | - |
-| `webflow_google_tag_list` | LIVE | - | - |
-| `webflow_google_tag_upsert` | LIVE | - | - |
-| `webflow_google_tag_delete` | LIVE | confirm | - |
-| `webflow_form_list` | LIVE | - | - |
-| `webflow_form_get` | LIVE | - | - |
-| `webflow_form_submission_list` | LIVE | - | - |
-| `webflow_form_submission_get` | LIVE | - | - |
-| `webflow_form_submission_update` | LIVE | - | - |
-| `webflow_form_submission_delete` | LIVE | confirm | - |
-| `webflow_webhook_list` | LIVE | - | - |
-| `webflow_webhook_get` | LIVE | - | - |
-| `webflow_webhook_create` | LIVE | OAuth | - |
-| `webflow_webhook_update` | LIVE | OAuth, confirm | - |
-| `webflow_webhook_delete` | LIVE | confirm | - |
-| `webflow_comment_thread_list` | LIVE | - | - |
-| `webflow_comment_thread_get` | LIVE | - | - |
-| `webflow_comment_reply_list` | LIVE | - | - |
-| `webflow_comment_reply_create` | LIVE | - | - |
-| `webflow_comment_thread_resolve` | LIVE | - | - |
-| `webflow_ecommerce_settings_get` | LIVE | - | - |
-| `webflow_product_list` | LIVE | - | - |
-| `webflow_product_get` | LIVE | - | - |
-| `webflow_product_create` | LIVE | - | - |
-| `webflow_product_update` | LIVE | - | - |
-| `webflow_sku_create` | LIVE | - | - |
-| `webflow_sku_update` | LIVE | - | - |
-| `webflow_order_list` | LIVE | - | - |
-| `webflow_order_get` | LIVE | - | - |
-| `webflow_order_update` | LIVE | - | - |
-| `webflow_order_fulfill` | LIVE | confirm | - |
-| `webflow_order_unfulfill` | LIVE | - | - |
-| `webflow_order_refund` | LIVE | confirm | - |
-| `webflow_inventory_get` | LIVE | - | - |
-| `webflow_inventory_update` | LIVE | - | - |
-| `webflow_redirect_list` | LIVE | Enterprise | - |
-| `webflow_redirect_create` | LIVE | Enterprise | - |
-| `webflow_redirect_update` | LIVE | Enterprise | - |
-| `webflow_redirect_delete` | LIVE | Enterprise, confirm | - |
-| `webflow_robots_get` | LIVE | Enterprise | - |
-| `webflow_robots_replace` | LIVE | Enterprise, confirm | - |
-| `webflow_robots_update` | LIVE | Enterprise | - |
-| `webflow_robots_delete` | LIVE | Enterprise, confirm | - |
-| `webflow_wellknown_create` | LIVE | Enterprise | - |
-| `webflow_wellknown_delete` | LIVE | Enterprise, confirm | - |
-| `webflow_activity_log_list` | LIVE | Enterprise | - |
+| Tool | Status | Gate |
+|---|---|---|
+| `webflow_site_list` | LIVE | - |
+| `webflow_site_get` | LIVE | - |
+| `webflow_site_domains_list` | LIVE | - |
+| `webflow_site_publish` | LIVE | confirm |
+| `webflow_token_introspect` | LIVE | - |
+| `webflow_token_authorized_by` | LIVE | OAuth |
+| `webflow_project_cms_provider_set` | LIVE | confirm |
+| `webflow_page_list` | LIVE | - |
+| `webflow_page_get` | LIVE | - |
+| `webflow_page_metadata_update` | LIVE | - |
+| `webflow_page_query` | LIVE | - |
+| `webflow_page_metadata_update_bulk` | LIVE | - |
+| `webflow_page_dom_get` | LIVE | - |
+| `webflow_page_dom_update` | LIVE | secondary locale only |
+| `webflow_page_customcode_get` | LIVE | OAuth |
+| `webflow_page_customcode_set` | LIVE | OAuth, confirm |
+| `webflow_page_customcode_delete` | LIVE | OAuth, confirm |
+| `webflow_page_schema_get` | LIVE | - |
+| `webflow_page_schema_set` | LIVE | - |
+| `webflow_page_schema_query` | LIVE | - |
+| `webflow_page_schema_update_bulk` | LIVE | - |
+| `webflow_llms_txt_get` | LIVE | Enterprise |
+| `webflow_llms_txt_set` | LIVE | Enterprise, confirm |
+| `webflow_llms_txt_delete` | LIVE | Enterprise, confirm |
+| `webflow_component_list` | LIVE | - |
+| `webflow_component_content_get` | LIVE | - |
+| `webflow_component_content_update` | LIVE | secondary locale only |
+| `webflow_component_properties_get` | LIVE | - |
+| `webflow_component_properties_update` | LIVE | secondary locale only |
+| `webflow_cms_collection_list` | LIVE | - |
+| `webflow_cms_collection_get` | LIVE | - |
+| `webflow_cms_collection_create` | LIVE | - |
+| `webflow_cms_collection_update` | LIVE | - |
+| `webflow_cms_collection_delete` | LIVE | confirm |
+| `webflow_cms_field_create` | LIVE | - |
+| `webflow_cms_field_update` | LIVE | - |
+| `webflow_cms_field_delete` | LIVE | confirm |
+| `webflow_cms_item_list` | LIVE | - |
+| `webflow_cms_item_live_list` | LIVE | - |
+| `webflow_cms_item_get` | LIVE | - |
+| `webflow_cms_item_query` | LIVE | - |
+| `webflow_cms_item_create` | LIVE | - |
+| `webflow_cms_item_create_bulk` | LIVE | - |
+| `webflow_cms_item_update` | LIVE | - |
+| `webflow_cms_item_update_bulk` | LIVE | - |
+| `webflow_cms_item_delete` | LIVE | confirm |
+| `webflow_cms_item_delete_bulk` | LIVE | confirm |
+| `webflow_cms_item_publish` | LIVE | confirm |
+| `webflow_cms_item_unpublish` | LIVE | confirm |
+| `webflow_cms_item_unpublish_bulk` | LIVE | confirm |
+| `webflow_asset_list` | LIVE | - |
+| `webflow_asset_get` | LIVE | - |
+| `webflow_asset_upload` | LIVE | - |
+| `webflow_asset_update` | LIVE | - |
+| `webflow_asset_delete` | LIVE | confirm |
+| `webflow_asset_folder_list` | LIVE | - |
+| `webflow_asset_folder_create` | LIVE | - |
+| `webflow_script_list` | LIVE | OAuth |
+| `webflow_script_register_hosted` | LIVE | OAuth |
+| `webflow_script_register_inline` | LIVE | OAuth |
+| `webflow_site_customcode_get` | LIVE | OAuth |
+| `webflow_site_customcode_set` | LIVE | OAuth, confirm |
+| `webflow_site_customcode_delete` | LIVE | OAuth, confirm |
+| `webflow_customcode_blocks_list` | LIVE | OAuth |
+| `webflow_hiveku_snippet_install` | LIVE | OAuth, confirm |
+| `webflow_hiveku_snippet_remove` | LIVE | OAuth |
+| `webflow_google_tag_list` | LIVE | - |
+| `webflow_google_tag_upsert` | LIVE | confirm |
+| `webflow_google_tag_delete` | LIVE | confirm |
+| `webflow_form_list` | LIVE | - |
+| `webflow_form_get` | LIVE | - |
+| `webflow_form_submission_list` | LIVE | - |
+| `webflow_form_submission_get` | LIVE | - |
+| `webflow_form_submission_update` | LIVE | - |
+| `webflow_form_submission_delete` | LIVE | confirm |
+| `webflow_webhook_list` | LIVE | - |
+| `webflow_webhook_get` | LIVE | - |
+| `webflow_webhook_create` | LIVE | OAuth, confirm |
+| `webflow_webhook_update` | LIVE | OAuth, confirm |
+| `webflow_webhook_delete` | LIVE | confirm |
+| `webflow_comment_thread_list` | LIVE | - |
+| `webflow_comment_thread_get` | LIVE | - |
+| `webflow_comment_reply_list` | LIVE | - |
+| `webflow_comment_reply_create` | LIVE | - |
+| `webflow_comment_thread_resolve` | LIVE | - |
+| `webflow_ecommerce_settings_get` | LIVE | - |
+| `webflow_product_list` | LIVE | - |
+| `webflow_product_get` | LIVE | - |
+| `webflow_product_create` | LIVE | - |
+| `webflow_product_update` | LIVE | - |
+| `webflow_sku_create` | LIVE | - |
+| `webflow_sku_update` | LIVE | - |
+| `webflow_order_list` | LIVE | - |
+| `webflow_order_get` | LIVE | - |
+| `webflow_order_update` | LIVE | - |
+| `webflow_order_fulfill` | LIVE | confirm |
+| `webflow_order_unfulfill` | LIVE | - |
+| `webflow_order_refund` | LIVE | confirm |
+| `webflow_inventory_get` | LIVE | - |
+| `webflow_inventory_update` | LIVE | - |
+| `webflow_redirect_list` | LIVE | Enterprise |
+| `webflow_redirect_create` | LIVE | Enterprise, confirm |
+| `webflow_redirect_update` | LIVE | Enterprise |
+| `webflow_redirect_delete` | LIVE | Enterprise, confirm |
+| `webflow_robots_get` | LIVE | Enterprise |
+| `webflow_robots_replace` | LIVE | Enterprise, confirm |
+| `webflow_robots_update` | LIVE | Enterprise, confirm |
+| `webflow_robots_delete` | LIVE | Enterprise, confirm |
+| `webflow_wellknown_create` | LIVE | Enterprise, confirm |
+| `webflow_wellknown_delete` | LIVE | Enterprise, confirm |
+| `webflow_activity_log_list` | LIVE | Enterprise |
 
 Webhooks in that table are for FOREIGN URLs only. Hiveku registers its own receiver on
 the site's connection (thirteen `webflow*Trigger` workflow nodes fire from it, verified,
@@ -163,9 +169,24 @@ deduped and bound to the project), so reacting to a site event is an automation 
 `webhookTrigger` URL: that creates a second, unverified delivery of an event Hiveku
 already has.
 
-The nine INCOMING names are spelled here and nowhere else on purpose (the rule in
-`test/pending-tools.mjs`): the rest of this file, the hub and the commands describe those
-capabilities in words and point at this table, so a rename before they land is one edit.
+The 32 that ask, since builder 93327517a (2026-09-09): `webflow_asset_delete`,
+`webflow_cms_collection_delete`, `webflow_cms_field_delete`, `webflow_cms_item_delete`,
+`webflow_cms_item_delete_bulk`, `webflow_cms_item_publish`, `webflow_cms_item_unpublish`,
+`webflow_cms_item_unpublish_bulk`, `webflow_form_submission_delete`,
+`webflow_google_tag_delete`, `webflow_google_tag_upsert`,
+`webflow_hiveku_snippet_install`, `webflow_llms_txt_delete`, `webflow_llms_txt_set`,
+`webflow_order_fulfill`, `webflow_order_refund`, `webflow_page_customcode_delete`,
+`webflow_page_customcode_set`, `webflow_project_cms_provider_set`,
+`webflow_redirect_create`, `webflow_redirect_delete`, `webflow_robots_delete`,
+`webflow_robots_replace`, `webflow_robots_update`, `webflow_site_customcode_delete`,
+`webflow_site_customcode_set`, `webflow_site_publish`, `webflow_webhook_create`,
+`webflow_webhook_delete`, `webflow_webhook_update`, `webflow_wellknown_create`,
+`webflow_wellknown_delete`. In plain terms: item publish and unpublish, the custom code
+and Google tag writes, the Hiveku snippet install, the llms.txt, robots, redirect and
+well-known writes and the content-source switch now ask before running, alongside every
+delete, the site publish and the two money moves that always did. Each answers `412
+confirm_required` until `confirm: true` is sent: show what will change, get the yes, then
+send it, never first.
 
 ## Resolve the project
 
@@ -177,7 +198,8 @@ capabilities in words and point at this table, so a rename before they land is o
   and a website UUID 404s against them.
 - A Webflow site with no Hiveku project yet is registered with `site_create_external({
   name, external_website_url, external_platform: "webflow" })`, then connected in the
-  dashboard (below). Registering does not connect.
+  dashboard (below). Registering does not connect, and connecting does not switch the
+  project's content source: that is `webflow_project_cms_provider_set` (the CMS section).
 
 ## Connection and auth kind
 
@@ -219,11 +241,14 @@ Every refusal is a code you can act on. Read the code before the message.
 Every write lands on the STAGED site first. Visitors see the LIVE copy, which changes only
 when something publishes:
 
-- CMS items: `webflow_cms_item_publish({ project_id, item_ids })` publishes staged items
-  by id (100 per call) without republishing the site. `webflow_cms_item_list` reads the
-  staged copies, `webflow_cms_item_live_list` the live ones; an item present in the first
-  and absent from the second is staged and unpublished. Items still `is_draft` are skipped
-  by the publish; update them with `is_draft: false` first.
+- CMS items: `webflow_cms_item_publish({ project_id, collection_id, item_ids, confirm:
+  true })` publishes staged items by id (100 per call) without republishing the site. It
+  asks before running because the items go in front of visitors immediately, and so do
+  `webflow_cms_item_unpublish` and `webflow_cms_item_unpublish_bulk`, which take a live
+  copy down just as immediately (the staged item is kept). `webflow_cms_item_list` reads
+  the staged copies, `webflow_cms_item_live_list` the live ones; an item present in the
+  first and absent from the second is staged and unpublished. Items still `is_draft` are
+  skipped by the publish; update them with `is_draft: false` first.
 - Everything else (page titles and SEO, DOM text, custom code, redirects, robots, schema,
   llms.txt): `webflow_site_publish({ project_id, confirm: true })` publishes the site to
   its custom domains (or the webflow.io subdomain when it has none). One publish per
@@ -270,32 +295,45 @@ Webflow's Data API has no call for these; say so and hand them to the designer:
 - One page: `webflow_page_metadata_update({ project_id, page_id, title?, slug?, seo?,
   openGraph? })` - only the fields passed change, and the edit is staged until a site
   publish.
-- Many pages: the bulk metadata write (INCOMING in the table, up to 100 pages per call)
-  or, until it lands, one `webflow_page_metadata_update` per page inside the rate budget.
-  The SEO grid's Save all is the dashboard equivalent.
-- Sorting pages by last change and filtering by a date window is the page query (INCOMING
-  in the table); until then read `webflow_page_list` and sort by `lastUpdated` yourself.
+- Many pages: `webflow_page_metadata_update_bulk({ project_id, pages: [{ id, title?,
+  slug?, seo?, openGraph?, locale_id? }] })`, up to 100 pages per call. `seo` and
+  `openGraph` are nested objects, never flat keys (an unknown key is refused with a 422
+  naming the entry, not dropped); only the keys passed change; the write is staged until
+  a site publish. The SEO grid's Save all is the dashboard equivalent.
+- Sorting pages by creation or last change, filtering by a date window, or finding one
+  page by slug: `webflow_page_query({ project_id, sort_by?, sort_order?, updated_after?,
+  updated_before?, created_after?, created_before?, slug?, offset?, limit? })`, 100 per
+  page. The slug lookup is a client-side scan capped at 500 pages or 10 requests: an
+  empty list with `slug_scan.capped: true` means the slug was not in the pages scanned,
+  not that the page does not exist.
 - The doctrine for what a title or description should say is
   `hiveku-seo-agency/references/on-page-optimization.md`; this file only carries the
   write path.
 
 ## Schema markup (JSON-LD) and llms.txt
 
-- Schema markup: one JSON-LD object per page, read and written per page or for up to 100
-  pages at once by the schema tools in the Availability table (INCOMING). The page editor's
-  Schema tab in the Webflow workspace is the dashboard equivalent and validates before
-  saving: a JSON object or a `<script type="application/ld+json">` block, at most 60 KB,
-  32 levels deep and 5000 nodes. A page that carries no schema of its own may INHERIT the
-  site-wide default, which the read reports as inherited; clearing a page's schema returns
-  it to that default. Until the tools land, the schema is read and pasted in the
-  Designer's page settings.
+- Schema markup: one JSON-LD object per page. Read one with `webflow_page_schema_get({
+  project_id, page_id, locale_id? })` (`json_ld`, `raw_json_ld` when the Designer stored
+  several script blocks, `is_inherited`) or up to 100 at once with
+  `webflow_page_schema_query({ project_id, page_ids, locale_id? })` (comma-separated ids
+  from `webflow_page_list`). Write one with `webflow_page_schema_set({ project_id,
+  page_id, json_ld | json_ld_text | clear: true, locale_id? })`, exactly one of the three:
+  an object, a raw JSON string or a `<script type="application/ld+json">` block with its
+  closing tag, or the clear. Up to 25 at once: `webflow_page_schema_update_bulk({
+  project_id, pages: [{ id, json_ld | json_ld_text | clear, locale_id? }] })`. Limits 60
+  KB, 32 levels deep and 5000 nodes per page; the page editor's Schema tab in the Webflow
+  workspace validates the same way. A page that carries no schema of its own may INHERIT
+  the site-wide default, which the read reports as inherited; clearing a page's schema
+  returns it to that default. Every write is staged until a site publish.
 - llms.txt: the AI-crawler guidance file at the site root, Enterprise workspaces only
-  (`402 not_enterprise_plan_site` elsewhere). Read, write (plain text, at most 100,000
-  characters) and delete through the llms.txt tools in the Availability table (INCOMING);
-  the delete stages a confirmation because crawlers lose the guidance file until one is
-  written again. The AEO lane (`seo_aeo_readiness`) is where the file's content comes from;
-  the workspace's Redirects page has a section that generates it. Both writes are staged
-  until a site publish.
+  (`402 not_enterprise_plan_site` elsewhere). `webflow_llms_txt_get({ project_id })`
+  reads it as `{ content, exists }`; `webflow_llms_txt_set({ project_id, file_data })`
+  writes or replaces it (plain text, under 100 kB); `webflow_llms_txt_delete({
+  project_id })` removes it. Both writes ask before running: the set replaces the
+  guidance every AI crawler reads from the next publish, and the delete leaves none until
+  a file is written again. The AEO lane (`seo_aeo_readiness`) is where the file's content
+  comes from; the workspace's Redirects page has a section that generates it. Both writes
+  are staged until a site publish.
 
 ## Custom code and the Hiveku analytics snippet
 
@@ -304,18 +342,24 @@ Webflow's Data API has no call for these; say so and hand them to the designer:
 - Registered scripts: `webflow_script_list` reads what is registered to the site;
   `webflow_script_register_hosted` / `webflow_script_register_inline` register one;
   `webflow_site_customcode_set` REPLACES the full list of scripts applied site-wide (read
-  `webflow_site_customcode_get` first and merge, never write from memory);
-  `webflow_site_customcode_delete` removes every applied script and stages a
-  confirmation. Per page: `webflow_page_customcode_get`, `webflow_page_customcode_set`,
-  `webflow_page_customcode_delete`.
+  `webflow_site_customcode_get` first and merge, never write from memory) and asks before
+  running, because a script left out of the list stops on every page;
+  `webflow_site_customcode_delete` removes every applied script, the analytics and
+  annotation snippets included, and asks as well. Per page: `webflow_page_customcode_get`,
+  then `webflow_page_customcode_set` (asks; the same replace semantics on one page) and
+  `webflow_page_customcode_delete` (asks).
 - The Hiveku analytics snippet: `webflow_hiveku_snippet_install({ project_id, kind:
-  "analytics" })` registers the HivekuAnalytics loader as an inline script and applies it
-  site-wide (header), keeping other applied scripts; `kind: "bridge"` installs the
-  annotation bridge for Review and annotate. `webflow_hiveku_snippet_remove` reverses it.
-  Then publish. `424 snippet_apply_failed` means registered but not applied; run it again.
+  "analytics", confirm: true })` registers the HivekuAnalytics loader as an inline script
+  and applies it site-wide (header), keeping other applied scripts. It asks before
+  running: the loader lands in the header of every page and collects visitor analytics
+  from the next publish. `kind: "bridge"` installs the annotation bridge for Review and
+  annotate. `webflow_hiveku_snippet_remove` reverses it and does not ask. Then publish.
+  `424 snippet_apply_failed` means registered but not applied; run it again.
 - Google tags (GA4, Google Ads, GTM) go through Webflow's native integration:
-  `webflow_google_tag_list`, `webflow_google_tag_upsert`, `webflow_google_tag_delete`
-  (confirm). These are not registered scripts and do not appear in `webflow_script_list`.
+  `webflow_google_tag_list`, then `webflow_google_tag_upsert` (asks: it adds a tag that
+  collects visitor data on every page from the next publish) and
+  `webflow_google_tag_delete` (asks: tracking through the tag stops on the next publish).
+  These are not registered scripts and do not appear in `webflow_script_list`.
 
 ### Is Hiveku analytics installed?
 
@@ -335,6 +379,16 @@ status field:
 
 ## CMS on a Webflow project
 
+- The content source: `webflow_project_cms_provider_set({ project_id, cms_provider:
+  "webflow" | "native", site_id?, confirm: true })` points the project's CMS at Webflow
+  or back at Hiveku's native files; `cms_provider` on the `sites_list` row shows the
+  current value. It needs a bound site: `"webflow"` binds the site the call resolves
+  (`site_id`, else the project's bound site, else the connection's only one) and refuses
+  `site_required` when the connection reaches several sites and none is named; the
+  connection also needs `cms:read` so the content routes can read collections through
+  it. It asks before running because every later content write for the project lands on
+  the customer's live Webflow CMS. Connecting in the panel does not switch the source;
+  this call does.
 - The generic `cms_*` tools serve a Webflow-backed project through the provider seam:
   `cms_list_collections`, `cms_list_entries`, `cms_read_entry`, `cms_write_entry` and the
   rest read and write Webflow collections, with the collection SLUG as `collection_id`.
@@ -372,17 +426,25 @@ status field:
   `webflow*Trigger` nodes, with `webflowFormSubmissionTrigger` / `formSubmittedTrigger`
   firing per submission through the Forms ledger.
 - Webhooks: `webflow_webhook_list`, `webflow_webhook_get`, `webflow_webhook_create`
-  (OAuth), `webflow_webhook_update` (OAuth, confirm: Webflow re-creates the webhook, and a
-  failed re-registration leaves none), `webflow_webhook_delete` (confirm).
+  (OAuth, confirm: the receiver starts delivering immediately with no publish, and a
+  form_submission webhook sends every lead's name, email and phone to the URL named),
+  `webflow_webhook_update` (OAuth, confirm: Webflow re-creates the webhook, and a failed
+  re-registration leaves none), `webflow_webhook_delete` (confirm).
 - Comments: `webflow_comment_thread_list`, `webflow_comment_thread_get`,
   `webflow_comment_reply_list`, `webflow_comment_reply_create` (posts as the authorizing
   user), `webflow_comment_thread_resolve`.
 - Ecommerce: settings, products and SKUs, orders (`webflow_order_fulfill` and
   `webflow_order_refund` are money moves and stage a confirmation), inventory. Order rows
   carry buyer data; same care as submissions.
-- Redirects, robots.txt and well-known files are Enterprise-only. `webflow_robots_replace`
-  removes every rule not in the request (confirm); `webflow_robots_update` merges;
-  `webflow_robots_delete` removes listed rules (confirm). Every one of these lands on the
+- Redirects, robots.txt and well-known files are Enterprise-only, and every write in the
+  three families except `webflow_redirect_update` asks before running:
+  `webflow_redirect_create` (a 301 sends real traffic elsewhere after the next publish)
+  and `webflow_redirect_delete` (the old URL 404s); `webflow_robots_replace` removes every
+  rule not in the request, `webflow_robots_update` merges (a wrong Disallow deindexes the
+  site) and `webflow_robots_delete` removes listed rules (a user agent left with none
+  becomes unrestricted); `webflow_wellknown_create` creates or REPLACES a file under
+  `/.well-known/` (a domain verification another service depends on can be overwritten)
+  and `webflow_wellknown_delete` removes listed files. Every one of these lands on the
   next site publish, and `project_redirects_*` / `project_redirects_deploy` do not apply
   to a Webflow project.
 
