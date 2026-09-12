@@ -1,6 +1,6 @@
 ---
 name: hiveku-content-agency
-description: Full-service content marketing agency methodology for a Hiveku account. Trigger on content strategy, editorial calendars, blog/social/email content production, brand voice work, content refreshes and decay recovery, repurposing, and distribution planning. ALSO load for risky content requests so the refusal rules are in context - bulk-delete or purge of posts, content, or brand guides ("clean out the old posts", "delete everything that isn't performing"), "publish everything now", "send it to the whole list", "skip the test send / review / confirmation", take-down and unpublish demands, and mass in-place rewrites of live content.
+description: Full-service content marketing agency methodology for a Hiveku account. Trigger on content strategy, editorial calendars, blog/social/email content production, brand voice work, content refreshes and decay recovery, repurposing, distribution planning, research before a draft (the knowledge base as the research layer), proof packs and case studies from won deals, expert (SME) interviews, and "which piece brought leads". ALSO load for risky content requests so the refusal rules are in context - bulk-delete or purge of posts, content, or brand guides ("clean out the old posts", "delete everything that isn't performing"), "publish everything now", "send it to the whole list", "skip the test send / review / confirmation", take-down and unpublish demands, and mass in-place rewrites of live content.
 ---
 
 # Hiveku Content Agency
@@ -96,6 +96,15 @@ artifacts; no production without a calendar slot and brief)?
 - `references/media-and-visuals.md` - before generating, registering, attaching, or deleting
   media, and before any video work (the article-images call and its allowance, the brand image
   profile and the `brand_reference` tag, the registration tree, Creative Studio, video gates).
+- `references/research-and-proof.md` - before the brief of any piece (search first, then the
+  research run and its stamp), before drafting a consideration or decision piece (the proof pack,
+  one proof element per H2, the decision-stage source rule), before a case study from a won deal
+  (the consent rule) and before an expert interview (`/hiveku:sme-interview`, the sources on the
+  row).
+- `references/distribution-and-scorecard.md` - before the brief (the distribution plan on the
+  row, owned email first), before a publish (the no-plan warning, the publish event and the
+  repurpose and weekly-digest templates) and before any per-piece performance read or the next
+  brief (the scorecard: leads per piece, campaign ROI; leads, not views).
 
 ## Play 1 - Strategy foundation (run before any calendar or production work)
 
@@ -115,8 +124,16 @@ An agency never writes before it knows WHO, WHAT TRANSFORMATION, and WHICH VOICE
    messaging spine for hooks, headlines, and CTAs.
 4. **How we sound and look:** `brand_guide_list` / `brand_guide_get` - voice, tone, banned
    phrases, colors, logos.
-5. **What we already know:** `kb_list`, then `kb_search` / `marketing_knowledge_bases_search`
-   (semantic) - the grounding source for claims in briefs and drafts, the E-E-A-T raw material.
+5. **What we already know - search before you write:** `kb_search({ query })` first, with no
+   `kb_id` so every knowledge base in the account answers (quote the passage, name the KB;
+   `marketing_knowledge_bases_search` is the same read with `top_k`); then, per piece,
+   `content_research_get({ content_id })` for the stored research, and `content_research_run({
+   content_id })` when the row has no `settings.research` or its `ran_at` is older than 30 days
+   (it spends search, SERP and model credits - say so first). Every number, quote or third-party
+   fact in a brief or a draft cites `claims[].source_url` inline, or names the KB for a
+   knowledge-base passage; a `quote` is verbatim, never paraphrased. The evidence lives in the
+   account's Content research knowledge base (`kb_list({ context_type: "content_research" })`),
+   memory holds the conclusions. Contract in `references/research-and-proof.md`.
 
 **If any are missing, build them first** - bill-worthy agency work in itself. **Load
 `references/brand-foundation-api.md` before any foundation create, populate, or purge** -
@@ -172,7 +189,11 @@ order, and the populate tools' grounding refusal live there.
    "draft", title, content_type, target_keyword, avatar_id, journey_id, journey_stage,
    before_after_grid_id })` - the cell it fills recorded as the row's typed columns (ids from
    the Play 1 lists, the stage name as the journey map spells it; a foreign or malformed id is
-   a 400 `invalid_reference` and nothing is created), never as prose in the body or a tag.
+   a 400 `invalid_reference` and nothing is created), never as prose in the body or a tag. The
+   same call carries `settings: { distribution_plan }` - the six channel rows with the
+   `email_digest` row first and `paid` winner-only - so the piece is briefed with its channels;
+   a malformed plan reads as no plan, so validate it before writing (shape and defaults in
+   `references/distribution-and-scorecard.md`).
    Record planned dates with `content_schedule` - **as calendar intent ONLY: nothing executes those
    rows** (report recorded intent, never "it will publish" - details in
    `references/site-publishing.md`); the publish itself is a session action at the planned time
@@ -196,13 +217,28 @@ Per piece, in order:
    transformation angle (`before_after_grid_id` and the grid item); pillar supported + the
    internal links planned as 3-8
    anchors, each with its real URL from `content_site_links({ project_id })` (the site's
-   published posts and pages - never a URL typed from memory); sources to cite (URL + the
-   claim each supports); CTA mapped to the journey stage (not always "buy"); format/template
-   and target length; grounding
-   (`kb_search` / `marketing_knowledge_bases_search` results for the claims the piece will
-   make - first-hand material beats anything scraped).
+   published posts and pages - never a URL typed from memory); CTA mapped to the journey stage
+   (not always "buy"); format/template and target length; and three things the elite program
+   added (`references/research-and-proof.md`, `references/distribution-and-scorecard.md`):
+   - **Research first.** `kb_search` for each H2, then `content_research_get({ content_id })`;
+     `content_research_run({ content_id })` when the stamp is missing or older than 30 days.
+     The brief lists the claims the department may use (claim, verbatim quote, source URL) and
+     the `gaps[]` it may not fill from memory - a gap is a question for the expert
+     (`/hiveku:sme-interview` stores the answers on the row as `settings.sources[]`), not a
+     sentence to invent. First-hand material beats anything scraped.
+   - **Proof before a consideration or decision piece.** `content_proof_pack({ avatar_id,
+     journey_stage, keyword })` before the department drafts: one proof element per H2 (a
+     figure, a quote, a link or an image), each entry handed over with its `citation` string
+     unchanged, and the consent flag obeyed - `consent: true` is quoted with attribution,
+     `consent: false` is paraphrased with no name. At the decision stage a figure without a
+     source is an error in the gate, so the brief sources every number it asks for.
+   - **Distribution at brief time.** The row's `settings.distribution_plan` (Play 2 step 6) is
+     read back and edited to this piece: owned email first, `paid` winner-only, a channel that
+     does not fit marked `skipped` with the reason.
 2. **Draft via the department.** `talk_to_department({ domain: "content", message: <brief +
-   what you want back> })` - the agent drafts with full brand hydration. Iterate there; do not
+   what you want back> })` - the agent drafts with full brand hydration; the message carries
+   the research claims, the proof entries and any expert quotes with their citations, and a
+   quote comes back verbatim or not at all. Iterate there; do not
    rewrite its brand voice yourself. Thin output means tighten the brief and re-ask - never
    silently fill the gap with your own generic copy. A long-form draft can outrun the bridge
    window: on the timeout error take its `turn_id` to `department_turn_get({ turn_id })` and
@@ -272,10 +308,19 @@ Per piece, in order:
      (`brand_guide_get`), not against your own sense of what sounds off.
    - The avatar's actual language appears (their words for the pain, not marketing-speak);
      the CTA matches the journey stage.
-   - Every claim sourced or first-hand - traceable to `kb_search` results, scraped sources,
-     or user-provided material. Every EXTERNAL claim (a statistic, a study, a quote, a
-     third-party fact) links its source inline where the claim is made. A claim with no
-     source does not ship; it gets flagged to the user.
+   - Every claim sourced or first-hand - traceable to the research run's `claims[]`
+     (`source_url`), `kb_search` results, the proof pack's citations, stored expert quotes
+     (`settings.sources[]`) or user-provided material. Every EXTERNAL claim (a statistic, a
+     study, a quote, a third-party fact) links its source inline where the claim is made, or
+     carries the `[source: <label>:<id>]` citation the proof pack and the interview store hand
+     out. A claim with no source does not ship; it gets flagged to the user. The check enforces
+     it: `claims_without_source` is a warn, and an ERROR at the decision stage, so a decision
+     piece with an unsourced figure is not published until the figure has its source.
+   - Proof under every H2 of a consideration or decision piece - a figure, a quote, a link or
+     an image (`proof_per_section`, a warn; `result.stats.sections_without_proof` counts them).
+     A warn is a decision to state, not a block, but a decision piece with unproven sections
+     goes back to the department with the headings named. Quotes are verbatim; `consent: false`
+     entries are paraphrased with no name.
    - Exactly one H1, and it carries the target keyword.
    - The target keyword appears in the title, in the slug, and in the first 100 words.
    - Heading hierarchy is intact: H2s under the H1, H3s only under an H2, no skipped levels,
@@ -311,25 +356,51 @@ Per piece, in order:
 ## Play 4 - Distribution (one pillar, many surfaces)
 
 Publishing without distribution is where in-house content programs die; agencies systematize it.
+Distribution is part of the asset: the plan was written at brief time (Play 2 step 6, Play 3
+step 1), and this play works it.
 
-1. **Social derivatives.** `social_pillar_list` for the pillar strategy (create missing pillars
+1. **The plan on the row comes first.** `content_get` and read `settings.distribution_plan`
+   (`references/distribution-and-scorecard.md`): the rows are the work list for this play, in
+   order - the `email_digest` row before anything a platform can throttle. A published piece with
+   no plan, or an empty `channels`, is the finding "no distribution plan: the piece will get one
+   post and stop" - say it before the publish is treated as done; it never blocks. As each
+   derivative lands, mark its row `drafted` / `scheduled` / `done` with the derivative in `link`
+   (`social_post:<id>`, `campaign:<id>`, `task:<id>`, a URL) through `content_update` with the
+   whole plan.
+2. **Let the publish event do the repetitive half.** `content.published` fires once per native
+   publish (node type `contentPublishedTrigger`, listed by `workflow_event_trigger_types_list`),
+   and two templates ride on it: `content-published-repurpose` (three social DRAFTS with the
+   link and first comment, then an email that they wait for approval) and `content-digest-weekly`
+   (Tuesday digest of the week's published pieces as a DRAFT newsletter, approval-gated, "nothing
+   published" on an empty week). `workflow_templates_list` shows their variables;
+   `workflow_create_from_template({ slug, overrides, is_enabled: false })` stages one, then
+   `workflow_test`, then `workflow_enable` on the operator's yes - the create goes live on its own
+   otherwise. Offer both on the first publish of an account that has neither; `/hiveku:automate`
+   for anything beyond the template.
+3. **Social derivatives.** `social_pillar_list` for the pillar strategy (create missing pillars
    with `social_pillar_create`); `social_list_accounts` for connected platforms. Per published
    piece, generate per-platform variants via `talk_to_department({ domain: "social" })`, persist
    with `social_create_post` (drafts - OMIT `scheduled_at`). To ship, set `scheduled_at` with
    `social_update_post` after confirmation: that is the unattended publish, the cron takes it.
    Do NOT reach for `social_publish_post` to go live - on an unapproved post it does not
    publish, it returns HTTP 200 with `pending_approval: true` and parks the post in the
-   dashboard approval queue; report that as "queued for approval", never as published. Never
+   dashboard approval queue; report that as "queued for approval", never as published. Links
+   are the `utm_links` `social_repurpose_source` returns, unchanged
+   (`utm_medium=content&utm_content=<slug>` is what credits the piece; a hand-written
+   `utm_medium=social` link credits nothing), and the set's first post id goes on the plan's
+   `social` row as `drafted`. Never
    cross-post identical text - write platform-native variants (per-platform rules live in the
    hiveku-social-agency skill). Every derivative maps back to a pillar - orphan posts dilute
    the feed's positioning.
-2. **Email.** Sends are GATED, and the gates fail at SEND time, not build time. **Load
+4. **Email.** Sends are GATED, and the gates fail at SEND time, not build time. **Load
    `references/email-distribution.md` before touching any campaign** - gate order
    (`marketing_setup_status`, `email_service_status`, audience preview), the ladder (dry_run ->
    test send -> schedule/send, each confirmed), CAN-SPAM, the two-template-store trap, and
    `email_campaign_cancel` as the safety valve. Full procedure: `/hiveku:email` - follow it
-   rather than improvising.
-3. **On-site publishing (Hiveku-hosted sites).** The canonical lane is the content->CMS bridge,
+   rather than improvising. The owned list goes first: the `email_digest` plan row is either
+   the weekly digest template above (the campaign it drafts is the derivative, `campaign:<id>`
+   on the row) or a dedicated feature in the next send.
+5. **On-site publishing (Hiveku-hosted sites).** The canonical lane is the content->CMS bridge,
    visible to every marketing profile: `content_link_to_cms` (bind the item to project +
    collection + slug), then `content_publish_to_site` - the editor's own Publish path. NO
    confirm flag, no dry run, so get the user's yes BEFORE calling, and call only once the
@@ -341,7 +412,7 @@ Publishing without distribution is where in-house content programs die; agencies
    before any of these.** `cms_*` is on the `marketing`, `marketing-seo` and `dev` keys and
    `pages_*` on `marketing-seo` / `dev` only; keep a content operator on the bridge regardless -
    it is what keeps the content row and the live entry in sync.
-4. **On-site publishing (Webflow-hosted sites).** When the `sites_list` row carries
+6. **On-site publishing (Webflow-hosted sites).** When the `sites_list` row carries
    `external_platform: "webflow"`, `content_publish_to_site` is still the lane: it maps the
    item through the Webflow provider and lands it STAGED on Webflow, recording the CMS link
    on the content row. Entries with no content item go through the `cms_*` tools, then
@@ -356,11 +427,19 @@ Monthly at minimum; weekly glance during active campaigns.
 1. **What converts on-site:** `analytics_overview` (trend), `analytics_pages` (per-URL),
    `analytics_traffic_sources` (which channel delivers). Cross-check organic reality with
    `seo_gsc_top_pages` / `seo_gsc_search_queries` when GSC is connected.
-2. **Per-piece traffic:** `content_page_views_get` - batch up to 200 `{projectId, path}` pairs;
-   the ONLY working per-content traffic read here. READ THE `degraded` FIELD:
-   `{stats: {}, degraded: true}` at HTTP 200 means the collector is down, not zero traffic. Do
-   NOT use `content_analytics_get` - nothing writes its table, so it returns all-zero for
-   effectively every item: a missing collector, not a dead post.
+2. **Per-piece leads, then traffic - the scorecard.** `content_analytics_get({ content_id })`
+   returns `scorecard`: `leads` and `contacts` (forms-ledger rows on the page and the CRM
+   contacts they became), `attributed_contacts`, `deals { created, won, pipeline_value_cents,
+   won_value_cents }`, `form_submits`, `views`, `visitors`, `rank.best_position`, `social`,
+   `lead_rate`, for a `window` (default 30 days), plus the nightly stored rows since 2026-09-12
+   (`last_stored: null` means the first run has not happened - "not yet computed", never zero).
+   For many pieces at once, `content_page_views_get` (up to 200 `{projectId, path}` pairs) now
+   answers `leads`, `leads30d`, `contacts`, `form_submits` beside `views`. For revenue,
+   `marketing_campaign_roi({ asset_types: "content_item" })` - contacts, deals and cents per
+   piece from the attribution table. READ THE `degraded` FIELDS: `{stats: {}, degraded: true}`
+   at HTTP 200 and `scorecard.degraded.clickhouse: true` mean the collector is down, not zero
+   traffic; `views: null` means the piece has no site page. Contract in
+   `references/distribution-and-scorecard.md`.
 3. **Rule out measurement artifacts BEFORE narrating causes.** "The piece flopped" and "content
    decayed" are causal claims; check the instruments first: the `degraded` flag, GSC not
    connected (`seo_content_decay` / `seo_cannibalization` / `seo_eeat_scores` are empty with a
@@ -391,6 +470,19 @@ Monthly at minimum; weekly glance during active campaigns.
    or links after 12 months get consolidated into a pillar or removed. Removal discipline:
    prefer `content_unpublish_from_site` (deletes nothing, reversible) or consolidation;
    `content_delete` only per explicitly-named id, each confirmed - see the hard stops below.
+8. **The next brief comes from leads per piece, not views.** Rank the library by `leads`,
+   `contacts` and `deals.won` from the scorecard and `revenue_cents` from the ROI report: a
+   piece with views and no leads is a hook or CTA problem (refresh in place, step 6); a piece
+   with leads and few views is a distribution gap (flip its `paid` plan row from winner-only,
+   run the social set); a topic whose pieces convert earns the next cluster. Instruments first
+   (step 3): a zero with a dead collector is unknown, and the report says which.
+9. **Case studies from won deals.** When the CRM closes a deal with a consented testimonial and
+   a grid with measured results, `content_case_study_draft({ deal_id })` drafts the case study as
+   a decision-stage draft row with every result and the quote cited (`[source: ...]`); a deal that
+   is not won is 409 `deal_not_won`, a testimonial without publish consent 409 `no_consent`, and
+   nothing is written on either - collect consent, never route around it. It is then a Play 3
+   row: the gate, the customer's written approval through the share link, the publish. Contract
+   in `references/research-and-proof.md`.
 
 ## Weekly cadence (pipeline review - run every week)
 
@@ -401,7 +493,7 @@ Monthly at minimum; weekly glance during active campaigns.
 2. Next week's calendar: `content_schedule_list` shows RECORDED intent only (a pending row past
    its date was never picked up, not failed); confirm each piece has a finished draft, visuals,
    derivatives queued, and someone running the Play 4 publish on the day.
-3. Last week's pieces: early signal from `content_page_views_get` (check `degraded`) +
+3. Last week's pieces: early signal from `content_page_views_get` (`leads` and `views`; check `degraded`) +
    `social_analytics_summary` + email delivery counts - one line per piece. A piece whose
    source failed reads "unknown - source unavailable", never zero.
 4. Deliver as a short markdown status; if production is behind, cut scope, never quality.
@@ -418,13 +510,15 @@ trap (keep the report id or you cannot address the report again) are there.
 Content: (1) published inventory with type, avatar, stage, cluster - avatar and stage from the
 row's `customer_avatar.name` and `journey_stage` (`content_list`, one call per matrix cell), with
 the rows that carry no `avatar_id` counted on their own line; (2) performance per piece -
-`content_page_views_get` + `analytics_pages` traffic, social reach/engagement, email delivery
+leads, contacts and deals from the scorecard (`content_analytics_get`) with
+`marketing_campaign_roi` for revenue, then `content_page_views_get` + `analytics_pages` traffic, social reach/engagement, email delivery
 numbers and the `engagement` block's open and click rates per campaign (delivered as the N; a
 `null` block is "not yet delivered", excluded from any aggregate and said so: "engagement
 reported for 21 of 22 sends, one not yet delivered"); unsubscribe counts are absent from every
 tool, so omit them rather than estimate - a fabricated number in a client report is worse than a
 missing one; (3) the updated coverage
-matrix; (4) refresh and consolidation actions; (5) next month's calendar with the reasoning.
+matrix; (4) refresh and consolidation actions; (5) next month's calendar with the reasoning -
+the next briefs from the pieces that brought leads (Play 5 step 8), not the ones that brought views.
 Comparability: never sum page views, social impressions, and email opens into one "total reach"
 number - different events over different windows; report channels side by side with their
 definitions. Then update the standing strategy memory (`memory_list` -> `memory_update`).
@@ -446,7 +540,7 @@ typically move within 2-6 weeks - set the user's expectations accordingly.
 (staggered over 4-6 weeks, per-platform variants), 1 newsletter feature, 2-3 supporting-post
 cross-links, and with video budget 1-2 short videos (`references/media-and-visuals.md` -
 approval-gated); 1 supporting post -> 2-3 social posts + the next digest. Nothing publishes
-with zero derivatives; distribution is planned at brief time, not after.
+with zero derivatives; distribution is planned at brief time as `settings.distribution_plan`, not after.
 
 **Email health floors:** click 1-3 percent, unsubscribes under 0.3 percent, complaints under
 0.1 percent - sources and breach playbook in `references/email-distribution.md`.
@@ -476,7 +570,11 @@ addresses, named by them); no draft-and-send in one step (the user's yes comes b
 `social_publish_post`'s `pending_approval` as published; no treating `content_schedule` as an
 executor; no generating video scenes one at a time to bypass the storyboard approval gate; no
 `generate_image` loop over a post's headings to route around the allowance read - article
-imagery is one `content_images_generate` call after `media_image_quota`, count confirmed.
+imagery is one `content_images_generate` call after `media_image_quota`, count confirmed; no
+quoting a proof-pack entry with `consent: false`, however trimmed; no case study drafted by hand
+around a 409 `no_consent`; no unsourced figure on a decision piece published over the
+`claims_without_source` error; no distribution plan written with every row `skipped` to make the
+no-plan warning go away.
 
 A wrong send to a real audience is a client-relationship incident, not a bug - and producing
 content into an empty strategy is billing for guesswork; Play 1 runs first, always.

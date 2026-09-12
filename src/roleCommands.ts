@@ -435,12 +435,14 @@ Social report. Follow the **hiveku-social-agency** skill. 1. \`social_analytics_
 const DEV_COMMANDS = ['webflow', 'cms'] as const;
 
 /**
- * The marketer role's email commands, written as /hiveku-<name>; the third
- * part of the VENDORED_COMMANDS mirror (see SOCIAL_COMMANDS, DEV_COMMANDS).
- * No inline fallbacks: a build whose assets are missing warns and writes
- * nothing rather than scaffolding the stale literals these replaced.
+ * The marketer role's email commands and the expert interview
+ * (/hiveku-sme-interview, which the vendored content skill names), written
+ * as /hiveku-<name>; the third part of the VENDORED_COMMANDS mirror (see
+ * SOCIAL_COMMANDS, DEV_COMMANDS). No inline fallbacks: a build whose assets
+ * are missing warns and writes nothing rather than scaffolding the stale
+ * literals these replaced.
  */
-const MARKETER_COMMANDS = ['email', 'email-review'] as const;
+const MARKETER_COMMANDS = ['email', 'email-review', 'sme-interview'] as const;
 
 /**
  * Loop names a second scaffold writer also owns. knowledge.ts writes a

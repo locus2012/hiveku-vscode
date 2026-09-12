@@ -75,6 +75,12 @@ export const VENDORED_COMMANDS = [
   // not return). Written by MARKETER_COMMANDS in src/roleCommands.ts.
   'email',
   'email-review',
+  // 2026-09-12: the expert interview the vendored content skill names
+  // (/hiveku:sme-interview) for the marketer role - questions from the brief
+  // and the proof pack, a transcript or a voice call into verbatim quotes
+  // stored on the item as settings.sources[]. Written by MARKETER_COMMANDS in
+  // src/roleCommands.ts.
+  'sme-interview',
 ];
 
 export const DEFAULT_PLUGIN_ROOT = join(EXTENSION_ROOT, '..', 'hiveku-claude-plugin');

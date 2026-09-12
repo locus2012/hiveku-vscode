@@ -18,8 +18,11 @@ the piece it came from, the set is persisted as DRAFTS, and no publish time is p
    lines in the body - the specific inside every hook), `hero { media_asset_id, file_url, registered }`
    (a hero that existed only as a URL is registered into the Media Library on this read and
    `registered: true` says so - the one side effect), `live_url` or `{ url: null, reason:
-   "not_deployed" }`, `utm_links` per platform (`utm_medium=social`, the value the analytics
-   classifier maps to Organic Social) and the `linked_content_id` every row will carry. 'latest' or
+   "not_deployed" }`, `utm_links` per platform (since 2026-09-12
+   `utm_source=<platform>&utm_medium=content&utm_campaign=<slug>&utm_content=<slug>`, the shape the
+   content attribution resolver credits to the piece; the response also returns `utm_medium` and
+   `utm_content` top-level; use the links unchanged - a hand-written `utm_medium=social` link with
+   no `utm_content` credits nothing) and the `linked_content_id` every row will carry. 'latest' or
    "pick one for me": `content_list({ status: "published", content_type: "blog_post", limit: 50 })` -
    rows carry `website_project_id`, `cms_collection_id`, `cms_entry_slug` and
    `last_published_to_cms_at`, and a published row with `website_project_id` null is published nowhere
