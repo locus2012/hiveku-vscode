@@ -34,6 +34,7 @@ shape on every key today; their descriptions and the new params catch up with th
 | `brand_offers_get` | INCOMING (build 10) | `GET /api/olympus/marketing/brand/offers` |
 | `brand_offers_set` | INCOMING (build 10) | `PUT /api/olympus/marketing/brand/offers` |
 | `content_conversion_plan` | INCOMING (build 10) | `POST /api/olympus/marketing/content/:contentId/conversion` |
+| `content_conversion_plan_get` | INCOMING (build 10) | `GET /api/olympus/marketing/content/:contentId/conversion` |
 | `content_create` | LIVE, changed (eleven new fields) | `POST /api/olympus/marketing/content` |
 | `content_update` | LIVE, changed (eleven new fields) | `PATCH /api/olympus/marketing/content/:contentId` |
 | `content_publish_to_site` | LIVE, changed (author, markup, llms.txt) | `POST /api/olympus/marketing/content/:contentId/publish-to-site` |
@@ -325,7 +326,7 @@ Errors: 400 `invalid_offers` naming the entry and field, 404 `no_active_brand_gu
 `offers_conflict` with the current `lock_version` (reload and resend), 503 `brand_unavailable`.
 An offer is owner-approved copy: draft it, show it, write it on the yes.
 
-**The plan per piece.** `content_conversion_plan({ content_id })` (a write: it also ensures the
+**The plan per piece.** `content_conversion_plan_get({ content_id })` reads the plan without touching anything (use it to inspect before you draft); `content_conversion_plan({ content_id })` (a write: it also ensures the
 journey checkpoint, below; `ensure_checkpoint: false` for a pure read) returns `{ data: {
 content_id, generated_at, plan, shortcodes { inline, end, upgrade } (counts in the body), journey,
 guide, checkpoint, delivery } }` where `plan` is:
