@@ -6,7 +6,7 @@
  *   1. builder memory slugs  (knowledge.ts DEPARTMENTS, 12)
  *   2. console ids           (deptData.ts DEPARTMENTS, 24) — drives the tree,
  *                            the console tabs, Operate, and the chat picker
- *   3. MCP chat domains      (this file, 15) — the only set the server accepts
+ *   3. MCP chat domains      (this file, 16) — the only set the server accepts
  *
  * The chat picker was built from (2) and passed the console id straight to the
  * tool, so 19 of the 24 offered departments hard-failed. Worse, the server
@@ -34,6 +34,9 @@ export const CHAT_DOMAINS: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'before_after_grid', label: 'Before / After Grid' },
   { id: 'knowledge_base', label: 'Knowledge Base' },
   { id: 'workflow', label: 'Automations' },
+  // 2026-09-12: the email marketing department runs its own agent; the console
+  // id and the chat domain are both `email`, so no alias is needed.
+  { id: 'email', label: 'Email Marketing' },
 ];
 
 const VALID = new Set(CHAT_DOMAINS.map((d) => d.id));
@@ -41,8 +44,9 @@ const VALID = new Set(CHAT_DOMAINS.map((d) => d.id));
 /**
  * Console ids (and a few legacy ids used by Operate row actions) that map onto
  * a real chat domain. Anything absent here has NO department agent behind it —
- * `email`, `helpdesk`, `accounting`, `pm`, `mc`, `voice`, `hiveboards`, `media`,
- * `commerce`, `pages`, `cms`, `database`.
+ * `helpdesk`, `accounting`, `pm`, `mc`, `voice`, `hiveboards`, `media`,
+ * `commerce`, `pages`, `cms`, `database`. (`email` left that list on
+ * 2026-09-12: it is a first-class domain above.)
  * Those must surface a clear message rather than being sent to the server to
  * fail. (`account_context_get` documents `helpdesk` as a domain but
  * `talk_to_department` does not accept it — the two tools still disagree there.

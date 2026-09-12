@@ -72,6 +72,14 @@ export interface ActionSpec {
    * publishes it, and only the response says which.
    */
   done?: (result: unknown) => string;
+  /**
+   * kind 'tool' - a typed confirmation AFTER the modal, for actions that reach
+   * real people. A modal's Confirm button is one click; a send to N recipients
+   * should cost typing N. Return null when there is nothing to type, otherwise
+   * the prompt and the exact string the user must enter; anything else, or
+   * Escape, aborts without calling the tool.
+   */
+  confirmTyped?: (row: Row) => { prompt: string; expected: string } | null;
 }
 export interface SectionSpec {
   id: string;
@@ -351,6 +359,16 @@ export function openModulePanel(
         'Confirm',
       );
       if (ok !== 'Confirm') return;
+    }
+    if (action.confirmTyped) {
+      const typed = action.confirmTyped(row ?? {});
+      if (typed) {
+        const value = await vscode.window.showInputBox({
+          prompt: typed.prompt,
+          validateInput: (v) => (v.trim() === typed.expected ? null : `Type exactly ${typed.expected} to continue`),
+        });
+        if (value === undefined || value.trim() !== typed.expected) return;
+      }
     }
     const client = await clientFor(account.accountId);
     const args: Record<string, unknown> = { ...context, ...(action.args ? action.args(row ?? {}) : {}) };

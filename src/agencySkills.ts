@@ -43,6 +43,7 @@ const VENDORED_SKILLS = [
   'hiveku-creative-agency',
   'hiveku-social-agency',
   'hiveku-web-agency',
+  'hiveku-communications',
   'hiveku-orient',
 ] as const;
 
@@ -75,7 +76,10 @@ const ROLE_SKILLS: Record<RoleId, VendoredSkill[]> = {
   pm: [],
   // Marketer carries social too: the content calendar it runs is what the
   // social plays repurpose, and the same person usually owns both.
-  marketer: ['hiveku-content-agency', 'hiveku-seo-agency', 'hiveku-creative-agency', 'hiveku-social-agency'],
+  // Marketer carries communications too: the email send ladder, the sending
+  // domain and suppression doctrine that /hiveku-email and /hiveku-email-review
+  // lean on live in that skill's references.
+  marketer: ['hiveku-content-agency', 'hiveku-seo-agency', 'hiveku-creative-agency', 'hiveku-social-agency', 'hiveku-communications'],
   sales: ['hiveku-sales-agency'],
   outbound: ['hiveku-outbound-agency', 'hiveku-sales-agency'],
   helpdesk: [],

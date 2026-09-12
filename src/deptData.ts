@@ -777,7 +777,7 @@ export const DEPARTMENTS: Department[] = [
     setup: EMAIL_SETUP,
     gate: 'marketing_email',
     datasets: [
-      { id: 'campaigns', label: 'Campaigns', tool: 'email_campaign_list', args: { limit: 200 }, columns: [{ key: ['name', 'subject'], label: 'campaign' }, { key: 'status' }, { key: ['recipients_count', 'sent_count'], label: 'sent' }, { key: ['scheduled_at', 'created_at'], label: 'when', date: true }] },
+      { id: 'campaigns', label: 'Campaigns', tool: 'email_campaign_list', args: { limit: 200 }, columns: [{ key: ['name', 'subject'], label: 'campaign' }, { key: 'status' }, { key: 'scheduled_for', label: 'scheduled for', date: true }, { key: 'sent_finished_at', label: 'finished sending', date: true }] },
       { id: 'audiences', label: 'Audiences', tool: 'email_audience_list', columns: [{ key: 'name' }, { key: 'kind' }, { key: 'estimated_size', label: 'size' }] },
       { id: 'sequences', label: 'Sequences', tool: 'email_sequence_list', columns: [{ key: 'name' }, { key: 'is_active', label: 'active' }, { key: 'total_enrolled', label: 'enrolled' }] },
       { id: 'templates', label: 'Templates', tool: 'email_template_list', columns: [{ key: 'name' }, { key: 'subject' }, { key: 'id' }] },

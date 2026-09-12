@@ -119,6 +119,146 @@ const SOCIAL_REJECT: ActionSpec = {
 
 const SOCIAL_POST_TITLE_KEYS = ['title', 'content', 'caption'];
 
+// ============================================================
+// An email campaign send is a THREE-STEP ladder, not a button.
+//
+// email_campaign_send_now without dry_run on a draft IS the send, and the
+// server does not enforce that a preview happened. So this surface does:
+// 'Preview recipients' calls the same tool with dry_run: true (the list is
+// materialized and counted, nothing sends, status is untouched) and remembers
+// the counts per campaign; 'Test send' puts real mail in the operator's own
+// inbox; 'Send now' is refused until a preview exists and then asks the user
+// to TYPE the queued count from that preview before the tool is called.
+// Pause holds an in-flight send (queued rows wait); Resume continues it
+// without re-materializing anything.
+// ============================================================
+
+type SendPreview = { totalQueued: number; totalSkipped: number; noOptInCount: number | null; takenAt: number };
+
+/** A preview older than this no longer describes the audience (dynamic audiences re-evaluate at send time). */
+const SEND_PREVIEW_MAX_AGE_MS = 15 * 60 * 1000;
+
+/** Last dry-run counts per campaign id, for the typed confirmation on Send now. Panel-lifetime only. */
+const lastSendPreview = new Map<string, SendPreview>();
+
+/** The campaign the in-flight preview is for; `done` receives only the tool result, not the row. */
+let previewingCampaignId = '';
+
+const asFiniteNumber = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+/**
+ * sendCampaign answers { ok, dryRun, campaignId, materialization: { totalQueued,
+ * totalSkipped, skippedBreakdown, noOptInCount }, noOptInCount, ... } - read it
+ * under `data` too in case a proxy wraps it.
+ */
+const readSendPreview = (result: unknown): { campaignId: string; preview: SendPreview } | null => {
+  if (!result || typeof result !== 'object') return null;
+  const top = result as Record<string, unknown>;
+  const data = top.data && typeof top.data === 'object' ? (top.data as Record<string, unknown>) : top;
+  const materialization =
+    data.materialization && typeof data.materialization === 'object'
+      ? (data.materialization as Record<string, unknown>)
+      : null;
+  if (!materialization) return null;
+  const totalQueued = asFiniteNumber(materialization.totalQueued);
+  const totalSkipped = asFiniteNumber(materialization.totalSkipped);
+  if (totalQueued === null || totalSkipped === null) return null;
+  const campaignId = asString(data.campaignId) || previewingCampaignId;
+  const noOptInCount = asFiniteNumber(materialization.noOptInCount) ?? asFiniteNumber(data.noOptInCount);
+  return { campaignId, preview: { totalQueued, totalSkipped, noOptInCount, takenAt: Date.now() } };
+};
+
+const EMAIL_PREVIEW_RECIPIENTS: ActionSpec = {
+  id: 'preview',
+  label: 'Preview recipients',
+  kind: 'tool',
+  tool: 'email_campaign_send_now',
+  args: (r) => {
+    previewingCampaignId = asString(r.id);
+    return { id: r.id, dry_run: true };
+  },
+  successReload: false,
+  done: (result) => {
+    const read = readSendPreview(result);
+    if (!read) return 'Preview ran but returned no recipient counts; nothing was sent. Read the response in the dashboard before sending.';
+    if (read.campaignId) lastSendPreview.set(read.campaignId, read.preview);
+    const { totalQueued, totalSkipped, noOptInCount } = read.preview;
+    const optIn = noOptInCount === null ? '' : `, ${noOptInCount} with no opt-in record`;
+    return `Preview only, nothing sent: ${totalQueued} would receive it, ${totalSkipped} skipped${optIn}. The 7-day frequency cap is applied at dispatch, so ${totalQueued} is an upper bound.`;
+  },
+};
+
+const EMAIL_TEST_SEND: ActionSpec = {
+  id: 'test',
+  label: 'Test send',
+  kind: 'tool',
+  tool: 'email_campaign_test_send',
+  args: (r) => ({ id: r.id }),
+  inputs: [
+    {
+      key: 'to',
+      label: 'Test recipients, up to 5, comma-separated. Real mailboxes only: a reserved test domain (example.com, test.com) is refused; success@simulator.amazonses.com is the no-inbox check',
+      csv: true,
+    },
+  ],
+  successReload: false,
+  done: () => 'Test send accepted. Confirm the render in the inbox before a real send.',
+};
+
+/**
+ * sendCampaign reports what it actually did in `transitionedTo` ('sending' or
+ * 'scheduled'); a campaign with a future scheduled_for is armed, not sent, and
+ * materializes nothing, so the completion message must not claim a send.
+ */
+const readSendOutcome = (result: unknown): { campaignId: string; transitionedTo: string; scheduledFor: string } => {
+  if (!result || typeof result !== 'object') return { campaignId: previewingCampaignId, transitionedTo: '', scheduledFor: '' };
+  const top = result as Record<string, unknown>;
+  const data = top.data && typeof top.data === 'object' ? (top.data as Record<string, unknown>) : top;
+  return {
+    campaignId: asString(data.campaignId) || previewingCampaignId,
+    transitionedTo: asString(data.transitionedTo),
+    scheduledFor: asString(data.scheduledFor) || asString(data.scheduled_for),
+  };
+};
+
+const EMAIL_SEND_NOW: ActionSpec = {
+  id: 'send',
+  label: 'Send now',
+  kind: 'tool',
+  tool: 'email_campaign_send_now',
+  args: (r) => ({ id: r.id }),
+  guard: (r) => {
+    const preview = lastSendPreview.get(asString(r.id));
+    if (!preview) return 'Run Preview recipients first: the send confirmation names the recipient count from that preview.';
+    if (preview.totalQueued === 0) return 'The last preview queued 0 recipients; the server would refuse this send. Fix the audience and preview again.';
+    if (Date.now() - preview.takenAt > SEND_PREVIEW_MAX_AGE_MS) return 'The last preview is more than 15 minutes old and may no longer describe the audience. Run Preview recipients again.';
+    return null;
+  },
+  confirm: 'Send this campaign now to real recipients? Dispatch starts on the next cron tick and cannot be recalled once rows are sent.',
+  confirmTyped: (r) => {
+    const preview = lastSendPreview.get(asString(r.id));
+    if (!preview) return null;
+    return {
+      prompt: `Type ${preview.totalQueued} (the recipient count from the last preview) to send`,
+      expected: String(preview.totalQueued),
+    };
+  },
+  done: (result) => {
+    const outcome = readSendOutcome(result);
+    if (outcome.campaignId) lastSendPreview.delete(outcome.campaignId);
+    if (outcome.transitionedTo === 'scheduled') {
+      const when = outcome.scheduledFor ? ` until ${outcome.scheduledFor}` : ' until its scheduled time';
+      return `Scheduled, not sent: this campaign has a future send time, so nothing was materialized and nothing goes out${when}. To send immediately, clear the schedule first.`;
+    }
+    const read = readSendPreview(result);
+    if (read) {
+      return `Send started: ${read.preview.totalQueued} queued, ${read.preview.totalSkipped} skipped. Dispatch runs on a ~60s tick; verify with email_campaign_metrics (status sent and by_status.sent > 0).`;
+    }
+    return 'Send accepted. Dispatch runs on a ~60s tick; verify with email_campaign_metrics (status sent and by_status.sent > 0).';
+  },
+};
+
 export const MODULES: ModuleSpec[] = [
   {
     id: 'crm',
@@ -325,9 +465,11 @@ export const MODULES: ModuleSpec[] = [
           ] },
         ],
         rowActions: [
-          { id: 'send', label: 'Send now', kind: 'tool', tool: 'email_campaign_send_now', args: (r) => ({ id: r.id }), confirm: 'Send this campaign now?' },
-          { id: 'pause', label: 'Pause', kind: 'tool', tool: 'email_campaign_pause', args: (r) => ({ id: r.id }), confirm: 'Pause this campaign? (queued sends stop)', successReload: true },
-          { id: 'resume', label: 'Resume', kind: 'tool', tool: 'email_campaign_resume', args: (r) => ({ id: r.id }), confirm: 'Resume this campaign? (sending continues)', successReload: true },
+          EMAIL_PREVIEW_RECIPIENTS,
+          EMAIL_TEST_SEND,
+          EMAIL_SEND_NOW,
+          { id: 'pause', label: 'Pause', kind: 'tool', tool: 'email_campaign_pause', args: (r) => ({ id: r.id }), confirm: 'Pause this in-flight send? Queued rows wait until you resume.', successReload: true },
+          { id: 'resume', label: 'Resume', kind: 'tool', tool: 'email_campaign_resume', args: (r) => ({ id: r.id }), confirm: 'Resume this paused send? The queued rows are picked up on the next tick; nothing is re-materialized.', successReload: true },
           open('Open'),
         ],
         empty: 'No campaigns.',

@@ -40,6 +40,10 @@ export const VENDORED_SKILLS = [
   // references/webflow-sites.md, the Webflow-hosted site doctrine) for the
   // dev role.
   'hiveku-web-agency',
+  // 2026-09-12: the communications skill (email infrastructure, the send
+  // ladder, inbox, sequences) for the marketer role, alongside its two
+  // commands below.
+  'hiveku-communications',
   'hiveku-orient',
 ];
 
@@ -65,6 +69,12 @@ export const VENDORED_COMMANDS = [
   // the Webflow provider seam. Written by DEV_COMMANDS in src/roleCommands.ts.
   'webflow',
   'cms',
+  // 2026-09-12: the marketer role's email plays, previously carried as inline
+  // literals in src/roleCommands.ts and stale within weeks (they named
+  // email_domain_verify over check_dns and a total_sent field the tool does
+  // not return). Written by MARKETER_COMMANDS in src/roleCommands.ts.
+  'email',
+  'email-review',
 ];
 
 export const DEFAULT_PLUGIN_ROOT = join(EXTENSION_ROOT, '..', 'hiveku-claude-plugin');

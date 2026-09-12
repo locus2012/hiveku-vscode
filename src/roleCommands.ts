@@ -381,7 +381,7 @@ function vendoredCommand(name: string): string | undefined {
 
 /**
  * The social role's commands, written as /hiveku-<name>. SOCIAL_COMMANDS plus
- * DEV_COMMANDS mirror VENDORED_COMMANDS in scripts/agency-skills-set.mjs (the
+ * DEV_COMMANDS plus MARKETER_COMMANDS mirror VENDORED_COMMANDS in scripts/agency-skills-set.mjs (the
  * generator's list) - keep the union identical to it, or a command is vendored
  * but never written, or listed here and never vendored (warned about and
  * skipped at scaffold time).
@@ -433,6 +433,14 @@ Social report. Follow the **hiveku-social-agency** skill. 1. \`social_analytics_
  * vendored, so a build whose assets are missing warns and writes nothing.
  */
 const DEV_COMMANDS = ['webflow', 'cms'] as const;
+
+/**
+ * The marketer role's email commands, written as /hiveku-<name>; the third
+ * part of the VENDORED_COMMANDS mirror (see SOCIAL_COMMANDS, DEV_COMMANDS).
+ * No inline fallbacks: a build whose assets are missing warns and writes
+ * nothing rather than scaffolding the stale literals these replaced.
+ */
+const MARKETER_COMMANDS = ['email', 'email-review'] as const;
 
 /**
  * Loop names a second scaffold writer also owns. knowledge.ts writes a
@@ -544,8 +552,13 @@ Triage pass. 1. \`mc_tasks_list\` (pending/unassigned) → for each, \`mc_intake
 4. ${PERSIST_STEP}
 `,
       };
-    case 'marketer':
-      return {
+    case 'marketer': {
+      // /hiveku-email and /hiveku-email-review are the plugin's own files,
+      // verbatim (MARKETER_COMMANDS). The inline copies this case carried until
+      // 0.80.1 were stale: they sent the reader to email_domain_verify instead of
+      // check_dns, to a `total_sent` field the tool does not return, and to the
+      // marketing context instead of the email department's own.
+      const loops: Record<string, string> = {
         'hiveku-campaign': `---
 description: Plan + draft a campaign with the account's brand context, then record its publish dates (calendar intent - the publish is a confirmed step on the day).
 argument-hint: "[campaign brief]"
@@ -561,54 +574,13 @@ Campaign: $ARGUMENTS. Context FIRST: \`account_context_get({ domain: "marketing"
    /hiveku-email for the ladder (dry run, test send, then a confirmed schedule or send).
 3. Create the campaign's PM tasks. ${PERSIST_STEP}
 `,
-        'hiveku-email': `---
-description: Build, test and launch an email campaign end-to-end - setup gates, audience, template, dry run, test send, schedule/send.
-argument-hint: "[what the campaign is about]"
----
-Build and launch an email campaign: $ARGUMENTS.
-
-Sends are GATED. Skipping a step doesn't fail loudly at that step - it means the campaign silently
-cannot send later. After every write, read it back (get/list) before proceeding. Report failures
-verbatim; never claim something sent without checking.
-
-1. **Setup gates first:** \`marketing_setup_status\`. It lists every condition that BLOCKS a send with
-   the fix for each. Do not build until \`ready_to_send: true\`. The two that bite:
-   - a VERIFIED sending domain (\`email_domain_add\` -> \`email_domain_verify\`); the campaign's
-     from_email must be on it.
-   - the CAN-SPAM mailing address (\`marketing_mailing_address_set\`) - footer validation FAILS without
-     a physical address, so NOTHING can send.
-2. **Audience:** \`email_audience_list\` - pick or create (\`email_audience_create\` +
-   \`email_audience_members_add\`). Members are CRM CONTACTS: get ids via \`crm_search_contacts\` /
-   \`crm_contact_upsert_by_email\`. Then \`email_audience_preview\` - report the DELIVERABLE count (not
-   the raw count) and why any are skipped. Zero deliverable = the send will be refused.
-3. **Content:** \`account_context_get({ domain: "marketing" })\` FIRST, then draft via
-   \`talk_to_department({ domain: "content", message })\` - subject (<50 chars) + preview text + HTML +
-   plain text. Save it with \`marketing_template_create\` (layout_json block tree, or raw HTML).
-   NOT \`email_template_create\` - that's the transactional store; a campaign cannot use it.
-4. **Draft:** \`email_campaign_create({ name, subject, from_email, audience_id, ... })\`, then read back
-   with \`email_campaign_get\`.
-5. **DRY RUN - never skip:** \`email_campaign_send_now({ id, dry_run: true })\`. It materializes the
-   recipient list and reports totalQueued / skippedBreakdown WITHOUT sending. Show the user the number
-   that would actually receive it.
-6. **TEST SEND - never skip:** \`email_campaign_test_send({ id, to: [the user's email] })\`. Real mail.
-   Ask the user to confirm the render before ANY real send.
-7. **Launch only on explicit approval:** \`email_campaign_schedule({ id, scheduled_for })\` or
-   \`email_campaign_send_now({ id })\`. Confirm which. Dispatch runs on a ~60s cron tick, so it is not
-   instant - do not report "sent" until \`email_campaign_get\` shows status sent and total_sent > 0.
-   A "sent" campaign with total_sent: 0 reached NOBODY.
-8. **After:** \`email_campaign_metrics({ id })\` next day - delivered/opens/clicks/bounces. Under-
-   delivered? Check \`marketing_frequency_cap_get\` (over-cap recipients are silently skipped).
-   \`email_campaign_resend_non_openers\` builds a fresh non-opener audience and clones the campaign.
-9. ${PERSIST_STEP}
-`,
-        'hiveku-email-review': `---
-description: Email program review — stats, winners/losers, next test.
----
-Email review. 1. \`email_stats\` + \`email_campaign_list\` → \`email_campaign_metrics\` for recent sends.
-2. Winners/losers by open/click/conversion; ONE next A/B test recommendation with rationale.
-3. ${PERSIST_STEP}
-`,
       };
+      for (const name of MARKETER_COMMANDS) {
+        const body = vendoredCommand(name);
+        if (body) loops[`hiveku-${name}`] = body;
+      }
+      return loops;
+    }
     case 'sales':
       return {
         'hiveku-pipeline': `---

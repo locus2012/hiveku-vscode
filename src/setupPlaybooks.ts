@@ -88,40 +88,74 @@ existing contacts mean parts of this are already done — only fill the gaps.
 \`crm_delete_contact\` it. Then re-run "Download Department Data → CRM" to refresh \`hiveku-data/crm/*.json\`.
 `;
 
-export const EMAIL_SETUP = `# Email marketing first-run: sender domain, mailboxes, audiences — verified
+export const EMAIL_SETUP = `# Email marketing first-run: setup gates, sender domain, audiences, the send ladder — verified
 
-Check current state FIRST: \`email_domain_list\` (verified sender domains) + \`email_service_status\`
-(providers, send capacity, reputation). A verified default domain means STEP 1 is already done.
+Check current state FIRST: \`marketing_setup_status\` (no arguments). It checks marketing_enabled, not_paused,
+ses_provisioned, verified_sending_domain and mailing_address, plus account-level suspension, each failing
+check with its fix. Do not build anything until \`ready_to_send: true\`. \`email_service_status.sending_enabled\`
+is the TRANSACTIONAL lane (hk_ API keys, smtp.hiveku.com) and is not a second opinion on this flag; suspension
+is the one gate they share, and staff lift it, not a tool.
 
 ## STEP 1 — the sending domain (the gate for everything else)
 1. \`email_domain_add({ domain })\` (e.g. "mail.example.com") → returns the DNS records the user must add
-   (DKIM / SPF / MAIL FROM / DMARC). Idempotent.
-2. The user adds those records **at their DNS host** (dashboard/external — Cloudflare, Route53, registrar; not doable from here).
-3. \`email_domain_verify({ id })\` — re-checks SES; repeat until verification + DKIM pass (DNS can take minutes to hours).
-4. \`email_domain_set_default({ id })\` — mark it the account's default sender.
+   (DKIM / SPF / MAIL FROM / DMARC). Surface them verbatim. Idempotent.
+2. The user adds those records **at their DNS host** (Cloudflare, Route53, registrar; not doable from here).
+3. \`email_domain_check_dns({ id })\`, NOT \`email_domain_verify\`. check_dns resolves each DKIM CNAME, the SPF
+   TXT and the DMARC TXT against live DNS and returns \`action_items[]\` naming what is still missing;
+   \`email_domain_verify\` only echoes SES's yes/no and never reports SPF or DMARC. Repeat until \`all_valid\`.
+4. \`email_domain_set_default({ id })\` — mark it the account's default sender. A campaign's from_email must be
+   on a verified domain or the send is refused with \`domain_unverified\`.
 
-## Mailbox identities (Gmail / Outlook for 1:1 send/reply)
+## STEP 2 — the CAN-SPAM mailing address (before ANY campaign)
+\`marketing_mailing_address_set({ address, city, state, zip_code, country })\`. Footer validation fails without a
+physical address, so nothing can send — a test send included.
+
+## Mailbox identities (Gmail / Outlook for 1:1 send/reply — a different lane from campaigns)
 1. \`email_connect_start({ platform: 'gmail'|'outlook' })\` → \`setup_url\` for the user (valid 5 min; needs the
    'crm_email_calendar' OAuth app — on \`no_oauth_app\` the owner registers one at /dashboard/settings/oauth-apps).
 2. Poll \`email_connections_list\` until the row shows \`connection_status: 'connected'\`.
 
-## First audience
-1. \`email_audience_create({ name, kind })\` — 'dynamic' (default) re-evaluates \`filter_json\`
-   ({ include_tags?, lifecycle_stages?, lead_sources?, ... }) at send time; 'static' is manually maintained.
-2. Static only: \`email_audience_members_add({ id, contact_ids })\`.
+## First audience — with a consent attestation
+1. \`email_audience_create({ name, kind, filter_json })\` — 'dynamic' (default) re-evaluates \`filter_json\` at send
+   time; 'static' is hand-maintained via \`email_audience_members_add({ id, contact_ids })\` (CRM contact ids).
+2. Every list you import or attach needs the operator's attestation that the people on it opted in to
+   marketing email from this business. An audience built from Visitor Intelligence signals (site visits, ICP
+   matches) is flagged \`visitor_derived: true\` by \`email_audience_list\` / \`email_audience_get\`; on an account
+   that requires opt-in the send is refused with \`audience_not_opted_in\`, and elsewhere it only warns — confirm
+   with the operator before sending to one.
+3. \`email_audience_preview({ id })\` — report the DELIVERABLE count and the skipped_breakdown, not
+   total_candidates. Zero deliverable means the send will be refused.
+
+## Templates — two stores, do not mix them
+Marketing campaigns use \`marketing_template_list\` / \`marketing_template_create\` (layout_json block tree with a
+footer block, editable in the visual builder). \`email_template_*\` is the TRANSACTIONAL store (API-key sends,
+SMTP) and a campaign cannot use one of those; \`email_campaign_create\` rejects it.
+
+## The send ladder — never skip a rung
+1. \`email_campaign_create({ name, subject, from_email, audience_id, template_id })\`, then \`email_campaign_get\`.
+2. \`email_campaign_send_now({ id, dry_run: true })\` — materializes the list and reports totalQueued /
+   totalSkipped / skippedBreakdown / noOptInCount WITHOUT sending or changing status. A call without
+   dry_run on a draft IS the send.
+3. \`email_campaign_test_send({ id, to: [the operator's real mailbox] })\` — real mail, up to 5 addresses,
+   same CAN-SPAM validation as a production send. Reserved and test domains (example.com, test.com,
+   localhost, .invalid) are refused with \`reserved_test_address\`: a bounce there counts against the account's
+   sender reputation and two of them caused the 2026-08-07 outage. For a no-inbox pipeline check the recipient
+   is success@simulator.amazonses.com. Ask the operator to confirm the render.
+4. Only on explicit approval, naming the totalQueued count: \`email_campaign_schedule({ id, scheduled_for })\`
+   (future ISO timestamp) or \`email_campaign_send_now({ id })\`. Refusals come back as codes
+   (\`email_service_suspended\`, \`audience_not_opted_in\`, \`tenant_identity_not_attached\`, \`empty_audience\`,
+   \`plan_cap\`, \`domain_unverified\`); relay them verbatim. \`email_campaign_pause\` holds an in-flight send
+   (queued rows wait) and \`email_campaign_resume\` continues it.
 
 ## Deliverability event webhooks (optional but recommended)
 1. \`email_webhook_create({ name, url, events })\` — response includes \`signing_secret\` **ONCE**; record it
    (HMAC-SHA256 over the raw body verifies X-Hiveku-Signature).
 2. \`email_webhook_test({ id })\` — sends a synthetic signed event to prove the receiver works.
 
-## Test send
-\`email_send_test({ to, subject?, body?, from?, dry_run? })\` — \`dry_run: true\` validates without sending;
-a real send 502s with a hint if the \`from\` domain isn't verified (that's your domain check failing).
-
 ## Verify
-\`email_stats\` shows the test send in today's counts and \`email_domain_list\` shows the domain verified +
-default. Then re-run "Download Department Data → Email" to refresh \`hiveku-data/email/*.json\`.
+\`email_campaign_metrics({ id })\`: status 'sent' AND \`by_status.sent > 0\` (a 'sent' campaign with
+\`by_status.sent: 0\` reached nobody). \`email_domain_list\` shows the domain verified + default. Then re-run
+"Download Department Data → Email" to refresh \`hiveku-data/email/*.json\`.
 `;
 
 export const SOCIAL_SETUP = `# Social first-run: accounts, pillars, slots, first draft - verified
