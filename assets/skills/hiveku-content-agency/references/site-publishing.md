@@ -7,8 +7,9 @@ feedback on a shared draft, or working with categories.
 ## The content -> CMS bridge (the canonical publish lane)
 
 The `content_*` tools carry a first-class publish lane that every marketing profile can see.
-It replaces hand-rolling `cms_write_entry` (which only the `dev` profile can call - see the
-profile note in SKILL.md).
+It replaces hand-rolling `cms_write_entry` - which the `marketing`, `marketing-seo` and `dev`
+profiles can all call (see the profile note in SKILL.md), but which writes the entry without
+touching the content row, so the row and the live entry drift apart.
 
 1. **Bind the item to its destination: `content_link_to_cms`.** Sets `website_project_id`,
    `cms_collection_id`, `cms_entry_slug` on the row - the binding `content_publish_to_site`
@@ -18,8 +19,10 @@ profile note in SKILL.md).
    `cms_collection_id` is the collection SLUG string like `'blog'`, not a UUID. Binding to an
    entry another content item already owns is a 409 naming the fix. The three fields are
    independent - sending only `cms_entry_slug` re-points within the existing project/collection.
-   Visibility flag: the project-id sources (`sites_list`, `project_get`) are NOT in the
-   `marketing` profile - on a scoped key, ask the user for the project id or use a full key.
+   Visibility: the project-id sources (`sites_list`, `project_get`) ARE on the `marketing` and
+   `marketing-seo` profiles (granted by name in the MCP server's profiles.ts, next to
+   `deploy_site`) - read the project id yourself. Only a narrower sub-profile that lacks them
+   (`marketing-email`, `marketing-ads`) has to ask the user for it.
 2. **Publish: `content_publish_to_site`.** The same canonical path the editor's Publish button
    uses. The route reads NO body - there is no confirm flag and no dry run, so calling it IS the
    commit; confirm with the human first. It forces the entry live and writes

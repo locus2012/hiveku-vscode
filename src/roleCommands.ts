@@ -547,14 +547,18 @@ Triage pass. 1. \`mc_tasks_list\` (pending/unassigned) → for each, \`mc_intake
     case 'marketer':
       return {
         'hiveku-campaign': `---
-description: Plan + draft a campaign with the account's brand context, then schedule it.
+description: Plan + draft a campaign with the account's brand context, then record its publish dates (calendar intent - the publish is a confirmed step on the day).
 argument-hint: "[campaign brief]"
 ---
 Campaign: $ARGUMENTS. Context FIRST: \`account_context_get({ domain: "marketing" })\`.
 1. Strategy + copy through the department agents (full brand/memory):
    \`talk_to_department({ domain: "marketing", message })\` then \`{ domain: "content" }\` for drafts.
-2. Persist: \`content_create\` per asset; schedule with \`content_schedule\` / \`email_campaign_create\`
-   (confirm before anything is scheduled to SEND).
+2. Persist: \`content_create\` per asset. Record each piece's planned date with \`content_schedule\` -
+   it schedules a PUBLISH (or unpublish) date on a content item, never a send, and today the row is
+   recorded intent only: nothing executes it. Report it as "recorded for <date>", never as "it will
+   publish"; the publish itself is a confirmed \`content_publish_to_site\` + deploy on the day.
+   Email is separate: \`email_campaign_create\` is only the draft - the send is gated, run
+   /hiveku-email for the ladder (dry run, test send, then a confirmed schedule or send).
 3. Create the campaign's PM tasks. ${PERSIST_STEP}
 `,
         'hiveku-email': `---

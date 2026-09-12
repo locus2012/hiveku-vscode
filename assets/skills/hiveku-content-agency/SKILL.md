@@ -17,7 +17,8 @@ what gets made next. Run the loop; do not just write copy.
    cross-channel planning). It returns persona, brand voice, avatars, domain memory, skills,
    rules, and recent published content - THE differentiator versus generic AI content; skipping
    this is the number one cause of bad output. Re-read its `instructions` field before every
-   generative call. If the tool is not in your session (scoped key - see below), reconstruct:
+   generative call. It is on every profile (see the profile note below); if a session still
+   lacks it, reconstruct:
    `memory_list` + `brand_guide_get` + `customer_avatar_list` + `customer_journey_list` +
    `before_after_grid_list` + recent `content_list`.
 2. **Generative work goes through `talk_to_department`.** Drafting, headlines, angles, campaign
@@ -49,15 +50,22 @@ what gets made next. Run the loop; do not just write copy.
    account memory or labeled as judgment - never presented as measured scores.
 
 **Know your key's profile.** This skill assumes a `full`-profile key. There is no `content`
-profile; the natural scoped profile is `marketing`, and under it `account_context_get` and
-`account_seed_initialize` DO NOT EXIST (no `account_` prefix in any scoped profile) - use the
-fallbacks named at each step. `cms_*` is `dev`-only, `pages_*` is `marketing-seo`/`dev` only -
-the content->CMS bridge in Play 4 is the lane that works everywhere. `talk_to_department`,
-`web_search`, `fetch_url`, and `audit_query` are always available; `audit_query` reads the
-account's MCP audit log - introspect a suspicious write there before re-deriving from guesswork.
+profile; the natural scoped profile is `marketing`. Re-derived from the MCP server's
+`src/tools/profiles.ts` (2026-09-12): the `marketing` key carries the whole `content_*` family,
+the whole `cms_*` family (32 tools, Webflow-backed collections included), `webflow_*`, `seo_*`,
+`social_*`, `brand_*`, `design_*`, `media_*`, `email_*`, and by name `sites_list`,
+`project_get`, `project_files_list`, `project_file_get`, `project_file_save` and `deploy_site` -
+a marketing key reads its own project ids, reads and writes CMS entries, and deploys. What it
+does NOT carry: `pages_*` (`marketing-seo` / `dev` only), the rest of `project_*` (secrets,
+databases, VCS, bulk saves - `dev`), and `account_seed_initialize` (no `account_` prefix on any
+scoped profile; `full` only - see `references/brand-foundation-api.md`). `account_context_get`,
+`talk_to_department`, `web_search`, `fetch_url`, and `audit_query` are always available on
+every profile; `audit_query` reads the account's MCP audit log - introspect a suspicious write
+there before re-deriving from guesswork. The content->CMS bridge in Play 4 stays the canonical
+lane on every key: `cms_write_entry` is for entries with no content item, not a replacement.
 
-**Session-start checklist:** (1) `account_context_get({ domain: "content" })` (scoped-key
-fallback above); (2) `content_list({ limit: 200 })` - where the pipeline stands; (3) which play
+**Session-start checklist:** (1) `account_context_get({ domain: "content" })` (reconstruct
+fallback in principle 1); (2) `content_list({ limit: 200 })` - where the pipeline stands; (3) which play
 does the request belong to, and do its prerequisites exist (no calendar work without Play 1
 artifacts; no production without a calendar slot and brief)?
 
@@ -139,9 +147,9 @@ order, and the populate tools' grounding refusal live there.
    up to the pillar. Check `seo_internal_links` when planning link paths.
 5. **Content types:** `marketing_content_templates` lists the account's formats - use them
    instead of inventing structures. Building missing formats is bill-worthy
-   (`content_template_create` / `_update` / `_get`) - but NOTHING auto-applies a template
-   (`content_create` takes no template_id): they are scaffolds you copy from. Traps in
-   `references/site-publishing.md`.
+   (`content_template_create` / `content_template_update` / `content_template_get`) - but
+   NOTHING auto-applies a template (`content_create` takes no template_id): they are scaffolds
+   you copy from. Traps in `references/site-publishing.md`.
 6. **Persist the calendar:** each planned piece becomes a draft `content_create({ status:
    "draft" })` with title, type, target keyword, avatar, and stage in the body/notes. Record
    planned dates with `content_schedule` - **as calendar intent ONLY: nothing executes those
@@ -183,13 +191,30 @@ Per piece, in order:
    **Load `references/media-and-visuals.md` before any media or video work.** Record the
    piece's assets with `content_media_attach` (a manifest only - it does NOT put the image on
    the page; the hero is `content_update` `featured_image_url`).
-5. **Quality gate (before persisting, all of these):** voice matches the brand guide (compare
-   against recent published pieces), zero banned phrases; the avatar's actual language appears
-   (their words for the pain, not marketing-speak); every claim sourced or first-hand -
-   traceable to `kb_search` results, scraped sources, or user-provided material; a claim with no
-   source does not ship, it gets flagged to the user; internal links from the brief present, CTA
-   matches the journey stage; title under ~60 characters for search pieces; meta description
-   drafted.
+5. **Quality gate (before persisting - ALL of these; a piece that fails one goes back to the
+   department with the failing item named, it does not ship):**
+   - Voice matches the brand guide (compare against recent published pieces); zero banned
+     phrases - check the draft against the guide's `ai_forbidden_phrases` and `copy_donts`
+     (`brand_guide_get`), not against your own sense of what sounds off.
+   - The avatar's actual language appears (their words for the pain, not marketing-speak);
+     the CTA matches the journey stage.
+   - Every claim sourced or first-hand - traceable to `kb_search` results, scraped sources,
+     or user-provided material. Every EXTERNAL claim (a statistic, a study, a quote, a
+     third-party fact) links its source inline where the claim is made. A claim with no
+     source does not ship; it gets flagged to the user.
+   - Exactly one H1, and it carries the target keyword.
+   - The target keyword appears in the title, in the slug, and in the first 100 words.
+   - Heading hierarchy is intact: H2s under the H1, H3s only under an H2, no skipped levels,
+     a subhead every 150-300 words.
+   - Alt text on the hero (`featured_image_alt`) and on every inline image - descriptive, not
+     the filename.
+   - At least two internal links to EXISTING published pieces, each by its real URL, taken
+     from `content_list` (published rows and their `cms_entry_slug`), `cms_list_entries`
+     (`resolvedPath`) or `seo_internal_links` - never invented, never guessed from a title.
+     The links the brief planned are among them.
+   - Title under ~60 characters for search pieces; meta description drafted, 150-160
+     characters, keyword present.
+   After deploy, `/hiveku:seo-onpage <url>` re-checks the same items on the live page.
 6. **Persist:** `content_create` (or `content_update` for revisions), then
    `content_link_tasks` to close the loop with any PM tasks tracking the piece.
 7. **Client sign-off before anything ships:** the confirm gate needs an artifact the CLIENT can
@@ -232,8 +257,9 @@ Publishing without distribution is where in-house content programs die; agencies
    after the project deploys** - verify before reporting "published". Take-downs:
    `content_unpublish_from_site` (never `content_update status='draft'` - that leaves the live
    page up). Imports: `content_create_from_cms_entry`. **Load `references/site-publishing.md`
-   before any of these.** The `cms_*` / `pages_*` tools in older notes are `dev` /
-   `marketing-seo` lanes - do not route a content operator onto tools their key cannot see.
+   before any of these.** `cms_*` is on the `marketing`, `marketing-seo` and `dev` keys and
+   `pages_*` on `marketing-seo` / `dev` only; keep a content operator on the bridge regardless -
+   it is what keeps the content row and the live entry in sync.
 4. **On-site publishing (Webflow-hosted sites).** When the `sites_list` row carries
    `external_platform: "webflow"`, `content_publish_to_site` is still the lane: it maps the
    item through the Webflow provider and lands it STAGED on Webflow, recording the CMS link
