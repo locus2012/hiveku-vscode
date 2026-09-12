@@ -2,9 +2,9 @@
 
 Load this file before publishing content to a Hiveku site, taking a page down, refreshing a live
 piece, importing existing CMS entries, minting a client share link, reading or answering client
-feedback on a shared draft, or working with categories - and before the Play 3 quality gate
-(the pre-publish check and the site's link targets) or resuming a department turn that timed
-out.
+feedback on a shared draft, or working with categories - before recording who a piece is for on
+its row (the five grounding columns), and before the Play 3 quality gate (the pre-publish check
+and the site's link targets) or resuming a department turn that timed out.
 
 ## Availability - the content program's incoming tools (2026-09-12)
 
@@ -22,6 +22,56 @@ A key whose server does not serve a name yet answers unknown-tool: say so, run t
 form of the step (the checklist in SKILL.md Play 3 step 5; `content_list` + `cms_list_entries`
 for URLs; the operator looks a turn up in the dashboard's AI turn log), and never present the
 gap as "Hiveku cannot do this".
+
+The five grounding params and the four list filters of the next section are not tools but
+declarations on `content_create`, `content_update` and `content_list`: the builder routes read
+them on `main` (295f68240; the dashboard routes 8f6d4c3ba) and the MCP declarations land with
+the same round. The proxy forwards only DECLARED params, so on a key whose server predates them
+the arg is dropped silently and the row comes back with `avatar_id: null` - the echo, not the
+call, is the proof.
+
+## The grounding on the row - `content_create` / `content_update` ({ avatar_id, journey_id, journey_stage, before_after_grid_id, target_keyword })
+
+Who a piece is for lives on the row as five typed columns (schema d7b67cba9), the same columns
+the marketing editor's "Who this is for" sidebar panel and the New Content modal write, the
+workflow content node forwards, and the department's `data/content_items.json` carries with the
+names behind the ids. One contract, every writer:
+
+- `avatar_id`, `journey_id`, `before_after_grid_id` - UUIDs of a customer avatar
+  (`customer_avatar_list`), a customer journey map (`customer_journey_list`) and a before/after
+  grid (`before_after_grid_list`) IN THIS ACCOUNT, or null to clear. Each id is looked up with
+  the key's account before anything is written: an id from another account, or a malformed one,
+  is a 400 with `code: "invalid_reference"` naming the field, and NOTHING on that call is
+  written - not the body, not the other ids. Re-read the list and send the real id; never strip
+  the id to make the call pass.
+- `journey_stage` - the stage NAME as the journey map spells it (free text, max 255; the
+  `social_posts` convention), or null. It is not checked against the journey's stages, so copy it
+  from `customer_journey_get`, never paraphrase it ("Awareness" is not "Problem Aware").
+- `target_keyword` - max 255; null or "" clears. The `target_keyword` column is canonical and is
+  mirrored into `settings.target_keyword` for the readers still moving over; a row written
+  before 2026-09-12 carries the keyword only in `settings`, and every reader (`content_get`,
+  `content_seo_check`, rank tracking at publish) falls back to it. When the param and a
+  `settings.target_keyword` arrive on the same call the param wins.
+
+What comes back, on every `content_list` row and every `content_get` / `content_create` /
+`content_update` response: the five columns (every key present, null when unset;
+`target_keyword` with the settings fallback applied) plus `customer_avatar`, `customer_journey`
+and `before_after_grid` as `{ id, name }` or null - the names resolved inside the account. A
+writer needs one read to say who a piece is for, and the report's header line
+(`For: | Stage: | Grid: | Keyword: | Links:`) is read from `customer_avatar.name`,
+`journey_stage`, `before_after_grid.name` and `target_keyword`, never re-typed from the brief.
+
+Filters: `content_list({ avatar_id, journey_id, before_after_grid_id, journey_stage })` - the
+three ids exact (a malformed id is a 400, not an empty page), `journey_stage` a case-insensitive
+exact match on the stage name. "Content for avatar X at stage Y" is one call, and the avatar x
+stage coverage matrix of Play 1 is one call per cell.
+
+Two honesty rules. Read the echo: when the row that comes back lacks what was sent, the
+grounding did not land - say so rather than reporting the piece as grounded. And
+`settings.linkedAvatars` / `settings.targetJourneyStage` / `settings.linkedBeforeAfterGrids`
+and `persona:` / `stage:` tags are NOT the contract: nothing reads them any more, so a piece
+grounded only there is a piece grounded nowhere - move it onto the columns with one
+`content_update`.
 
 ## Link targets - `content_site_links({ project_id, limit? })`
 
@@ -56,8 +106,8 @@ Response: `{ data: { content_id, checked_at, result, context } }` where
   message, field }` - `field` is the `content_items` column (or settings key) to fix;
 - `result.stats` is `{ word_count, h1_count, heading_count, image_count, images_missing_alt,
   internal_link_count, external_link_count, format }`;
-- `context` is what the check was given: `target_keyword` (from `settings.target_keyword`),
-  `banned_phrases` (the active brand guide's `ai_forbidden_phrases`), `site_host` (the linked
+- `context` is what the check was given: `target_keyword` (the `target_keyword` column, else
+  `settings.target_keyword` for a row written before 2026-09-12), `banned_phrases` (the active brand guide's `ai_forbidden_phrases`), `site_host` (the linked
   project's production host, so absolute links back to it count as internal),
   `content_format`, and `linked` (bound to a project and collection; false means bind with
   `content_link_to_cms` before publishing).
@@ -89,8 +139,9 @@ touching the content row, so the row and the live entry drift apart.
 
 1. **Bind the item to its destination: `content_link_to_cms`.** Sets `website_project_id`,
    `cms_collection_id`, `cms_entry_slug` on the row - the binding `content_publish_to_site`
-   needs; without it the item "has a body and no destination". `content_update` cannot reach
-   these three columns. Pass `null` to unbind. Traps: `website_project_id` is a WEBSITE project
+   needs; without it the item "has a body and no destination". `content_update` reaches the same
+   three columns since round 1, but only this tool refuses an entry another item already owns -
+   bind here. Pass `null` to unbind. Traps: `website_project_id` is a WEBSITE project
    UUID, not a PM project (a cross-account project is a 404, not a silent no-op).
    `cms_collection_id` is the collection SLUG string like `'blog'`, not a UUID. Binding to an
    entry another content item already owns is a 409 naming the fix. The three fields are
@@ -107,7 +158,8 @@ touching the content row, so the row and the live entry drift apart.
    Read back from the response: `slug`/`route` (slug collisions auto-suffix to `slug-2`..`slug-49`
    and REWRITE `cms_entry_slug`, so the live URL can differ from the slug you set) and `unmapped`
    (content fields with no home in the collection are silently dropped, with a 200). A brief-born
-   item carrying `settings.target_keyword` auto-enrolls that keyword in rank tracking;
+   item carrying `target_keyword` (the column, else the settings mirror on a row older than
+   2026-09-12) auto-enrolls that keyword in rank tracking;
    `trackingStarted: false` only means skipped-or-already-tracked. The path takes NO advisory
    lock - a concurrent builder CMS write to the same slug is last-writer-wins (snapshot first,
    below). The response also carries the pre-publish check: `warnings[]` (one line each,

@@ -84,11 +84,12 @@ artifacts; no production without a calendar slot and brief)?
   TRAFFIC/HOOK/CONVERT rule for every transition, the brief-versus-link coverage model,
   checkpoints and what makes a funnel measured rather than estimated, and how to quote ROI
   without overclaiming.
-- `references/site-publishing.md` - before publishing to a site, taking a page down, refreshing
-  a live piece, importing CMS entries, minting a client share link, reading or answering client
-  comments on a shared draft, or category/content-template work (the pre-publish check, the
-  site's link targets, resuming a department turn that timed out, the content->CMS bridge,
-  versions, the content_schedule truth, the review thread).
+- `references/site-publishing.md` - before recording who a piece is for on its row, publishing
+  to a site, taking a page down, refreshing a live piece, importing CMS entries, minting a client
+  share link, reading or answering client comments on a shared draft, or category/content-template
+  work (the grounding on the row - the five columns every writer records and every reader gets
+  back, the pre-publish check, the site's link targets, resuming a department turn that timed
+  out, the content->CMS bridge, versions, the content_schedule truth, the review thread).
 - `references/email-distribution.md` - before building, sending, cancelling, or reporting on
   any email campaign, and before the client-report rail (gates, ladder, CAN-SPAM, template
   stores, the metrics/by_variant contract, marketing_report_* mechanics).
@@ -124,7 +125,14 @@ order, and the populate tools' grounding refusal live there.
 6. **Coverage audit:** pull `content_list({ limit: 200 })`, paginating and filtering on
    `status` / `content_type` / `category_id` / `tags` (category ids from
    `content_categories_list` - traps in `references/site-publishing.md`), then build an avatar x
-   journey-stage matrix. Do NOT also pull `marketing_content_list` - it is the
+   journey-stage matrix from the rows' own grounding: every row carries `avatar_id`,
+   `journey_id`, `journey_stage`, `before_after_grid_id` and `target_keyword` with
+   `customer_avatar` / `customer_journey` / `before_after_grid` as `{ id, name }` or null, and
+   `content_list` filters on `avatar_id`, `journey_id`, `before_after_grid_id` and
+   `journey_stage`, so one call per cell is the matrix (contract in
+   `references/site-publishing.md`). A row with `avatar_id` null is a piece written for nobody:
+   count those on their own line, never guess an audience from a title or a tag. Do NOT also
+   pull `marketing_content_list` - it is the
    thinner duplicate of the same route (search/page/limit only, no status or type filter), so
    concatenating the two double-counts published inventory, which is the number the monthly report
    is graded on. Empty cells are the strategy backlog; overloaded cells (five posts, all
@@ -160,8 +168,11 @@ order, and the populate tools' grounding refusal live there.
    NOTHING auto-applies a template (`content_create` takes no template_id): they are scaffolds
    you copy from. Traps in `references/site-publishing.md`.
 6. **Persist the calendar:** each planned piece becomes a draft `content_create({ status:
-   "draft" })` with title, type, target keyword, avatar, and stage in the body/notes. Record
-   planned dates with `content_schedule` - **as calendar intent ONLY: nothing executes those
+   "draft", title, content_type, target_keyword, avatar_id, journey_id, journey_stage,
+   before_after_grid_id })` - the cell it fills recorded as the row's typed columns (ids from
+   the Play 1 lists, the stage name as the journey map spells it; a foreign or malformed id is
+   a 400 `invalid_reference` and nothing is created), never as prose in the body or a tag.
+   Record planned dates with `content_schedule` - **as calendar intent ONLY: nothing executes those
    rows** (report recorded intent, never "it will publish" - details in
    `references/site-publishing.md`); the publish itself is a session action at the planned time
    (Play 4). Link production work to PM tasks with `content_link_tasks` (`content_get_tasks` to
@@ -179,8 +190,10 @@ account can actually produce (see Benchmarks).
 Per piece, in order:
 
 1. **Brief.** Every piece gets a brief - no field, no draft: working title + target keyword and
-   intent (from Play 2); avatar + journey stage (which matrix cell this fills); the
-   before/after transformation angle; pillar supported + the internal links planned as 3-8
+   intent (from Play 2); avatar + journey stage (which matrix cell this fills - `avatar_id`,
+   `journey_id` and the stage name as the journey map spells it); the before/after
+   transformation angle (`before_after_grid_id` and the grid item); pillar supported + the
+   internal links planned as 3-8
    anchors, each with its real URL from `content_site_links({ project_id })` (the site's
    published posts and pages - never a URL typed from memory); sources to cite (URL + the
    claim each supports); CTA mapped to the journey stage (not always "buy"); format/template
@@ -194,6 +207,16 @@ Per piece, in order:
    window: on the timeout error take its `turn_id` to `department_turn_get({ turn_id })` and
    call it again until `status` is `completed` - the finished draft is in `response`. Do not
    re-send the brief; a second fresh conversation drafts the piece twice.
+   Then record the grounding ON the row before anything else touches it:
+   `content_update({ content_id, avatar_id, journey_id, journey_stage, before_after_grid_id,
+   target_keyword })` with the brief's ids (or the same five on the `content_create` of step 6
+   when no calendar row exists). The echo carries the five back with `customer_avatar` /
+   `customer_journey` / `before_after_grid` as `{ id, name }`; an echo without them means the
+   write did not land (an undeclared param is dropped at the proxy) - say so, never report the
+   piece as grounded. A 400 `invalid_reference` names the id that is not this account's and
+   writes nothing on that call: re-read the Play 1 lists, never strip the id to make the call
+   pass. `settings.linkedAvatars` / `settings.targetJourneyStage` and `persona:` / `stage:`
+   tags are not the contract - nothing reads them.
 3. **Optimize against the SERP reality:** `seo_serp_get` on the target query, then `web_scrape` /
    `web_extract` the top results - subtopics and entities they cover that the draft does not are
    the revision list; feed them back to the department. The SERP is the specification.
@@ -218,6 +241,13 @@ Per piece, in order:
      user with your decision. `content_publish_to_site` runs the same check and hands the
      findings back as `warnings[]`, but it NEVER blocks - the gate is you: it is not called
      while an error stands. Contract: `references/site-publishing.md`.
+   - The row carries its grounding: `content_get` returns `avatar_id`, `journey_id`,
+     `journey_stage`, `before_after_grid_id` and `target_keyword` set, with the three
+     `{ id, name }` objects beside them. The `For: | Stage: | Grid: | Keyword: | Links:`
+     header line of the report is READ BACK from those (`customer_avatar.name`,
+     `journey_stage`, `before_after_grid.name`, `target_keyword`), not typed from the brief -
+     a header that disagrees with the row is a defect on one of them, fixed before the piece
+     ships.
    - Voice matches the brand guide (compare against recent published pieces); zero banned
      phrases - check the draft against the guide's `ai_forbidden_phrases` and `copy_donts`
      (`brand_guide_get`), not against your own sense of what sounds off.
@@ -244,8 +274,9 @@ Per piece, in order:
    - Title under ~60 characters for search pieces; meta description drafted, 150-160
      characters, keyword present.
    After deploy, `/hiveku:seo-onpage <url>` re-checks the same items on the live page.
-6. **Persist:** `content_create` (or `content_update` for revisions), then
-   `content_link_tasks` to close the loop with any PM tasks tracking the piece.
+6. **Persist:** `content_create` (or `content_update` for revisions) carrying the five
+   grounding params beside the copy, then `content_link_tasks` to close the loop with any PM
+   tasks tracking the piece.
 7. **Client sign-off before anything ships:** the confirm gate needs an artifact the CLIENT can
    review, not just a verbal yes in this chat. `content_share_link_create` mints a PUBLIC
    no-login review URL exposing the full body - mint it only when the user wants the draft to
@@ -365,7 +396,9 @@ public page renders - regenerate before every delivery) -> `marketing_report_sha
 (Client report delivery) before touching the rail** - the confirm flow and the no-list/no-get
 trap (keep the report id or you cannot address the report again) are there.
 
-Content: (1) published inventory with type, avatar, stage, cluster; (2) performance per piece -
+Content: (1) published inventory with type, avatar, stage, cluster - avatar and stage from the
+row's `customer_avatar.name` and `journey_stage` (`content_list`, one call per matrix cell), with
+the rows that carry no `avatar_id` counted on their own line; (2) performance per piece -
 `content_page_views_get` + `analytics_pages` traffic, social reach/engagement, email delivery
 numbers and the `engagement` block's open and click rates per campaign (delivered as the N; a
 `null` block is "not yet delivered", excluded from any aggregate and said so: "engagement
