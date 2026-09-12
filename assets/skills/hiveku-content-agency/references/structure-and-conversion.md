@@ -13,28 +13,28 @@ rules in `references/site-publishing.md`.
 
 Round B of the elite content program shipped its builder routes on `main`. The MCP names below
 are the parallel MCP lane's declarations and reach `lib/tool-index.json` when that server deploys;
-until then `test/pending-tools.mjs` carries them as ELITE-B. The changed live tools answer the new
+they are live on the server and in `lib/tool-index.json` since 2026-09-12 (the ELITE-B pending batch is retired). The changed live tools answer the new
 shape on every key today; their descriptions and the new params catch up with the same deploy.
 
 | Tool | Status | Route (Olympus auth, account-scoped) |
 |---|---|---|
-| `content_authors_list` | INCOMING (build 3) | `GET /api/olympus/marketing/content-authors` |
-| `content_authors_create` | INCOMING (build 3) | `POST /api/olympus/marketing/content-authors` |
-| `content_authors_get` | INCOMING (build 3) | `GET /api/olympus/marketing/content-authors/:authorId` |
-| `content_authors_update` | INCOMING (build 3) | `PATCH /api/olympus/marketing/content-authors/:authorId` |
-| `content_authors_delete` | INCOMING (build 3) | `DELETE /api/olympus/marketing/content-authors/:authorId` |
-| `content_brief_build` | INCOMING (build 4) | `POST /api/olympus/marketing/content/:contentId/brief` |
-| `content_brief_get` | INCOMING (build 4) | `GET /api/olympus/marketing/content/:contentId/brief` |
-| `content_brief_topic` | INCOMING (build 4) | `POST /api/olympus/marketing/content/brief` |
-| `brand_positioning_get` | INCOMING (build 5) | `GET /api/olympus/marketing/brand/positioning` |
-| `brand_positioning_set` | INCOMING (build 5) | `PUT /api/olympus/marketing/brand/positioning` |
-| `content_titles_generate` | INCOMING (build 5) | `POST /api/olympus/marketing/content/:contentId/titles` |
-| `content_titles_get` | INCOMING (build 5) | `GET /api/olympus/marketing/content/:contentId/titles` |
-| `content_titles_pick` | INCOMING (build 5) | `POST /api/olympus/marketing/content/:contentId/titles/pick` |
-| `brand_offers_get` | INCOMING (build 10) | `GET /api/olympus/marketing/brand/offers` |
-| `brand_offers_set` | INCOMING (build 10) | `PUT /api/olympus/marketing/brand/offers` |
-| `content_conversion_plan` | INCOMING (build 10) | `POST /api/olympus/marketing/content/:contentId/conversion` |
-| `content_conversion_plan_get` | INCOMING (build 10) | `GET /api/olympus/marketing/content/:contentId/conversion` |
+| `content_authors_list` | LIVE (build 3) | `GET /api/olympus/marketing/content-authors` |
+| `content_authors_create` | LIVE (build 3) | `POST /api/olympus/marketing/content-authors` |
+| `content_authors_get` | LIVE (build 3) | `GET /api/olympus/marketing/content-authors/:authorId` |
+| `content_authors_update` | LIVE (build 3) | `PATCH /api/olympus/marketing/content-authors/:authorId` |
+| `content_authors_delete` | LIVE (build 3) | `DELETE /api/olympus/marketing/content-authors/:authorId` |
+| `content_brief_build` | LIVE (build 4) | `POST /api/olympus/marketing/content/:contentId/brief` |
+| `content_brief_get` | LIVE (build 4) | `GET /api/olympus/marketing/content/:contentId/brief` |
+| `content_brief_topic` | LIVE (build 4) | `POST /api/olympus/marketing/content/brief` |
+| `brand_positioning_get` | LIVE (build 5) | `GET /api/olympus/marketing/brand/positioning` |
+| `brand_positioning_set` | LIVE (build 5) | `PUT /api/olympus/marketing/brand/positioning` |
+| `content_titles_generate` | LIVE (build 5) | `POST /api/olympus/marketing/content/:contentId/titles` |
+| `content_titles_get` | LIVE (build 5) | `GET /api/olympus/marketing/content/:contentId/titles` |
+| `content_titles_pick` | LIVE (build 5) | `POST /api/olympus/marketing/content/:contentId/titles/pick` |
+| `brand_offers_get` | LIVE (build 10) | `GET /api/olympus/marketing/brand/offers` |
+| `brand_offers_set` | LIVE (build 10) | `PUT /api/olympus/marketing/brand/offers` |
+| `content_conversion_plan` | LIVE (build 10) | `POST /api/olympus/marketing/content/:contentId/conversion` |
+| `content_conversion_plan_get` | LIVE (build 10) | `GET /api/olympus/marketing/content/:contentId/conversion` |
 | `content_create` | LIVE, changed (eleven new fields) | `POST /api/olympus/marketing/content` |
 | `content_update` | LIVE, changed (eleven new fields) | `PATCH /api/olympus/marketing/content/:contentId` |
 | `content_publish_to_site` | LIVE, changed (author, markup, llms.txt) | `POST /api/olympus/marketing/content/:contentId/publish-to-site` |

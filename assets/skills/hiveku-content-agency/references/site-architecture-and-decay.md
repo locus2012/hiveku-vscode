@@ -16,13 +16,13 @@ Builder routes live on `main`; MCP names declared by the parallel MCP lane and c
 
 | Tool | Status | Route (Olympus auth, account-scoped) |
 |---|---|---|
-| `site_page_roles_get` | INCOMING (build 8) | `GET /api/olympus/marketing/site-architecture/page-roles?project_id=` |
-| `site_page_roles_set` | INCOMING (build 8) | `POST /api/olympus/marketing/site-architecture/page-roles` |
-| `content_keyword_map` | INCOMING (build 8) | `GET /api/olympus/marketing/content/keyword-map?project_id=` |
-| `content_bofu_plan` | INCOMING (build 9) | `POST /api/olympus/marketing/content/bofu-plan` |
-| `content_bofu_plan_get` | INCOMING (build 9) | `GET /api/olympus/marketing/content/bofu-plan?project_id=` |
-| `content_prune_candidates` | INCOMING (build 7) | `GET /api/olympus/marketing/content/prune-candidates` |
-| `content_refresh_brief_get` | INCOMING (build 7) | `GET /api/olympus/marketing/content/:contentId/refresh-brief` |
+| `site_page_roles_get` | LIVE (build 8) | `GET /api/olympus/marketing/site-architecture/page-roles?project_id=` |
+| `site_page_roles_set` | LIVE (build 8) | `POST /api/olympus/marketing/site-architecture/page-roles` |
+| `content_keyword_map` | LIVE (build 8) | `GET /api/olympus/marketing/content/keyword-map?project_id=` |
+| `content_bofu_plan` | LIVE (build 9) | `POST /api/olympus/marketing/content/bofu-plan` |
+| `content_bofu_plan_get` | LIVE (build 9) | `GET /api/olympus/marketing/content/bofu-plan?project_id=` |
+| `content_prune_candidates` | LIVE (build 7) | `GET /api/olympus/marketing/content/prune-candidates` |
+| `content_refresh_brief_get` | LIVE (build 7) | `GET /api/olympus/marketing/content/:contentId/refresh-brief` |
 | `content_site_links` | LIVE, changed (`content_id`, roles, anchors) | `GET /api/olympus/marketing/content/site-links` |
 | `seo_topic_clusters` | LIVE, changed (recomputed every Sunday) | `GET /api/olympus/seo/topic-clusters` |
 | `seo_keyword_clusters` | LIVE, changed (mapped to published items) | `GET /api/olympus/seo/keyword-clusters` |
