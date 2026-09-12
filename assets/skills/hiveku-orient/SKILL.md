@@ -290,6 +290,20 @@ source_url?, tags? })` (the server chunks and embeds) -> `kb_search({ query, kb_
 `kb_documents_get` / `kb_documents_delete` manage the contents; `kb_update` / `kb_delete` manage the
 KB itself, and `kb_delete` cascades to every document in it, so confirm before calling it.
 
+The content research layer lives here, not in memory. `content_research_run({ content_id })` (or
+`content_research_topic({ topic })` for a topic with no row yet) creates ONE knowledge base per
+account with `context_type: "content_research"` on its first run - `kb_list({ context_type:
+"content_research" })` finds it; never create a second one and never look it up by name - and
+stores what it found as a knowledge artifact, a typed row beside the documents. `artifact_type` is
+`content_research` today (the research run is the one writer the product ships); `serp_brief`,
+`positioning`, `proof_pack`, `case_study` and `data_study` are the declared types the reads already
+accept, for the writers that come later. `kb_artifacts_list({ artifact_type?, kb_id?, content_id?,
+is_verified?, page?, limit? })` lists them account-wide, newest first, without knowing the KB
+(`content_id` filters on `content_json.content_id`); `kb_artifact_get({ artifact_id })` is the
+one-artifact read for the id a row's `settings.research` stamp carries; `kb_search` surfaces the
+same artifacts semantically through their indexed markdown (`metadata.artifact_id`). The contracts
+and the citation rules are hiveku-content-agency/references/research-and-proof.md.
+
 Routing trap: `kb_list`, `kb_get` and `kb_create` hit `/api/olympus/knowledge-bases`, while
 `kb_update`, `kb_delete`, `kb_stats` and every `kb_documents_*` tool hit
 `/api/olympus/marketing/knowledge-bases/:kbId`. Verify a `kb_id` from `kb_list` resolves with

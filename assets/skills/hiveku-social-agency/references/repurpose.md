@@ -73,10 +73,14 @@ evergreen set, then weigh persona fit (section 4) above either number.
 - A missing key is never zero-filled: it means no pageviews, OR the entry was dropped as
   malformed (a non-UUID `projectId`, a `path` without a leading slash), OR the project is not
   this account's. The three are indistinguishable; report "no traffic recorded".
-- Never `content_analytics_get`. Nothing in the product writes `content_analytics` and the
-  `view_count` / `like_count` / `share_count` columns are never incremented, so it answers
-  200 with an empty array and an all-zero summary for effectively every item. A ranking built
-  on it puts every candidate at zero and looks like a finding.
+- `content_analytics_get({ content_id })` is the per-piece scorecard: `leads`, `contacts`,
+  `deals`, `lead_rate` and `social`, computed for `window` (`7d` | `30d` | `90d` | `all`).
+  The sentence "nothing writes content_analytics" was true until 2026-09-12 and is not any
+  more: a nightly writer (`/api/cron/content-scorecard`) stores one row per published piece per
+  closed UTC day. Rank the shortlist by `leads` before `views`; `last_stored: null` means the
+  first nightly run has not happened and `views: null` with `degraded.clickhouse: true` is an
+  unreachable collector - neither is zero. One call per piece, so shortlist with
+  `content_page_views_get` first.
 
 ## 3. Absolute URL rules
 
@@ -99,14 +103,24 @@ you compose by hand (doors 2 and 3), the rules are:
    and `route` back from the publish response, or re-read `cms_entry_slug` with
    `content_get`, before any link is written on a post. Publishing itself is the content
    session's lane (hiveku-content-agency/references/site-publishing.md).
-3. **UTM: `utm_source=<platform slug>&utm_medium=social&utm_campaign=repurpose-<slug>`.**
-   `utm_medium=social` is what the analytics classifier reads: `classify-source.ts`
-   maps a medium of exactly `social` to the Organic Social channel, and `utm_source` of
-   `linkedin`, `facebook`, `instagram`, `twitter` or `tiktok` matches its known-source table,
-   so the session, the form fill and the lead it becomes are attributed to the platform. A
-   bare link is attributed by referrer when one arrives, and in-app browsers often send none,
-   so the visit reads as Direct. `social_repurpose_source` returns `utm_links` already
-   composed per platform; hand-composed links use the same shape.
+3. **UTM: the `utm_links` the source read returns, unchanged -
+   `utm_source=<platform>&utm_medium=content&utm_campaign=<slug>&utm_content=<slug>`.**
+   `utm_medium=content` plus `utm_content=<the row's slug>` is what the content attribution
+   resolver reads: a medium of `content`, `blog` or `organic` with a `utm_content` equal to a
+   content item's `slug` credits the session, the form fill and the lead it becomes to that
+   piece, which is how the scorecard counts leads per piece. The shape before 2026-09-12
+   (`utm_medium=social`, no `utm_content`) credits nothing. `social_repurpose_source` returns
+   one link per platform (`linkedin`, `facebook`, `instagram`, `twitter`, `tiktok`,
+   `google_business_profile`) plus top-level `utm_medium` and `utm_content`; a hand-composed
+   link (doors 2 and 3) uses the same shape with the bound row's `slug` - never `utm_content`
+   from a page URL, because the resolver keys on the row's `slug` and the page can serve at
+   `slug-2` after a collision. The channel in the analytics sources view comes from
+   `utm_source`, not the medium: `classify-source.ts` matches `linkedin`, `facebook`,
+   `instagram`, `twitter` and `tiktok` in its known-source table and labels the session Organic
+   Social whatever the medium says, and `google_business_profile` matches its Google rule and
+   reads as Google / Organic Search (a known label limit, not a UTM error). A bare link is
+   attributed by referrer when one arrives, and in-app browsers often send none, so the visit
+   reads as Direct.
    Trap: the classifier's click-id branch outranks the UTM. It reads `fbclid` off the landing
    URL and labels the session Meta Ads / Paid Social, and Facebook appends `fbclid` to
    outbound clicks. A Facebook or Instagram click can therefore read as paid in the sources

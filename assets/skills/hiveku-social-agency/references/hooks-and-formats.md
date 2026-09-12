@@ -224,8 +224,12 @@ never fails the post. Read the outcome with `social_get_post` after publish.
   voice. "Full breakdown here:" is filler; "The 12-point checklist, as a PDF:" is a
   reason to click.
 - One link per post. Two links split the click and double the X character cost.
-- Every link out of a social post carries `utm_medium=social` (the composition and
-  the attribution reason are in references/repurpose.md).
+- A link to a published piece is one of the `utm_links` `social_repurpose_source` returns,
+  unchanged: `utm_source=<platform>&utm_medium=content&utm_campaign=<slug>&utm_content=<slug>`,
+  the shape the content scorecard credits to the piece; the pre-2026-09-12 shape
+  (`utm_medium=social`, no `utm_content`) credits nothing. Any other link keeps
+  `utm_source=<platform>`, which is what the sources view labels the channel from (the
+  composition and the attribution reasons are in references/repurpose.md section 3).
 - After a publish, an `first_comment_status` of 'failed' on LinkedIn or Meta means the
   link never posted; the post is live without it. Post the comment from the native app
   or the dashboard, and record the failure in the report.

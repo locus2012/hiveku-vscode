@@ -88,7 +88,7 @@ Ground: data/customer_avatars.json for the persona the piece serves (social_plat
 
 The set: 6-10 posts over 4-6 weeks, one per format, the piece as proof for each: question (unanswerable-question), data-point (specific-number), listicle (the H2s, count true), contrarian, case-study-3-lines (a measured result only), quote-card (a verbatim line), faq (objection-first), behind-the-scenes. Open Unaware and Problem Aware, close Product and Most Aware. Header and Rubric: N/14 (11+) on every post; variance inside the set.
 
-Links: the production URL with utm_source=<platform>&utm_medium=social&utm_campaign=repurpose-<slug>: first_comment on LinkedIn and Facebook-with-media, link_url on Google Business Profile and text-only Facebook, body on X (a URL counts 23), nothing on TikTok. One link per post.
+Links: the production URL with utm_source=<platform>&utm_medium=content&utm_campaign=<slug>&utm_content=<slug> (utm_content is the content row's own slug from content_get, not cms_entry_slug, which can be slug-2 after a collision; utm_medium=content plus utm_content=<slug> is what credits the piece in the scorecard, and a utm_medium=social link credits nothing): first_comment on LinkedIn and Facebook-with-media, link_url on Google Business Profile and text-only Facebook, body on X (a URL counts 23), nothing on TikTok. One link per post.
 
 Media: the hero from data/media_library.json, confirmed with media_library_get(asset_id); text cards are designer briefs (pm_task_create, task_type="design", CREATIVE: <platform> <format> - <title>) or design_to_post(design_id, content, platforms).
 

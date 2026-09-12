@@ -36,8 +36,9 @@ the piece it came from, the set is persisted as DRAFTS, and no publish time is p
    momentum, `views` for the evergreen set, persona fit above both. Branch on `degraded`: `{ stats: {},
    degraded: true }` is an outage at HTTP 200, so rank by `published_at` and persona fit, say the
    traffic read was unavailable, and never write a zero; a missing key is "no traffic recorded", not
-   0. Never `content_analytics_get`: nothing in the product writes the table it reads, so every
-   candidate comes back at zero and looks like a finding. A hand-composed URL (doors 2 and 3) takes
+   0. `content_analytics_get({ content_id })` on the shortlist is the per-piece scorecard (`leads`,
+   `contacts`, `deals`), real since the 2026-09-12 nightly writer: `leads` outranks `views`, and
+   `last_stored: null` is "not yet computed", never zero. A hand-composed URL (doors 2 and 3) takes
    the production host only - `environments.production.url` from `sites_list`, or the `is_primary`
    row of `project_domains_list({ project_id, tier: "production" })` when `ssl_status` is `issued`
    and `dns_status` is `verified` - never `live_preview.url`, never a development or staging tier;

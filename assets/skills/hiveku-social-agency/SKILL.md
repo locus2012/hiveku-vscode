@@ -307,10 +307,13 @@ the package (title, headers, `candidate_specifics`, hero asset, absolute live UR
 `not_deployed`, UTM links per platform, `linked_content_id`); the library (`content_list({
 status: 'published' })` with its CMS binding columns, then `content_get`); the site ladder on
 the social key (`sites_list` -> `cms_list_collections` -> `cms_list_entries` ->
-`cms_read_entry`). Rank with `content_page_views_get`. One piece earns 6-10 posts over 4-6
-weeks, one per format, every link carrying `utm_medium=social` on the production URL. Persist
-with `social_posts_bulk_create({ posts, batch_id, calendar })` - drafts only, 25 max,
-all-or-nothing with every row's validation echoed, an optional `calendar_event` per row,
+`cms_read_entry`). Rank with `content_page_views_get`, then `content_analytics_get` on the
+shortlist (`leads` outranks `views`). One piece earns 6-10 posts over 4-6 weeks, one per
+format, every link one of the `utm_links` the source read returns, unchanged
+(`utm_source=<platform>&utm_medium=content&utm_campaign=<slug>&utm_content=<slug>` is the shape
+the content scorecard credits to the piece; a hand-written `utm_medium=social` link credits
+nothing). Persist with `social_posts_bulk_create({ posts, batch_id, calendar })` - drafts only,
+25 max, all-or-nothing with every row's validation echoed, an optional `calendar_event` per row,
 `linked_content_id` and tags `repurpose:<content_id>` / `batch:<id>` on each;
 `social_list_posts({ linked_content_id })` BEFORE a pass says whether the piece already ran.
 Refuse an unpublished source, a page the production tier does not serve, and a source not read
