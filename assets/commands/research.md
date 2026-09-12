@@ -22,8 +22,8 @@ it into content-gap and keyword work. Cite source URLs in your summary; never fa
 7. Index what you used - the evidence outlives this chat. The Content research knowledge base
    (`kb_list({ context_type: "content_research" })`; the research run creates it, never create a
    second one) holds the pages behind a finding: `kb_documents_index_text({ kb_id, title, content,
-   source_url })` per page you relied on (put the URL on the first line of `content` and in the
-   title too - the route stores `metadata` only and does not read `source_url` yet), then `kb_search`
+   source_url, tags })` per page you relied on (the route stores `source_url` and `tags` as the
+   document's provenance and reuses a document whose URL is already in the KB), then `kb_search`
    to confirm it answers. Memory holds the conclusion, the KB holds the evidence.
    Research FOR a piece of content is not this ladder: `content_research_run({ content_id })` (or
    `content_research_topic({ topic })` before a row exists) does the search, the SERP read, the
