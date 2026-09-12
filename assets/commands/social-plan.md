@@ -71,7 +71,7 @@ is set and every schedule must carry `timezone` explicitly).
    ids are checked against the account (a foreign id is a 400 naming the field) and `journey_stage`
    with `journey_id` must be a stage NAME on that journey (the 400 lists the real names). The link goes
    where the platform lets it: LinkedIn and Facebook posts with media carry it in `first_comment`
-   (one line of context plus the link, `utm_medium=social`); a text-only Facebook post and GBP use
+   (one line of context plus the link; a post that repurposes a content item uses that item's `utm_links` from `social_repurpose_source`, which carry `utm_medium=content` and `utm_content=<slug>` so the piece gets the credit; a post with no source item keeps `utm_medium=social`); a text-only Facebook post and GBP use
    `link_url` (GBP's Learn more button); X carries it in the body; Instagram gets `first_comment` plus
    "link in bio"; TikTok gets none from this rail. `media_alt_texts` is one entry per media item in
    order, 125 characters or fewer, stored on the row and shown in the dashboard but sent to no

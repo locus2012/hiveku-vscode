@@ -91,8 +91,10 @@ the operator's yes:
   email to `RECIPIENT_EMAIL` that drafts are waiting. Nothing publishes from it: the drafts go
   through the social approval queue.
 - `content-digest-weekly` (variables `AUDIENCE_ID`, `FROM_EMAIL`, `APPROVER_EMAIL`, `DIGEST_NAME`,
-  `TIMEZONE`): Tuesday 9 AM in `TIMEZONE`; `content_list({ status: "published",
-  published_within_days: 7, sort: "published" })` inside the run; on an empty week it emails
+  `TIMEZONE`): Tuesday 9 AM in `TIMEZONE`; a `marketingListContent` node (`status: published`,
+  `published_within_days: 7`, `sort: published`) inside the run (over MCP the same read is
+  `content_list({ status: "published", published_since: "<7 days ago, ISO>", sort: "published" })`;
+  the route takes an instant, not a day count); on an empty week it emails
   "nothing published" and creates no campaign; otherwise the email agent writes the digest and
   calls `email_newsletter_create` as a DRAFT, `APPROVER_EMAIL` approves, then the send. The
   campaign is the `email_digest` derivative: mark the plan row with `campaign:<id>`.
