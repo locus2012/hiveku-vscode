@@ -88,6 +88,18 @@ export const VENDORED_COMMANDS = [
   // that keeps the URL). Written by MARKETER_COMMANDS in src/roleCommands.ts.
   'bofu',
   'refresh',
+  // 2026-09-12: the SEO role's decay sweep, previously an inline literal in
+  // src/roleCommands.ts that read seo_content_decay and went straight to a
+  // department draft. The plugin's file reads the stored page roles for the
+  // money pages, the prune list and the refresh brief before any draft, and
+  // records the disposition on the row. Written by SEO_COMMANDS in
+  // src/roleCommands.ts.
+  'seo-decay',
+  // 2026-09-12: the universal /hiveku-research, previously an inline literal
+  // that lacked the plugin's "index what you used" step. Written by
+  // UNIVERSAL_COMMANDS in src/roleCommands.ts for every role, and for a
+  // workspace with no role set.
+  'research',
 ];
 
 export const DEFAULT_PLUGIN_ROOT = join(EXTENSION_ROOT, '..', 'hiveku-claude-plugin');

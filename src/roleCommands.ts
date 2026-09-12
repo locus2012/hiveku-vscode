@@ -4,9 +4,10 @@
  *   /hiveku-daily        — morning brief: context → role signals → today's tasks
  *   /hiveku-new-command  — capture THIS account's process as a new account command
  *                          (saved locally AND to Hiveku via memory_create type=command)
- * plus the role's loops (the social role's ten and the dev role's two are the
- * Claude Code plugin's own command files, vendored into assets/commands/ - see
- * vendoredCommand). All
+ * plus the role's loops (the social role's ten, the dev role's two, the
+ * marketer's five, the SEO role's decay sweep and the universal
+ * /hiveku-research are the Claude Code plugin's own command files, vendored
+ * into assets/commands/ - see vendoredCommand). All
  * commands share one skeleton: account_context_get
  * FIRST → do the work → persist learnings (memory) → reflect work in Hiveku PM
  * (source of truth). Writes are confirmed per-step, never auto-approved.
@@ -124,21 +125,6 @@ Create a new site project for THIS account$ARGUMENTS. You do the build; the huma
 4. Download it locally to keep building: tell the user to run "Hiveku: Download Project" (or open it from the Projects tree), then /hiveku-verify + /hiveku-deploy development.
 5. Point a domain at it with /hiveku-domains (in the site's folder) and configure the CMS with /hiveku-cms.
 Confirm before \`site_create\`/\`site_delete\` (delete is irreversible + drops any Supabase billing). Reflect the new project as a PM task if this is client work.
-`;
-
-const RESEARCH_COMMAND = `---
-description: Deep web research for this account — competitors, content gaps, prospects — via the Firecrawl ladder.
-argument-hint: "[what to research — e.g. 'competitor pricing pages']"
----
-Research$ARGUMENTS for THIS account. Escalate only as far as you need — each rung costs more:
-
-1. \`web_search({ query, count?, country?, freshness? })\` — find candidate URLs / answer a quick question.
-2. \`web_scrape({ url, formats: ["markdown"] })\` — one page's content (the workhorse).
-3. \`web_map({ url, search? })\` — enumerate a whole site's URLs (find every /pricing, /service page).
-4. \`web_crawl({ url, limit })\` — pull many pages of a site at once (competitor content audit).
-5. \`web_extract({ urls: [...], schema | prompt })\` — pull STRUCTURED JSON across many URLs (e.g. {price, plan} from every competitor pricing page) — the highest-leverage rung for comparison tables.
-6. \`web_actions({ url, actions: [...] })\` — click/scroll/fill to reach content behind interaction.
-Persist what you find to department memory (\`memory_create\`) and, for SEO/content, feed it into content-gap + keyword work. Cite source URLs in your summary; never fabricate a finding.
 `;
 
 const CONNECT_COMMAND = `---
@@ -380,8 +366,9 @@ function vendoredCommand(name: string): string | undefined {
 }
 
 /**
- * The social role's commands, written as /hiveku-<name>. SOCIAL_COMMANDS plus
- * DEV_COMMANDS plus MARKETER_COMMANDS mirror VENDORED_COMMANDS in scripts/agency-skills-set.mjs (the
+ * The social role's commands, written as /hiveku-<name>. SOCIAL_COMMANDS,
+ * DEV_COMMANDS, MARKETER_COMMANDS, SEO_COMMANDS and UNIVERSAL_COMMANDS
+ * together mirror VENDORED_COMMANDS in scripts/agency-skills-set.mjs (the
  * generator's list) - keep the union identical to it, or a command is vendored
  * but never written, or listed here and never vendored (warned about and
  * skipped at scaffold time).
@@ -447,6 +434,28 @@ const DEV_COMMANDS = ['webflow', 'cms'] as const;
 const MARKETER_COMMANDS = ['email', 'email-review', 'sme-interview', 'bofu', 'refresh'] as const;
 
 /**
+ * The SEO role's decay sweep (/hiveku-seo-decay), the plugin's own file; the
+ * fourth part of the VENDORED_COMMANDS mirror. The inline copy this replaced
+ * (0.81.1 and earlier) read seo_content_decay and went straight to a
+ * department draft: it never read the stored page roles for the money pages
+ * (site_page_roles_get), the twelve-month prune list
+ * (content_prune_candidates) or the refresh brief (content_refresh_brief_get)
+ * before drafting, and it recorded no disposition on the row. No inline
+ * fallback: a build whose assets are missing warns and writes nothing.
+ */
+const SEO_COMMANDS = ['seo-decay'] as const;
+
+/**
+ * Commands every workspace receives regardless of role, the plugin's own
+ * files; the fifth part of the VENDORED_COMMANDS mirror. /hiveku-research was
+ * an inline literal until 0.81.1 and lacked the plugin's "index what you
+ * used" step (the Content research knowledge base) and the hand-off to
+ * content_research_run for research that belongs to a piece. No inline
+ * fallback, the same as the other vendored sets.
+ */
+const UNIVERSAL_COMMANDS = ['research'] as const;
+
+/**
  * Loop names a second scaffold writer also owns. knowledge.ts writes a
  * project-scoped /hiveku-cms (this project's id baked in, the cms_* tools
  * allowed) into every downloaded project folder one step before this runs.
@@ -468,8 +477,9 @@ async function isProjectFolder(baseDir: string): Promise<boolean> {
 
 function roleLoops(role: Role): Record<string, string> {
   switch (role.id) {
-    case 'seo':
-      return {
+    case 'seo': {
+      // /hiveku-seo-decay is the plugin's own file, verbatim (SEO_COMMANDS).
+      const loops: Record<string, string> = {
         'hiveku-seo-fix': `---
 description: Audit this account's site, fix the top SEO issues, track the keywords.
 argument-hint: "[site or focus, optional]"
@@ -482,16 +492,13 @@ SEO fix loop$ARGUMENTS. Context first: \`account_context_get({ domain: "seo" })\
 3. Track new targets: \`seo_track_keyword\`. Re-run the audit to verify the score moved.
 4. ${PERSIST_STEP}
 `,
-        'hiveku-seo-decay': `---
-description: Find decaying + cannibalizing content and produce a refresh plan.
----
-Content decay sweep. Context: \`account_context_get({ domain: "seo" })\`.
-1. \`seo_content_decay\` + \`seo_cannibalization\` → pages losing traffic or competing with themselves.
-2. For the top candidates, get a brand-aligned refresh plan: \`talk_to_department({ domain: "seo", message })\`.
-3. Create one PM task per refresh (\`pm_tasks_create\`) with the plan in the description.
-4. ${PERSIST_STEP}
-`,
       };
+      for (const name of SEO_COMMANDS) {
+        const body = vendoredCommand(name);
+        if (body) loops[`hiveku-${name}`] = body;
+      }
+      return loops;
+    }
     case 'ppc':
       return {
         'hiveku-ppc-optimize': `---
@@ -860,8 +867,16 @@ export async function writeRoleSlashCommands(baseDir: string, roleId: string | u
   await writeCmd(baseDir, 'hiveku-pull-data', PULL_DATA_COMMAND);
   await writeCmd(baseDir, 'hiveku-connect', CONNECT_COMMAND);
   await writeCmd(baseDir, 'hiveku-new-site', NEW_SITE_COMMAND);
-  await writeCmd(baseDir, 'hiveku-research', RESEARCH_COMMAND);
   await writeCmd(baseDir, 'hiveku-media', MEDIA_COMMAND);
+  // The vendored universal commands (/hiveku-research): written only when the
+  // asset is present, and named below only when written.
+  const universal: string[] = [];
+  for (const name of UNIVERSAL_COMMANDS) {
+    const body = vendoredCommand(name);
+    if (!body) continue;
+    await writeCmd(baseDir, `hiveku-${name}`, body);
+    universal.push(`hiveku-${name}`);
+  }
   const role = roleById(roleId);
   if (!role) {
     // No role set — the role prompt is skippable, and this used to return HERE,
@@ -881,8 +896,8 @@ export async function writeRoleSlashCommands(baseDir: string, roleId: string | u
       'hiveku-pull-data',
       'hiveku-connect',
       'hiveku-new-site',
-      'hiveku-research',
       'hiveku-media',
+      ...universal,
     ];
   }
   const loops = { ...roleLoops(role), ...cadenceCommands(role) };
@@ -905,8 +920,7 @@ export async function writeRoleSlashCommands(baseDir: string, roleId: string | u
   names.push('hiveku-pull-data');
   names.push('hiveku-connect');
   names.push('hiveku-new-site');
-  names.push('hiveku-research');
-  names.push('hiveku-media');
+  names.push('hiveku-media', ...universal);
   await writeCmd(baseDir, 'hiveku-onboard', ONBOARD_COMMAND);
   names.push('hiveku-onboard');
   for (const [name, body] of Object.entries(loops)) {
