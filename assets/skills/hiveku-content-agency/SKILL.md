@@ -26,7 +26,13 @@ what gets made next. Run the loop; do not just write copy.
    `"marketing"` - there is NO `email` department agent; email copy goes through `"content"` or
    `"marketing"`). Department agents run with FULL hydration - memory, brand, avatars,
    journeys, skills, rules. Persist the result with the matching direct tool
-   (`content_create`, `social_create_post`, `email_campaign_create`).
+   (`content_create`, `social_create_post`, `email_campaign_create`). A turn that outruns
+   the bridge's ~110 s window comes back as an error that STILL carries `turn_id` (and
+   `session_id` once the department has minted one) - the department is usually still
+   writing. Never re-send the ask blind (it duplicates every write the first turn is making):
+   resume with `department_turn_get({ turn_id })` and call it again until `status` leaves
+   `running`, then read `response`, `tool_calls` and `data_updates` from it. Contract in
+   `references/site-publishing.md`.
 3. **Direct tools are for CRUD only** - status flips, list queries, scheduling, metadata,
    linking. Never call `content_create` with raw copy you wrote yourself without steps 1 and 2
    first - the number one quality failure: generic AI content the client is explicitly paying
@@ -80,7 +86,8 @@ artifacts; no production without a calendar slot and brief)?
   without overclaiming.
 - `references/site-publishing.md` - before publishing to a site, taking a page down, refreshing
   a live piece, importing CMS entries, minting a client share link, reading or answering client
-  comments on a shared draft, or category/content-template work (the content->CMS bridge,
+  comments on a shared draft, or category/content-template work (the pre-publish check, the
+  site's link targets, resuming a department turn that timed out, the content->CMS bridge,
   versions, the content_schedule truth, the review thread).
 - `references/email-distribution.md` - before building, sending, cancelling, or reporting on
   any email campaign, and before the client-report rail (gates, ladder, CAN-SPAM, template
@@ -144,7 +151,9 @@ order, and the populate tools' grounding refusal live there.
    stage does not go on the calendar. This mapping is what clients pay agencies for.
 4. **Pillar/cluster architecture:** each cluster gets ONE pillar page (comprehensive, 2,000+
    words, the ranking target) plus 4-8 supporting posts, each covering one subtopic and linking
-   up to the pillar. Check `seo_internal_links` when planning link paths.
+   up to the pillar. Plan link paths from `content_site_links({ project_id })` - every
+   published post and page on the site with its live URL (`references/site-publishing.md`);
+   `seo_internal_links` shows the graph that already exists on a Hiveku-hosted project.
 5. **Content types:** `marketing_content_templates` lists the account's formats - use them
    instead of inventing structures. Building missing formats is bill-worthy
    (`content_template_create` / `content_template_update` / `content_template_get`) - but
@@ -171,14 +180,20 @@ Per piece, in order:
 
 1. **Brief.** Every piece gets a brief - no field, no draft: working title + target keyword and
    intent (from Play 2); avatar + journey stage (which matrix cell this fills); the
-   before/after transformation angle; pillar supported + planned internal links; CTA mapped to
-   the journey stage (not always "buy"); format/template and target length; grounding
+   before/after transformation angle; pillar supported + the internal links planned as 3-8
+   anchors, each with its real URL from `content_site_links({ project_id })` (the site's
+   published posts and pages - never a URL typed from memory); sources to cite (URL + the
+   claim each supports); CTA mapped to the journey stage (not always "buy"); format/template
+   and target length; grounding
    (`kb_search` / `marketing_knowledge_bases_search` results for the claims the piece will
    make - first-hand material beats anything scraped).
 2. **Draft via the department.** `talk_to_department({ domain: "content", message: <brief +
    what you want back> })` - the agent drafts with full brand hydration. Iterate there; do not
    rewrite its brand voice yourself. Thin output means tighten the brief and re-ask - never
-   silently fill the gap with your own generic copy.
+   silently fill the gap with your own generic copy. A long-form draft can outrun the bridge
+   window: on the timeout error take its `turn_id` to `department_turn_get({ turn_id })` and
+   call it again until `status` is `completed` - the finished draft is in `response`. Do not
+   re-send the brief; a second fresh conversation drafts the piece twice.
 3. **Optimize against the SERP reality:** `seo_serp_get` on the target query, then `web_scrape` /
    `web_extract` the top results - subtopics and entities they cover that the draft does not are
    the revision list; feed them back to the department. The SERP is the specification.
@@ -191,8 +206,18 @@ Per piece, in order:
    **Load `references/media-and-visuals.md` before any media or video work.** Record the
    piece's assets with `content_media_attach` (a manifest only - it does NOT put the image on
    the page; the hero is `content_update` `featured_image_url`).
-5. **Quality gate (before persisting - ALL of these; a piece that fails one goes back to the
-   department with the failing item named, it does not ship):**
+5. **Quality gate (ALL of these; a piece that fails one goes back to the department with the
+   failing item named, it does not ship):** the mechanical half runs on the STORED row, so
+   write the draft to its calendar row first (`content_update` on the Play 2 draft, or
+   `content_create({ status: "draft" })` when none exists - a draft row is free; only
+   publishing is the commit), then:
+   - `content_seo_check({ content_id })` on that row. Every `level: "error"` item in
+     `result.checks` names its `field`: fix it with `content_update` (a placeholder slug on a
+     bound item via `content_link_to_cms`) and re-run until `result.ok` is true - `score` is
+     information, `ok` is the gate. `warn` items are judgment calls; state each one to the
+     user with your decision. `content_publish_to_site` runs the same check and hands the
+     findings back as `warnings[]`, but it NEVER blocks - the gate is you: it is not called
+     while an error stands. Contract: `references/site-publishing.md`.
    - Voice matches the brand guide (compare against recent published pieces); zero banned
      phrases - check the draft against the guide's `ai_forbidden_phrases` and `copy_donts`
      (`brand_guide_get`), not against your own sense of what sounds off.
@@ -209,9 +234,13 @@ Per piece, in order:
    - Alt text on the hero (`featured_image_alt`) and on every inline image - descriptive, not
      the filename.
    - At least two internal links to EXISTING published pieces, each by its real URL, taken
-     from `content_list` (published rows and their `cms_entry_slug`), `cms_list_entries`
-     (`resolvedPath`) or `seo_internal_links` - never invented, never guessed from a title.
-     The links the brief planned are among them.
+     from `content_site_links({ project_id })` (the project's published posts and pages with
+     their absolute URLs; `posts.without_url` and `notes` say what could not be resolved, and
+     an empty list means there is nothing to link yet - the brief says so out loud) - never
+     invented, never guessed from a title. Fallbacks when the project is unknown:
+     `content_list` (published rows carry `url`) and `cms_list_entries` (`resolvedPath`);
+     `seo_internal_links` shows the existing graph only. The links the brief planned are
+     among them.
    - Title under ~60 characters for search pieces; meta description drafted, 150-160
      characters, keyword present.
    After deploy, `/hiveku:seo-onpage <url>` re-checks the same items on the live page.
@@ -253,7 +282,9 @@ Publishing without distribution is where in-house content programs die; agencies
 3. **On-site publishing (Hiveku-hosted sites).** The canonical lane is the content->CMS bridge,
    visible to every marketing profile: `content_link_to_cms` (bind the item to project +
    collection + slug), then `content_publish_to_site` - the editor's own Publish path. NO
-   confirm flag, no dry run, so get the user's yes BEFORE calling; **the page is live only
+   confirm flag, no dry run, so get the user's yes BEFORE calling, and call only once the
+   Play 3 `content_seo_check` answers `ok: true` (the publish response repeats the findings as
+   `warnings[]` and never blocks on them - relay each one); **the page is live only
    after the project deploys** - verify before reporting "published". Take-downs:
    `content_unpublish_from_site` (never `content_update status='draft'` - that leaves the live
    page up). Imports: `content_create_from_cms_entry`. **Load `references/site-publishing.md`
@@ -301,8 +332,9 @@ Monthly at minimum; weekly glance during active campaigns.
    there is no tool-side restore, so the snapshot is the only undo. Then `content_update` +
    republish via the Play 4 bridge. Per page: re-read the SERP and scrape the current winners -
    close coverage gaps first; update every dated fact; rewrite title and intro against the
-   current SERP (the old ones already lost); add internal links from newer pieces
-   (`seo_internal_links`) and up to the pillar; route substantive rewrites through
+   current SERP (the old ones already lost); add internal links from newer pieces (URLs from
+   `content_site_links`; `seo_internal_links` for the graph as it stands) and up to the
+   pillar; re-run `content_seo_check` before the republish; route substantive rewrites through
    `talk_to_department` like any draft.
 7. **Kill or consolidate underperformers:** `seo_cannibalization` finds pages competing for one
    query - merge into the strongest URL, redirect the losers. Pages with no traffic, rankings,
@@ -378,8 +410,9 @@ reversible alternative:
   the candidate list with evidence, disclose the sample, let the user name ids; prefer
   `content_unpublish_from_site` or consolidation-with-redirects; `content_delete` only per
   named id, each confirmed.
-- **No bulk publish.** Each piece gets its own Play 3 quality gate and its own confirmed
-  `content_publish_to_site` (no dry run - the call is the commit).
+- **No bulk publish.** Each piece gets its own Play 3 quality gate (`content_seo_check` with
+  zero errors) and its own confirmed `content_publish_to_site` (no dry run - the call is the
+  commit).
 - **"Skip the checks" does not shrink the email ladder - it is why the ladder exists.** Gates
   fail at send time, and dry_run catches an audience of zero or of thousands. Gates -> dry_run
   -> test send -> explicit yes on audience + time. No exceptions for urgency.

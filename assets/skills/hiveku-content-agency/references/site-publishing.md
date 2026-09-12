@@ -2,7 +2,83 @@
 
 Load this file before publishing content to a Hiveku site, taking a page down, refreshing a live
 piece, importing existing CMS entries, minting a client share link, reading or answering client
-feedback on a shared draft, or working with categories.
+feedback on a shared draft, or working with categories - and before the Play 3 quality gate
+(the pre-publish check and the site's link targets) or resuming a department turn that timed
+out.
+
+## Availability - the content program's incoming tools (2026-09-12)
+
+Three hands land with the content-engine round 2. Each builder route is live on `main`; the
+MCP names below are mapped in the parallel MCP lane and reach `lib/tool-index.json` when that
+server deploys (until then `test/pending-tools.mjs` carries them as CONTENT-1).
+
+| Tool | Status | Route (Olympus auth, account-scoped) |
+|---|---|---|
+| `content_seo_check` | INCOMING (builder 5387b132b, ebceb8cf9) | `GET /api/olympus/marketing/content/:contentId/seo-check` |
+| `content_site_links` | INCOMING (builder 467fb70e2) | `GET /api/olympus/marketing/content/site-links?project_id=` |
+| `department_turn_get` | INCOMING (builder 1b4b833e0) | `GET /api/olympus/marketing/ai/turns/:turnId` |
+
+A key whose server does not serve a name yet answers unknown-tool: say so, run the tool-free
+form of the step (the checklist in SKILL.md Play 3 step 5; `content_list` + `cms_list_entries`
+for URLs; the operator looks a turn up in the dashboard's AI turn log), and never present the
+gap as "Hiveku cannot do this".
+
+## Link targets - `content_site_links({ project_id, limit? })`
+
+The list a writer picks internal-link anchors from: every published post and page on ONE
+website project, each with its live absolute URL. `project_id` is the WEBSITE project UUID from
+`sites_list` (400 `project_id_required` without it, 404 `project_not_found` outside the
+account); `limit` defaults to and caps at 500.
+
+Response: `{ data: [{ id, title, url, type: "post" | "page", published_at, slug, source }],
+total, capped, project: { id, name, host }, posts: { listed, without_url }, pages: { listed },
+notes: [] }`. `id` is the content item UUID for a post and `page:<route>` or `crawl:<url>` for
+a page; `source` says where the row came from (`content_item`, the project's `page_list`, or a
+`crawl` of a site Hiveku does not host - the Webflow and external cases); `published_at` is
+null for pages. Every URL is DERIVED, never guessed: a published row whose route cannot be
+resolved is counted in `posts.without_url` and explained in `notes` instead of being listed
+with an invented path, and a project with no production host (never deployed, no domain)
+answers an empty list and says why. An empty list means there is nothing to link yet; the
+brief says so and the piece ships without internal links rather than with fabricated ones.
+Hand the department 3-8 anchors (title + url) in the brief; the Play 3 gate then requires at
+least two of them in the body by URL.
+
+## The pre-publish check - `content_seo_check({ content_id })`
+
+The mechanical half of the Play 3 quality gate, run on the STORED row (persist the draft
+first). Deterministic and free - no network, no quota - so re-run it after every revision. The
+row is read in the key's account; another account's id is a 404.
+
+Response: `{ data: { content_id, checked_at, result, context } }` where
+- `result.ok` is true only when there is no `error` - THIS is the gate; `result.score` (100
+  minus 15 per error and 5 per warning) is information for the report;
+- `result.checks[]` is errors first, then warnings, each `{ id, level: "error" | "warn",
+  message, field }` - `field` is the `content_items` column (or settings key) to fix;
+- `result.stats` is `{ word_count, h1_count, heading_count, image_count, images_missing_alt,
+  internal_link_count, external_link_count, format }`;
+- `context` is what the check was given: `target_keyword` (from `settings.target_keyword`),
+  `banned_phrases` (the active brand guide's `ai_forbidden_phrases`), `site_host` (the linked
+  project's production host, so absolute links back to it count as internal),
+  `content_format`, and `linked` (bound to a project and collection; false means bind with
+  `content_link_to_cms` before publishing).
+
+What is an ERROR (must be fixed): an empty title; an exclamation mark in the title or meta
+title; a missing meta title; a missing meta description; a placeholder slug
+(`untitled-content`, `untitled`); an empty body; more than one H1 in the body (the title is
+the H1); no `featured_image_alt` while `featured_image_url` is set; an inline image with no
+alt; a banned phrase anywhere in the title, meta title, meta description or body. What is a
+WARNING (state it and decide): a meta title over 60 or a meta description over 160
+characters; no slug yet; under 300 words; no target keyword set (placement is then
+unchecked); the keyword absent from the title, the slug, the H1 or the first 100 words; a
+skipped heading level; fewer than two internal links; a sentence with a figure and no source
+link in the same paragraph.
+
+The fix loop: `content_update` the named field (`featured_image_alt`, `meta_description`,
+`slug`, `content`, `meta_title`, ...), re-run, repeat until `ok`; the keyword itself is set
+with `content_update({ target_keyword })`. Never publish while an error stands:
+`content_publish_to_site` re-runs this check and hands the findings back as `warnings[]` for
+the human's benefit, but it never blocks - the gate is the session, not the route. After the
+deploy, `/hiveku:seo-onpage <url>` re-checks the live page.
 
 ## The content -> CMS bridge (the canonical publish lane)
 
@@ -34,7 +110,12 @@ touching the content row, so the row and the live entry drift apart.
    item carrying `settings.target_keyword` auto-enrolls that keyword in rank tracking;
    `trackingStarted: false` only means skipped-or-already-tracked. The path takes NO advisory
    lock - a concurrent builder CMS write to the same slug is last-writer-wins (snapshot first,
-   below). Errors: 400 no `website_project_id`/`cms_collection_id` (bind first), 404 unknown
+   below). The response also carries the pre-publish check: `warnings[]` (one line each,
+   "Error (field): ..." / "Warning (field): ...") and `seo_check` (the same object
+   `content_seo_check` returns); the route NEVER blocks on them and the note counts them.
+   Relay every line to the user; an error line means the gate above was skipped - fix the
+   field and publish again (same file, new version) rather than leaving the entry as it is.
+   Errors: 400 no `website_project_id`/`cms_collection_id` (bind first), 404 unknown
    item/manifest/collection, 422 validation with the field named.
 3. **Take-down: `content_unpublish_from_site`.** The unpublish direction of the same endpoint;
    it can only ever draft an entry, never publish one. **Do NOT reach for
@@ -53,6 +134,34 @@ touching the content row, so the row and the live entry drift apart.
    `content_update` instead (`cms_read_entry` is dev-profile - flag it on scoped keys). An entry
    with a missing/unrecognized status materializes as 'published'; `featured_image_url` is stored
    raw and site-relative; a slug race surfaces as a 500 - retry, do not treat as permanent.
+
+## Resuming a department turn - `department_turn_get({ turn_id })`
+
+`talk_to_department` waits about 110 s at the bridge while a department turn may run up to
+1200 s, so a long draft times out at the client with the department still writing. The
+timeout error STILL carries `turn_id` (from the first frame) and `session_id` (null on a fresh
+conversation until the department mints it at the end of the turn), plus whatever `response`,
+`tool_calls` and `data_updates` had arrived. Do not re-send the ask - a retry duplicates every
+write the first turn is still making; resume with the turn id instead. The read is
+account-scoped: another account's turn, or a non-UUID, is a 404.
+
+Response: `{ turn_id, session_id, status, domain, user_message, started_at, finished_at,
+last_event_at, stale, error_message, stop_reason, num_turns, response, tool_calls: [{ seq,
+tool_call_id, name, input_summary, ok, result_preview }], data_updates: [{ seq, entity, action,
+id }], since_seq, last_seq, event_count, events_available, events_truncated }`.
+- `status` is `running | completed | errored | cancelled`. Call again while `running`;
+  `stale: true` (no event for five minutes on a running turn) is a dead worker, not a slow
+  one - report it, re-read the records `data_updates` names, and only then send the ask again.
+- `response` is the folded assistant text of the whole turn (the draft, once `completed`);
+  `tool_calls[].ok` is null while a call is still running and false when it failed - a false
+  here means a confident paragraph in `response` may sit on a write that did not land.
+- `session_id` becomes non-null once the turn finishes; a later
+  `talk_to_department({ domain, session_id, message })` resumes that conversation with its
+  transcript, which is how revisions go back to the same department session.
+- Events are a 30-day replay buffer: a finished turn older than that answers with status and
+  timestamps but `response: ""` and `events_available: false` - the transcript is the chat
+  session, not this read. The route also takes `since_seq` (events after a sequence number,
+  for a delta poll) and `events=1` (the raw `{ seq, event_type, event_data }` rows).
 
 ## Versions - the only undo for in-place refreshes
 
