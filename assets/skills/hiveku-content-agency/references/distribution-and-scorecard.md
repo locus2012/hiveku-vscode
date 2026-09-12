@@ -9,7 +9,7 @@ not views). Research, proof and case studies are in `references/research-and-pro
 
 | Tool | Status | Route (Olympus auth, account-scoped) |
 |---|---|---|
-| `marketing_campaign_roi` | INCOMING (builder e47ab5f70) | `GET /api/olympus/marketing/reports/campaign-roi` |
+| `marketing_campaign_roi` | LIVE (builder e47ab5f70) | `GET /api/olympus/marketing/reports/campaign-roi` |
 | `content_analytics_get` | LIVE, changed (builder 5d58d7d8b) | `GET /api/olympus/marketing/content/:contentId/analytics` |
 | `content_page_views_get` | LIVE, changed (builder 5d58d7d8b) | `POST /api/olympus/marketing/content/views` |
 | `social_repurpose_source` | LIVE, changed (builder c8e8e48dc, 913138c57) | `GET /api/olympus/social/repurpose/source` |

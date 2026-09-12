@@ -6,21 +6,21 @@ source rule), before drafting a case study from a won deal, and before an expert
 (`/hiveku:sme-interview`). The distribution plan and the scorecard are in
 `references/distribution-and-scorecard.md`.
 
-## Availability - the elite content program's incoming tools (2026-09-12)
+## Availability - the elite content program's round A tools (live since 2026-09-12)
 
-Seven hands land with round A of the elite content program. Each builder route is live on `main`;
-the MCP names below are mapped in the parallel MCP lane and reach `lib/tool-index.json` when that
-server deploys (until then `test/pending-tools.mjs` carries them as ELITE-A).
+Seven hands landed with round A of the elite content program. Each builder route is live, the MCP
+names below are declared on the live server and `lib/tool-index.json` carries them (the ELITE-A
+pending batch in `test/pending-tools.mjs` is retired).
 
 | Tool | Status | Route (Olympus auth, account-scoped) |
 |---|---|---|
-| `content_research_run` | INCOMING (builder 23bed5d65, bdc4f2f6b) | `POST /api/olympus/marketing/content/:contentId/research` |
-| `content_research_get` | INCOMING (builder 23bed5d65) | `GET /api/olympus/marketing/content/:contentId/research` |
-| `content_research_topic` | INCOMING (builder 23bed5d65) | `POST /api/olympus/marketing/content/research` |
-| `kb_artifacts_list` | INCOMING (builder 23bed5d65, bdc4f2f6b) | `GET /api/olympus/knowledge-bases/artifacts` |
-| `kb_artifact_get` | INCOMING (builder 23bed5d65) | `GET /api/olympus/knowledge-bases/artifacts/:artifactId` |
-| `content_proof_pack` | INCOMING (builder 4cd5bd7f6, 95ec02834) | `GET /api/olympus/marketing/content/proof-pack` |
-| `content_case_study_draft` | INCOMING (builder a1bea92a4, a8125a616) | `POST /api/olympus/marketing/content/case-study` |
+| `content_research_run` | LIVE (builder 23bed5d65, bdc4f2f6b) | `POST /api/olympus/marketing/content/:contentId/research` |
+| `content_research_get` | LIVE (builder 23bed5d65) | `GET /api/olympus/marketing/content/:contentId/research` |
+| `content_research_topic` | LIVE (builder 23bed5d65) | `POST /api/olympus/marketing/content/research` |
+| `kb_artifacts_list` | LIVE (builder 23bed5d65, bdc4f2f6b) | `GET /api/olympus/knowledge-bases/artifacts` |
+| `kb_artifact_get` | LIVE (builder 23bed5d65) | `GET /api/olympus/knowledge-bases/artifacts/:artifactId` |
+| `content_proof_pack` | LIVE (builder 4cd5bd7f6, 95ec02834) | `GET /api/olympus/marketing/content/proof-pack` |
+| `content_case_study_draft` | LIVE (builder a1bea92a4, a8125a616) | `POST /api/olympus/marketing/content/case-study` |
 
 A key whose server does not serve a name yet answers unknown-tool: say so, run the tool-free form
 of the step (`kb_search` plus the `/hiveku:research` ladder for evidence; `marketing_testimonials_list`,
