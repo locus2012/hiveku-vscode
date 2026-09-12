@@ -6,17 +6,20 @@ feedback on a shared draft, or working with categories - before recording who a 
 its row (the five grounding columns), and before the Play 3 quality gate (the pre-publish check
 and the site's link targets) or resuming a department turn that timed out.
 
-## Availability - the content program's incoming tools (2026-09-12)
+## Availability - the content program's round 2 tools (live since 2026-09-12)
 
-Three hands land with the content-engine round 2. Each builder route is live on `main`; the
-MCP names below are mapped in the parallel MCP lane and reach `lib/tool-index.json` when that
-server deploys (until then `test/pending-tools.mjs` carries them as CONTENT-1).
+Three hands landed with the content-engine round 2. Each builder route is live on `main` and the
+MCP names below are in `lib/tool-index.json` (the CONTENT-1 batch in `test/pending-tools.mjs`
+is retired). The elite content program's round B changed two of them - `content_site_links`
+gained `content_id`, roles and suggested anchors, `content_seo_check` gained eleven rules - and
+those contracts live in `references/site-architecture-and-decay.md` and
+`references/structure-and-conversion.md`.
 
 | Tool | Status | Route (Olympus auth, account-scoped) |
 |---|---|---|
-| `content_seo_check` | INCOMING (builder 5387b132b, ebceb8cf9) | `GET /api/olympus/marketing/content/:contentId/seo-check` |
-| `content_site_links` | INCOMING (builder 467fb70e2) | `GET /api/olympus/marketing/content/site-links?project_id=` |
-| `department_turn_get` | INCOMING (builder 1b4b833e0) | `GET /api/olympus/marketing/ai/turns/:turnId` |
+| `content_seo_check` | LIVE (builder 5387b132b, ebceb8cf9; MCP b0e0d4d) | `GET /api/olympus/marketing/content/:contentId/seo-check` |
+| `content_site_links` | LIVE (builder 467fb70e2; MCP b0e0d4d) | `GET /api/olympus/marketing/content/site-links?project_id=` |
+| `department_turn_get` | LIVE (builder 1b4b833e0; MCP a675885) | `GET /api/olympus/marketing/ai/turns/:turnId` |
 
 A key whose server does not serve a name yet answers unknown-tool: say so, run the tool-free
 form of the step (the checklist in SKILL.md Play 3 step 5; `content_list` + `cms_list_entries`
@@ -91,7 +94,11 @@ with an invented path, and a project with no production host (never deployed, no
 answers an empty list and says why. An empty list means there is nothing to link yet; the
 brief says so and the piece ships without internal links rather than with fabricated ones.
 Hand the department 3-8 anchors (title + url) in the brief; the Play 3 gate then requires at
-least two of them in the body by URL.
+least two of them in the body by URL. Since the elite content program's build 8 the read takes
+`content_id` (the item being written) and orders the rows for architecture - money pages first,
+then the item's pillar, then the other pillars - with `role`, `suggested_anchor` and
+`is_pillar_for_item` on every row; the money page and the pillar are the two links the gate
+checks first. Contract in `references/site-architecture-and-decay.md`.
 
 ## The pre-publish check - `content_seo_check({ content_id })`
 
@@ -122,6 +129,14 @@ characters; no slug yet; under 300 words; no target keyword set (placement is th
 unchecked); the keyword absent from the title, the slug, the H1 or the first 100 words; a
 skipped heading level; fewer than two internal links; a sentence with a figure and no source
 link in the same paragraph.
+
+Eleven elite rules joined these on 2026-09-12 - `author_missing`, `answer_block_missing`,
+`faq_schema_mismatch`, `title_generic`, `money_link_missing`, `pillar_link_missing`,
+`keyword_already_targeted`, `comparison_table_missing`, `competitor_claim_unsourced`,
+`cta_missing`, `cta_stage_mismatch` - with their levels, fields and fixes tabled in
+`references/structure-and-conversion.md`; `field` gained `author_id`, `answer_block` and `faq`,
+and `context` echoes the author, the money pages, the cluster, the offer and the CTA stage table
+the check was given.
 
 The fix loop: `content_update` the named field (`featured_image_alt`, `meta_description`,
 `slug`, `content`, `meta_title`, ...), re-run, repeat until `ok`; the keyword itself is set
@@ -255,10 +270,13 @@ session action: `content_publish_to_site` + deploy at the planned time.
 ## Content templates
 
 - `marketing_content_templates` (the listing) has no paging; `content_template_get` by id is the
-  only way to reach a template it never shows - hold onto ids.
+  only way to reach a template it never shows - hold onto ids. The three bottom-funnel templates
+  (`default_settings.template_slug` brand-vs-rival, rival-alternatives,
+  best-category-for-segment) appear as account rows after the first `content_bofu_plan`
+  (`references/site-architecture-and-decay.md`).
 - `content_template_create`: `name` + `template_content` required (blank = 400); `content_type`
   outside article, blog_post, page, social_post, email, press_release, case_study, tutorial,
-  faq, landing_page, custom is a generic 500, not a 400; `is_global`/`usage_count`/`created_by`
+  faq, landing_page, comparison, alternatives, research, custom is a generic 500, not a 400; `is_global`/`usage_count`/`created_by`
   you send are silently dropped. Nothing applies a template for you - `content_create` takes no
   template_id and `usage_count` never moves.
 - `content_template_update`: global templates are READ-ONLY - a PATCH returns 404,

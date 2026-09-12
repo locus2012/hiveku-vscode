@@ -81,6 +81,13 @@ export const VENDORED_COMMANDS = [
   // stored on the item as settings.sources[]. Written by MARKETER_COMMANDS in
   // src/roleCommands.ts.
   'sme-interview',
+  // 2026-09-12: the elite content round B plays the vendored content skill
+  // names for the marketer role - /hiveku:bofu (the bottom-funnel plan and
+  // the sourced, dated comparison pages) and /hiveku:refresh (the decision
+  // loop: the refresh queue, one of five dispositions per piece, a refresh
+  // that keeps the URL). Written by MARKETER_COMMANDS in src/roleCommands.ts.
+  'bofu',
+  'refresh',
 ];
 
 export const DEFAULT_PLUGIN_ROOT = join(EXTENSION_ROOT, '..', 'hiveku-claude-plugin');

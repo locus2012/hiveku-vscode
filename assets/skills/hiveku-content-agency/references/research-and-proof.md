@@ -51,7 +51,9 @@ as "Hiveku cannot do this".
 
 What it does, in order: searches every KB in the account, reads the Google SERP for the item's
 `target_keyword` (one DataForSEO call against the monthly SEO research cap; a `settings.serp_brief`
-captured in the last 30 days is reused instead), searches and fetches up to `max_sources` (1-10,
+captured in the last 30 days is reused instead - `content_brief_build` writes it, so build the
+brief first and the run spends one read less; `references/structure-and-conversion.md`),
+searches and fetches up to `max_sources` (1-10,
 default 5) web pages, extracts claims and figures each with a quote copied verbatim from its
 passage and a source URL, indexes every page it used into the Content research KB (a URL already
 there is reused, never indexed twice), writes the artifact (`artifact_type: "content_research"`,

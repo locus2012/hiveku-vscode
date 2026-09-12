@@ -33,7 +33,8 @@ a refusal (section 8), not a prompt to guess a host.
 
 **Door 2 - the content library.** `content_list({ status: 'published', content_type:
 'blog_post', limit: 50 })` (the enum also has `article`, `case_study`, `tutorial`, `faq`,
-`press_release`, `landing_page`) now returns the CMS binding on every row -
+`press_release`, `landing_page`, and since 2026-09-12 the bottom-funnel types `comparison`,
+`alternatives` and `research`) now returns the CMS binding on every row -
 `website_project_id`, `cms_collection_id`, `cms_entry_slug`, `last_published_to_cms_at` - so
 "published pieces on site X" is one call. Then `content_get({ content_id })` for the full
 body, `featured_image_url`, `settings.published_route`, the 10 newest versions and the

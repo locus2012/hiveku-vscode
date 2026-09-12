@@ -1,6 +1,6 @@
 ---
 name: hiveku-content-agency
-description: Full-service content marketing agency methodology for a Hiveku account. Trigger on content strategy, editorial calendars, blog/social/email content production, brand voice work, content refreshes and decay recovery, repurposing, distribution planning, research before a draft (the knowledge base as the research layer), proof packs and case studies from won deals, expert (SME) interviews, and "which piece brought leads". ALSO load for risky content requests so the refusal rules are in context - bulk-delete or purge of posts, content, or brand guides ("clean out the old posts", "delete everything that isn't performing"), "publish everything now", "send it to the whole list", "skip the test send / review / confirmation", take-down and unpublish demands, and mass in-place rewrites of live content.
+description: Full-service content marketing agency methodology for a Hiveku account. Trigger on content strategy, editorial calendars, blog/social/email content production, brand voice work, content refreshes and decay recovery, repurposing, distribution planning, research before a draft (the knowledge base as the research layer), proof packs and case studies from won deals, expert (SME) interviews, "which piece brought leads", the byline and author on a post, the SERP brief before a draft, titles that test, comparison / alternatives / best-X-for-Y pages, offers, lead magnets and CTAs inside a piece, page roles, clusters and the keyword map, and what to refresh, consolidate or prune. ALSO load for risky content requests so the refusal rules are in context - bulk-delete or purge of posts, content, or brand guides ("clean out the old posts", "delete everything that isn't performing"), "publish everything now", "send it to the whole list", "skip the test send / review / confirmation", take-down and unpublish demands, and mass in-place rewrites of live content.
 ---
 
 # Hiveku Content Agency
@@ -105,6 +105,18 @@ artifacts; no production without a calendar slot and brief)?
   row, owned email first), before a publish (the no-plan warning, the publish event and the
   repurpose and weekly-digest templates) and before any per-piece performance read or the next
   brief (the scorecard: leads per piece, campaign ROI; leads, not views).
+- `references/structure-and-conversion.md` - before the brief of any piece (the author on the
+  row, the SERP brief built before the draft, the thesis and the hook), before the title step
+  (five candidates, one pick, the weekly test), before a consideration or decision piece asks
+  the reader for anything (offers, the lead magnet, the CTA plan and the `::cta` / `::upgrade`
+  placements) and before a publish (the answer block and FAQ the markup is built from, the
+  eleven elite rules of the check, tabled with their fixes).
+- `references/site-architecture-and-decay.md` - before placing a piece on the site (its
+  cluster, its role in it, its page role, the money page and the pillar it must link), before
+  choosing a keyword (the keyword map and its collisions), before a bottom-funnel page
+  (`/hiveku:bofu`: the plan, the seed, the sourced and dated comparison table) and before any
+  refresh, consolidate or prune decision (`/hiveku:refresh`: the decay columns, the refresh
+  brief, the prune list, the disposition recorded on the row).
 
 ## Play 1 - Strategy foundation (run before any calendar or production work)
 
@@ -157,39 +169,90 @@ order, and the populate tools' grounding refusal live there.
    awareness, all avatar one) explain why traffic does not convert. Report the matrix before
    proposing the calendar, disclosing its sample (N of M, what was excluded) - a verdict from a
    partial pull is partial; label it, never round it up to a whole-library claim.
+7. **Who signs it:** `content_authors_list` - the practitioners every piece publishes under,
+   the default first. No piece ships under nobody: an account with no authors gets one before
+   the calendar - `content_authors_create({ name, role, bio, headshot_url, credentials, same_as,
+   voice_notes })` for a real person the owner names, never an invented byline and never the
+   brand name standing in for a person. Contract in `references/structure-and-conversion.md`.
+8. **What we stand for:** `brand_positioning_get` - the thesis, the beliefs, what we are
+   against, the category name and the proof points on the active brand guide. `is_empty: true`
+   is foundation work: draft it through `talk_to_department({ domain: "content" })` from the
+   mission, the guide's brand-is / brand-is-not lists, the avatars' objections and the grids'
+   measured results, present it, and `brand_positioning_set` only on the owner's yes (it
+   replaces the whole object). Every draft argues one sentence from it (Play 3, the `Thesis:`
+   line).
+9. **What we ask for, and where the site converts:** `brand_offers_get` - the offers on the
+   guide (promise, guarantee, bonuses, the button and the one link, the stages each fits); a
+   decision piece with no offer to point at is a brief that stops at `offer_missing`. Then
+   `site_page_roles_get({ project_id })` - which pages are `money`, `pillar`, `support` or
+   `utility`. An account that has marked no money page gets the seed
+   (`site_page_roles_set({ project_id, seed: true })`, each suggestion shown with its `reason`,
+   applied with `apply: true` on the yes; a role a person set is never overwritten) before any
+   piece is asked to link one. Contract in `references/site-architecture-and-decay.md`.
 
 ## Play 2 - Editorial calendar (SEO-informed, avatar-mapped, pillar-clustered)
 
-1. **Topic sourcing (consume the SEO skill's cluster work if installed):**
-   `seo_keyword_clusters` / `seo_topic_clusters` (the architecture to publish against);
+1. **The keyword map first, then topic sourcing.** `content_keyword_map({ project_id })` is
+   one read: keyword -> item -> live URL -> best position -> decay, grouped by topic cluster
+   with the pillar first (`references/site-architecture-and-decay.md`). Each cluster's
+   `missing_subtopics[]` are the next briefs; `collisions[]` (two items on one keyword, or an
+   open cannibalisation with its `recommended_primary_url`) are REFUSED for a new piece unless
+   the owner says consolidate; `without_keyword[]` is counted on its own line, never guessed.
+   Then the SEO skill's cluster work if installed:
+   `seo_keyword_clusters` / `seo_topic_clusters` (the architecture to publish against; the
+   Sunday cluster sweep recomputes `coverage_score`, `missing_subtopics` and
+   `internal_link_score` from published content);
    `seo_content_gaps` (topics competitors rank for that this account does not);
    `dataforseo_labs_google_top_searches` + `dataforseo_labs_google_keyword_ideas` for demand
    discovery and `dataforseo_labs_search_intent` to classify intent before assigning a content
-   type (informational -> blog/guide, commercial -> comparison, transactional -> landing). The
+   type (informational -> blog/guide, commercial -> a `comparison` or `alternatives` page whose
+   rival claims carry a source and a date - `/hiveku:bofu` - transactional -> landing); the
+   brief's own verdict (`search_intent` and `page_type`, Play 3 step 1) overrides this first
+   guess. The
    `dataforseo_labs_*` module is profile-gated and served separately - when absent, fall back
    to `seo_research` (its keyword actions) and `seo_keywords_list`.
 2. **Cannibalization gate before net-new topics.** A plan drafted without checking what already
    ranks cannibalizes the account's own pages: run `seo_cannibalization` (detected collisions)
    and `seo_keywords_list` / `seo_gsc_search_queries` for queries the site already ranks for. A
    topic the site already covers becomes a REFRESH or consolidation target (Play 5), not a new
-   URL.
+   URL. Before any net-new topic the decision loop reads first (`/hiveku:refresh`): a decaying
+   page on the keyword (`decay_status` set and not `recovered`, ordered by `refresh_priority`)
+   is a refresh, never a new page; a zero-traffic page on it (`content_prune_candidates`) is
+   consolidate-or-prune first.
 3. **Map every topic to a cell:** avatar x journey stage x cluster. A topic with no avatar or no
    stage does not go on the calendar. This mapping is what clients pay agencies for.
 4. **Pillar/cluster architecture:** each cluster gets ONE pillar page (comprehensive, 2,000+
    words, the ranking target) plus 4-8 supporting posts, each covering one subtopic and linking
    up to the pillar. Plan link paths from `content_site_links({ project_id })` - every
    published post and page on the site with its live URL (`references/site-publishing.md`);
-   `seo_internal_links` shows the graph that already exists on a Hiveku-hosted project.
+   `seo_internal_links` shows the graph that already exists on a Hiveku-hosted project. The row
+   says which it is: `topic_cluster_id` (a `seo_topic_clusters` id in the account) and
+   `cluster_role` (`pillar` | `spoke`) go on the calendar draft, and `page_role` (`money` |
+   `pillar` | `support` | `utility`) says what the page is for the site. With `content_id` the
+   same read orders the targets money pages first, then the piece's own pillar
+   (`is_pillar_for_item`), each with a `suggested_anchor` - the money page and the pillar are
+   the two links every draft carries (`references/site-architecture-and-decay.md`).
 5. **Content types:** `marketing_content_templates` lists the account's formats - use them
    instead of inventing structures. Building missing formats is bill-worthy
    (`content_template_create` / `content_template_update` / `content_template_get`) - but
    NOTHING auto-applies a template (`content_create` takes no template_id): they are scaffolds
-   you copy from. Traps in `references/site-publishing.md`.
+   you copy from. Traps in `references/site-publishing.md`. The three bottom-funnel templates
+   (brand vs rival, rival alternatives, best category for segment) appear as account rows after
+   the first `content_bofu_plan`; `comparison`, `alternatives` and `research` are content types
+   on every content route.
 6. **Persist the calendar:** each planned piece becomes a draft `content_create({ status:
    "draft", title, content_type, target_keyword, avatar_id, journey_id, journey_stage,
    before_after_grid_id })` - the cell it fills recorded as the row's typed columns (ids from
    the Play 1 lists, the stage name as the journey map spells it; a foreign or malformed id is
    a 400 `invalid_reference` and nothing is created), never as prose in the body or a tag. The
+   same call carries the round-B columns: `author_id` (Play 1 step 7; the account default
+   publishes otherwise), `topic_cluster_id` and `cluster_role` (step 4), `page_role`, and
+   `search_intent` / `page_type` once the brief has been built (Play 3 step 1 stamps them
+   otherwise) - every id is looked up in the account (400 `invalid_reference`, nothing written)
+   - and a `target_keyword` another live item already targets comes back as `warnings:
+   ["keyword_already_targeted: ..."]` with `keyword_conflicts[]`: relay the line and
+   consolidate or re-aim; a 201 with a warning is not a clean brief
+   (`references/structure-and-conversion.md`). The
    same call carries `settings: { distribution_plan }` - the six channel rows with the
    `email_digest` row first and `paid` winner-only - so the piece is briefed with its channels;
    a malformed plan reads as no plan, so validate it before writing (shape and defaults in
@@ -201,9 +264,10 @@ order, and the populate tools' grounding refusal live there.
    inspect).
 
 **Stage-to-format defaults (override with account data):** awareness - educational posts, trend
-pieces, social-native, top-of-funnel guides; consideration - comparisons, deep dives, case
-studies, newsletter features; decision - product-led pieces, ROI/pricing explainers, landing
-pages, objection FAQs; retention - advanced tutorials, changelog narratives, customer
+pieces, social-native, top-of-funnel guides; consideration - deep dives, case studies,
+newsletter features, comparisons; decision - the bottom-funnel pages (`comparison`,
+`alternatives`, `/hiveku:bofu`), product-led pieces, ROI/pricing explainers, landing pages,
+objection FAQs; retention - advanced tutorials, changelog narratives, customer
 spotlights. Calendar horizon: 4 weeks firm + 8 weeks provisional. Never schedule more than the
 account can actually produce (see Benchmarks).
 
@@ -235,6 +299,44 @@ Per piece, in order:
    - **Distribution at brief time.** The row's `settings.distribution_plan` (Play 2 step 6) is
      read back and edited to this piece: owned email first, `paid` winner-only, a channel that
      does not fit marked `skipped` with the reason.
+   - **Author first.** The `By: <name>, <role>` line comes from the row's `author` (else the
+     account default in `content_authors_list`); no authors is a brief that stops here and
+     offers `content_authors_create` for a real person (Play 1 step 7).
+   - **The SERP brief before the draft.** `content_brief_build({ content_id })` when the row
+     has no stored brief (it spends one SERP read, three page parses and at most one model
+     call against the research cap - say so first; a spent cap is a 402 with nothing written),
+     then `content_brief_get({ content_id })` and reason from what is stored: `Intent:` and
+     `Type:` are header lines read back from the row's `search_intent` and `page_type` (a
+     guide for a SERP full of comparison pages is the mistake the brief exists to catch -
+     re-scope, never override the verdict from taste), `top_results[].outline` is the outline
+     benchmark, `word_count_band` a band, `paa[]` the questions, `what_the_top_3_all_say[]` the
+     consensus the thesis argues against. No SERP brief, no draft.
+   - **Thesis and hook.** `Thesis:` is a REQUIRED header line - the one sentence the piece
+     argues, from `brand_positioning_get` (the thesis or a belief) else the piece's own claim;
+     `Hook:` names the opener's pattern, one of the sixteen slugs
+     hiveku-social-agency/references/hooks-and-formats.md carries, persisted as
+     `settings.hook_pattern`. The
+     rubric: a competitor would not publish this sentence.
+   - **The answer block and the FAQ.** 40-60 words directly under the H1 that restate the
+     query and answer it - the row's `answer_block` AND the lead paragraph, the same words;
+     three to six REAL questions from `paa[]`, the tickets and the calls into the row's `faq`
+     AND an FAQ section in the body, never padded. The publish builds the Article, BreadcrumbList
+     and FAQPage markup from them.
+   - **Placement and the two links that matter first.** `content_site_links({ project_id,
+     content_id })` orders the targets money pages first, then the piece's own pillar, each
+     with its `suggested_anchor`: the brief names the money page and the pillar the draft MUST
+     link (a consideration or decision piece with no money-page link, or a spoke that does not
+     link its pillar, is an error in the gate). Comparison and alternatives pages carry the
+     sourced, dated table: `/hiveku:bofu` and `references/site-architecture-and-decay.md`.
+   - **Conversion, from the plan.** `content_conversion_plan({ content_id })` - the five-stage
+     table's row for THIS piece (`allowed_hooks`, `proof_type`, `cta_verb`, `destination`), the
+     offer it asks with, the lead magnet, the copy the shortcodes render to, and `warnings[]`
+     that are brief items: `lead_magnet_missing` on a long-form piece means proposing one
+     (kind, title, what it delivers) and `content_update({ content_id, lead_magnet })` before
+     the draft; `offer_missing` on a decision piece means an offer from the owner through
+     `brand_offers_set` before it publishes. The three buckets (awareness subscribes,
+     consideration downloads, decision buys) are retired. Contract in
+     `references/structure-and-conversion.md`.
 2. **Draft via the department.** `talk_to_department({ domain: "content", message: <brief +
    what you want back> })` - the agent drafts with full brand hydration; the message carries
    the research claims, the proof entries and any expert quotes with their citations, and a
@@ -253,13 +355,38 @@ Per piece, in order:
    piece as grounded. A 400 `invalid_reference` names the id that is not this account's and
    writes nothing on that call: re-read the Play 1 lists, never strip the id to make the call
    pass. `settings.linkedAvatars` / `settings.targetJourneyStage` and `persona:` / `stage:`
-   tags are not the contract - nothing reads them.
-3. **Optimize against the SERP reality:** `seo_serp_get` on the target query, then `web_scrape` /
-   `web_extract` the top results - subtopics and entities they cover that the draft does not are
-   the revision list; feed them back to the department. The SERP is the specification.
-   `seo_serp_features` tells you what shape the page must take (snippet, list, comparison
-   table). Think in `seo_eeat_scores` terms: named author, first-hand evidence, citations,
-   updated date. Readability: short paragraphs, descriptive subheads every 150-300 words.
+   tags are not the contract - nothing reads them. The round-B fields ride in the same write:
+   `author_id`, `answer_block`, `faq`, `topic_cluster_id`, `cluster_role`, `page_role`,
+   `lead_magnet`, `offer_id` and `settings: { hook_pattern }` (the settings PATCH merges
+   top-level keys). Six columns are read-only on this call - `serp_brief` and its capture
+   stamp, `decay_status`, `refresh_priority`, `top_declining_keywords`, `refreshed_at` - and a
+   changed value is 400 `read_only_field` (an unchanged echo is ignored, so a whole
+   `content_get` PATCHed back is safe): `content_brief_build`, the Sunday runs and the publish
+   path own them; never work around the 400. The draft itself carries the placements, never
+   the CTA copy: one `::cta{variant=inline}` after the second section, one `::cta{variant=end}`
+   after the last, then `::upgrade` when the piece has a lead magnet - two colons, each on a
+   line of its own (the site renders the plan's copy, so a changed offer reaches every
+   published piece).
+3. **Optimize against the SERP reality:** the stored brief is the specification -
+   `content_brief_get({ content_id })`: `top_results[].outline` and `word_count` are the
+   benchmark (cover every subtopic two of the three cover, in the shape the SERP rewards;
+   `word_count_band` is a band, never a target), `features[]` and `featured_snippet` say what
+   shape the page must take (snippet, list, comparison table), `paa[]` the questions it
+   answers. Subtopics and entities the top three cover that the draft does not are the revision
+   list; feed them back to the department. On a key that predates the brief route,
+   `seo_serp_get` on the target query, then `web_scrape` / `web_extract` the top results and
+   `seo_serp_features` for the layout, do the same by hand. Think in `seo_eeat_scores` terms:
+   named author (the row's `author_id`), first-hand evidence, citations, updated date.
+   Readability: short paragraphs, descriptive subheads every 150-300 words.
+   **Then the title.** Titles are claims, not labels: `content_titles_generate({ content_id,
+   count: 5 })` (a metered department call; 180 s client timeout) argues five from the
+   positioning, each tagged with one of the sixteen hook patterns open at the row's stage.
+   Present all five with pattern and rationale (`dropped[]` as a muted note), then
+   `content_titles_pick({ content_id, index })` - `index` is 0-based - writes `title` and
+   `meta_title`, `settings.hook_pattern` and a version row. Never write
+   `settings.title_candidates` by hand. A pick on a published piece reaches the live page on
+   the next `content_publish_to_site`. The `title_generic` rule (no number, no name, no claim,
+   no contrast) is the floor. Contract in `references/structure-and-conversion.md`.
 4. **Illustrate - after the draft is on its row, before the gate and the publish.** A long-form
    piece ships with a hero and one image per major section (an H2 a picture adds information
    to - the thing, the place, the process, the comparison - never decoration), and they come
@@ -307,7 +434,23 @@ Per piece, in order:
      phrases - check the draft against the guide's `ai_forbidden_phrases` and `copy_donts`
      (`brand_guide_get`), not against your own sense of what sounds off.
    - The avatar's actual language appears (their words for the pain, not marketing-speak);
-     the CTA matches the journey stage.
+     the CTA matches the journey stage - the rung of awareness the reader stands on, from the
+     conversion plan's stage row (`cta_verb` toward `destination`), placed as
+     `::cta{variant=end}` on its own line with the inline placement and `::upgrade` where the
+     plan says (`cta_missing`, `cta_stage_mismatch`); "learn more" is not a decision.
+   - The eleven elite rules (`references/structure-and-conversion.md`, tabled with their
+     fixes): errors `author_missing`, `money_link_missing`, `pillar_link_missing`,
+     `comparison_table_missing`, `competitor_claim_unsourced`; warns `answer_block_missing`,
+     `faq_schema_mismatch`, `title_generic`, `keyword_already_targeted`, `cta_missing`,
+     `cta_stage_mismatch`. `title_generic` and `cta_stage_mismatch` are the two a writer fixes
+     by hand (a better title from the candidates, a fitting ask); the other nine name a field
+     or a link. `result.context` echoes what the check was given (the author, the money pages,
+     the cluster, the offer, the CTA stage table), so a rule that skipped says why.
+   - The round-B header lines are read back the same way: `By:` from the row's `author.name`
+     (else the account default), `Intent:` and `Type:` from `search_intent` / `page_type`,
+     `Cluster:` from `topic_cluster.pillar_keyword`, `cluster_role` and `page_role`, `Hook:`
+     from `settings.hook_pattern`; `Thesis:` is the sentence the body argues, and a draft
+     without one is an outline, not a draft.
    - Every claim sourced or first-hand - traceable to the research run's `claims[]`
      (`source_url`), `kb_search` results, the proof pack's citations, stored expert quotes
      (`settings.sources[]`) or user-provided material. Every EXTERNAL claim (a statistic, a
@@ -334,12 +477,15 @@ Per piece, in order:
      invented, never guessed from a title. Fallbacks when the project is unknown:
      `content_list` (published rows carry `url`) and `cms_list_entries` (`resolvedPath`);
      `seo_internal_links` shows the existing graph only. The links the brief planned are
-     among them.
+     among them. The money page and the pillar come first: `content_site_links({ project_id,
+     content_id })` lists them first with a `suggested_anchor`, and a consideration or
+     decision piece with no money-page link (`money_link_missing`), or a spoke that does not
+     link its pillar (`pillar_link_missing`), is an error.
    - Title under ~60 characters for search pieces; meta description drafted, 150-160
      characters, keyword present.
    After deploy, `/hiveku:seo-onpage <url>` re-checks the same items on the live page.
 6. **Persist:** `content_create` (or `content_update` for revisions) carrying the five
-   grounding params beside the copy, then `content_link_tasks` to close the loop with any PM
+   grounding params and the round-B fields (step 2) beside the copy, then `content_link_tasks` to close the loop with any PM
    tasks tracking the piece.
 7. **Client sign-off before anything ships:** the confirm gate needs an artifact the CLIENT can
    review, not just a verbal yes in this chat. `content_share_link_create` mints a PUBLIC
@@ -388,7 +534,11 @@ step 1), and this play works it.
    are the `utm_links` `social_repurpose_source` returns, unchanged
    (`utm_medium=content&utm_content=<slug>` is what credits the piece; a hand-written
    `utm_medium=social` link credits nothing), and the set's first post id goes on the plan's
-   `social` row as `drafted`. Never
+   `social` row as `drafted`. A piece with `settings.title_candidates` tests them off-site:
+   each derivative carries a DIFFERENT candidate as its first line, tagged `title:<n>` (or
+   `utm_term=title-<n>` on the link; n is the 0-based index) - the Monday title-results run
+   pools those click rates with Search Console on the live title and writes
+   `settings.title_results` (`references/structure-and-conversion.md`). Never
    cross-post identical text - write platform-native variants (per-platform rules live in the
    hiveku-social-agency skill). Every derivative maps back to a pillar - orphan posts dilute
    the feed's positioning.
@@ -399,14 +549,23 @@ step 1), and this play works it.
    `email_campaign_cancel` as the safety valve. Full procedure: `/hiveku:email` - follow it
    rather than improvising. The owned list goes first: the `email_digest` plan row is either
    the weekly digest template above (the campaign it drafts is the derivative, `campaign:<id>`
-   on the row) or a dedicated feature in the next send.
+   on the row) or a dedicated feature in the next send. A digest link that tests a title
+   candidate appends `utm_term=title-<n>` beside the `utm_content=<slug>` the digest carries.
 5. **On-site publishing (Hiveku-hosted sites).** The canonical lane is the content->CMS bridge,
    visible to every marketing profile: `content_link_to_cms` (bind the item to project +
    collection + slug), then `content_publish_to_site` - the editor's own Publish path. NO
    confirm flag, no dry run, so get the user's yes BEFORE calling, and call only once the
    Play 3 `content_seo_check` answers `ok: true` (the publish response repeats the findings as
    `warnings[]` and never blocks on them - relay each one); **the page is live only
-   after the project deploys** - verify before reporting "published". Take-downs:
+   after the project deploys** - verify before reporting "published". The response also
+   carries `author { id, name, entry_slug, entry_created } | null` (null on a collection with
+   an author field means the byline did not reach the site - say so; 422 `author_missing` /
+   `author_entry_failed` name the cause), `publish_warnings[]` (one line each, the Webflow
+   no-custom-code line especially), `refreshed: true` ("Refreshed on the same URL";
+   `refreshed_at` is stamped, which the decay loop reads) and `llms_txt_regenerated`; the
+   JSON-LD graph (Article with the author as a Person, BreadcrumbList, FAQPage when `faq` has
+   real pairs) is built from the row on every publish. The publish summary names the money
+   page and the pillar the piece links. Take-downs:
    `content_unpublish_from_site` (never `content_update status='draft'` - that leaves the live
    page up). Imports: `content_create_from_cms_entry`. **Load `references/site-publishing.md`
    before any of these.** `cms_*` is on the `marketing`, `marketing-seo` and `dev` keys and
@@ -454,28 +613,57 @@ Monthly at minimum; weekly glance during active campaigns.
    variant-carrying campaign). The canonical contract, including what is still absent
    (unsubscribes), is in `references/email-distribution.md` - load it
    before reporting any email number.
-6. **Refresh cycle:** `seo_content_decay` finds previously-ranking pages losing clicks. For
-   decayed winners, UPDATE IN PLACE - the same URL keeps the authority; a new URL starts from
-   zero. **Snapshot FIRST: `content_version_create({ content_id })` before every in-place
-   rewrite** - the publish path takes no lock (concurrent CMS writes are last-writer-wins) and
-   there is no tool-side restore, so the snapshot is the only undo. Then `content_update` +
-   republish via the Play 4 bridge. Per page: re-read the SERP and scrape the current winners -
-   close coverage gaps first; update every dated fact; rewrite title and intro against the
-   current SERP (the old ones already lost); add internal links from newer pieces (URLs from
-   `content_site_links`; `seo_internal_links` for the graph as it stands) and up to the
-   pillar; re-run `content_seo_check` before the republish; route substantive rewrites through
-   `talk_to_department` like any draft.
-7. **Kill or consolidate underperformers:** `seo_cannibalization` finds pages competing for one
-   query - merge into the strongest URL, redirect the losers. Pages with no traffic, rankings,
-   or links after 12 months get consolidated into a pillar or removed. Removal discipline:
-   prefer `content_unpublish_from_site` (deletes nothing, reversible) or consolidation;
-   `content_delete` only per explicitly-named id, each confirmed - see the hard stops below.
+6. **The decision loop - refresh, on the same URL.** `/hiveku:refresh` is the play; the
+   contract is `references/site-architecture-and-decay.md`. The Sunday decay run
+   (`seo_content_decay` finds previously-ranking pages losing clicks) stamps the row:
+   `decay_status`, `refresh_priority` (an integer, higher sooner), `top_declining_keywords`,
+   `refreshed_at` - read-only columns (400 `read_only_field`) the queue is built from:
+   `content_list` and keep the rows whose `decay_status` is set and not `recovered`, ordered by
+   `refresh_priority` descending (the ordering is yours; say so). Each episode also files a
+   "Refresh: <title>" PM task, or fires the `content.decay_detected` workflow event when a
+   workflow handles it. Per piece `content_refresh_brief_get({ content_id })` (spends
+   nothing): what declined, the `declining_keywords`, the stored SERP brief, the `scorecard`
+   (leads, not views - a piece with leads and falling views is a distribution problem),
+   `keyword_siblings` and `cannibalization`, `link_donors`, `suggested_disposition` and the
+   `checklist`. For decayed winners, UPDATE IN PLACE - the same URL keeps the authority; a new
+   URL starts from zero. **Snapshot FIRST: `content_version_create({ content_id })` before
+   every in-place rewrite** - the publish path takes no lock (concurrent CMS writes are
+   last-writer-wins) and there is no tool-side restore, so the snapshot is the only undo. Then:
+   cover every declining query on the page; close the gaps against the brief's top-3 outlines
+   (`content_brief_build` when none is stored or the outline moved - it spends, say so);
+   update every dated fact from a page read this session; a new title from
+   `content_titles_generate` / `content_titles_pick` (the old one already lost); links FROM
+   the donors (each its own `content_update`, by real URL) and up to the pillar
+   (`content_site_links({ project_id, content_id })`); route the rewrite through
+   `talk_to_department` like any draft; `content_seo_check` until `result.ok`; the Play 4
+   bridge on the SAME slug, never a new URL. Then record it - `content_update({ content_id,
+   review_disposition: "refresh" })` - and cite `refreshed_at` (and the publish response's
+   `refreshed: true`) as the proof the refresh shipped. `rewrite` is the same play with the
+   body replaced; `double_down` is a refresh plus distribution.
+7. **Kill or consolidate underperformers - five dispositions, recorded.** Every published
+   piece is, once a year, one of `double_down`, `refresh`, `rewrite`, `consolidate`, `prune`,
+   written to the row's `review_disposition` through `content_update` (the one decay-side
+   column a session writes; `content_list` filters on it) - the operator decides, you propose
+   with the brief's evidence beside each. `content_prune_candidates({ min_age_days: 365 })`
+   lists the pieces a year old with zero views and zero leads across twelve months, honest
+   about its source (`measured_by` per row; `unmeasured[]` - no page, the collector down - is
+   never a candidate; money pages excluded and counted); `seo_cannibalization` and the keyword
+   map's `collisions[]` find pages competing for one query - merge into the strongest URL
+   (`consolidate_into`, `recommended_primary_url`), then `project_redirect_create` (a 301,
+   confirmed with both URLs shown) and `content_unpublish_from_site` on the loser - never a
+   take-down without its redirect. Removal discipline: prefer `content_unpublish_from_site`
+   (deletes nothing, reversible, live until the deploy) or consolidation; `content_delete`
+   only per explicitly-named id, each confirmed - see the hard stops below.
 8. **The next brief comes from leads per piece, not views.** Rank the library by `leads`,
    `contacts` and `deals.won` from the scorecard and `revenue_cents` from the ROI report: a
    piece with views and no leads is a hook or CTA problem (refresh in place, step 6); a piece
    with leads and few views is a distribution gap (flip its `paid` plan row from winner-only,
    run the social set); a topic whose pieces convert earns the next cluster. Instruments first
-   (step 3): a zero with a dead collector is unknown, and the report says which.
+   (step 3): a zero with a dead collector is unknown, and the report says which. Read
+   `settings.title_results.winner` and `notes[]` on every piece that carried candidates ("No
+   Search Console archive for this account" is no baseline, not no result; a winner can win on
+   social and email clicks alone - name `winner.sources`) and record `Winning titles:
+   <pattern> x<n>` in the content memory beside the leads.
 9. **Case studies from won deals.** When the CRM closes a deal with a consented testimonial and
    a grid with measured results, `content_case_study_draft({ deal_id })` drafts the case study as
    a decision-stage draft row with every result and the quote cited (`[source: ...]`); a deal that
@@ -488,7 +676,9 @@ Monthly at minimum; weekly glance during active campaigns.
 
 1. Pipeline counts: `content_list` by status vs plan. Flag anything stuck in draft 7+ days past
    its calendar slot; a second week stuck escalates into a PM task via `content_link_tasks`
-   instead of re-flagging forever. Sweep `content_comments_recent` since last week's review - a
+   instead of re-flagging forever. The Sunday runs' "Refresh: <title>" tasks (`pm_tasks_list`)
+   are the refresh queue's open items - each is a `/hiveku:refresh` decision, closed with
+   `pm_tasks_complete` when the refresh ships. Sweep `content_comments_recent` since last week's review - a
    draft stuck WITH an unanswered client comment is stuck on you, not the client.
 2. Next week's calendar: `content_schedule_list` shows RECORDED intent only (a pending row past
    its date was never picked up, not failed); confirm each piece has a finished draft, visuals,
@@ -517,7 +707,9 @@ numbers and the `engagement` block's open and click rates per campaign (delivere
 reported for 21 of 22 sends, one not yet delivered"); unsubscribe counts are absent from every
 tool, so omit them rather than estimate - a fabricated number in a client report is worse than a
 missing one; (3) the updated coverage
-matrix; (4) refresh and consolidation actions; (5) next month's calendar with the reasoning -
+matrix; (4) the decision loop - the count per disposition recorded on the rows (`content_list`
+filters on `review_disposition`), the refreshes shipped with their URLs and `refreshed_at`, the
+consolidations with their redirects, the winning titles; (5) next month's calendar with the reasoning -
 the next briefs from the pieces that brought leads (Play 5 step 8), not the ones that brought views.
 Comparability: never sum page views, social impressions, and email opens into one "total reach"
 number - different events over different windows; report channels side by side with their
@@ -530,10 +722,15 @@ library - 4-8 blog pieces/month (pillar-first), 3-5 social posts per platform pe
 email sends/month; authority/thought leadership - 2-4 deep pieces/month beats 12 shallow ones;
 mature library (100+ posts) - shift to 60-70 percent refresh / 30-40 percent net-new.
 
-**Refresh vs new decision matrix:** position 5-20 with declining clicks -> REFRESH in place
-(highest-ROI action available); position 20+, thin and off-intent -> REWRITE on the same URL;
-two+ own pages on one query (`seo_cannibalization`) -> CONSOLIDATE + redirect; cluster gap with
-real volume and no page -> NEW piece. Expect 3-6 months for new pieces to rank; refreshes
+**Refresh vs new decision matrix (the five dispositions, recorded as `review_disposition`):**
+position 5-20 with declining clicks -> `refresh` in place (highest-ROI action available);
+severe decay with current traffic a quarter of peak or less, thin and off-intent -> `rewrite`
+on the same URL; two+ own pages on one query (`seo_cannibalization`, the keyword map's
+`collisions[]`) -> `consolidate` + redirect; a year old with zero views and zero leads, measured
+(`content_prune_candidates`) -> `prune`; a top performer that is not decaying -> `double_down`
+(a title test, the social set again, a link from every newer donor); a cluster gap with real
+volume and no page (`missing_subtopics`) -> NEW piece. The refresh brief's
+`suggested_disposition` applies the same rule; the operator decides. Expect 3-6 months for new pieces to rank; refreshes
 typically move within 2-6 weeks - set the user's expectations accordingly.
 
 **Repurposing ratios (minimum viable distribution):** 1 pillar page -> 6-10 social posts
@@ -553,7 +750,9 @@ full list now, skip the test send."* Expected response: refuse all three as aske
 reversible alternative:
 - **No pattern-derived deletions, ever.** "Every post with no traffic" is a query, not a target
   list - and the zeros may be the collector (`degraded`, missing GSC), not the posts. Produce
-  the candidate list with evidence, disclose the sample, let the user name ids; prefer
+  the candidate list with evidence (`content_prune_candidates`: `measured_by` per row,
+  `unmeasured[]` never a candidate, money pages excluded), disclose the sample, let the user
+  name ids; prefer
   `content_unpublish_from_site` or consolidation-with-redirects; `content_delete` only per
   named id, each confirmed.
 - **No bulk publish.** Each piece gets its own Play 3 quality gate (`content_seo_check` with
@@ -574,7 +773,15 @@ imagery is one `content_images_generate` call after `media_image_quota`, count c
 quoting a proof-pack entry with `consent: false`, however trimmed; no case study drafted by hand
 around a 409 `no_consent`; no unsourced figure on a decision piece published over the
 `claims_without_source` error; no distribution plan written with every row `skipped` to make the
-no-plan warning go away.
+no-plan warning go away; no invented byline (an account with no authors gets
+`content_authors_create` for a real person, never the brand name as a person); no rival price
+or feature written from memory on a comparison page (a row without `source` and `checked_at` is
+refused by `competitor_claim_unsourced`); no `serp_brief`, `decay_status`, `refresh_priority`,
+`top_declining_keywords` or `refreshed_at` written through `content_update` around the
+`read_only_field` 400 (`content_brief_build` and the Sunday runs own them; `review_disposition`
+is the one decision column a session writes); no hand-written `settings.title_candidates`; no
+consolidation take-down before its 301; no "learn more" as the decision a comparison page ends
+on.
 
 A wrong send to a real audience is a client-relationship incident, not a bug - and producing
 content into an empty strategy is billing for guesswork; Play 1 runs first, always.

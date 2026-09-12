@@ -294,15 +294,23 @@ The content research layer lives here, not in memory. `content_research_run({ co
 `content_research_topic({ topic })` for a topic with no row yet) creates ONE knowledge base per
 account with `context_type: "content_research"` on its first run - `kb_list({ context_type:
 "content_research" })` finds it; never create a second one and never look it up by name - and
-stores what it found as a knowledge artifact, a typed row beside the documents. `artifact_type` is
-`content_research` today (the research run is the one writer the product ships); `serp_brief`,
-`positioning`, `proof_pack`, `case_study` and `data_study` are the declared types the reads already
-accept, for the writers that come later. `kb_artifacts_list({ artifact_type?, kb_id?, content_id?,
+stores what it found as a knowledge artifact, a typed row beside the documents. Four types have
+writers today: `content_research` (the research run), `serp_brief` (`content_brief_build`, one per
+keyword, refreshed on a re-build; the item's `serp_brief` column carries the same brief),
+`positioning` (the owner-approved positioning `brand_positioning_set` mirrors, `content_id` null and
+`is_verified` true, so `kb_artifacts_list({ artifact_type: "positioning", is_verified: true, limit:
+1 })` is the read) and `bofu_plan` (the bottom-funnel plan `content_bofu_plan` stores, one per
+website project; `content_bofu_plan_get({ project_id })` is the exact read); `proof_pack`,
+`case_study` and `data_study` are declared types the reads already accept, for the writers that
+come later. `kb_artifacts_list({ artifact_type?, kb_id?, content_id?,
 is_verified?, page?, limit? })` lists them account-wide, newest first, without knowing the KB
 (`content_id` filters on `content_json.content_id`); `kb_artifact_get({ artifact_id })` is the
 one-artifact read for the id a row's `settings.research` stamp carries; `kb_search` surfaces the
 same artifacts semantically through their indexed markdown (`metadata.artifact_id`). The contracts
-and the citation rules are hiveku-content-agency/references/research-and-proof.md.
+and the citation rules are hiveku-content-agency/references/research-and-proof.md; the SERP
+brief, positioning and bottom-funnel contracts are
+hiveku-content-agency/references/structure-and-conversion.md and
+hiveku-content-agency/references/site-architecture-and-decay.md.
 
 Routing trap: `kb_list`, `kb_get` and `kb_create` hit `/api/olympus/knowledge-bases`, while
 `kb_update`, `kb_delete`, `kb_stats` and every `kb_documents_*` tool hit
