@@ -78,17 +78,30 @@ and never touches the source; bytes are immutable (`media_update` refuses `file_
 read it). `media_image_quota` FIRST before any set or upscale: `{ used, limit, unlimited, remaining,
 period }`, always a 200; `remaining` is null when unlimited or when the read failed (`reason:
 'read_failed'`), and null means UNKNOWN, never "nothing left"; a lapsed period is reported honestly with
-`period.lapsed`. Both generators auto-register a media asset and return its id. Both are brand-aware by
-default (`use_brand: false` opts out; the set takes a top-level `use_brand` plus `target_width` /
-`target_height` that a per-prompt frame REPLACES, never merges) and both SAY whether the brand landed:
-`brand_applied` true, or `brand_skipped_reason: 'no_active_brand_guide'` meaning the image is UNBRANDED
-and the slot was still spent - tell the client so. A failed brand READ is 503 `brand_unavailable`
-before any slot is reserved, never a silent unbranded render. `generate_image` takes exact
-`target_width` / `target_height`, and `mode: 'modify'` with `reference_media_asset_ids` (1 to 4 library
-ids) edits an existing still. `seed` and `negative_prompt` apply only to the fal models (`flux`,
-`flux-pro`, `recraft`); the default gemini lane rejects them rather than silently dropping them. Prompts
-name photographic subjects only - generated text and logos are garbage, so words are a rung 3 layer.
-`media_ai_enhance_prompt` COSTS MONEY, writes nothing - batch use only.
+`period.lapsed`. Both generators auto-register a media asset and return its id. The default model is
+`gpt-image-2.5` (GPT Image 2.5 on a direct OpenAI lane; `gemini-3.1` is its fallback when that lane
+fails and stays selectable beside `gpt-5.4`); `gpt-image-2.5-sunburst` is the premium pick for an edit
+that must hold the referenced subject exactly; `flux`, `flux-pro` and `recraft` are the fal lane. Both
+are brand-aware by default (`use_brand: false` opts out; the set takes a top-level `use_brand` plus
+`target_width` / `target_height` that a per-prompt frame REPLACES, never merges), and brand mode now
+sends the whole brand IMAGE profile, not three colours and two fonts: the prompt block (personality and
+visual adjectives, the full palette with hex codes and gradients, typography for any text in the image,
+photography / illustration / icon style and rules, logo rules, the AI prompt rules, the avoid list)
+plus, as image input on the GPT Image and OpenRouter lanes, the primary logo and up to three Media
+Library images the client tagged `brand_reference` (the fal lane gets the text only). Read exactly what
+will be sent with `brand_image_profile_get`; the tag and the ladder are in
+`references/brand-and-assets.md` Part 3. Both generators SAY whether the brand landed: `brand_applied`
+true, or `brand_skipped_reason: 'no_active_brand_guide'` meaning the image is UNBRANDED and the slot
+was still spent - tell the client so - and `brand_reference_ids` names the references that reached the
+model (`brand_references_skipped` any that could not be fetched, never a silent drop). A failed brand
+READ is 503 `brand_unavailable` before any slot is reserved, never a silent unbranded render.
+`generate_image` takes exact `target_width` / `target_height`, and `mode: 'modify'` with
+`reference_media_asset_ids` (1 to 4 library ids) edits an existing still. `seed` and `negative_prompt`
+apply only to the fal models; the GPT Image and OpenRouter lanes reject them rather than silently
+dropping them. Prompts name photographic subjects only - generated text and logos are garbage, so words
+are a rung 3 layer. A blog post's hero and section images are the content skill's
+`content_images_generate`, one call per piece after `media_image_quota`, never a `generate_image` per
+heading. `media_ai_enhance_prompt` COSTS MONEY, writes nothing - batch use only.
 
 **3. Editable design project.** The default for anything the client will ever tweak: social graphics,
 carousels, thumbnails, banners, ad creative, newsletter headers, one-pagers. `design_templates_list`
@@ -229,6 +242,10 @@ OG 1200x630, YouTube 1280x720, LinkedIn 1584x396 and X 1500x500 templates are th
    win. Read the page's actual slot dimensions before generating anything. A real photo at the wrong
    size is `media_transform({ asset_id, resize: { width, height, fit: 'cover' } })` - free, a new row -
    not a regeneration; a client photo still on their site is `media_import_url` so the bytes are ours.
+   Before the first generation, tag the photography the client has approved as the brand's look
+   `brand_reference` (`media_update({ asset_id, tags })`, three newest ride along with the logo on
+   every branded render) and read `brand_image_profile_get` once: if the photography style line is
+   empty, the fix is the guide (Play 4), not adjectives in every prompt.
 2. `media_image_quota` for the batch, then generate at exact dimensions: `generate_image({ prompt,
    use_brand: true, target_width, target_height })` per slot, one photographic subject per prompt, no
    words. Defaults when the page does not say: hero 1920x1080, OG/share 1200x630, blog thumbnail
@@ -261,6 +278,10 @@ is `references/brand-and-assets.md` Part 4; this is the shape.
    `url()` an http(s) URL without credentials or a `data:` font, no `@import`, no CSS escapes. The
    create route stores it verbatim; the render worker screens it and drops a bad rule with a
    `warnings` line, so prove a new font with one `design_export_image` and read `warnings`.
+   Fill the imagery side of the guide too - photography style, illustration style, icon style, logo
+   rules, the AI prompt rules and forbidden phrases - because that is what an image model is told now,
+   and tag up to three approved photographs `brand_reference` in the library so they ride along as
+   reference images. `brand_image_profile_get` reads the result back as the model will see it.
 3. Prove substitution: `design_templates_list`. The client's colors and type coming back on the templates
    is the only proof the guide is live. Generic templates mean fix the guide, not the canvases.
 4. Restyle existing designs one at a time: `design_state_get` inventory of every `fill`, `stroke`,
@@ -460,6 +481,12 @@ Do not generate, render, or spend in the onboarding session beyond the one proof
   402 `quota_exceeded`; the generate tools answer 429 `budget_exceeded` on the same counter.
 - **`remaining: null` is not zero.** `media_image_quota` answers null when the plan is unlimited or the
   read failed (`reason: 'read_failed'`); neither is "nothing left", and neither is "go ahead".
+- **Only the three newest `brand_reference` images ride.** A fourth tagged image is not attached and
+  nothing says so; the primary logo is always first and the guide's other logo variants never ride.
+  Read `brand_image_profile_get` to see the set a render will get, and re-tag to promote a newer photo.
+  The fal lane (`flux`, `flux-pro`, `recraft`) gets the text profile only - no logo, no references -
+  so a client who wants the logo reproduced needs the GPT Image lane, and the logo still belongs on a
+  canvas layer for anything that must be pixel-exact.
 - **Stock searches save nothing**, `stock_photos_download` writes to a website project, and the
   `marketing-design` key profile sees neither `sites_list` nor the website-project reads - say so
   instead of guessing a `project_id`.
@@ -474,6 +501,6 @@ Do not generate, render, or spend in the onboarding session beyond the one proof
 | --- | --- |
 | `references/design-canvas.md` | Before creating, editing, restyling, animating, or exporting ANY design: the layer model and every animation field, artboard and safe-area sizes per channel, the 58-template library and the six wide formats, composition, carousels and multi-page, the comment loop and its inbox ears, export with its `warnings` channel and budgets, publish-to-library, versioning, the attach-to-post handoff, and the worked canvas plays. |
 | `references/video.md` | Before ANY moving picture: the three lanes and their costs, storyboard shape and the approval gate, voiceover pricing and approved narrators, render-job recovery, the pipeline after approval and its inbox ears, the paid single-clip lane with its dry-run discipline and duration honesty, attaching the finished clip to a post, the testimonial polish play. |
-| `references/brand-and-assets.md` | Standing up or refreshing a client's brand system (Part 4 is the full first-hour ladder), custom fonts that render and what `css_font_face` must contain, the Media Library model (folders, collections, bulk moves, registration, immutable bytes, usage checks before deletion), the quota pre-flight, the import / transform / upscale lanes and their costs, brand-applied honesty, avatars, stock sourcing and attribution, before/after grids. |
+| `references/brand-and-assets.md` | Standing up or refreshing a client's brand system (Part 4 is the full first-hour ladder), the brand image profile an image model is sent and the `brand_reference` tag that adds approved photography to it, custom fonts that render and what `css_font_face` must contain, the Media Library model (folders, collections, bulk moves, registration, immutable bytes, usage checks before deletion), the quota pre-flight, the image models and lanes, the import / transform / upscale lanes and their costs, brand-applied honesty, avatars, stock sourcing and attribution, before/after grids. |
 | `references/memory-protocol.md` | Before ANY `memory_create` / `memory_update`: read-merge-write on the `branding` document, recovery, the storyboard-id and spend ledger format (clips, voiceover seconds, image generations and upscales), approved narrator voice ids. |
 | `references/self-review.md` | Before handing off any design or render: the see-and-judge protocol, the written checklist, the download-and-view mechanics, reading `warnings` for font degrades, the pass limit, and the motion frame check (0, mid, last) before an MP4. |

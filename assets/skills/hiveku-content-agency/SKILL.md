@@ -94,7 +94,8 @@ artifacts; no production without a calendar slot and brief)?
   any email campaign, and before the client-report rail (gates, ladder, CAN-SPAM, template
   stores, the metrics/by_variant contract, marketing_report_* mechanics).
 - `references/media-and-visuals.md` - before generating, registering, attaching, or deleting
-  media, and before any video work (registration tree, Creative Studio, video gates).
+  media, and before any video work (the article-images call and its allowance, the brand image
+  profile and the `brand_reference` tag, the registration tree, Creative Studio, video gates).
 
 ## Play 1 - Strategy foundation (run before any calendar or production work)
 
@@ -223,12 +224,30 @@ Per piece, in order:
    `seo_serp_features` tells you what shape the page must take (snippet, list, comparison
    table). Think in `seo_eeat_scores` terms: named author, first-hand evidence, citations,
    updated date. Readability: short paragraphs, descriptive subheads every 150-300 words.
-4. **Visuals:** generated images auto-register into the media library and return
-   `media_asset_id` - reuse that id; never re-upload, never hotlink. Text-heavy branded
-   graphics go through the Creative Studio lane; video derivatives exist and are approval-gated.
-   **Load `references/media-and-visuals.md` before any media or video work.** Record the
-   piece's assets with `content_media_attach` (a manifest only - it does NOT put the image on
-   the page; the hero is `content_update` `featured_image_url`).
+4. **Illustrate - after the draft is on its row, before the gate and the publish.** A long-form
+   piece ships with a hero and one image per major section (an H2 a picture adds information
+   to - the thing, the place, the process, the comparison - never decoration), and they come
+   from ONE call, `content_images_generate({ content_id })`, not from `generate_image` per
+   heading: it plans the set from the stored body, the row's grounding and the account's brand
+   image profile, renders the hero first and every section image with the brand references and
+   the hero as reference images so the set matches, registers each in the Media Library (tags
+   `content_image` and `content:<id>`), writes each under its heading and sets
+   `featured_image_url` / `featured_image_alt` when a hero was made. Read the allowance FIRST -
+   `media_image_quota` (`remaining` null is UNKNOWN, never a green light) - and confirm the count
+   with the user: each image is one slot from the monthly image allowance, billed as the run
+   goes, and a run that hits the allowance returns what it made plus a warning (`max_images` 1
+   to 8, default 4, hero included). Alt text is mandatory: the plan writes one plain sentence per
+   image saying what it shows, and you read it back - `images[].alt` for each, and
+   `featured_image_alt` on the row - and rewrite with `content_update` any that reads like a
+   filename or a keyword list, before the gate below checks it. `warnings[]` says what was
+   skipped (a heading that already carried an image, a render that failed and was refunded);
+   `brand_applied` false means the pictures went out unbranded and the handoff says so. Reuse
+   beats generation for anything a customer could verify (products, team, premises): a real
+   photo comes in through the Media Library lanes and goes on the row with `content_update`.
+   Text-heavy branded graphics go through the Creative Studio lane; video derivatives exist and
+   are approval-gated. **Load `references/media-and-visuals.md` before any media or video
+   work** - the full contract is there. `content_media_attach` is a manifest only (it does NOT
+   put an image on the page; the hero is `featured_image_url`).
 5. **Quality gate (ALL of these; a piece that fails one goes back to the department with the
    failing item named, it does not ship):** the mechanical half runs on the STORED row, so
    write the draft to its calendar row first (`content_update` on the Play 2 draft, or
@@ -455,7 +474,9 @@ customers as a route around the audience confirmation (test recipients are the u
 addresses, named by them); no draft-and-send in one step (the user's yes comes between); no
 `content_update status='draft'` as a take-down (the live page stays up); no reporting
 `social_publish_post`'s `pending_approval` as published; no treating `content_schedule` as an
-executor; no generating video scenes one at a time to bypass the storyboard approval gate.
+executor; no generating video scenes one at a time to bypass the storyboard approval gate; no
+`generate_image` loop over a post's headings to route around the allowance read - article
+imagery is one `content_images_generate` call after `media_image_quota`, count confirmed.
 
 A wrong send to a real audience is a client-relationship incident, not a bug - and producing
 content into an empty strategy is billing for guesswork; Play 1 runs first, always.
