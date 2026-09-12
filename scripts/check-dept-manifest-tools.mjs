@@ -198,7 +198,17 @@ function collectReferences(manifest, declared) {
     map.get(name).add(where);
   };
 
-  const isField = (ident) => FIELD_SUFFIXES.has(ident.slice(ident.lastIndexOf('_') + 1));
+  // Tools whose last segment collides with FIELD_SUFFIXES. They must never be
+  // swallowed by the field rule: a rename or removal on the server has to fail
+  // this gate, not vanish into ignoredProse.
+  const FIELD_LIKE_TOOLS = new Set([
+    'cms_field_types',
+    'crm_contact_upsert_by_email',
+    'media_library_register_external_url',
+    'seo_bing_submit_url',
+  ]);
+  const isField = (ident) =>
+    !FIELD_LIKE_TOOLS.has(ident) && FIELD_SUFFIXES.has(ident.slice(ident.lastIndexOf('_') + 1));
 
   /**
    * `email_campaign_create` / `_update` / `_pause`: resolve a shorthand against
