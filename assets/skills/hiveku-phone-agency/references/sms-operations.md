@@ -6,8 +6,7 @@ This file replaces the old communications `sms.md`; registration (10DLC and toll
 `tendlc-and-toll-free.md` in this skill - go there for anything about brands, campaigns,
 verification, or "why do carriers filter us".
 
-Every tool below resolves on this server today except the one marked INCOMING (declared by the
-MCP server, not yet in this plugin's tool index; the row flips to LIVE at release). A name that
+Every tool below resolves on this server today. A name that
 does not resolve on your key is a profile question first: check the key's profile, then the
 hiveku-communications reachability ladder, then hand off with a precise dashboard step filed via
 `pm_tasks_create` - never conclude the capability does not exist, and never invent a name to fill
@@ -29,7 +28,7 @@ a gap.
 | `voice_sms_bulk_send` | LIVE | Up to 200 real texts in one call. Ask-gated |
 | `voice_sms_scheduled_list` | LIVE | Lists pending scheduled sends |
 | `voice_sms_scheduled_cancel` | LIVE | Cancels one scheduled send (hard delete) |
-| `voice_sms_opt_outs_list` | INCOMING | Reads the do-not-text list (source auto vs manual) |
+| `voice_sms_opt_outs_list` | LIVE | Reads the do-not-text list (source auto vs manual) |
 
 Profile note: `voice_*` and `workflow_*` names resolve under this skill's key; the `crm_*`
 (DNC), `helpdesk_*` and `survey_*` tools referenced below resolve only under a broader profile

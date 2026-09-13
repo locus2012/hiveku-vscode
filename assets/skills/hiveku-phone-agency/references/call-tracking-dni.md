@@ -19,8 +19,7 @@ confirmation.
 
 ## Availability
 
-Every tool in this table resolves on this server today except the one marked INCOMING (declared
-by the MCP server, not yet in this plugin's tool index; the row flips to LIVE at release). A name
+Every tool in this table resolves on this server today. A name
 that does not resolve on your key is a profile question first: check the key's profile (section
 below), then the hiveku-communications reachability ladder, then hand off with a precise
 dashboard step filed via `pm_tasks_create`. Never say Hiveku cannot do the thing, and never
@@ -37,7 +36,7 @@ invent a name.
 | `voice_settings_get` | LIVE | - |
 | `voice_pool_create` | LIVE | Creates a live pool; a destination declared here is inherited by every member added later |
 | `voice_pool_get` | LIVE | Single-pool read; carries weight, is_active and the occupancy block |
-| `voice_pool_sessions_list` | INCOMING | The non-minting occupancy read: who holds each DID right now; safe to repeat |
+| `voice_pool_sessions_list` | LIVE | The non-minting occupancy read: who holds each DID right now; safe to repeat |
 | `voice_pool_update` | LIVE | PARTIAL patch, except `destination`, which bulk-rewrites every member DID's routing |
 | `voice_pool_delete` | LIVE | Cascades sessions and members; prefer `is_active: false` and drain |
 | `voice_pool_numbers_list` | LIVE | Members with `weight` and `member_id` (what remove takes) |

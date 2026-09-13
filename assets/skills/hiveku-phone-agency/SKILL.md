@@ -37,11 +37,8 @@ call-tracking pools, and the call-conversion send-back to the ad platforms.
 ## The availability rule
 
 Each reference opens with an Availability table. Every `voice_` name in those tables resolves
-on this server today except the two rows marked INCOMING (one in
-`references/call-tracking-dni.md`, one in `references/sms-operations.md`): INCOMING means the
-MCP server declares the tool but this plugin's tool index has not been regenerated to carry it
-yet, and the row flips to LIVE at release. Each tool is described from its own registered
-description - trust that over any older copy of a reference.
+on this server today (LIVE). Each tool is described from its own registered description - trust
+that over any older copy of a reference.
 
 **A name that does not resolve is a profile question first.** (1) Check the key's profile - the
 list above says which names each key sees, and an invisible tool fails exactly like a missing
