@@ -367,11 +367,11 @@ function vendoredCommand(name: string): string | undefined {
 
 /**
  * The social role's commands, written as /hiveku-<name>. SOCIAL_COMMANDS,
- * DEV_COMMANDS, MARKETER_COMMANDS, SEO_COMMANDS and UNIVERSAL_COMMANDS
- * together mirror VENDORED_COMMANDS in scripts/agency-skills-set.mjs (the
- * generator's list) - keep the union identical to it, or a command is vendored
- * but never written, or listed here and never vendored (warned about and
- * skipped at scaffold time).
+ * DEV_COMMANDS, MARKETER_COMMANDS, SEO_COMMANDS, UNIVERSAL_COMMANDS,
+ * HELPDESK_COMMANDS and PPC_COMMANDS together mirror VENDORED_COMMANDS in
+ * scripts/agency-skills-set.mjs (the generator's list) - keep the union
+ * identical to it, or a command is vendored but never written, or listed here
+ * and never vendored (warned about and skipped at scaffold time).
  */
 const SOCIAL_COMMANDS = [
   'social-plan',
@@ -456,6 +456,40 @@ const SEO_COMMANDS = ['seo-decay'] as const;
 const UNIVERSAL_COMMANDS = ['research'] as const;
 
 /**
+ * The helpdesk role's phone system plays, the plugin's own files; the sixth
+ * part of the VENDORED_COMMANDS mirror. The vendored phone-agency skill sends
+ * "phones aren't ringing" to /hiveku:phone-check, "we need phones" to
+ * /hiveku:phone-setup, and the rest to their named play (a phone menu, a ring
+ * group, a seat per person, buying and porting numbers, the caller-ID name
+ * and the spam ladder, texting and its 10DLC / toll-free registration). Every
+ * one of them ends in a confirmed write, so the helpdesk role received the
+ * doctrine and none of the plays until 0.82.0. No inline fallbacks, the same
+ * as the other vendored sets.
+ */
+const HELPDESK_COMMANDS = [
+  'phone-check',
+  'phone-setup',
+  'ivr',
+  'ring-group',
+  'extensions',
+  'number-buy',
+  'port-numbers',
+  'caller-id',
+  'sms',
+  'sms-register',
+] as const;
+
+/**
+ * The PPC role's call-tracking plays, the plugin's own files; the seventh part
+ * of the VENDORED_COMMANDS mirror. /hiveku-call-tracking is DNI setup with the
+ * dry run before any purchase and the one-shot swap test; /hiveku-call-report
+ * is the paid-ads call report (attribution in the ad account's timezone, the
+ * outbox, a cost per call with its definition stated); /hiveku-tracking-check
+ * is the per-channel conversion-tracking verdict. No inline fallbacks.
+ */
+const PPC_COMMANDS = ['call-tracking', 'call-report', 'tracking-check'] as const;
+
+/**
  * Loop names a second scaffold writer also owns. knowledge.ts writes a
  * project-scoped /hiveku-cms (this project's id baked in, the cms_* tools
  * allowed) into every downloaded project folder one step before this runs.
@@ -499,8 +533,10 @@ SEO fix loop$ARGUMENTS. Context first: \`account_context_get({ domain: "seo" })\
       }
       return loops;
     }
-    case 'ppc':
-      return {
+    case 'ppc': {
+      // The two inline plays stay; /hiveku-call-tracking, /hiveku-call-report
+      // and /hiveku-tracking-check are the plugin's own files (PPC_COMMANDS).
+      const loops: Record<string, string> = {
         'hiveku-ppc-optimize': `---
 description: Optimization pass — search terms to negatives, pacing, disapprovals. Confirms every write.
 ---
@@ -522,6 +558,12 @@ PPC report for the last $ARGUMENTS days (default 28). Context: \`account_context
 3. ${PERSIST_STEP}
 `,
       };
+      for (const name of PPC_COMMANDS) {
+        const body = vendoredCommand(name);
+        if (body) loops[`hiveku-${name}`] = body;
+      }
+      return loops;
+    }
     case 'bookkeeper':
       return {
         'hiveku-books-close': `---
@@ -639,8 +681,10 @@ Outbound health. 1. \`outbound_list_campaigns\` + per-campaign \`outbound_list_l
    (\`.claude/AUTOMATION.md\`, \`node automations/manage.mjs list\`). ${PERSIST_STEP}
 `,
       };
-    case 'helpdesk':
-      return {
+    case 'helpdesk': {
+      // The two inline plays stay; the ten phone system plays are the
+      // plugin's own files (HELPDESK_COMMANDS).
+      const loops: Record<string, string> = {
         'hiveku-tickets': `---
 description: Work the overdue ticket queue with macro-based drafts. Nothing sends without approval.
 ---
@@ -661,6 +705,12 @@ KB coverage (\`helpdesk_kb_search\` per theme).
 3. ${PERSIST_STEP}
 `,
       };
+      for (const name of HELPDESK_COMMANDS) {
+        const body = vendoredCommand(name);
+        if (body) loops[`hiveku-${name}`] = body;
+      }
+      return loops;
+    }
     case 'dev': {
       // The plugin's own files, verbatim: /hiveku-webflow for the Webflow lane
       // and /hiveku-cms for the native CMS and the Webflow provider seam.

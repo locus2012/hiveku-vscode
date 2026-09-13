@@ -29,7 +29,7 @@ import type { RoleId } from './roles';
  * (VENDORED_SKILLS). That ESM file drives the generator and the drift gate; the
  * compiled CommonJS loader cannot import it (it lives outside tsconfig's
  * rootDir, and the extension host's Node cannot require() an ES module), so the
- * eight names are duplicated here. Keep the two lists identical: a name listed
+ * names are duplicated here. Keep the two lists identical: a name listed
  * here that the generator does not copy is warned about and skipped at write
  * time; a name listed there but missing here is vendored yet never written and
  * never cleaned up on a role switch.
@@ -44,6 +44,8 @@ const VENDORED_SKILLS = [
   'hiveku-social-agency',
   'hiveku-web-agency',
   'hiveku-communications',
+  'hiveku-phone-agency',
+  'hiveku-conversion-tracking',
   'hiveku-orient',
 ] as const;
 
@@ -68,7 +70,12 @@ const ROLE_SKILLS: Record<RoleId, VendoredSkill[]> = {
   // SEO carries the outbound skill too: the link-building play hands its target
   // list to an outbound campaign (see "Backlink outreach campaigns").
   seo: ['hiveku-seo-agency', 'hiveku-outbound-agency'],
-  ppc: ['hiveku-ppc-agency'],
+  // PPC carries conversion tracking (is the click-to-lead chain counting what
+  // the platforms are not?) and the phone skill: DNI call tracking and the
+  // call send-back are the paid-ads side of the phone system, and
+  // /hiveku-call-tracking, /hiveku-call-report and /hiveku-tracking-check
+  // lean on both.
+  ppc: ['hiveku-ppc-agency', 'hiveku-conversion-tracking', 'hiveku-phone-agency'],
   // The web agency methodology: the code lane plays and, through its
   // references/webflow-sites.md, the Webflow-hosted site doctrine.
   dev: ['hiveku-web-agency'],
@@ -80,9 +87,15 @@ const ROLE_SKILLS: Record<RoleId, VendoredSkill[]> = {
   // domain and suppression doctrine that /hiveku-email and /hiveku-email-review
   // lean on live in that skill's references.
   marketer: ['hiveku-content-agency', 'hiveku-seo-agency', 'hiveku-creative-agency', 'hiveku-social-agency', 'hiveku-communications'],
-  sales: ['hiveku-sales-agency'],
+  // Sales carries the phone skill: the rep's calls, voicemails, transcripts
+  // and texts live in that doctrine, and the voice department is in its
+  // console departments already.
+  sales: ['hiveku-sales-agency', 'hiveku-phone-agency'],
   outbound: ['hiveku-outbound-agency', 'hiveku-sales-agency'],
-  helpdesk: [],
+  // Helpdesk owns the phone system: the doctor, first-time setup, IVR, ring
+  // groups, seats, numbers and porting, caller ID and texting are all its
+  // plays (HELPDESK_COMMANDS in roleCommands.ts).
+  helpdesk: ['hiveku-phone-agency'],
   // Social keeps content (its references/repurpose.md carries the content-side
   // ladder the social plays start from) and creative (the designer handoff).
   social: ['hiveku-social-agency', 'hiveku-content-agency', 'hiveku-creative-agency'],
@@ -101,14 +114,16 @@ export function skillsForRole(roleId: string | undefined): string[] {
   return [...ROLE_SKILLS[roleId], ORIENT];
 }
 
-type SkillFile = { rel: string; bytes: Buffer };
+export type SkillFile = { rel: string; bytes: Buffer };
 
 /**
  * Every regular file under `dir` as [POSIX-relative path, bytes], sorted.
  * Dotfiles and dot-directories are skipped - they are never part of a skill
- * (.DS_Store on the build machine must not reach a workspace).
+ * (.DS_Store on the build machine must not reach a workspace). Exported for
+ * codex.ts, which mirrors the written skill directories into .agents/skills/
+ * and needs the same whole-tree view (SKILL.md alone is a table of contents).
  */
-async function readTree(dir: string, rel = ''): Promise<SkillFile[]> {
+export async function readTree(dir: string, rel = ''): Promise<SkillFile[]> {
   const out: SkillFile[] = [];
   const entries = await fs.readdir(dir, { withFileTypes: true });
   entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));

@@ -44,6 +44,13 @@ export const VENDORED_SKILLS = [
   // ladder, inbox, sequences) for the marketer role, alongside its two
   // commands below.
   'hiveku-communications',
+  // 2026-09-13: the phone agency skill (numbers and E911, PBX routing, DNI
+  // call tracking, SMS operations, the send-back to the ad platforms) for the
+  // helpdesk, sales and PPC roles, and the conversion-tracking skill (the
+  // click-to-call chain, calls, forms, offline conversions) for PPC, alongside
+  // the thirteen phone commands below.
+  'hiveku-phone-agency',
+  'hiveku-conversion-tracking',
   'hiveku-orient',
 ];
 
@@ -100,6 +107,25 @@ export const VENDORED_COMMANDS = [
   // UNIVERSAL_COMMANDS in src/roleCommands.ts for every role, and for a
   // workspace with no role set.
   'research',
+  // 2026-09-13: the phone system plays the vendored phone-agency skill names.
+  // The helpdesk role's ten (the phone doctor, first-time setup, IVR, ring
+  // group, seats, buying and porting numbers, caller ID, texting and its
+  // registration) are written by HELPDESK_COMMANDS in src/roleCommands.ts; the
+  // PPC role's three (DNI call tracking, the paid-ads call report, the
+  // per-channel conversion-tracking verdict) by PPC_COMMANDS.
+  'phone-check',
+  'phone-setup',
+  'ivr',
+  'ring-group',
+  'extensions',
+  'number-buy',
+  'port-numbers',
+  'caller-id',
+  'sms',
+  'sms-register',
+  'call-tracking',
+  'call-report',
+  'tracking-check',
 ];
 
 export const DEFAULT_PLUGIN_ROOT = join(EXTENSION_ROOT, '..', 'hiveku-claude-plugin');

@@ -62,7 +62,9 @@ export const ROLES: Role[] = [
     id: 'ppc',
     label: 'PPC Manager',
     blurb: 'Pacing, anomalies, search terms, disapprovals',
-    deptIds: ['ppc', 'analytics', 'creative', 'pm'],
+    // voice: the tracking pools, the swap config and the call send-back are
+    // the paid-ads side of the phone system (/hiveku-call-tracking).
+    deptIds: ['ppc', 'voice', 'analytics', 'creative', 'pm'],
     knowledgeDomains: ['ppc', 'marketing'],
     briefTools: ['ppc_pacing_summary', 'ppc_anomaly_check', 'ppc_metrics', 'ppc_disapprovals_list', 'ppc_period_comparison'],
   },

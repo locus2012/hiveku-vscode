@@ -356,3 +356,87 @@ populate refuses without grounding, which is why research comes first. 2-3 avata
    \`media_library_list({ source_type: "ai_generated", limit: 5 })\`.
 Then re-run "Download Department Data → Brand & Creative" to refresh \`hiveku-data/creative/*.json\`.
 `;
+
+export const VOICE_SETUP = `# Phone tracking (DNI) first-run: pool, config, proof, send-back - verified
+
+Check current state FIRST: \`voice_settings_get\` (no arguments). \`settings: null\` on a 200 means the account
+pays for the Voice add-on but the PBX tenant was never provisioned - that is a dashboard + billing step, stop
+and hand it back (\`voice_diagnose_setup\` reports the same as \`tenant_provisioned: false\`). A 402
+\`voice_not_enabled\` is the add-on being off for the account, not an empty account. Then \`voice_pools_list\`
+(every tracking pool with its members, their routing and the live \`occupancy\` block) and
+\`voice_phone_tracking_config_get({ project_id, env })\` for the project (\`config: null\` beside a production
+sibling means "off here, live there", not "never set up"). A pool with active members AND an enabled config for
+the environment means the setup is done - skip to STEP 4. Confirm with \`voice_numbers_list\` that the number
+printed on the site is an active Hiveku DID: it is the exhaustion fallback, and a third-party number there makes
+every fallback caller invisible.
+
+## STEP 1 - the setup: dry run first, then the confirmed buy
+1. \`voice_call_tracking_setup({ project_id, environment, dry_run: true })\` every time, even on a re-run. It is
+   idempotent and returns per-step results (pool, tracking DIDs, the per-project config, the tenant's
+   conversion-upload policy, the Google "Hiveku - Phone Call" conversion action) plus an overall state, so
+   success is never inferred from a bare 200. A step reporting \`already_configured\` is done; a \`blocked\` step
+   names the human action. The usual block is E911: a local number cannot be bought without a carrier-validated
+   emergency address (\`voice_e911_addresses_list\`; register one with \`voice_e911_address_create\` if none),
+   passed as \`e911_address_id\` - an unvalidated or foreign id is refused before anything is bought.
+2. Only on explicit approval naming the count: the same call without \`dry_run\`, with \`did_count\` (the target
+   ACTIVE-DID size of the pool). \`did_count\` is THE ONLY FIELD THAT SPENDS MONEY: it buys only the shortfall
+   between the pool's current size and the target, at most 5 per run, and every number bought bills monthly
+   until released. Where to buy is \`did_search\`, an OBJECT ({ area_code?, locality?, state? }, at least one
+   set, normally the client's local area code); a flat top-level area_code is not read. Size the pool by the
+   rule the doctor applies: busiest-hour concurrent visitors divided by 4, never fewer than 4. Show the dry-run
+   output, the exact \`did_count\` and the area code before the yes; pass \`pool_id\` to reuse an existing pool
+   instead of creating one.
+
+## STEP 2 - call handling on the pool
+\`voice_pool_get({ pool_id })\` first - the read that carries member \`weight\`, per-DID \`is_active\` and the
+\`occupancy\` block (\`null\` means the read failed, never zero). Then ONE confirmed \`voice_pool_update\`, echoing
+before/after per field: \`destination\` (where tracked calls RING - an extension, ring group, queue, IVR, the AI
+receptionist, voicemail, or a PSTN forward via \`forward_to_e164\`, which bills minutes per tracked call);
+\`whisper_enabled\` + \`whisper_template\` (plays to whoever ANSWERS, max 200 chars, \`[source]\` resolves at ring
+time); \`greeting_text\` (plays to the CALLER, max 300 chars, billed TTS); \`caller_id_mode\`; and
+\`tracking_source_mode\` when only ad traffic should get a swapped number (it gates NEW mints only, and
+attributed-call volume DROPS - put that expected drop in writing before the change). The update is PARTIAL,
+but sending \`destination\` BULK-APPLIES it to every current member DID and re-syncs each PBX route; a response
+carrying \`destination_apply_failures\` is a PARTIAL success and those members keep their old routing until
+re-saved. Leave \`conversion_sticky_days\` at its default of 2 unless asked: a converted hold parks the DID for
+the whole window, and 30-day holds starved a production pool.
+
+## STEP 3 - the per-project swap config, then REDEPLOY
+\`voice_phone_tracking_config_get({ project_id, env })\` first, then \`voice_phone_tracking_config_set\` - it is
+a FULL REPLACE, not a merge: every omitted field is reset on the stored row (\`swap_selector\`,
+\`swap_text_regex\`, \`swap_source_numbers\`, the widget fields, \`enabled\` back to true), so resend every field
+you want to keep. The one exception is \`consent_mode\` ('analytics' waits for cookie consent before swapping;
+omitted = unchanged). \`environment\` travels in the body and is required. \`swap_source_numbers\` is the
+CallRail-cutover lever: up to 5 legacy numbers as they appear in the page text, swapped even with no tel:
+link; one unparseable entry refuses the whole write. The tracking script and the consent gate are injected into
+the site at DEPLOY time, so an enabled config on a never-redeployed site swaps nothing and a \`consent_mode\`
+change does nothing on the live site - say so every time, and redeploy that environment (/hiveku-deploy)
+before the proof step. Turning a tier off is \`voice_phone_tracking_config_delete({ project_id, env })\`; calls
+stop attributing at once but the tag lingers in the HTML until the next deploy.
+
+## STEP 4 - the proof, ONCE
+\`voice_swap_test({ project_id, environment })\` - it fetches the deployed page, checks the snippet is in the
+served HTML, finds the configured numbers in the text, reports pool capacity, then runs a REAL assignment for a
+synthetic visitor and HOLDS that tracking DID for the pool's whole sticky window, exactly as a paying click
+would. Run it on demand to verify a setup or a cutover; never on a schedule, never in a loop. \`ok\` is true only
+when the site was reachable AND the snippet was found AND a real number was assigned; relay \`warnings\`
+verbatim, and \`snippet_detected: false\` means deploy again, not a config bug. To read occupancy WITHOUT
+holding a DID use \`voice_pool_get\` or \`voice_pool_sessions_list({ pool_id })\` - who holds the DIDs right now,
+and whether a probe loop or a hold pile-up is eating the pool. \`voice_call_tracking_live_probe\` with
+\`live_probe: true\` is the same one-shot proof for a PPC-scoped key: one of the two, never both.
+
+## STEP 5 - the send-back to the ad platforms
+\`voice_call_tracking_diagnose({ project_id, environment })\` - seven checks and an ORDERED \`fix_first\` list;
+read \`fix_first\`, not the check array. An \`unknown\` (from \`skip_google\` / \`skip_site_fetch\`) is not a
+pass. A pool whose every active DID is held reports the number_tracking check as \`fail\` with
+details.pool_exhausted true, and the fix it names is inventory (STEP 1 again with a higher \`did_count\`) or a
+lower \`conversion_sticky_days\`. Starvation history for the account is
+\`agent_inbox_list({ category: 'voice.pool_starvation' })\`.
+
+## Verify
+\`voice_call_tracking_outbox({ status: 'failed' })\` first: an empty result means either nothing was ever
+enqueued (a tracking problem - back to the doctor) or everything uploaded cleanly. Read \`outcome\`, not
+\`status\`: \`uploaded_duplicate\` is success and never a retry. Once tracked calls have happened,
+\`voice_call_tracking_outbox({ platform: 'google_ads', limit: 20 })\` shows rows with \`outcome: 'uploaded'\`.
+Then re-run "Download Department Data → Communications (Voice)" to refresh \`hiveku-data/voice/*.json\`.
+`;

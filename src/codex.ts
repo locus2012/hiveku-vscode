@@ -28,6 +28,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
+import { readTree, type SkillFile } from './agencySkills';
 
 /** Marker pair for the Hiveku-managed region inside AGENTS.md. */
 const AGENTS_BEGIN = '<!-- hiveku:begin -->';
@@ -225,8 +226,17 @@ export async function mirrorCommandsToSkills(baseDir: string): Promise<number> {
  * slash commands were being mirrored, so Codex ran without any of it while
  * Claude Code had all of it.
  *
- * They already carry their own YAML frontmatter, so unlike commands they are
- * copied through unchanged apart from the $ARGUMENTS translation.
+ * They already carry their own YAML frontmatter, so unlike commands SKILL.md
+ * is copied through unchanged apart from the $ARGUMENTS translation.
+ *
+ * The WHOLE directory is mirrored, not SKILL.md alone. SKILL.md is a table of
+ * contents; the doctrine lives in references/** (the phone skill's ten
+ * reference files, the content skill's contracts), and until 0.82.0 only the
+ * SKILL.md reached .agents/skills/, so every "load references/x.md first" it
+ * contained pointed at a file Codex did not have. Reference files are written
+ * byte-for-byte: Codex reads them by the relative path SKILL.md cites, so a
+ * stamped or translated copy would be a different document than the one named.
+ * Returns the number of files written.
  */
 async function mirrorAgencySkills(baseDir: string, stamp: string): Promise<number> {
   const skillsDir = path.join(baseDir, '.claude', 'skills');
@@ -240,27 +250,38 @@ async function mirrorAgencySkills(baseDir: string, stamp: string): Promise<numbe
   }
   let written = 0;
   for (const name of dirs) {
-    let src: string;
+    let files: SkillFile[];
     try {
-      src = await fs.readFile(path.join(skillsDir, name, 'SKILL.md'), 'utf8');
+      files = await readTree(path.join(skillsDir, name));
     } catch {
       continue;
     }
+    if (!files.some((file) => file.rel === 'SKILL.md')) continue; // not a skill directory
     const destDir = path.join(baseDir, '.agents', 'skills', name);
     const destPath = path.join(destDir, 'SKILL.md');
     try {
       const existing = await fs.readFile(destPath, 'utf8');
-      if (!existing.includes(stamp)) continue; // user-authored — never clobber
+      // User-authored skill: the whole directory is theirs, references included.
+      if (!existing.includes(stamp)) continue;
     } catch {
       /* new */
     }
-    const body = src.replace(/\$ARGUMENTS/g, '(the arguments the user gave after the skill name)');
-    // Insert the stamp after the existing frontmatter so re-runs stay idempotent.
-    const fm = body.match(/^---\n[\s\S]*?\n---\n?/);
-    const stamped = fm ? `${fm[0]}${stamp}\n\n${body.slice(fm[0].length).trimStart()}` : `${stamp}\n\n${body}`;
-    await fs.mkdir(destDir, { recursive: true });
-    await fs.writeFile(destPath, stamped, 'utf8');
-    written += 1;
+    for (const file of files) {
+      const target = path.join(destDir, ...file.rel.split('/'));
+      await fs.mkdir(path.dirname(target), { recursive: true });
+      if (file.rel === 'SKILL.md') {
+        const body = file.bytes
+          .toString('utf8')
+          .replace(/\$ARGUMENTS/g, '(the arguments the user gave after the skill name)');
+        // Insert the stamp after the existing frontmatter so re-runs stay idempotent.
+        const fm = body.match(/^---\n[\s\S]*?\n---\n?/);
+        const stamped = fm ? `${fm[0]}${stamp}\n\n${body.slice(fm[0].length).trimStart()}` : `${stamp}\n\n${body}`;
+        await fs.writeFile(target, stamped, 'utf8');
+      } else {
+        await fs.writeFile(target, file.bytes);
+      }
+      written += 1;
+    }
   }
   return written;
 }

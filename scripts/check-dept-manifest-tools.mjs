@@ -16,9 +16,14 @@
  * `email_domain_check_dns`, `email_audience_preview`, the send ladder) and the
  * only thing that would notice those names going stale is this check.
  *
- * WHAT IT READS. The server's tool declarations, preferring the compiled
- * hiveku-mcp-api-server/dist (what a Render deploy actually serves) and falling
- * back to src/tools/*.ts. Both are parsed with the same line-anchored name regex
+ * WHAT IT READS. The server's tool declarations from hiveku-mcp-api-server's
+ * src/tools/*.ts, falling back to the compiled dist when src is absent. Until
+ * 2026-09-13 dist was preferred as "what a Render deploy actually serves", but
+ * a local dist is only what tsc last produced on this machine - dist is
+ * gitignored and Render compiles from the committed source - and it went stale
+ * within a day: the MCP checkout declared voice_pool_sessions_list in src while
+ * a day-old dist did not, and this gate failed a correct manifest. The committed
+ * src is the truth both clients ship against. Both are parsed with the same line-anchored name regex
  * gen-tool-index.mjs uses, for the reason it documents: a loose /name:\s*'…'/
  * also matches `pathParams: { name: 'name' }` inside a real tool and invents a
  * phantom. The DataForSEO tools are registered at runtime from class methods
@@ -63,6 +68,11 @@ const VERBOSE = process.argv.includes('--verbose');
  * readiness checks, the consent-count dry run, the test-send rung, the in-flight
  * hold, and the metrics read that the send ladder depends on. Dropping one from
  * the prose is a silent regression of the ladder, not a wording change.
+ *
+ * The voice entry (2026-09-13) is the DNI first-run ladder: the idempotent
+ * setup with its dry run, the config read-then-full-replace pair, the one-shot
+ * swap proof, the pool read that carries occupancy, and the non-minting
+ * sessions read that is the alternative to holding a DID.
  */
 const REQUIRED_BY_DEPARTMENT = {
   email: [
@@ -75,6 +85,14 @@ const REQUIRED_BY_DEPARTMENT = {
     'email_campaign_pause',
     'email_campaign_resume',
     'email_campaign_metrics',
+  ],
+  voice: [
+    'voice_call_tracking_setup',
+    'voice_phone_tracking_config_get',
+    'voice_phone_tracking_config_set',
+    'voice_swap_test',
+    'voice_pool_get',
+    'voice_pool_sessions_list',
   ],
 };
 
@@ -157,11 +175,13 @@ function walk(dir, filter, out = []) {
   return out;
 }
 
-/** Returns { names: Set, source: string } or null when neither dist nor src is on disk. */
+/** Returns { names: Set, source: string } or null when neither src nor dist is on disk. */
 function loadDeclaredTools() {
+  // src first: the committed source is what Render builds; a local dist is a
+  // build artifact that goes stale the moment another session edits src.
   const candidates = [
-    { dir: 'dist', ext: '.js', label: 'dist' },
-    { dir: 'src', ext: '.ts', label: 'src (compiled dist absent)' },
+    { dir: 'src', ext: '.ts', label: 'src' },
+    { dir: 'dist', ext: '.js', label: 'dist (src absent)' },
   ];
   for (const { dir, ext, label } of candidates) {
     const toolsDir = join(MCP_ROOT, dir, 'tools');

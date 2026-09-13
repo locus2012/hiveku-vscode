@@ -14,7 +14,7 @@
 import type { PageAccessKey } from './pageAccessKeys';
 
 import { HivekuMcpClient } from './mcpClient';
-import { SEO_SETUP, CRM_SETUP, EMAIL_SETUP, SOCIAL_SETUP, OUTBOUND_SETUP, ACCOUNTING_SETUP, CREATIVE_SETUP } from './setupPlaybooks';
+import { SEO_SETUP, CRM_SETUP, EMAIL_SETUP, SOCIAL_SETUP, OUTBOUND_SETUP, ACCOUNTING_SETUP, CREATIVE_SETUP, VOICE_SETUP } from './setupPlaybooks';
 
 export type Row = Record<string, unknown>;
 
@@ -945,15 +945,59 @@ export const DEPARTMENTS: Department[] = [
     id: 'voice',
     label: 'Communications (Voice)',
     gate: 'communications',
-    readOnly: true,
+    setup: VOICE_SETUP,
     datasets: [
       { id: 'numbers', label: 'Numbers', tool: 'voice_numbers_list', args: { limit: 200 }, columns: [{ key: ['e164', 'number'], label: 'number' }, { key: 'is_active', label: 'active' }, { key: 'provider' }] },
       { id: 'extensions', label: 'Extensions', tool: 'voice_extensions_list', args: { limit: 200 }, columns: [{ key: 'extension' }, { key: 'display_name', label: 'name' }, { key: 'endpoint_type', label: 'type' }, { key: 'presence_state', label: 'presence' }] },
-      { id: 'ring_groups', label: 'Ring groups', tool: 'voice_ring_groups_list', columns: [{ key: 'name' }, { key: 'strategy' }, { key: 'member_count', label: 'members' }] },
+      // voice_ring_groups_list is a bare findMany over voice_ring_groups: no
+      // members and no member count (the roster is only on voice_ring_group_get),
+      // so the `member_count` column this table carried until 0.82.0 was blank
+      // on every row.
+      { id: 'ring_groups', label: 'Ring groups', tool: 'voice_ring_groups_list', columns: [{ key: 'name' }, { key: 'strategy' }, { key: 'extension' }, { key: 'ring_seconds', label: 'ring s' }] },
       { id: 'ivrs', label: 'IVRs', tool: 'voice_ivrs_list', columns: [{ key: 'name' }] },
       { id: 'e911', label: 'E911 addresses', tool: 'voice_e911_addresses_list', args: { limit: 200 }, columns: [{ key: ['label', 'name'], label: 'label' }, { key: ['street', 'address'], label: 'address' }, { key: 'city' }, { key: ['state', 'region'], label: 'state' }, { key: 'postal_code', label: 'zip' }] },
       { id: 'calls', label: 'Recent calls', tool: 'voice_calls_list', args: { limit: 200 }, columns: [{ key: 'direction' }, { key: 'disposition' }, { key: ['from_e164', 'from'], label: 'from' }, { key: ['to_e164', 'to'], label: 'to' }, { key: 'started_at', label: 'started', date: true }] },
+      // { pools: [...], occupancy_measured_at } - extractRows takes the first
+      // object array. occupancy is a point-in-time read, null when it failed.
+      { id: 'pools', label: 'Tracking pools (DNI)', tool: 'voice_pools_list', columns: [{ key: 'name' }, { key: 'member_count', label: 'members' }, { key: 'occupancy.dids_available', label: 'available now' }, { key: 'is_active', label: 'active' }, { key: 'exhaustion_policy', label: 'when exhausted' }, { key: 'sticky_minutes', label: 'sticky min' }, { key: 'conversion_sticky_days', label: 'hold days' }] },
+      // audio_urls 'false' (the literal string is what the route reads): the
+      // default mints a 5-minute presigned link to a real person's voice per
+      // row, and this snapshot is written to disk and grepped.
+      { id: 'voicemails', label: 'Voicemails', tool: 'voice_voicemails_list', args: { audio_urls: 'false', limit: 200 }, columns: [{ key: 'from_number', label: 'from' }, { key: 'peer_name', label: 'caller' }, { key: 'received_at', label: 'received', date: true }, { key: 'duration_seconds', label: 'seconds' }, { key: 'read' }] },
+      // { threads: [...], next_cursor, search_truncated }; limit clamps at 100.
+      { id: 'sms_threads', label: 'SMS threads', tool: 'voice_sms_threads_list', args: { limit: 100 }, columns: [{ key: 'peer_e164', label: 'customer' }, { key: 'tenant_e164', label: 'our number' }, { key: 'unread_count', label: 'unread' }, { key: 'last_message_at', label: 'last message', date: true }, { key: 'archived' }] },
     ],
+    crud:
+      'The phone system is LIVE infrastructure: every write below changes what rings, what bills, or where a 911 call ' +
+      'dispatches, so confirm each one on its own and read the result back. ' +
+      'Tracking pools (DNI): `voice_pool_create` (born EMPTY - no spend; numbers join and a project opts in separately) / ' +
+      '`voice_pool_get` (the read with member `weight`, per-DID `is_active` and the live `occupancy` block) / ' +
+      '`voice_pool_update` (PARTIAL, but sending `destination` BULK-APPLIES it to every member DID and re-syncs each PBX ' +
+      'route; `destination_apply_failures` in the response is a partial success) / `voice_pool_delete` (cascades live ' +
+      'sessions, strands project configs and RELEASES NOTHING - prefer `is_active: false`). ' +
+      'Membership: `voice_pool_numbers_list` / `voice_pool_numbers_add` (an EXISTING owned DID by `voice_number_id`; it ' +
+      'buys nothing) / `voice_pool_numbers_remove` (by `member_id`, never the number id); one DID lives in exactly one pool. ' +
+      'Per-project swap config: `voice_phone_tracking_config_get({ project_id, env })` THEN `voice_phone_tracking_config_set` ' +
+      '- FULL REPLACE: resend every field you want to keep (`consent_mode` is the one omitted-means-unchanged field and ' +
+      'needs a site redeploy to take effect; `swap_source_numbers` max 5, the CallRail-cutover lever) / ' +
+      '`voice_phone_tracking_config_delete`. ' +
+      'Probes: `voice_swap_test` and `voice_call_tracking_live_probe` each HOLD a tracking DID for the pool\'s sticky window ' +
+      'exactly as a visitor would - run ONE of them ONCE to prove a setup, never in a loop or on a schedule; ' +
+      '`voice_pool_sessions_list` is the non-minting occupancy read (who holds the DIDs right now). ' +
+      'Verdicts: `voice_call_tracking_diagnose` (read `fix_first`) and `voice_call_tracking_outbox` (per-call upload rows; ' +
+      'read `outcome`, where `uploaded_duplicate` is success). ' +
+      'Numbers: `voice_numbers_search` (one carrier-billed search, no looping) -> `voice_number_purchase` (ONE number per ' +
+      'call by `e164`; a local buy needs a validated `e911_address_id`; a recurring monthly charge; a 202 is a PENDING ' +
+      'order, never re-submit) -> `voice_number_update` (routing, forwards, E911, whisper and greeting; the PBX push is ' +
+      'best-effort behind a 200, so read back with `voice_number_get`) / `voice_number_cnam_set` / `voice_number_release` ' +
+      '(permanent). ' +
+      'Seats and routing: `voice_extension_create` / `_update` / `_delete`; ring groups `voice_ring_group_create` / ' +
+      '`_update` / `_delete` (the roster is only on `voice_ring_group_get`); IVRs `voice_ivr_create` / `_update` / ' +
+      '`_delete`, proven with `voice_ivr_walk`; E911 `voice_e911_address_create` (+ `voice_pool_e911_apply` for an office ' +
+      'move - a carrier call per number). ' +
+      'Texting: `voice_sms_send_to_contact` (a REAL text billed per segment, no recall; the recipient is the CRM contact\'s ' +
+      'stored phone) / `voice_sms_thread_reply`; voicemail read state `voice_voicemail_mark_read`. ' +
+      'Doctor: `voice_diagnose_setup` (Hiveku rows only) + `voice_tenant_healthcheck` (the only read that sees the PBX side).',
   },
   {
     id: 'hiveboards',
