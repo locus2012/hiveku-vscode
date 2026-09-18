@@ -172,9 +172,12 @@ export function cronMatches(expr, d = new Date()) {
   return part(f[2], vals[2], 1, 31) && (part(f[4], vals[4], 0, 7) || part(f[4], vals[4] === 0 ? 7 : vals[4], 0, 7));
 }
 
-/** Tiny REST helper for Smartlead / HeyReach. Identifies as Hiveku unless the worker
- *  sets its own User-Agent, and names the edge firewall's challenge (an HTTP 202 with
- *  an empty body, or an x-amzn-waf-action header) instead of handing back a blank page. */
+/** Tiny REST helper for Smartlead / HeyReach and whatever REST API a worker calls.
+ *  Identifies as Hiveku unless the worker sets its own User-Agent, and names the edge
+ *  firewall's challenge instead of handing back a blank page. */
+function _hostOf(url) {
+  try { return new URL(url instanceof Request ? url.url : String(url)).host; } catch { return String(url).slice(0, 120); }
+}
 export async function http(url, opts = {}) {
   // new Headers() accepts a plain object, an array or a Headers instance, so a worker's
   // own headers survive whatever shape it passed; only a missing agent is filled in.
@@ -182,8 +185,17 @@ export async function http(url, opts = {}) {
   if (!headers.has('user-agent')) headers.set('user-agent', HIVEKU_USER_AGENT);
   const res = await fetch(url, { ...opts, headers });
   const text = await res.text();
-  if (res.headers.get('x-amzn-waf-action') || (res.status === 202 && text.length < 1024)) {
-    throw new Error('HTTP ' + res.status + ': the edge firewall challenged this client; send a user agent containing Hiveku, or use a HEAD request. This is not an empty site and not a failed deploy.');
+  // The firewall's header is the authoritative signal: every real challenge carries it,
+  // whatever the status or body. Without the header only a 202 with NOTHING in the body
+  // counts: a 202 with a small JSON body ({"status":"accepted","id":...}) is the normal
+  // async-accept answer from the third-party APIs this helper exists for, which are never
+  // behind Hiveku's edge, and it is returned like any other success. The host is named in
+  // the message so a misattribution is visible in the worker's log.
+  const wafAction = res.headers.get('x-amzn-waf-action');
+  if (wafAction || (res.status === 202 && text.trim().length === 0)) {
+    const where = 'HTTP ' + res.status + ' from ' + _hostOf(url) + (wafAction ? ' (x-amzn-waf-action: ' + wafAction + ')' : ' with an empty body');
+    const hint = wafAction ? '' : ' (If ' + _hostOf(url) + ' is not on Hiveku hosting, it accepted the request and returned nothing.)';
+    throw new Error(where + ': the edge firewall challenged this client; send a user agent containing Hiveku, or use a HEAD request. This is not an empty site and not a failed deploy.' + hint);
   }
   let json; try { json = JSON.parse(text); } catch { json = text; }
   if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + String(text).slice(0, 300));
