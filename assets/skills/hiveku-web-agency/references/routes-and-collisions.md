@@ -44,7 +44,7 @@ Thirty-one rules. The mechanism behind each is in the sections below, so you can
 25. DO NOT test a platform redirect in the live preview. It always "fails" there, and that is expected.
 26. DO NOT write a `/foo -> /foo/` rule. Hosting handles both forms for every rule; such a rule is a no-op at best and a self-loop at worst.
 27. DO prefer 302 while experimenting. Browsers cache 301s hard.
-28. DO identify which redirect system is responsible before editing anything. `curl -sI <URL>` showing `x-cache: FunctionGeneratedResponse from cloudfront` means the platform edge produced it, not your code.
+28. DO identify which redirect system is responsible before editing anything. `curl -sI <URL>` (HEAD; a terminal GET must carry `-A 'Hiveku-Session/1.0'` or the edge firewall answers 202 with an empty body) showing `x-cache: FunctionGeneratedResponse from cloudfront` means the platform edge produced it, not your code.
 29. DO read the literal error the user typed. `ERR_TOO_MANY_REDIRECTS`, a 404, and a blank page are three different failures with three different causes.
 30. DO NOT suggest HashRouter.
 

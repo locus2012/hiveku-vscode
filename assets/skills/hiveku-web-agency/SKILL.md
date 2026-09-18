@@ -305,8 +305,10 @@ Production IS `main`, permanently: branch work reaches production only through a
    `deployment_id` and `wait_seconds` (max 25); there is no log-line, max-seconds or
    heartbeat knob, and an undeclared argument is silently dropped. `deploy_status` is the
    point-in-time read of the same fields. Read `data.warnings[]`.
-3. Confirm live: load the live URL and spot-check the pages you changed. `deploy_history`
-   records the trail; `deploy_doctor` diagnoses a failed deploy or stale serving.
+3. Confirm live: load the live URL and spot-check the pages you changed - in a browser, or with
+   `curl -I` / `curl -A 'Hiveku-Session/1.0'`. A 202 with an empty body from a terminal fetch or
+   WebFetch is the edge firewall's challenge, not a broken deploy (`references/firewall.md`).
+   `deploy_history` records the trail; `deploy_doctor` diagnoses a failed deploy or stale serving.
 4. Regression shipped? Roll back by restoring the prior good checkpoint (dry-run first) and
    re-deploying - do not hot-patch prod under pressure.
 5. Nothing ships silently. State what is going live, to which tier, and why; get the yes;
@@ -522,6 +524,7 @@ incidents behind every rule. Read the relevant one BEFORE writing code, not afte
 | `references/framework-conversion-cdn-repair.md` | Any framework conversion; a live site 403ing/404ing on some routes while the app works; behavior sweep/prune; `project_site_orphan_sweep`. |
 | `references/redesign-import.md` | Rebuilding an existing site through the redesign pipeline - the approve/start/select/import/promote state machine and its 7-day TTL. |
 | `references/webflow-sites.md` | Any project hosted on Webflow (`external_platform: "webflow"`): the `webflow_*` tools and their Availability, the gates as codes, staged versus live and the publish, page SEO, schema markup and llms.txt, custom code and the analytics snippet, the CMS provider seam. |
+| `references/firewall.md` | A customer's uptime monitor, audit tool or script sees a blank page or a 202 from the live site; "is the site down?" from an automated client; reading what the edge firewall challenged or blocked in the last 7 days; allowing a client by its product token (never `Mozilla`) or by address; what an allowance does and does not do. |
 
 Conversion tracking has its own skill (`hiveku-conversion-tracking`) with a matching reference
 library. Anything about tags, attribution, or "the numbers do not match" belongs there.
