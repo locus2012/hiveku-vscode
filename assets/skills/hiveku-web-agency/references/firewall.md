@@ -18,10 +18,24 @@ any client whose user agent contains `Hiveku` pass. HEAD requests and the paths 
 the header `x-amzn-waf-action: challenge`.** A real page is never a 202. Read it as "the edge
 firewall challenged this client", never as "the site is empty", "the deploy failed" or "the
 form is missing from the HTML". From your own terminal, `curl -A 'Hiveku-Session/1.0'` passes
-and `curl -I` (HEAD) passes; WebFetch is not a Hiveku client and is challenged. `fetch_url`,
-`web_scrape`, `preview_http_get` and the deploy pipeline's smoke check run from Hiveku's own
-addresses and are never challenged. A 403 is the scraper-network block and a 429 is the rate
-limit: an allowance changes neither.
+and `curl -I` (HEAD) passes; WebFetch is not a Hiveku client and is challenged. A 403 is the
+scraper-network block and a 429 is the rate limit: an allowance changes neither.
+
+Which Hiveku tools reach the edge, and how:
+
+- `fetch_url` is a direct fetch from Hiveku's own servers with the user agent `Hiveku-Agent/1.0`,
+  and the deploy pipeline's smoke check fetches the same way as `Hiveku-Smoke-Check/1.0`. Both
+  are exempt by address and by agent and are never challenged.
+- `preview_http_get` hits localhost inside the preview container (a branch preview is fetched
+  from Hiveku's servers by its preview address); it never reaches the edge.
+- `web_scrape`, `web_crawl`, `web_extract`, `web_actions` and the screenshot pipeline go through
+  Firecrawl's hosted browsers at third-party addresses, so the edge treats them like any other
+  automated client. A format that drives a real browser (a screenshot, `web_actions`, or
+  `waitFor` on `web_scrape`) runs the JavaScript and passes the challenge; a plain-fetch format
+  (`markdown`, `html`, `rawHtml` or `links` with no `waitFor`) on a Hiveku-hosted site can come
+  back as `scrape_failed: true` with `reason: 'bot_challenge'` and a 202 status. That is the
+  challenge, not a fetcher defect and not an empty page: switch to a rendering format or read
+  the page with `fetch_url`. Do not report it and do not add an allowance for it.
 
 ## The three tools
 
@@ -87,14 +101,17 @@ directly. If the tools are not on your key yet, say so and hand the user the pat
 - A client that has not appeared in `clients[]` yet can still be allowed by token or address
   when the customer knows what it sends; the table fills after the next daily rollup.
 
-## Hiveku's own tools never need an allowance
+## Hiveku's own direct fetchers never need an allowance
 
-Every Hiveku fetcher identifies itself with a user agent containing `Hiveku` and runs from
-Hiveku's exempt addresses. If a Hiveku tool's answer says it was challenged, that is a defect in
-the fetcher (its user agent or its egress address), not something to fix with an allowance;
-report it. Never ask for a customer's monitor to be added to Hiveku's own exempt address set:
-that set is for Hiveku's tools, and the customer's allowance is self-service in Site > Hosting >
-Firewall.
+`fetch_url`, the deploy smoke check and the other fetchers that run from Hiveku's own servers
+identify themselves with a user agent containing `Hiveku` and come from Hiveku's exempt
+addresses. If one of those direct fetchers says it was challenged, that is a defect in the
+fetcher (its user agent or its egress address), not something to fix with an allowance; report
+it. The Firecrawl-backed tools are the exception: a `bot_challenge` from `web_scrape` on a
+Hiveku-hosted site is the edge doing its job to a third-party browser fleet, and the fix is a
+rendering format or `fetch_url` (above), not a report and not an allowance. Never ask for a
+customer's monitor to be added to Hiveku's own exempt address set: that set is for Hiveku's
+tools, and the customer's allowance is self-service in Site > Hosting > Firewall.
 
 ## Not in this round
 

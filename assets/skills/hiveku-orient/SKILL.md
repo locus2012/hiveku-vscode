@@ -120,10 +120,14 @@ them any more - it is always available on every profile):
   challenged on purpose. A 202 with an empty body, or any response carrying
   `x-amzn-waf-action`, is the edge firewall's challenge to an unidentified client - not an empty
   site and not a failed deploy. Say "the edge firewall challenged this client", then identify and
-  retry before reporting. `fetch_url`, `web_scrape` and every other Hiveku tool run from Hiveku's
-  own servers and are exempt; a WebFetch or a bare GET from this machine is not. A customer's own
-  monitor or audit tool that is challenged is allowed by its product token (never by `Mozilla`)
-  in Site > Hosting > Firewall: `hiveku-web-agency/references/firewall.md`.
+  retry before reporting. `fetch_url` runs from Hiveku's own servers as `Hiveku-Agent/1.0` and
+  is exempt; a WebFetch or a bare GET from this machine is not. `web_scrape` and the other
+  Firecrawl-backed web tools run from third-party browsers: a rendering format (a screenshot,
+  `web_actions`, `waitFor`) passes the challenge, and a plain-fetch format on a Hiveku-hosted
+  site can answer `scrape_failed` with `reason: 'bot_challenge'` and a 202 - switch format or
+  use `fetch_url`, do not report a fetcher defect. A customer's own monitor or audit tool that
+  is challenged is allowed by its product token (never by `Mozilla`) in Site > Hosting >
+  Firewall: `hiveku-web-agency/references/firewall.md`.
 - **PM tasks are required.** Create the task with
   `pm_tasks_create({ project_id, title, assigned_to_id })`, where `project_id` comes from
   `pm_projects_list` (or `pm_projects_create`) and `assigned_to_id` is the `id` field from
