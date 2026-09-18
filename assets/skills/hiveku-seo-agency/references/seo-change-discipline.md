@@ -275,7 +275,8 @@ paying for daily, and treat every AI lane as a spend decision.
 
 All seven `seo_gbp_*` writes preview first and publish on the identical call with
 `confirm: true`, straight onto the live listing. `seo_gbp_location_update` changes only the fields
-in `updates`, but a name, address or category edit can trigger Google re-verification, which can
+in `updates`, but a name, address, category or service-area edit (business type, cities served, address
+visibility) can trigger Google re-verification, which can
 pull the listing from Maps for days. `seo_gbp_services_update` REPLACES the whole menu: an item
 missing from `service_items` is removed and an empty array removes everything, so CURRENT is the
 full list from `seo_gbp_services`. `seo_gbp_media_add` with category COVER, PROFILE or LOGO
@@ -360,7 +361,7 @@ auto-confirm by re-firing.
 
 | Tool | The preview, and the strictness |
 |---|---|
-| `seo_gbp_location_update` | Fields and values changing, connection name, cached title |
+| `seo_gbp_location_update` | Fields and values changing against the LIVE current values, the update mask, a `service_area` added/removed/kept diff when the served areas change, and Google's own validateOnly verdict (`google_validation: passed`; a rejection is a 400 in Google's words) |
 | `seo_gbp_attributes_update` | Attribute names and count |
 | `seo_gbp_services_update` | Live diff: current_count / new_count / added / removed / kept |
 | `seo_gbp_media_add` | Category, source URL, format, whether primary imagery is replaced; validation runs at preview |

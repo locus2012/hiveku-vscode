@@ -274,10 +274,14 @@ page whose form sits behind `useSearchParams` + `Suspense` prerenders to HTML wi
 all: it passes every check in a browser and fails invisibly at the carrier, producing an 806
 rejection ("unable to verify CTA") that reads like a copy problem and is actually a rendering
 problem. This failure mode is systemic for statically-exported sites; it cost Locus a full
-rejection cycle. The diagnostic: fetch the URL with no JS (curl) and grep the raw HTML for the
+rejection cycle. The diagnostic: fetch the URL with no JS -
+`curl -sS -A 'Hiveku-Session/1.0 (+https://hiveku.com)' '<url>'` - and grep the raw HTML for the
 consent text, "message and data rates", "message frequency", "Reply STOP", "Text HELP", the
 privacy link, and the no-sharing sentence. Present in a browser but absent from raw HTML IS
-the rejection.
+the rejection. One trap: on a Hiveku-hosted page a 202 with an empty body (header
+`x-amzn-waf-action: challenge`) is the edge firewall challenging an unidentified client, not a
+missing form - add the `-A` above and re-run before concluding. `voice_sms_cta_preflight` fetches
+from Hiveku's own servers and is exempt.
 
 **`voice_sms_cta_preflight` - FIRST, ALWAYS, before any fee.** It fetches each opt-in URL the
 message flow names with no JavaScript, exactly as the reviewer's crawler does, and reports

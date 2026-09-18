@@ -22,7 +22,7 @@ before handing back any visual deliverable, and run it after every canvas write 
    with a valid `css_font_face`; brand-and-assets Part 3), then re-exported - never by changing the
    canvas to match the fallback.
 3. **Look.** Download the PNG and view it: the Read tool renders an image file, so
-   `curl -sSL -o <scratchpad>/review.png "<imageUrl>"` then Read that file, or fetch the URL directly
+   `curl -sSL -A 'Hiveku-Session/1.0' -o <scratchpad>/review.png "<imageUrl>"` then Read that file, or fetch the URL directly
    when no shell is available. Judging from the Fabric JSON is not review - the JSON already looked
    right when you wrote the bug.
 4. **Judge against the checklist below**, line by line, with a verdict per line. Name what failed and

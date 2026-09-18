@@ -256,6 +256,11 @@ passing gated route.
 **Rule 32. `indeterminate: true` means no HTTP response at all** - DNS or edge, nothing answered. WARN,
 not fail. Usually propagation, not breakage.
 
+**Rule 32a. A 202 with an empty body and `x-amzn-waf-action: challenge` from your own terminal is the
+edge firewall challenging an unidentified client, not a serving failure.** The pipeline's smoke runs
+from Hiveku's own servers and is exempt; your spot-check is not unless it sends a user agent
+containing `Hiveku` or uses HEAD. Do not run `deploy_doctor` or retry the deploy on a 202.
+
 **Rule 33. Page routes under reserved CDN prefixes are excluded from smoke** - they 403 by design, and
 counting them would fail every deploy that has one.
 
