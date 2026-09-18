@@ -2,7 +2,7 @@
   "name": "hiveku-vscode",
   "displayName": "Hiveku",
   "description": "Run entire Hiveku accounts from VS Code with Claude Code — role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
-  "version": "0.82.0",
+  "version": "0.83.0",
   "publisher": "hiveku",
   "license": "MIT",
   "icon": "icon.png",
@@ -1083,7 +1083,7 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "vscode:prepublish": "npm run check:permissions && npm run check:connect-departments && npm run check:skills && npm run gen:registry && npm run check:manifest-tools && npm run compile",
+    "vscode:prepublish": "npm run check:permissions && npm run check:connect-departments && npm run check:skills && npm run gen:registry && npm run check:manifest-tools && npm run compile && npm run check:generated-scripts",
     "check:permissions": "node scripts/check-permission-rules.mjs",
     "check:connect-departments": "node --import ./scripts/register-ts.mjs scripts/check-connect-departments.mjs",
     "gen:registry": "node --import ./scripts/register-ts.mjs scripts/gen-dept-manifest.mjs",
@@ -1092,7 +1092,8 @@
     "sync:registry": "npm run gen:registry && cp src/dept-manifest.json ../hiveku-claude-plugin/lib/dept-manifest.json && npm run check:registry",
     "gen:skills": "node scripts/gen-agency-skills.mjs",
     "check:skills": "node scripts/check-agency-skills-drift.mjs",
-    "sync:skills": "npm run gen:skills && npm run check:skills"
+    "sync:skills": "npm run gen:skills && npm run check:skills",
+    "check:generated-scripts": "node scripts/check-generated-scripts.mjs"
   },
   "dependencies": {
     "tar": "^7.4.3"

@@ -44,7 +44,7 @@ Thirty-one rules. The mechanism behind each is in the sections below, so you can
 25. DO NOT test a platform redirect in the live preview. It always "fails" there, and that is expected.
 26. DO NOT write a `/foo -> /foo/` rule. Hosting handles both forms for every rule; such a rule is a no-op at best and a self-loop at worst.
 27. DO prefer 302 while experimenting. Browsers cache 301s hard.
-28. DO identify which redirect system is responsible before editing anything. `curl -sI <URL>` showing `x-cache: FunctionGeneratedResponse from cloudfront` means the platform edge produced it, not your code.
+28. DO identify which redirect system is responsible before editing anything. `curl -sI <URL>` (HEAD; a terminal GET must carry `-A 'Hiveku-Session/1.0'` or the edge firewall answers 202 with an empty body) showing `x-cache: FunctionGeneratedResponse from cloudfront` means the platform edge produced it, not your code.
 29. DO read the literal error the user typed. `ERR_TOO_MANY_REDIRECTS`, a 404, and a blank page are three different failures with three different causes.
 30. DO NOT suggest HashRouter.
 
@@ -310,7 +310,7 @@ Rules that follow:
 
 **The diagnostic that settles which system is responsible:** a headers-only request to the DEPLOYED URL. `x-cache: FunctionGeneratedResponse from cloudfront` means the redirect comes from the platform, not your code. Run it before editing either system, because editing the wrong one produces a change with no observable effect, which then reads as "the fix did not work" and invites a second wrong edit.
 
-The URL is public, so a local `curl -sI <URL>` or a WebFetch from your own machine is the right instrument here. Do NOT reach for `preview_http_get` for this one: it issues the request against localhost INSIDE the preview container, which is upstream of CloudFront and therefore structurally incapable of showing you an `x-cache` header. `preview_http_get` is for the other job in this file - reading a 500 page's embedded error when the dev server swallows the stack, or checking an API route without leaving the container.
+The URL is public, so a local `curl -sI <URL>` (a HEAD, which Hiveku's edge firewall never challenges) is the right instrument here; a WebFetch or a plain GET from your own machine is challenged and answers 202 with an empty body and `x-amzn-waf-action: challenge` - add `-A 'Hiveku-Session/1.0'` when you need the body. Do NOT reach for `preview_http_get` for this one: it issues the request against localhost INSIDE the preview container, which is upstream of CloudFront and therefore structurally incapable of showing you an `x-cache` header. `preview_http_get` is for the other job in this file - reading a 500 page's embedded error when the dev server swallows the stack, or checking an API route without leaving the container.
 
 ---
 
@@ -360,7 +360,7 @@ Run this before you save, not after the customer calls.
 6. Save the whole change set in one `project_files_bulk_save` call and read its warnings, especially `reserved_cdn_prefix_page_collision`, `route_collision_edit_not_visible`, and `route_collision_new_dynamic_shadows`.
 7. Run `project_files_validate_orphan_routes` and read `route_collisions[]`. Not the orphan count.
 8. Confirm ownership on the specific URLs you touched with `project_route_owner`: `shadowed[]` must be empty.
-9. If a redirect is involved, `project_redirects_list` first, then `project_redirect_create`, then `project_redirects_deploy({ project_id, tier })` for the tier you are about to check, then verify the response headers against the DEPLOYED host (a local `curl -sI`, or WebFetch). `preview_http_get` cannot do this check: it hits localhost inside the preview container, so it never sees a CloudFront header.
+9. If a redirect is involved, `project_redirects_list` first, then `project_redirect_create`, then `project_redirects_deploy({ project_id, tier })` for the tier you are about to check, then verify the response headers against the DEPLOYED host (a local `curl -sI`; not a WebFetch - a non-browser GET is challenged by the edge firewall and answers 202 with an empty body). `preview_http_get` cannot do this check: it hits localhost inside the preview container, so it never sees a CloudFront header.
 10. Do not restart the preview because a route you just created 404s.
 
 Green build, green typecheck, and `orphans: 0` are together compatible with two pages that will silently revert to an older template on the next scheduled CMS publish. Section 2 is not optional reading.

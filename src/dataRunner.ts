@@ -18,12 +18,15 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { dataManifest } from './deptData';
+import { hivekuUserAgent } from './hivekuUserAgent';
 
 // v3: the MCP client below is now a faithful port of src/mcpClient.ts — one
 // edge-length budget instead of a fixed 90s guess, the timer held through the
 // body read, and a one-shot 429 retry that waits as long as the server asked.
 // Bumped so a folder's STATUS.json says which runner actually wrote it.
-export const RUNNER_VERSION = 3;
+// v4: every request identifies as Hiveku (HivekuDataRunner/<extension version>),
+// baked in at write time because this script runs outside the extension host.
+export const RUNNER_VERSION = 4;
 export const RUNNER_REL_PATH = path.join('.hiveku', 'pull-data.mjs');
 
 /**
@@ -130,7 +133,7 @@ function retryAfterFromProse(message) {
 }
 
 async function rpcOnce(method, params) {
-  const headers = { Authorization: AUTH, 'Content-Type': 'application/json', Accept: 'application/json' };
+  const headers = { Authorization: AUTH, 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': '${hivekuUserAgent('HivekuDataRunner')}' };
   if (sessionId) headers['Mcp-Session-Id'] = sessionId;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);

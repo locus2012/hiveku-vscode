@@ -9,6 +9,8 @@
  * service key and never talks to the Olympus routes directly.
  */
 
+import { hivekuUserAgent } from './hivekuUserAgent';
+
 const PROTOCOL_VERSION = '2024-11-05';
 
 /**
@@ -270,6 +272,9 @@ export class HivekuMcpClient {
       Accept: 'application/json',
       // Server buckets extension traffic separately from agent sessions.
       'X-Hiveku-Client': 'vscode-extension',
+      // Every Hiveku client identifies itself; X-Hiveku-Client is a header the
+      // edge firewall does not read (see hivekuUserAgent.ts).
+      'User-Agent': hivekuUserAgent(),
     };
     if (this.sessionId) headers['Mcp-Session-Id'] = this.sessionId;
 

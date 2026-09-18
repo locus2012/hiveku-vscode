@@ -192,11 +192,21 @@ site. Note the 500-match cap; narrow the glob rather than concluding.
 For **production headers on a live domain there is no Hiveku tool.** Say so in the report rather
 than implying the check ran, then close it with one shell line per URL, home page plus one per
 template family, against both `www` and apex if both resolve:
-`curl -sS -D - -o /dev/null -A 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' '<url>'`
-and grep for `x-robots-tag` (GET, not HEAD; the Googlebot agent because some stacks vary the header
-by user agent). The Search Console UI's live test is the client-facing version of the same evidence.
+`curl -sS -D - -o /dev/null -A 'Hiveku-Session/1.0 (+https://hiveku.com)' '<url>'`
+and grep for `x-robots-tag` (GET, not HEAD, because some stacks vary the header by method; the
+agent names the request as a Hiveku session, which Hiveku's edge firewall lets through). Do not
+send a Googlebot agent: a spoofed Googlebot from a non-Google address is challenged by the edge by
+design (every challenged "Googlebot" in the access logs was a spoof) and answers 202 with an empty
+body and `x-amzn-waf-action: challenge`, which is the firewall, not the header. The Search Console
+UI's live test is the client-facing version of the same evidence and the only way to see what real
+Googlebot is served.
 If you cannot run either, the finding is: "X-Robots-Tag was not verified on production; no Hiveku
 tool reads live response headers, and this is the check most likely to explain a sitewide loss."
+
+Reading the answer on a Hiveku-hosted site: a 202 with an empty body, or any response carrying
+`x-amzn-waf-action`, is the edge firewall's challenge to an unidentified client, not the page and
+not a missing header. Send a user agent containing `Hiveku` as above, or use `curl -I` (HEAD is
+never challenged), and re-run before reporting.
 
 ---
 
@@ -301,9 +311,10 @@ for the 3-hop case.
 For the URLs the crawl did not reach - every `from_path` from `project_redirects_list`, every URL
 that still has backlinks (`seo_backlinks_list`), the old URL set from any migration in memory - one
 shell line per URL reports the hop count and the final URL:
-`curl -sS -o /dev/null -L -w '%{num_redirects} hops -> %{url_effective} (%{http_code})\n' '<url>'`
-(add `-D -` and grep `^(HTTP/|location:)` for the full chain). Above a few hundred rules a desktop
-crawler reports the whole chain graph natively.
+`curl -sS -o /dev/null -L -A 'Hiveku-Session/1.0 (+https://hiveku.com)' -w '%{num_redirects} hops -> %{url_effective} (%{http_code})\n' '<url>'`
+(add `-D -` and grep `^(HTTP/|location:)` for the full chain). Without the `-A` a Hiveku-hosted URL
+answers the first hop with the edge firewall's 202 and the line reports 0 hops, which reads as no
+redirect. Above a few hundred rules a desktop crawler reports the whole chain graph natively.
 
 ---
 

@@ -1491,6 +1491,15 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   any time a deployed URL misbehaves (403/404/blank while "deploy said ready"): \`deploy_doctor\`
   FIRST — it sees the CloudFront wiring, edge functions, and CDN-vs-origin diff that you cannot —
   and NEVER propose deleting/recreating a Lambda or distribution without running it.
+- **Fetching a Hiveku-hosted site from this machine (curl, WebFetch, a script): identify as Hiveku.**
+  The edge firewall challenges automated clients that do not: use \`curl -I <url>\` (HEAD is never
+  challenged) or \`curl -A "Hiveku-Session/1.0" <url>\`, and do not WebFetch a customer domain, a
+  *.hiveku.com tier host or preview.hiveku.com. An HTTP 202 with an EMPTY body and the header
+  \`x-amzn-waf-action: challenge\` is that challenge: it is NOT an empty site and NOT a failed deploy,
+  so never report it as either. Say "the edge firewall challenged this client; send a user agent
+  containing Hiveku, or use a HEAD request". \`deploy_doctor\`, \`fetch_url\` and \`preview_http_get\`
+  already identify as Hiveku. A customer's own uptime monitor or audit tool is allowed in
+  Site > Hosting > Firewall.
 - **Converted the framework (e.g. Vite → Next.js)? Run \`site_reanalyze({ project_id })\` after pushing
   the new code.** Deploys auto-detect the framework from files (a stale label won't break the build),
   but Hiveku's stored labels (project_type / detected_project_type — the latter drives redirect rewrites

@@ -185,15 +185,43 @@ the date) plus `pm_tasks_create` per accepted fix. Plays L2 to L10 are what each
    `categories`.
 5. `seo_gbp_location_update({ connection_id, updates })` with only the changed fields (including
    `specialHours` every holiday season: a listing showing open when the doors are locked earns 1-stars).
-   The first call without `confirm` returns a preview and `requires_confirm: true` and touches nothing;
-   repeat the identical call with `confirm: true` to publish.
+   The first call without `confirm` returns a preview and `requires_confirm: true` and writes nothing to the
+   listing (it does spend two live Google calls: the location read and Google's validateOnly dry run, so
+   preview once per change, never in a loop); repeat the identical call with `confirm: true` to publish.
 
 **Argument shapes.** `updates` accepts only `title`, `phoneNumbers`, `profile`, `regularHours`,
-`specialHours`, `categories`, `websiteUri`, `storefrontAddress`; unknown keys are rejected with a 400
-rather than silently dropped, so a 400 means you invented a field name. `phoneNumbers` is `{ primaryPhone,
-additionalPhones? }`, `profile` is `{ description }`, `categories` is `{ primaryCategory: { name:
-'categories/gcid:...' } }`, `regularHours` is `{ periods: [{ openDay, openTime, closeDay, closeTime }] }`.
-Only the keys you send change.
+`specialHours`, `categories`, `websiteUri`, `storefrontAddress`, `serviceArea`, `openInfo` (or
+`openingDate` as shorthand); unknown keys are rejected with a 400 rather than silently dropped. A 400 names
+the key, the accepted values, or (on the preview) Google's own rejection from its dry run — read the message
+before retrying, it says what to change. `phoneNumbers` is `{ primaryPhone, additionalPhones? }`, `profile` is
+`{ description }`, `categories` is `{ primaryCategory: { name: 'categories/gcid:...' } }`, `regularHours`
+is `{ periods: [{ openDay, openTime, closeDay, closeTime }] }`. Only the keys you send change.
+
+**Service-area businesses.** `serviceArea` is `{ businessType, places?, regionCode? }`. `businessType` is
+`CUSTOMER_LOCATION_ONLY` (a service-area business: the address is hidden, the listing shows the areas
+served — a warehouse, a depot, a mobile trade) or `CUSTOMER_AND_BUSINESS_LOCATION` (a storefront that also
+serves customers at their location); there is no other value. `businessType` and `regionCode` you omit
+keeps its live value. `regionCode` is **required** by Google for `CUSTOMER_LOCATION_ONLY` and immutable
+once set — a service-area business has no street address, so the region is its only country signal.
+Converting a storefront fills it from the address being cleared, so you rarely send it; a listing with
+neither gets a 400 naming the field. `places` **replaces** the whole served-area list: send every city you want kept,
+each as `{ placeName, placeId }` — Google requires both — with the `placeId`s from `seo_gbp_location`. The
+preview shows `service_area.places.added / removed / kept` — read it the way you read the services diff.
+Converting a listing to `CUSTOMER_LOCATION_ONLY` **removes the street address**: Google requires
+`storefrontAddress` cleared in the same update, the tool does that for you (the preview says
+`clears_storefront_address: true` and lists `storefrontAddress` in the update mask), and a call that sends an
+address alongside the conversion is refused. It can trigger re-verification: written approval first, like
+an address change.
+
+**Opening date.** `openInfo: { openingDate: { year, month, day? } }` (month and year alone when the day is
+unknown; `openingDate: {...}` at the top level is accepted as shorthand). It is patched by sub-path, so it
+never touches the listing's open/closed `status`, which is also writable there (`OPEN`,
+`CLOSED_TEMPORARILY`, `CLOSED_PERMANENTLY`).
+
+**The preview is real.** The first call reads the LIVE location (not the snapshot), runs your change through
+Google's own `validateOnly` dry run, and returns the current value of every field you are changing plus
+`google_validation: passed`; a change Google would reject comes back as a 400 in Google's words before you
+ever confirm.
 
 **Closes the loop:** `pm_tasks_complete`, and `memory_update` with the new values, the date, and the
 pre-edit score so next month's report shows the `score_history` delta.
@@ -450,7 +478,7 @@ same category of visibility lever as attributes (Play L3), and just as commonly 
 
 - **Never keyword-stuff `title`.** "Plumber Dallas" appended to a business name is the most common cause
   of a hard suspension, which takes the client's local presence offline for weeks. Refuse and explain.
-- **`storefrontAddress`, `title` and `categories` edits can trigger re-verification**, during which the
+- **`storefrontAddress`, `title`, `categories` and `serviceArea` edits can trigger re-verification**, during which the
   listing can lose visibility. Never casual, never batched with cosmetic changes, never without written
   approval. Changing the primary category changes which searches the business appears in at all: evidence
   first (what do the pack holders use?), propose rather than apply.
