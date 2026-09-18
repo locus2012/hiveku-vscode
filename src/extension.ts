@@ -16,6 +16,7 @@ import { AccountStore, type AccountRecord } from './accounts';
 import { HivekuMcpClient, onRegistryDrift, resetRegistryDrift } from './mcpClient';
 import * as api from './hivekuApi';
 import { downloadAndExtract } from './download';
+import { hivekuUserAgent } from './hivekuUserAgent';
 import { HivekuScm, REMOTE_SCHEME } from './scm';
 import { HivekuTreeProvider } from './tree';
 import { AccountConsoleProvider } from './consoleTree';
@@ -1149,7 +1150,7 @@ async function revokeAccountKey(record: AccountRecord): Promise<boolean> {
     const timer = setTimeout(() => ctrl.abort(), 8000);
     const res = await fetch(url, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'User-Agent': hivekuUserAgent() },
       signal: ctrl.signal,
     }).finally(() => clearTimeout(timer));
     if (!res.ok) return false;

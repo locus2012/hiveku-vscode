@@ -16,6 +16,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { availableCadenceCommands } from './roleCommands';
+import { hivekuUserAgent } from './hivekuUserAgent';
 
 // ── lib.mjs : shared helpers (Hiveku MCP client, cron matcher, claude -p, env, idempotency) ──
 const LIB_MJS = `// Shared helpers for Hiveku local automations. ESM, Node 18+ (global fetch).
@@ -26,6 +27,10 @@ import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
 
 export const ROOT = dirname(fileURLToPath(import.meta.url));
+// Every Hiveku client identifies itself. Baked in when the extension wrote this
+// file (it runs outside the extension host): the edge firewall on Hiveku hosting
+// challenges automated clients that do not carry a Hiveku user agent.
+export const HIVEKU_USER_AGENT = '${hivekuUserAgent('HivekuLocalAutomation')}';
 
 export function loadEnv() {
   const p = join(ROOT, '.env');
@@ -66,7 +71,7 @@ function _retryAfterFromProse(message) {
 
 async function _rpcOnce(method, params) {
   const url = (process.env.HIVEKU_MCP_URL || 'https://core.hiveku.com/mcp');
-  const headers = { Authorization: 'Bearer ' + process.env.HIVEKU_MCP_KEY, 'Content-Type': 'application/json', Accept: 'application/json' };
+  const headers = { Authorization: 'Bearer ' + process.env.HIVEKU_MCP_KEY, 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': HIVEKU_USER_AGENT };
   if (_session) headers['Mcp-Session-Id'] = _session;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), MCP_TIMEOUT_MS);
@@ -167,10 +172,19 @@ export function cronMatches(expr, d = new Date()) {
   return part(f[2], vals[2], 1, 31) && (part(f[4], vals[4], 0, 7) || part(f[4], vals[4] === 0 ? 7 : vals[4], 0, 7));
 }
 
-/** Tiny REST helper for Smartlead / HeyReach. */
+/** Tiny REST helper for Smartlead / HeyReach. Identifies as Hiveku unless the worker
+ *  sets its own User-Agent, and names the edge firewall's challenge (an HTTP 202 with
+ *  an empty body, or an x-amzn-waf-action header) instead of handing back a blank page. */
 export async function http(url, opts = {}) {
-  const res = await fetch(url, opts);
+  // new Headers() accepts a plain object, an array or a Headers instance, so a worker's
+  // own headers survive whatever shape it passed; only a missing agent is filled in.
+  const headers = new Headers(opts.headers || {});
+  if (!headers.has('user-agent')) headers.set('user-agent', HIVEKU_USER_AGENT);
+  const res = await fetch(url, { ...opts, headers });
   const text = await res.text();
+  if (res.headers.get('x-amzn-waf-action') || (res.status === 202 && text.length < 1024)) {
+    throw new Error('HTTP ' + res.status + ': the edge firewall challenged this client; send a user agent containing Hiveku, or use a HEAD request. This is not an empty site and not a failed deploy.');
+  }
   let json; try { json = JSON.parse(text); } catch { json = text; }
   if (!res.ok) throw new Error('HTTP ' + res.status + ': ' + String(text).slice(0, 300));
   return json;

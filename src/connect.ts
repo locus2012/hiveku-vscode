@@ -8,6 +8,7 @@
 import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import { AccountStore } from './accounts';
+import { hivekuUserAgent } from './hivekuUserAgent';
 
 interface ExchangeResponse {
   accounts: Array<{ account_id: string; account_name: string; api_key: string }>;
@@ -117,7 +118,7 @@ export class ConnectFlow {
         async (): Promise<ExchangeResponse> => {
           const res = await fetch(`${this.appUrl().replace(/\/+$/, '')}/api/connect/vscode/exchange`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'User-Agent': hivekuUserAgent() },
             body: JSON.stringify({ code }),
           });
           if (!res.ok) {

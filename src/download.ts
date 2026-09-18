@@ -11,9 +11,15 @@ import * as path from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import * as tar from 'tar';
+import { EDGE_CHALLENGE_MESSAGE, hivekuUserAgent, isEdgeChallenge } from './hivekuUserAgent';
 
 export async function downloadAndExtract(downloadUrl: string, destRoot: string): Promise<void> {
-  const res = await fetch(downloadUrl);
+  const res = await fetch(downloadUrl, { headers: { 'User-Agent': hivekuUserAgent() } });
+  if (isEdgeChallenge(res)) {
+    // A 202 is res.ok, so without this the firewall's empty body would reach
+    // tar as an empty stream and the error would blame the archive.
+    throw new Error(`Download failed: ${EDGE_CHALLENGE_MESSAGE}`);
+  }
   if (!res.ok) {
     // Read the body before giving up on it. The server sends a JSON error with
     // the actual cause (an expired link, a size refusal, the underlying S3
