@@ -37,9 +37,10 @@ Which Hiveku tools reach the edge, and how:
   challenge, not a fetcher defect and not an empty page: switch to a rendering format or read
   the page with `fetch_url`. Do not report it and do not add an allowance for it.
 
-## The three tools
+## The four tools
 
-Agents get exactly what a person has in Site > Hosting > Firewall: read, allow, remove.
+Agents get exactly what a person has in Site > Hosting > Firewall: read, read one client's
+evidence, allow, remove.
 
 - `site_firewall_get({ project_id, environment })` - read-only. The last 7 days for that tier
   (`production` | `staging` | `development`): `totals` (`challenged`, `blocked`, `rateLimited`),
@@ -48,6 +49,17 @@ Agents get exactly what a person has in Site > Hosting > Firewall: read, allow, 
   20 by requests: `userAgent`, `asn`, `country`, `requests`, `lastSeen`, `outcome`, `allowed`)
   and `exceptions[]` (the active allowances: `id`, `kind`, `value`, `note`, `createdBy`,
   `createdAt`).
+- `site_firewall_client_get({ project_id, environment, user_agent, asn })` - read-only. The
+  evidence behind one `clients[]` row, the same panel a person opens by clicking the row: what
+  that client actually got over the window (`totals.served`, `challenged`, `blocked`,
+  `rateLimited`, `bytes`, `addresses`), `firstSeen` / `lastSeen`, a per-day table, requests per
+  hour, its ten top `paths`, the `cadence` sentence, a `verdict` (`scraper`, `monitor`,
+  `crawler`, `unknown`) with its reason, and `actions` (`allowAgent` with the token or the reason
+  it cannot be allowed, `allowAddress` when it used at most three addresses, `report`). Pass
+  `user_agent` and `asn` exactly as the row returned them; a pair that is not on the card
+  answers 404. Read this before deciding anything about a row: a browser identity from a cloud
+  network with many addresses walking the site is a scraper, not something to allow; one
+  address fetching one path every few minutes is a monitor, allow its address.
 - `site_firewall_allow({ project_id, kind: 'ip' | 'user_agent', value, note? })` - adds one
   allowance and pushes it to the edge. Returns the exception and `edge: 'applied' | 'pending'`;
   `pending` means saved and picked up within the day, not failed. This is a write on a
@@ -55,7 +67,7 @@ Agents get exactly what a person has in Site > Hosting > Firewall: read, allow, 
 - `site_firewall_remove({ project_id, exception_id })` - removes one allowance (the id comes
   from `site_firewall_get`) and pushes the change to the edge.
 
-The same three operations are `GET`, `POST` and `DELETE` on
+The same four operations are `GET`, `GET .../firewall/clients/detail`, `POST` and `DELETE` on
 `/api/olympus/builder/projects/{projectId}/firewall[...]` for a script that talks to Olympus
 directly. If the tools are not on your key yet, say so and hand the user the path
 (Site > Hosting > Firewall) instead of guessing at another tool.
