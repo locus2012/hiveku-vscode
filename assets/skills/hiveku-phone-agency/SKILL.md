@@ -168,7 +168,8 @@ speed-to-lead hook - a missed or abandoned call with no voicemail), `voiceVoicem
 (caller and message length, NEVER the transcript), `voiceCallCompletedTrigger` (fires after
 every call, human or AI), `smsReceivedTrigger` (a bare STOP/CANCEL keyword never reaches it),
 the `sms` action node, and `phoneCall`. Build with `test_mode: true` and read the
-`would_have` payload before anything fires for real. Node field shapes, trigger payloads and
+`would_have` payload and `template_values` (in the response's `data.step_states`) before
+anything fires for real. Node field shapes, trigger payloads and
 the authoring traps live in the automation skill:
 `hiveku-automation-agency/references/node-rail.md`.
 

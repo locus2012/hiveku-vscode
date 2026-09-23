@@ -35,7 +35,9 @@ plugin-version question (`/hiveku:update`, then retry).
    means it never reached the phone system and cannot ring anyone.
 6. **Route the main line** - [CONFIRM] `voice_number_update` pointing the purchased DID at the ring
    group (or an IVR, a seat, or a bare PSTN forward via `forward_to_e164` to a cell or the old
-   office line - a forward bills PSTN minutes for every inbound call, say so before the yes). Echo
+   office line - a forward bills PSTN minutes for every inbound call, say so before the yes; it
+   also overrides any target on the number, so a later re-route must send `forward_to_e164: null`
+   in the same call). Echo
    before/after: "next inbound call to <e164> rings <group>". The PBX push is best-effort behind a
    200, so read the number back with `voice_number_get`.
 7. **Caller-ID name (CNAM)** - offer it: an unregistered number shows bare digits and is likelier to

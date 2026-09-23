@@ -56,7 +56,9 @@ then retry). Never say Hiveku cannot do it.
      current member DID - each member's routing is rewritten and its PBX route re-synced - so say
      that before the yes. A response carrying `destination_apply_failures` is a PARTIAL success:
      those members keep their old routing until re-saved. A `forward_to_e164` destination bills
-     PSTN minutes for every tracked call. Fix the destination FIRST when `voice_pools_list` shows
+     PSTN minutes for every tracked call, and it is stamped onto each member number's own
+     `forward_to_e164`, which stays there if the number later leaves the pool: clear it on the
+     number with `voice_number_update` (`forward_to_e164: null`). Fix the destination FIRST when `voice_pools_list` shows
      members with `routing.target_name: null` (a deleted target).
    - `whisper_enabled` + `whisper_template` (max 200 chars; `[source]` resolves at ring time to
      the ad platform, the UTM source, the referrer host, or "your website"): plays to whoever

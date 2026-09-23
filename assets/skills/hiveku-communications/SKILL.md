@@ -73,14 +73,18 @@ hydration where a domain fits.
 3. `workflow_node_add` per node, then `workflow_edge_add`. Leave `sourceHandle` empty except
    off a `conditional` (`'true'`/`'false'`) or a `switch` (a `handleId` from
    `switchConfig.cases`).
-4. `workflow_validate`, then `workflow_run({ id, test_mode: true })`.
-5. `workflow_run_get`, read `step_states`. Fix with `workflow_node_update` (shallow-merged),
-   re-run.
-6. `workflow_enable` only once the dry run is clean and the user has approved.
+4. `workflow_validate`, then `workflow_test({ workflow_id, input_data })` (the same as
+   `workflow_run` with `test_mode: true`, flag pinned).
+5. Read `data.step_states` on that response. A test writes no run row, so `workflow_run_get`
+   has nothing to fetch after it. Fix with `workflow_node_update` (shallow-merged), re-run.
+6. `workflow_enable` only once the dry run is clean and the user has approved. It refuses a
+   disabled workflow that still fails validation (422 `workflow_invalid`); fix the named nodes.
 
-**`test_mode: true` is the safe dry run - use it every time.** It short-circuits every
-side-effecting node: each returns `__dry_run: true` and `would_have: { ...the args it would
-have sent }`. Read `would_have` before anything fires for real: a live run reaches a customer's
+**`test_mode: true` is the safe dry run - use it every time.** It runs the whole graph and
+short-circuits every side-effecting node: each simulated node's entry in `data.step_states`
+has `dry_run: true`, `output.would_have` (the config it would have sent) and
+`template_values` (every `{{token}}` and what it resolved to; `missed`, `empty` or `literal`
+is a broken merge). Read them before anything fires for real: a live run reaches a customer's
 phone or inbox, and that is not undoable.
 
 A `manualTrigger` plus one action node, run once, is a fine way to spend rung 2. **Run-once
@@ -171,12 +175,15 @@ and the sales skill's 1:1 email section.
 Gmail or Outlook) - the rail when a trigger or schedule sends the reply, or when your key
 cannot see `crm_contact_email_send`. Read with Play 1 or 4, carry the thread id into the node.
 
-**This node has the worst authoring trap in the department.** The catalog advertises two
-fields; the handler requires `connectionId`, `to` and `subject` (none advertised) and reads
-`threadId` in camelCase where the catalog says `thread_id`. Built faithfully from the catalog
-it fails three times and then sends an unthreaded new email. `gmailSend` has the same missing
-`connectionId`. The full key table and the reader-to-node pattern are in `references/inbox.md`
-Part 4 - load it before building, then dry run and read the `would_have` recipient.
+**This node still has one authoring trap.** The catalog lists `to` and `subject` as
+required and `body` and `threadId` (camelCase) as optional (a blank body sends an empty
+message), matching the handler, but it does not list
+`connectionId`, which the handler also requires. `gmailSend` has the same missing
+`connectionId`. Before the 2026-09 fix the catalog advertised only `thread_id` and `body`, so
+an older node built from it fails on `to` and, once fixed, still sends unthreaded: `thread_id`
+is never read, rename it `threadId`. The full key table and the reader-to-node pattern are in `references/inbox.md`
+Part 4 - load it before building, then dry run and read the `would_have` recipient and the
+`template_values` in `data.step_states`.
 
 Do not reach for `email_send_test` as a reply substitute: it is a REAL send on the marketing
 lane (`dry_run` defaults FALSE), does not thread, and does not come from the person the
@@ -323,8 +330,9 @@ strategy via `talk_to_department({ domain: 'marketing' })`; workflow design via
   shipped. Verify "there is no X" against the live catalog first.
 - **Calling `crm_inbox_recent` for recent mail.** It is the search tool; `query` is required.
 - **Omitting `connection_id` on a multi-inbox account.** You silently read the default mailbox.
-- **Building `gmailReply` from the node catalog alone.** `connectionId`, `to`, `subject` are
-  required and unadvertised; the handler reads `threadId`, not `thread_id`.
+- **Building `gmailReply` from the node catalog alone.** `connectionId` is required and
+  unadvertised; an older node carrying `thread_id` (the pre-fix catalog key) never threads,
+  because the handler reads only `threadId`.
 - **Building a STOP keyword workflow.** A bare compliance keyword never reaches the trigger -
   and a bare "CANCEL" is an opt-out, so your cancellation flow never sees it.
 - **Replying to an SMS ticket with `helpdesk_ticket_send_reply`.** Records the message,

@@ -17,8 +17,8 @@ import * as api from './hivekuApi';
 import type { AccountRecord } from './accounts';
 import { departmentById, extractRows, fetchDataset, mapLimit, type Column, type Row } from './deptData';
 import { isExternalProject } from './projectKind';
-import { moduleById } from './modules';
-import { openModulePanel } from './panel';
+import { enableWorkflow, enabledAnywayNote, moduleById } from './modules';
+import { modalActionUi, openModulePanel } from './panel';
 import { openTaskDetail } from './taskDetail';
 import { effectiveDepartments } from './roles';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
@@ -1036,7 +1036,16 @@ export function openAccountConsole(
           );
           await load('automations');
         } else if (msg.type === 'togglewf' && msg.id) {
-          await api.workflowSetEnabled(await clientFor(account.accountId), msg.id, !!msg.enabled);
+          const client = await clientFor(account.accountId);
+          if (msg.enabled) {
+            // Same flow as the Automations panel's Enable: a 422 workflow_invalid
+            // lists the problems and offers "Enable anyway" (allow_incomplete).
+            const outcome = await enableWorkflow(client, { id: msg.id }, modalActionUi(msg.name ?? '', account.label));
+            const note = outcome ? enabledAnywayNote(outcome.result) : null;
+            if (note) void vscode.window.showInformationMessage(note);
+          } else {
+            await api.workflowSetEnabled(client, msg.id, false);
+          }
           await load('automations');
         } else if (msg.type === 'operate' && msg.tab) {
           const mod = moduleById(DEPT_TO_MODULE[msg.tab]);
@@ -1466,7 +1475,7 @@ function consoleHtml(webview: vscode.Webview, label: string): string {
         var st=el('span','badge '+(on?'ok':''),on?'on':'off');st.style.marginLeft='8px';left.appendChild(st);
         var actions=el('div');actions.style.display='flex';actions.style.gap='6px';
         actions.appendChild(btn('Run','',function(){vscode.postMessage({type:'runwf',id:w.id});}));
-        actions.appendChild(btn(on?'Disable':'Enable','ghost',function(){vscode.postMessage({type:'togglewf',id:w.id,enabled:!on});}));
+        actions.appendChild(btn(on?'Disable':'Enable','ghost',function(){vscode.postMessage({type:'togglewf',id:w.id,enabled:!on,name:w.name||''});}));
         r.appendChild(left);r.appendChild(actions);content.appendChild(r);
       });
       content.appendChild(el('div','sec','Recent runs'));

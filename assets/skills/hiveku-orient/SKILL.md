@@ -132,7 +132,15 @@ them any more - it is always available on every profile):
   `pm_tasks_create({ project_id, title, assigned_to_id })`, where `project_id` comes from
   `pm_projects_list` (or `pm_projects_create`) and `assigned_to_id` is the `id` field from
   `crm_list_users` - NOT `clerk_user_id`, which is a different id space and errors the whole write.
-  The field is `title`, not `name`. Comment as you go with `pm_tasks_comment`, read the thread back
+  The field is `title`, not `name`.
+  **An empty roster is a real answer.** `crm_list_users` lists the account's Team Members only
+  (people whose home account it is, plus invited members). Agency and SaaS operators working a
+  client account without an invitation are not listed and cannot be assigned. When it returns
+  `{ users: [], hint }`, or when the person the work belongs to is not in the list, leave
+  `assigned_to_id` (and `owner_id` on CRM records) unset: the task or record is created
+  unassigned, which is correct. Never borrow another member's id to stand in for them, and
+  never use an id from another account. Tell the user once that inviting them under Team
+  Members makes them assignable, then carry on. Comment as you go with `pm_tasks_comment`, read the thread back
   with `pm_task_comments_list`, and close with `pm_tasks_complete({ id, summary })` (sets
   status='done', completed_at=now, progress_percentage=100; the summary is recorded as an audit
   comment). `pm_tasks_complete` takes no attribution argument - attribution is set at create/update
@@ -141,7 +149,8 @@ them any more - it is always available on every profile):
   report while sitting in an open status.
   Visibility: `crm_list_users` reaches full, sales and helpdesk keys only (and sales in turn
   cannot see `pm_tasks_create`); on other scoped keys ask the user for the assignee rather than
-  guessing an id. For bulk, `pm_tasks_create_bulk` creates up to 500 tasks per call (`project_id` +
+  guessing an id. A tool missing from the key's profile is a scope question; the tool answering
+  an empty list is the empty-roster case above. For bulk, `pm_tasks_create_bulk` creates up to 500 tasks per call (`project_id` +
   `title` per row, `name` accepted as alias; ownership of every `project_id` is validated before
   any insert, so one bad id blocks the whole batch).
 - **Every completed task ends with an Owner update** - two to four calm, plain sentences a busy owner

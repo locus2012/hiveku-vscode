@@ -9,7 +9,8 @@
  */
 
 import type { ActionSpec, ModuleSpec } from './panel';
-import { maskSecret } from './hivekuApi';
+import { maskSecret, workflowEnable } from './hivekuApi';
+import type { WorkflowValidationIssue } from './hivekuApi';
 
 const open = (label = 'Open in Hiveku', sub?: string) =>
   ({ id: 'open', label, kind: 'open' as const, ...(sub ? { sub } : {}) });
@@ -37,6 +38,74 @@ const chat = (department: string, label = 'Ask agent') =>
 // ============================================================
 
 const asString = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+// ============================================================
+// Enabling a workflow is VALIDATED, not a toggle.
+//
+// workflow_enable on a DISABLED workflow runs workflow_validate first. Any error
+// (a node missing a required field, no trigger, a dangling edge) comes back as
+// 422 { error: 'workflow_invalid', issues } and nothing changes. The problems
+// are listed and the operator decides: "Enable anyway" re-sends with
+// allow_incomplete:true, which is exactly the explicit yes the override exists
+// for. Runs can then fail until the problems are fixed.
+//
+// An MCP server that predates allow_incomplete drops the argument, so the
+// second call is refused the same way; that case lists the problems without
+// offering the override again. Re-enabling an already-enabled workflow is
+// never refused.
+// ============================================================
+
+const MAX_LISTED_ISSUES = 12;
+function issueList(issues: WorkflowValidationIssue[]): string {
+  if (issues.length === 0) return 'Run workflow_validate to see the problems.';
+  const lines = issues
+    .slice(0, MAX_LISTED_ISSUES)
+    .map((issue) => `- ${issue.message || issue.code || 'Unnamed problem'}`);
+  if (issues.length > MAX_LISTED_ISSUES) lines.push(`- and ${issues.length - MAX_LISTED_ISSUES} more`);
+  return lines.join('\n');
+}
+
+/** The Enable flow, shared by the Automations panel row action and the console toggle. */
+export const enableWorkflow: NonNullable<ActionSpec['run']> = async (client, args, ui) => {
+  const id = asString(args.id);
+  const first = await ui.progress('Enable…', () => workflowEnable(client, id));
+  if (first.enabled) return { result: first.result };
+
+  const count = first.refusal.issues.length;
+  const heading = `${ui.subject || 'This workflow'} has ${count || 'some'} problem${count === 1 ? '' : 's'} to fix before it can be enabled.`;
+  if (first.refusal.overrideUnavailable) {
+    await ui.warn(`Not enabled. ${heading}`, issueList(first.refusal.issues));
+    return null;
+  }
+  const enableAnyway = await ui.confirm(
+    heading,
+    `${issueList(first.refusal.issues)}\n\nEnable anyway only if you accept that runs can fail until these are fixed.`,
+    'Enable anyway',
+  );
+  if (!enableAnyway) return null;
+
+  const second = await ui.progress('Enable anyway…', () => workflowEnable(client, id, true));
+  if (second.enabled) return { result: second.result };
+  await ui.warn(
+    'Not enabled. This Hiveku server does not accept "Enable anyway" yet: fix the problems below, or enable it from the workflow editor in the Hiveku dashboard.',
+    issueList(second.refusal.issues),
+  );
+  return null;
+};
+
+/** Non-null when an override enabled a workflow that still has errors (the 200 carries `validation.errors`). */
+export function enabledAnywayNote(result: unknown): string | null {
+  const data = result && typeof result === 'object' ? (result as { data?: unknown }).data : undefined;
+  const validation = data && typeof data === 'object' ? (data as { validation?: unknown }).validation : undefined;
+  const errors = validation && typeof validation === 'object' ? (validation as { errors?: unknown }).errors : undefined;
+  if (typeof errors === 'number' && errors > 0) {
+    return errors === 1
+      ? 'Enabled anyway - 1 problem remains; runs can fail until it is fixed.'
+      : `Enabled anyway - ${errors} problems remain; runs can fail until they are fixed.`;
+  }
+  return null;
+}
+const enableDone = (result: unknown): string => enabledAnywayNote(result) ?? 'Enable - done.';
 
 const isFutureDate = (value: unknown): boolean => {
   if (typeof value !== 'string' && typeof value !== 'number') return false;
@@ -436,7 +505,7 @@ export const MODULES: ModuleSpec[] = [
         fields: [{ keys: ['is_enabled'], label: 'enabled' }, { keys: ['run_count'], label: 'runs' }, { keys: ['description'] }],
         rowActions: [
           { id: 'run', label: 'Run', kind: 'tool', tool: 'workflow_run', args: (r) => ({ id: r.id }), successReload: false },
-          { id: 'enable', label: 'Enable', kind: 'tool', tool: 'workflow_enable', args: (r) => ({ id: r.id }) },
+          { id: 'enable', label: 'Enable', kind: 'tool', tool: 'workflow_enable', args: (r) => ({ id: r.id }), run: enableWorkflow, done: enableDone },
           { id: 'disable', label: 'Disable', kind: 'tool', tool: 'workflow_disable', args: (r) => ({ id: r.id }) },
         ],
         detail: { tool: 'workflow_get', idKeys: ['id'] },

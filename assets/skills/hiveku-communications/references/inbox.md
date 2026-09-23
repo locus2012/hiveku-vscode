@@ -274,25 +274,26 @@ Despite the name it dispatches through a unified email-providers module and work
 `email_connections` row, Gmail or Outlook. The node was originally Gmail-only and the name was
 kept for backwards compatibility.
 
-**The node catalog lies about this node's fields, and this is the highest-value fact in the
-reference.** `workflow_node_types_list` serves an authored schema for `gmailReply` whose
-node-specific fields are exactly two, `thread_id` and `body`. (A third, `on_error`, appears on
-every non-trigger node because the catalog builder appends it universally; it is not a `gmailReply`
-field.) The handler reads a different and larger set:
+**The node catalog still leaves out one required field, and this is the highest-value fact in
+the reference.** `workflow_node_types_list` serves an authored schema for `gmailReply` with
+`to` and `subject` marked required and `body` and `threadId` optional (plus the `on_error` the
+catalog builder appends to every non-trigger node). The handler reads one more key the catalog
+never lists:
 
 | Handler key | Required | In the catalog? | Failure if wrong |
 |---|---|---|---|
 | `connectionId` | yes | **no** | `No email connection selected. Pick an account in the node config.` |
-| `to` | yes | **no** | `Email send: missing "to" address` |
-| `subject` | yes | **no** | `Email send: missing "subject"` |
-| `body` | yes | yes | Sends empty |
-| `threadId` | for threading | **advertised as `thread_id`** | Sends as a NEW email, silently unthreaded |
+| `to` | yes | yes, required | `Email send: missing "to" address` |
+| `subject` | yes | yes, required | `Email send: missing "subject"` |
+| `body` | no | yes, optional | Sends an empty message |
+| `threadId` | for threading | yes, optional | Sends as a NEW email, silently unthreaded |
 | `cc`, `bcc` | no | no | - |
 | `replyToMessageId` | no | no | - |
 
-Read that table before you build. A node authored faithfully from the catalog fails three times
-in sequence and then, once you have added the three missing keys, still sends an unthreaded
-message because `thread_id` is never read.
+Read that table before you build: a node authored from the catalog alone fails on
+`connectionId`. Before the 2026-09 fix the catalog advertised only `thread_id` and `body`, so an
+older node built from it failed on `to` and `subject` and, once those were added, still sent
+unthreaded, because `thread_id` is never read. Rename it `threadId`.
 
 The `to` and `subject` requirements are enforced on the reply path, not just the send path. That
 is counter-intuitive for a reply, where both are notionally implied by the thread. They are not.
@@ -331,13 +332,14 @@ so you template real key names instead of guessing.
 - `gmailSend` composes a new message. Fields `to`, `subject`, `body`, `cc`, `bcc` are advertised
   correctly; `connectionId` is not advertised and is required.
 - `gmailSearch` searches a connected inbox from inside a workflow. `query` is required and is read
-  under that exact key. **`max_results` has the same catalog-versus-handler bug as `thread_id`
-  above:** the catalog advertises `max_results`, the handler reads `maxResults`, and node data keys
+  under that exact key. **`max_results` has the catalog-versus-handler bug `thread_id` used to
+  have:** the catalog advertises `max_results`, the handler reads `maxResults`, and node data keys
   are not case-normalized (only node TYPE strings carry camel and snake aliases). A node authored
   faithfully from the catalog has its value ignored, and the clamp of 1 to 100 always operates on
   the default of 25. Author it as `maxResults`. `connectionId` is required here too and is not
   advertised, because the handler resolves the connection before it branches on the action.
-- `gmail` is a generic action node that sends or labels.
+- `gmail` is a generic action node: `action` is `send` (the default), `reply` or `search`, and its thread field
+  is `threadId` too (the catalog's old `thread_id` is gone).
 - `crmSendContactEmail` sends to a CRM contact through the user's Gmail or Outlook and auto-logs
   a timeline activity. It is the automation twin of `crm_contact_email_send` - same lane, same
   self-logging - for when the send belongs inside a workflow.
@@ -365,11 +367,15 @@ Look at the delivery mechanisms instead, since the Gmail webhook, the Outlook we
 
 ### Always dry run
 
-`workflow_run({ id, test_mode: true })` short-circuits the send and returns
-`would_have: { to, subject, body, ... }`. `workflow_run_get({ workflow_id, run_id })` shows
-`step_states` per node with input, output and error. Read the recipient in `would_have` before
-any live run. An email sent to the wrong customer cannot be recalled, and on this surface the
-cost of a dry run is nothing.
+`workflow_test({ workflow_id, input_data })` (or `workflow_run` with `test_mode: true`)
+short-circuits the send and runs the rest of the graph. A test writes no run row, so there is
+nothing for `workflow_run_get` to fetch afterwards; the evidence is on the response itself:
+`data.step_states[<nodeId>]` per node, where the send node carries `dry_run: true`,
+`output.would_have: { to, subject, body, ... }` and `template_values` (every `{{token}}` and
+what it resolved to), and `data.not_reached` lists any node the run never got to. Read the
+recipient in `would_have` before any live run. An email sent to the wrong customer cannot be
+recalled, and on this surface the cost of a dry run is nothing. `workflow_run_get` shows
+per-node `step_states` with input, output and error for REAL runs.
 
 ## Part 5: Repairing a connection
 
@@ -443,8 +449,8 @@ mail, which runs on a different lane entirely.
 | `gmailSearch` ignores the result cap | The node's `maxResults` key | Catalog says `max_results`; handler reads `maxResults`, so it silently uses 25 |
 | `crm_inbox_recent` errors | Did you pass `query`? | It is the search tool; `query` is required |
 | A known email is missing from search | Live vs synced | `crm_email_thread_search` reads CRM copies; use `crm_thread_for_contact` for live |
-| Reply "sent" but not threaded | The node's `threadId` key | Catalog says `thread_id`; handler reads `threadId` |
-| Reply node fails immediately | `connectionId`, `to`, `subject` | All required, none advertised by the catalog |
+| Reply "sent" but not threaded | The node's `threadId` key | A node built before the 2026-09 fix carries `thread_id`; the handler reads only `threadId` |
+| Reply node fails immediately | `connectionId`, `to`, `subject` | All required; the catalog lists `to` and `subject` but never `connectionId` |
 | `crm_contact_email_send` not in the catalog | Your key's profile | It is a `crm_` tool; a communications-scoped key builds the `gmailReply` node instead |
 | `crm_contact_email_send` returns 400 | `crm_list_email_connections` | The default sendable mailbox is a read-only-scope or calendar row - reconnect with a sending scope, do not retry |
 | Internal team mail appearing as lead replies | The membership resolver | It failed open to noise-only, or a `+` address was dropped |

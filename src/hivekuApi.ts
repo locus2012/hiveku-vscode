@@ -4,7 +4,7 @@
  * extension deals in plain typed objects.
  */
 
-import { HivekuMcpClient } from './mcpClient';
+import { HivekuMcpClient, McpToolError } from './mcpClient';
 import type { CmsProviderKind, ExternalPlatform } from './projectKind';
 import type { CommitFile, ManifestEntry } from './workspace';
 
@@ -1404,6 +1404,82 @@ export async function workflowRun(client: HivekuMcpClient, id: string): Promise<
 }
 export async function workflowSetEnabled(client: HivekuMcpClient, id: string, enabled: boolean): Promise<unknown> {
   return client.callToolJson<unknown>(enabled ? 'workflow_enable' : 'workflow_disable', { id });
+}
+
+/** One workflow_validate issue, as the enable gate returns it. */
+export interface WorkflowValidationIssue {
+  severity?: string;
+  code?: string;
+  message?: string;
+  nodeId?: string;
+  nodeType?: string;
+  field?: string;
+  anyOf?: string[];
+}
+
+/**
+ * workflow_enable refused a DISABLED workflow because workflow_validate reports
+ * errors (HTTP 422 `workflow_invalid`; nothing changed). The override is
+ * allow_incomplete:true, on the operator's explicit yes only.
+ *
+ * `overrideUnavailable`: the call already carried allow_incomplete (or the
+ * server reported it dropped the argument) and was refused anyway. An MCP
+ * server that predates the flag drops it, so offering "Enable anyway" again
+ * would only repeat the same refusal.
+ */
+export interface WorkflowEnableRefusal {
+  message: string;
+  issues: WorkflowValidationIssue[];
+  overrideUnavailable: boolean;
+}
+
+export type WorkflowEnableOutcome =
+  | { enabled: true; result: unknown }
+  | { enabled: false; refusal: WorkflowEnableRefusal };
+
+/** A 422 workflow_invalid read out of a failed workflow_enable call, or null for any other failure. */
+export function workflowInvalidRefusal(err: unknown, sentOverride: boolean): WorkflowEnableRefusal | null {
+  if (!(err instanceof McpToolError)) return null;
+  const outer = err.payload;
+  if (!outer || typeof outer !== 'object' || Array.isArray(outer)) return null;
+  const o = outer as Record<string, unknown>;
+  // The MCP proxy nests the route body under `details`; a direct body is top-level.
+  const body = o.details && typeof o.details === 'object' && !Array.isArray(o.details)
+    ? (o.details as Record<string, unknown>)
+    : o;
+  if (body.error !== 'workflow_invalid' && o.error !== 'workflow_invalid') return null;
+  const issues = (Array.isArray(body.issues) ? body.issues : []).filter(
+    (i): i is WorkflowValidationIssue => !!i && typeof i === 'object',
+  );
+  const dropped = Array.isArray(o.dropped_params) && o.dropped_params.includes('allow_incomplete');
+  return {
+    message: typeof body.message === 'string' && body.message.trim()
+      ? body.message
+      : 'This workflow has problems that must be fixed before it can be enabled.',
+    issues,
+    overrideUnavailable: sentOverride || dropped,
+  };
+}
+
+/**
+ * Enable a workflow. A 422 workflow_invalid comes back as a refusal the caller
+ * can show (and, with the operator's yes, retry with allowIncomplete); every
+ * other failure still throws.
+ */
+export async function workflowEnable(
+  client: HivekuMcpClient,
+  id: string,
+  allowIncomplete = false,
+): Promise<WorkflowEnableOutcome> {
+  const args: Record<string, unknown> = { id };
+  if (allowIncomplete) args.allow_incomplete = true;
+  try {
+    return { enabled: true, result: await client.callToolJson<unknown>('workflow_enable', args) };
+  } catch (err) {
+    const refusal = workflowInvalidRefusal(err, allowIncomplete);
+    if (refusal) return { enabled: false, refusal };
+    throw err;
+  }
 }
 export interface WorkflowRun {
   workflow_id?: string;

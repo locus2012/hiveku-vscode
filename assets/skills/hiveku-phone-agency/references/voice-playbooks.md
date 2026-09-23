@@ -193,8 +193,8 @@ wording is drafted from `account_context_get({ domain: 'helpdesk' })` and approv
 1. `voiceMissedCallTrigger` into an `sms` node - build it with the `workflow_` tools, with
    filters on direction and ring time so an internal test call does not text a teammate.
    Node shapes and payloads: `hiveku-automation-agency/references/node-rail.md`.
-2. Dry run with `test_mode: true` and READ the `would_have` recipient and body before
-   enabling [CONFIRM to enable]. A bare STOP reply never reaches `smsReceivedTrigger` - the
+2. Dry run with `test_mode: true` and READ the `would_have` recipient and body (in
+   `data.step_states` on the response) before enabling [CONFIRM to enable]. A bare STOP reply never reaches `smsReceivedTrigger` - the
    opt-out is handled upstream; do not build a STOP branch.
 
 **Read back / measure:** take the baseline first - `voice_calls_list` with

@@ -1440,9 +1440,15 @@ Hiveku PM — not your head, this chat, or a local file — is the single source
    call \`crm_list_users\`, take the member whose \`email\`${connectedAs ? ` is \`${connectedAs}\`` : ' matches the connected account owner'},
    and keep their \`id\` (USER_ID) and \`name\` (USER_NAME).${connectedAs ? '' : ' If you cannot tell who connected, ask the user before creating tasks.'}
    Tasks and comments are attributed to THEM — never to "olympus".
+   **No member with that email = you are not on this account's team.** \`crm_list_users\` lists Team Members only
+   (people whose home is this account, plus invited members); agency/SaaS staff working the account without an
+   invitation are not listed and cannot be assigned. An empty list (it carries a \`hint\`) or one without that email
+   is a real answer, not an error: there is no USER_ID. Create tasks unassigned (omit \`assigned_to_id\`), set
+   USER_NAME to the connected person's name (their email if you do not know the name), and tell the user once that
+   inviting them under Team Members makes them assignable. Never borrow another member's id or an id from another account.
 2. **CREATE a task when you START work:** \`pm_tasks_create({ project_id, title, description, assigned_to_id: USER_ID })\`
    — \`project_id\` from \`pm_projects_list\` (make one with \`pm_projects_create({ name, project_type })\` if the
-   work has no home). The assignee MUST be USER_ID — never leave it blank.
+   work has no home). Omit \`assigned_to_id\` only when step 1 found no USER_ID.
 3. **COMMENT as you go — comments are essential:** log the plan, decisions, progress, blockers, and the
    outcome with \`pm_tasks_comment({ id: <task_id>, content, author_codename: USER_NAME })\`. A task with no
    comments is NOT documented work; \`author_codename\` MUST be USER_NAME so the trail reads as that person.
@@ -1921,9 +1927,15 @@ Hiveku PM is the single source of truth for the whole team; never track work onl
 1. **You act on behalf of the authenticated user${opts.connectedAs ? ` — \`${opts.connectedAs}\`` : ''}.** Resolve them ONCE per
    session: \`crm_list_users\` → the member whose \`email\`${opts.connectedAs ? ` is \`${opts.connectedAs}\`` : ' matches the connected owner'} → keep their \`id\` (USER_ID) and \`name\`
    (USER_NAME).${opts.connectedAs ? '' : ' If you cannot tell who connected, ask the user before creating tasks.'} Tasks and comments are attributed to THEM, never to "olympus".
+   **No member with that email = you are not on this account's team.** \`crm_list_users\` lists Team Members only
+   (home users plus invited members); agency/SaaS staff working the account without an invitation are not listed and
+   cannot be assigned. An empty list (it carries a \`hint\`) or one without that email is a real answer: there is no
+   USER_ID. Create tasks unassigned (omit \`assigned_to_id\`), set USER_NAME to the connected person's name (their email
+   if you do not know the name), and tell the user once that inviting them under Team Members makes them assignable.
+   Never borrow another member's id or an id from another account.
 2. **CREATE a task when you START work:** \`pm_tasks_create({ project_id, title, description, assigned_to_id: USER_ID })\`
-   — \`project_id\` from \`pm_projects_list\` (\`pm_projects_create({ name, project_type })\` if none fits). The
-   assignee MUST be USER_ID — never leave it blank.
+   — \`project_id\` from \`pm_projects_list\` (\`pm_projects_create({ name, project_type })\` if none fits). Omit
+   \`assigned_to_id\` only when step 1 found no USER_ID.
 3. **COMMENT as you go — comments are essential:** log the plan, decisions, progress, blockers, and the
    outcome with \`pm_tasks_comment({ id: <task_id>, content, author_codename: USER_NAME })\`. A task with no
    comments is NOT documented work; \`author_codename\` MUST be USER_NAME so the trail reads as that person.

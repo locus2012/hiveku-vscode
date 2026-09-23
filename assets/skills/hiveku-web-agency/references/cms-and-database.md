@@ -186,7 +186,7 @@ The half-done state produces the confusing bug report: **an RLS table with no po
 
 **The decision, stated once:** contact, lead, quote request, booking enquiry, newsletter signup, form submission of any kind goes to the CRM through the `crm*` nodes. `dbCreateRow` and a provisioned database are for a user's own custom application tables: an inventory the site manages, a booking calendar with its own state machine, gated resource entitlements. If you cannot name the application feature the table serves, you are about to store a lead in the wrong place.
 
-**Two wiring corollaries.** `on_error` defaults to `"fail"` and stops the whole downstream path: "a client had every form on their site returning 500 for six days because a CRM write sat in series ahead of the notification email with the default." Wire notification and CRM write as **siblings off the trigger**. And reference only fields the form actually sends: an unresolved `{{...}}` "is written through as the LITERAL string, not an error", so `{{body.email}}` on a form with no email field stores that text as somebody's address.
+**Two wiring corollaries.** `on_error` defaults to `"fail"` and stops the whole downstream path: "a client had every form on their site returning 500 for six days because a CRM write sat in series ahead of the notification email with the default." Wire notification and CRM write as **siblings off the trigger**. And reference only fields the form actually sends: an unresolved `{{...}}` is not an error, it is written through as a blank, so `{{body.email}}` on a form with no email field creates a contact with no address. A fallback is `{{ref || default}}` with two pipes; `{{ref | x}}` is not one.
 
 ---
 

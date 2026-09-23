@@ -51,9 +51,13 @@ you changed, every time, because the system will not record that you changed it.
 
 ## 1. The mental model
 
-**A DID points at exactly one inbound target.** `voice_numbers.inbound_target_type` +
-`inbound_target_id` name it: `extension`, `ring_group`, `ivr`, `queue`, `ai_agent`, `voicemail`,
-or an external forward (`forward_to_e164`). `voice_number_update` is the tool that re-points it,
+**A DID points at one inbound target, and a forward beats it.** `voice_numbers.inbound_target_type` +
+`inbound_target_id` name the target: `extension`, `ring_group`, `ivr`, `queue`, `ai_agent` or
+`voicemail`. A PSTN forward (`forward_to_e164`) is a SEPARATE column that can be set at the same
+time, and when it is set the call router forwards every call and never looks at the target, the
+geo rules or the pool's routing. So re-pointing a forwarded number means clearing the forward in
+the same save: `voice_number_update` with `forward_to_e164: null` plus the new target. Setting a
+target alone leaves the number forwarding. `voice_number_update` is the tool that re-points it,
 and every routing path in this system - a DID, an IVR menu digit, a ring-group fallback -
 ultimately resolves its target down to a numeric extension string. An object with no dial
 extension is unreachable no matter how configured it looks.

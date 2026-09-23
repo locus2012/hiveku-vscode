@@ -94,7 +94,10 @@ Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
   account's API key inlined, and \`.env*\` carry secrets — exclude them from every tar/push (the server
   refuses them too). Secrets belong in \`project_secrets_*\`, never in project code.
 - **PM tasks are required** — create one when you start work, comment as you go, complete it when
-  done, all attributed to the authenticated user (resolve via \`crm_list_users\`).
+  done, attributed to the authenticated user when \`crm_list_users\` lists them. That list is Team Members
+  only: if it is empty or lacks the connected email, you are not on this account's team, so create tasks
+  unassigned, sign comments with \`author_codename\` set to the connected person's name, and tell the user
+  once. Never borrow another member's id or an id from another account.
 - **Every completed task ends with an "Owner update"** — 2–4 calm, plain-language sentences a busy
   owner can skim: benefit first, no alarm vocabulary, no self-blaming narration, accurate.
 - Never read or print \`.env.local\` / \`.env.*.local\` contents.

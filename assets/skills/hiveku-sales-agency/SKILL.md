@@ -164,7 +164,8 @@ For each deal on the list:
      date on); flipping it back to open clears it.
      Reassignment is a deal write: `crm_update_deal({ deal_id, owner_id })` (a public_users UUID
      from `crm_list_users`; `assigned_to_id` defaults to the owner when only owner is given;
-     `unowned: true` clears both). Rep credit in the leaderboard and attainment reads runs on
+     `unowned: true` clears both). An empty `crm_list_users`, or an owner who is not in it, means
+     leave the record unowned (`unowned: true`), never a guessed owner or another member's id. Rep credit in the leaderboard and attainment reads runs on
      `deal.owner_id`. The contact owner still matters for contact-level attribution, so a real
      handoff also writes `crm_update_contact({ contact_id, owner_id })` - see the handoff play
      in section 2.
@@ -258,7 +259,8 @@ a read-only-scope or calendar connection 400s cleanly with the reason (fix via
 ### SDR → AE handoff (ownership is a field AND a play)
 There is no "handoff" tool - a real handoff is four writes, together:
 1. Ownership, on the deal: `crm_update_deal({ deal_id, owner_id })` (public_users UUID from
-   `crm_list_users`; `assigned_to_id` follows the owner unless you set it). This is what moves
+   `crm_list_users`; `assigned_to_id` follows the owner unless you set it; an AE who is not on
+   that roster cannot be the owner, so say so rather than substituting someone). This is what moves
    rep credit - `crm_rep_win_leaderboard` and `crm_report_attainment` attribute on
    `deal.owner_id`. Then the contact: `crm_update_contact({ contact_id, owner_id })` so
    contact-level attribution follows the AE too. A contact-owner change alone no longer moves

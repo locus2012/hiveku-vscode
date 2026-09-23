@@ -80,6 +80,55 @@ export interface ActionSpec {
    * Escape, aborts without calling the tool.
    */
   confirmTyped?: (row: Row) => { prompt: string; expected: string } | null;
+  /**
+   * kind 'tool' - make the call(s) yourself instead of one callToolJson, for an
+   * action whose answer can be a refusal the operator may override
+   * (workflow_enable's 422 workflow_invalid). Runs after the guard, confirm
+   * and input steps, with the same args. Return { result } when the action went
+   * through (`done` and successReload apply as usual), or null when it stopped
+   * and `run` has already told the user why.
+   */
+  run?: (
+    client: HivekuMcpClient,
+    args: Record<string, unknown>,
+    ui: ActionUi,
+  ) => Promise<{ result: unknown } | null>;
+}
+/** What an ActionSpec.run may show, without importing vscode into the registry. */
+export interface ActionUi {
+  /** The row's title ('' for a header action). */
+  subject: string;
+  progress<T>(title: string, task: () => Promise<T>): Promise<T>;
+  /** Modal warning with one action button; true only when the operator chose it. */
+  confirm(message: string, detail: string, button: string): Promise<boolean>;
+  /** Modal warning with no choice to make. */
+  warn(message: string, detail: string): Promise<void>;
+}
+
+/**
+ * Name the SUBJECT and the ACCOUNT in every modal. A VS Code modal is
+ * window-level and visually detached from the panel that raised it, so "Send
+ * this campaign now?" gave no way to tell which campaign, or which client — for
+ * actions that spend money or contact customers, on a machine with dozens of
+ * accounts open.
+ */
+function subjectAndAccount(subject: string, accountLabel: string): string {
+  return [subject && `Subject: ${subject}`, `Account: ${accountLabel}`].filter(Boolean).join('\n');
+}
+
+/** The VS Code ActionUi. Every modal names the subject and the account, like the confirm modal. */
+export function modalActionUi(subject: string, accountLabel: string): ActionUi {
+  const whereLines = subjectAndAccount(subject, accountLabel);
+  return {
+    subject,
+    progress: <T>(title: string, task: () => Promise<T>) =>
+      Promise.resolve(vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title }, () => task())),
+    confirm: async (message, detail, button) =>
+      (await vscode.window.showWarningMessage(message, { modal: true, detail: `${detail}\n\n${whereLines}` }, button)) === button,
+    warn: async (message, detail) => {
+      await vscode.window.showWarningMessage(message, { modal: true, detail: `${detail}\n\n${whereLines}` });
+    },
+  };
 }
 export interface SectionSpec {
   id: string;
@@ -338,24 +387,14 @@ export function openModulePanel(
         return;
       }
     }
+    const subject =
+      row && typeof row === 'object'
+        ? String(pick(row as Row, section.titleKeys ?? ['name', 'title']) ?? '')
+        : '';
     if (action.confirm) {
-      // Name the SUBJECT and the ACCOUNT. A VS Code modal is window-level and
-      // visually detached from the panel that raised it, so "Send this campaign
-      // now?" gave no way to tell which campaign, or which client — for actions
-      // that spend money or contact customers, on a machine with dozens of
-      // accounts open.
-      const subject =
-        row && typeof row === 'object'
-          ? String(pick(row as Row, section.titleKeys ?? ['name', 'title']) ?? '')
-          : '';
       const ok = await vscode.window.showWarningMessage(
         action.confirm,
-        {
-          modal: true,
-          detail: [subject && `Subject: ${subject}`, `Account: ${account.label}`]
-            .filter(Boolean)
-            .join('\n'),
-        },
+        { modal: true, detail: subjectAndAccount(subject, account.label) },
         'Confirm',
       );
       if (ok !== 'Confirm') return;
@@ -396,10 +435,17 @@ export function openModulePanel(
         args[input.key] = input.csv ? val.split(',').map((s) => s.trim()).filter(Boolean) : val;
       }
     }
-    const result = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `${action.label}…` },
-      () => client.callToolJson<unknown>(action.tool as string, args),
-    );
+    let result: unknown;
+    if (action.run) {
+      const outcome = await action.run(client, args, modalActionUi(subject, account.label));
+      if (!outcome) return;
+      result = outcome.result;
+    } else {
+      result = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: `${action.label}…` },
+        () => client.callToolJson<unknown>(action.tool as string, args),
+      );
+    }
     vscode.window.showInformationMessage(action.done ? action.done(result) : `${action.label} - done.`);
     if (action.successReload !== false) await loadSection(section.id);
   }

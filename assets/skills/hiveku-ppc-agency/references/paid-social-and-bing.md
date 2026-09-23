@@ -114,10 +114,12 @@ missing goal.
 3. Propose in one message: current intent, proposed intent, the areas, expected effect (impressions and clicks fall, CPA should fall further). Get the yes.
 4. `ppc_bing_location_criterion_add`, max 100 ids, exactly one of campaign_id or ad_group_id; `bid_adjustment_percent` is not allowed with `exclude: true`.
 5. Service radius: `ppc_bing_radius_criterion_add` around a lat/lon point.
-6. `ppc_bing_location_intent_set` to `people_in`. This is the half that stops the leak; adding locations without setting intent leaves it open.
+6. `ppc_bing_location_intent_set` to `people_in`. This is the half that stops the leak; adding locations without setting intent leaves it open. Run it AFTER step 4: Microsoft creates the intent criterion when the campaign gets its first criterion, and the tool then updates that one instead of adding a second.
 7. Undo: `ppc_bing_criterion_delete`, max 100 ids. Record criterion ids in the PM comment before you need them.
 
 Fix immediately on local-service accounts. On national ecommerce `in_or_searching` is often correct: check the shipping footprint first.
+
+**The partner-network half of the same leak.** Ad groups default to Microsoft's entire network (search partners included). `ppc_bing_ad_group_update` with `network: "microsoft_sites_and_select_traffic"` sets "Microsoft sites and select traffic", one ad group per call and every ad group in the campaign, not just the ones you looked at. The same tool renames an ad group. Nothing reads an ad group's network back except `ppc_bing_change_history`, so confirm it there.
 
 ## 9. Play: Bing waste mining and shared negatives
 

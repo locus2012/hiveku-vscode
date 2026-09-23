@@ -180,6 +180,32 @@ function rateLimitRetrySeconds(message: string): number | null {
   return clampRetrySeconds(m ? Number(m[1]) : 15);
 }
 
+/**
+ * A tool call the server answered with a failure. `message` (and `name`) are
+ * exactly what a plain Error carried before, so every existing catch reads the
+ * same text; `payload` is the parsed failure body ({error, status, details, ...}
+ * from the Olympus proxy) for the few callers that act on a specific refusal,
+ * such as workflow_enable's 422 workflow_invalid. undefined when the body was
+ * not JSON.
+ */
+export class McpToolError extends Error {
+  readonly tool: string;
+  readonly payload: unknown;
+  constructor(message: string, tool: string, payload: unknown) {
+    super(message);
+    this.tool = tool;
+    this.payload = payload;
+  }
+}
+
+function parseJsonOrUndefined(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
 export interface McpToolResult {
   content?: Array<{ type: string; text?: string }>;
   isError?: boolean;
@@ -378,7 +404,7 @@ export class HivekuMcpClient {
     noteRegistryStamp(result?._meta);
     if (result?.isError) {
       const text = result.content?.[0]?.text ?? 'unknown tool error';
-      throw new Error(`Tool ${name} errored: ${text}`);
+      throw new McpToolError(`Tool ${name} errored: ${text}`, name, parseJsonOrUndefined(text));
     }
     return result;
   }
@@ -417,11 +443,13 @@ export class HivekuMcpClient {
               .map((m) => `${m.package}: declared ${String(m.declared ?? '?')} vs locked ${String(m.locked ?? '?')}`)
           : [];
         const hint = typeof d.hint === 'string' && d.hint.trim() ? ` Fix: ${d.hint.trim()}` : '';
-        throw new Error(
+        throw new McpToolError(
           `Tool ${name} failed (${p.status}): ${p.error}` +
             `${mismatchLines.length ? ` (${mismatchLines.join('; ')})` : ''}` +
             `${p.details ? ` — ${JSON.stringify(p.details).slice(0, 200)}` : ''}` +
             hint,
+          name,
+          parsed,
         );
       }
     }
