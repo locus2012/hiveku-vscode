@@ -101,7 +101,7 @@ and report the result as complete, you are guessing.
 | `ppc_bing_search_terms_report` | `days` default **30** (1-365); `limit` caps returned rows only. `zero_conversions_only` and `min_spend` narrow server-side and combine as AND; with either set, RAISE `limit` |
 | `ppc_bing_audience_list` | `limit` default **25**, max **200**, plus `offset`. Filters: `name_contains`, `audience_types` |
 | `ppc_bing_ad_extension_list` | `limit` default **200**, ceiling **1000**, plus `offset`. Microsoft's 100-ids-per-call cap is chunked internally, so do NOT page for the 100 |
-| `ppc_change_history` | `days` default **7**, **max 30** (a Google API limit, not ours); `limit` default 200, max 10000 |
+| `ppc_change_history` | `days` default **7**, **max 30** (a Google API limit, not ours); `limit` default 200, max **9999** (Google caps the query at 10,000 and one row detects truncation); a very large window stops early with `truncated: true` to stay inside the response size, newest first |
 | `ppc_keyword_list` | `days` default 30, `limit` default **1000** (1-10000) |
 | `ppc_period_comparison` | per-period `limit` default **500**, max 10000 |
 | `marketing_form_conversion_audit` | `scan_limit` 1-20000, default **5000**; when `totals.truncated` is true **every count is a sample** |

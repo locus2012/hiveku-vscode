@@ -255,10 +255,20 @@ Sequence: callouts (no destinations), sitelinks (need real URLs), structured sni
      substantiate on the page; this tier escalates toward suspension if you resubmit unchanged.
  - **Regulated vertical** (healthcare, finance, gambling, alcohol): certification, an account-level UI
      process, no tool. Raise as a client action naming it.
-3. Remediate. Google ads are effectively immutable, so the pattern is **replace, never edit**: create the
-   corrected RSA with `ppc_responsive_search_ad_create` (lands paused), review, confirm, enable with
-   `ppc_enable_resource`, and only once it is live and eligible, `ppc_pause_resource` the disapproved one;
-   pause first and the group is dark for the whole review window.
+3. Remediate. **A responsive search ad is edited in place**: `ppc_google_ad_text_update` changes its
+   headlines, descriptions or paths and the ad keeps its id and its performance history, exactly as an
+   edit in the Google Ads UI does. It is preview-first: the first call writes nothing and returns old vs
+   new plus a `preview_hash`; show that to the client, then repeat the same call with `confirm: true` and
+   `params.expected_preview_hash`. The edited ad goes back through review on its own and the group never
+   goes dark. The same fix across many ads (a year, a phone number, a brand spelling) is
+   `ppc_google_ads_text_replace`, which previews every ad it would change and lists the ones it cannot.
+   Only a complete preview can be confirmed: when more ads match than `max_ads` (default 50, max 100),
+   the preview has `plan_truncated: true` and no `preview_hash`, so run it per campaign or ad group.
+   **Replace instead of editing** only when the ad cannot be edited (expanded text ads and legacy text
+   ads: nobody can edit those since Google's June 2022 change) or when you deliberately want the new copy
+   measured separately: create the corrected RSA with `ppc_responsive_search_ad_create` (lands paused),
+   review, confirm, enable with `ppc_enable_resource`, and only once it is live and eligible,
+   `ppc_pause_resource` the old one; pause first and the group is dark for the whole review window.
 4. **There is no appeal or request-review tool**; appeals happen in the Ads UI Policy Manager. When appeal
    is right, raise it as a client-facing action naming the exact policy rather than rewriting around a
    wrong disapproval. Re-check `ppc_disapprovals_list` at 24 and 48 hours ("fixed" is a status you observe,

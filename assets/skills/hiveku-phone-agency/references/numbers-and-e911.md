@@ -249,9 +249,13 @@ The traps its registered description documents, the ones that actually bite:
   without this the route would be silently released), `409 managed_by_pool` (the pool actually
   manages those fields - listed in the error), `422 number_in_pool` (setting `purpose: 'main'` on
   a number still rotating between website visitors).
-- `is_active: false` is the REVERSIBLE way to take a number out of service (section 8). It also
-  clears the DID off every extension presenting it as caller ID - best-effort, so a failed clear
-  is only logged.
+- `is_active: false` is the REVERSIBLE way to take a number out of service (section 8). On an
+  active number it FIRST takes the DID off every extension presenting it as caller ID, on the PBX
+  as well as in Hiveku (each falls back to the account's default caller ID; one set to hide its
+  caller ID stays hidden). It is fail-closed and runs after the refusals above: if the phone
+  system does not accept the change for any extension, the call is `409 caller_id_clear_failed`
+  and NOTHING in the patch is written, every other field sent with it included - the number
+  stays active. What to do with that 409 is in section 8.
 - The body is strict: `cnam_name`/`cnam_enabled` are NOT settable here (`voice_number_cnam_set`
   is), and an unknown key is a 422 that writes nothing.
 - **No audit row.** A routing change made through this tool leaves no entry on the voice audit
@@ -300,13 +304,20 @@ What its registered description warns about, verbatim where it matters:
   voice server and the local row is deleted REGARDLESS of its value. A 200 carrying
   `released: false` means Hiveku has forgotten a number the carrier may still own and still bill
   for, with no local row left to retry from. Check `released` on every response.
-- **Partial teardown, none rolled back**: BEFORE the carrier call, the handler releases the PBX
-  inbound route, deletes the number's DNI pool membership, and clears it off every extension's
-  caller ID. A `502 release_failed` leaves the local row intact but the number is already out of
-  its pool, off every caller ID, and NOT taking inbound calls. Retrying is the only way forward.
-- **No dependency guard anywhere.** Nothing checks whether this is the account's only DID, its
-  `main` business line, a tracking campaign's destination, a pool's last member, or a workflow
-  dependency. YOU do those checks (the retire play, below).
+- **Caller ID first, fail-closed.** Before anything else - on a row with no `provider_number_id`
+  too - the handler takes the DID off every extension presenting it as caller ID, on the PBX and
+  in Hiveku. If the phone system does not accept that for any extension, the answer is
+  `409 caller_id_clear_failed` and NOTHING else runs: no route release, no pool change, no
+  carrier call, the row untouched, the number still taking calls. Handling is below.
+- **Partial teardown after that, none rolled back**: BEFORE the carrier call, the handler releases
+  the PBX inbound route and deletes the number's DNI pool membership. A `502 release_failed`
+  leaves the local row intact but the number is already out of its pool, off every caller ID, and
+  NOT taking inbound calls. Retrying is the only way forward.
+- **No dependency guard.** The only 409 is `caller_id_clear_failed`, and that is about the phone
+  system accepting the caller-ID change, not about what depends on the number. Nothing checks
+  whether this is the account's only DID, its `main` business line, a tracking campaign's
+  destination, a pool's last member, or a workflow dependency. YOU do those checks (the retire
+  play, below).
 - **`soft` is NOT a dry run**: the carrier release happens either way; `soft` only keeps the row
   for audit (`is_active: false`, provider id nulled). And it must be the exact STRING `'1'` - a
   boolean `true` serializes as `'true'` and silently takes the HARD DELETE path.
@@ -314,10 +325,37 @@ What its registered description warns about, verbatim where it matters:
   the carrier).
 - **No audit row.** A permanent release leaves no entry on the voice audit page.
 
+**When the answer is `409 caller_id_clear_failed`** (from a release, or from `voice_number_update`
+with `is_active: false`):
+
+- Nothing was released or deactivated. Say so plainly; it is not a partial success.
+- The route's body arrives under `details`. `message` is a plain sentence naming the stuck
+  extensions - show it to the human as it is. `failed_extensions` is `[{ extension, reason }]`.
+  The extensions in `cleared_extensions` already stopped presenting the number and stay that way.
+- A reason of `not attempted: the phone system is unreachable` means the PBX was down and the
+  remaining extensions were not tried. `voice_tenant_healthcheck` goes through the same phone
+  system, so a normal answer from it is the signal to retry.
+- Retry the same call once the phone system is reachable. Only the stuck extensions are tried
+  again.
+- **Never work around it** by pointing those extensions at another number with
+  `voice_extension_update` while the PBX is down. That save records the new number in Hiveku before
+  its PBX push and only warns when the push fails, so the next release no longer finds the
+  extension and goes through while the PBX still presents the number. That extension then shows a
+  number the account no longer owns: its calls fail STIR/SHAKEN attestation, and once the carrier
+  re-sells the number the tenant is spoofing a stranger.
+- **Known limit**: the check finds extensions by Hiveku's record of which number each one
+  presents, not by what the PBX holds. An extension whose caller ID was changed while the PBX was
+  unreachable can still present this number without being found. That is why the retire play runs
+  `voice_tenant_healthcheck` while the number is still active, before the deactivate: its
+  `extension_caller_id_matches_builder` check is what shows an extension presenting a different
+  number on the PBX than in Hiveku, and it stops looking once the account has no active number.
+
 **The reversible alternative, and the default recommendation:** `voice_number_update` with
 `is_active: false`. The DID stays owned, inbound stops, caller-ID references are cleared, and the
 decision can be unwound. Prefer it, and wait a billing cycle before the real release - the calls
-that were still arriving at the "dead" number show up in that window.
+that were still arriving at the "dead" number show up in that window. If a release may follow,
+run the retire play's caller-ID check (step 3) before deactivating, while the number is still
+active.
 
 ## 9. Who is this number: `voice_number_lookup`
 
@@ -398,11 +436,29 @@ DIFFERENT column from the cap the toll-fraud guard enforces - quote `voice_setti
    number is PRINTED (signage, GBP listing, ads) - no tool can see a vehicle wrap.
 2. If it is the account's only DID, its only `main`, a pool's last member, or an SMS campaign's
    sender: stop and say so. The release tool will not.
-3. Deactivate first: `voice_number_update` with `is_active: false`. Reversible. Confirm caller-ID
-   references were cleared (`voice_extensions_list`).
-4. Wait a billing cycle. Check `voice_calls_list` and the SMS threads for traffic that arrived at
+3. While the number is still active, run `voice_tenant_healthcheck` and read
+   `extension_caller_id_matches_builder`. It is the only check that sees what the PBX presents,
+   and it is how you find an extension the release cannot see (section 8, known limit). Go on only
+   when it is ok and its detail does not start with `skipped`:
+   - Each drifted extension reads
+     `ext 101: builder=<what Hiveku shows> pbx=<what calls present>`. Re-save that extension's
+     caller ID with `voice_extension_update` while the phone system answers (re-saving re-pushes
+     it), then run the check again.
+   - The detail names only the first five drifted extensions. Keep going until the check is ok,
+     not just until the named ones are fixed.
+   - `skipped: tenant has no active DID` is NOT a pass: the check looked at nothing. It skips
+     whenever no number on the account is active. If this is the last active one, a check run
+     after the deactivate below comes back green even while an extension still presents these
+     digits, and the nightly repair skips such an account too, so nothing fixes it during the
+     wait. If this number was already deactivated and it was the last active one, nothing can see
+     the PBX side for it: say so to the human before asking for the release.
+4. Deactivate, do not release yet: `voice_number_update` with `is_active: false`. Reversible. A
+   `409 caller_id_clear_failed` means nothing was deactivated - handle it as section 8 says
+   before going on. On success, confirm caller-ID references were cleared
+   (`voice_extensions_list`).
+5. Wait a billing cycle. Check `voice_calls_list` and the SMS threads for traffic that arrived at
    the "dead" number - each one is a reason to keep it.
-5. Only then, with a human's explicit confirmation of the exact digits:
+6. Only then, with a human's explicit confirmation of the exact digits:
    `voice_number_release`. Read `released` in the response; `released: false` is a carrier-side
    follow-up, not a success. If audit history matters, pass `soft: '1'` - the exact string.
 
@@ -425,6 +481,12 @@ DIFFERENT column from the cap the toll-fraud guard enforces - quote `voice_setti
   not `'1'`, which is the hard-delete path.
 - **Assuming a release failed cleanly on 502.** The pool membership, caller-ID references, and
   inbound route are already torn down.
+- **Getting past a `409 caller_id_clear_failed` by reassigning caller ID.** The save lands in
+  Hiveku, the PBX push only warns, and the next release goes through while the PBX still presents
+  the number. Wait for the phone system and retry the same call.
+- **Checking caller ID after the deactivate.** Once the account has no active number,
+  `extension_caller_id_matches_builder` answers ok with `skipped: tenant has no active DID`, having
+  compared nothing. Run the healthcheck while the number is still active.
 - **Quoting `voice_usage_get` minutes as call volume.** Nothing increments them in this build.
 - **Promising an 800 number.** Unpurchasable platform-wide, and unsearchable.
 
@@ -443,5 +505,6 @@ DIFFERENT column from the cap the toll-fraud guard enforces - quote `voice_setti
 | CNAM returns `not_provisioned` on a working number | Ported/half-provisioned row with NULL `provider_number_id`. Fix the row's adoption (`porting.md`), not the number |
 | CNAM on an 8xx number | `cnam_not_applicable_toll_free` - by design, not a failure |
 | Release answered 200 but the client is still billed | `released: false` was in that response. Carrier-side follow-up required - and the local row is gone |
-| "Take the number out of service" | `voice_number_update` `is_active: false` - reversible. Release only after the retire play, digits confirmed |
+| "Take the number out of service" | `voice_number_update` `is_active: false` - reversible. If a release may follow, run the retire play's caller-ID check (step 3) first, while the number is still active. Release only after the retire play, digits confirmed |
+| Release or deactivate answered `409 caller_id_clear_failed` | Not released or deactivated (any `cleared_extensions` stay cleared). Show `details.message`; retry the same call once `voice_tenant_healthcheck` answers normally (only the stuck extensions are retried). Never reassign their caller ID to get past it |
 | Usage says zero minutes despite real calls | Normal - `voice_usage_get` counters are not live except `tts_cents`. Use `voice_calls_list` |
