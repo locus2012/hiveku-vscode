@@ -440,6 +440,11 @@ const HIVEKU_ALLOW: string[] = [
   // match the *_get / *_list globs above; _env_bindings matches neither.)
   'mcp__hiveku__project_vcs_env_bindings',
   'mcp__hiveku__account_context_get',
+  // account_memory_get is already a read under '*_get'; named so the pair is
+  // explicit. account_memory_append is NOT listed and matches no glob here:
+  // it suggests a line every department agent reads until an owner reviews
+  // it, so it keeps prompting (it is on the plugin's ask list too).
+  'mcp__hiveku__account_memory_get',
   'mcp__hiveku__project_files_search',
   'mcp__hiveku__project_files_bulk_get',
   'mcp__hiveku__project_deploy_preflight',
@@ -2123,8 +2128,12 @@ allowed-tools: mcp__hiveku__account_context_get
 ---
 Load account context FIRST (the MCP server requires this before generating copy/plans).
 Call \`account_context_get({ domain: "$ARGUMENTS" })\` (omit domain to use the account default) and
-summarize: identity/persona, brand voice, customer avatars, and the most relevant domain memory +
-skills/rules. Keep this in mind for everything that follows.
+summarize: identity/persona, brand voice, customer avatars, the account memory (its \`account\`
+section), and the most relevant domain memory + skills/rules. Keep this in mind for everything that
+follows. The account memory is what the owners wrote about the business, plus suggested lines no
+owner has reviewed yet (treat those as unconfirmed); it is internal, so never quote it to customers.
+Owners and admins edit it on the Hiveku dashboard (Account memory); no tool changes it, and
+\`account_memory_append\` only suggests one line for them to keep or remove.
 `,
     'hiveku-chat': `---
 description: Run a department's server-side agent (full brand/memory) for strategy or copy.

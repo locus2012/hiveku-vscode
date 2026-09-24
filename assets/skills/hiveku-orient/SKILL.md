@@ -30,8 +30,9 @@ The server ships 15 profiles: `full` (the default) plus `sales`, `marketing`, `m
 workspaces whose own `.mcp.json` requests one. Every key, scoped or not, can always call exactly
 five tools: `list_departments`, `talk_to_department`, `web_search`, `fetch_url`, `audit_query`.
 
-Tools this file relies on that NO scoped profile can see (`account_context_get` is NOT one of
-them any more - it is always available on every profile):
+Tools this file relies on that NO scoped profile can see (`account_context_get`,
+`account_memory_get` and `account_memory_append` are NOT among them - they are always available on
+every profile):
 `agent_identity_get` / `agent_identity_domains_list`, `hiveku_docs_*` / `hiveku_playbook*`,
 `connections_status`, `account_entitlements`, and `checkpoint_create` / `checkpoint_restore`
 (only the `project_checkpoint_*` variants reach `dev` keys). `sites_list` is visible to `full` and
@@ -277,6 +278,16 @@ with department NULL and is hydrated into nothing, and the MCP `memory_create` t
 `department` parameter to fix it afterwards. `memory_create` also accepts only these types:
 `memory`, `skill`, `rule`, `command`, `agent`, `identity` - anything else is a 400.
 
+**The account memory is not a department memory.** It is the one document of business facts every
+department agent reads (about the business, team and roles, goals right now, active initiatives, how
+they like to work), and it belongs to the account's owners and admins, who edit it on the Hiveku
+dashboard (Account memory). `memory_list` does not show it, and `memory_create` / `memory_update` /
+`memory_delete` refuse it. Read it with `account_memory_get()` (or the `account` section of
+`account_context_get`). The only write is `account_memory_append({ text })`, which SUGGESTS one
+line for an owner to keep or remove and never changes the owner's text (it is on the ask list).
+There is no set or replace tool. When the user wants what it says changed, tell them it is edited
+on the dashboard.
+
 **Deleting memory.** `memory_delete` removes one entry by UUID; the entry is snapshotted into
 version history before deletion (`changed_by: "olympus_agent_delete"`), so it remains recoverable.
 It is still the dangerous verb in this family: delete only an explicit `memory_id` the user
@@ -502,6 +513,11 @@ merged document, canonical domain only). One extra case the loop does not spell 
 session PROVED an existing memory line wrong, fix that line in the same read-modify-write instead
 of appending a contradiction under it - two disagreeing lines hydrate as noise and the next agent
 picks one at random.
+
+A fact that every department should know - hours, locations, key people, a standing policy - is not
+a department note: suggest it once with `account_memory_append` (see the account memory above) and
+tell the user an owner reviews it on the dashboard, rather than writing it into several department
+memories.
 
 A read-only session that learned nothing durable ends clean. This is a ritual for sessions that
 learned something, not a tollbooth on every exit.
