@@ -227,9 +227,13 @@ describe('hiveku:/account-memory document', () => {
   });
 
   test('negative control: an ordinary memory entry still saves through memory_update', async () => {
-    const { provider, client } = makeFs({ memory_update: { data: { ok: true } } });
+    // Since V1 a save reads the entry first (the stale-edit check), then writes.
+    const { provider, client } = makeFs({
+      memory_get: { data: { id: 'mem-1', version: 3, content: 'old' } },
+      memory_update: { data: { ok: true } },
+    });
     await provider.writeFile(platformFs.memoryUri(ACCOUNT, 'mem-1', 'sales'), new TextEncoder().encode('x'));
-    assert.deepEqual(client.seen.map((c) => c.name), ['memory_update']);
+    assert.deepEqual(client.seen.map((c) => c.name), ['memory_get', 'memory_update']);
   });
 });
 
