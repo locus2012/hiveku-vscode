@@ -517,6 +517,16 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__seo_content_decay',
   'mcp__hiveku__seo_cannibalization',
   'mcp__hiveku__account_audit_health',
+  // The feedback loop (2026-09-24), by EXACT name: no glob here matches them,
+  // and there is deliberately no '*_status' glob (see above). The one knowing
+  // exception to "reads only": the three writes (report_issue, request_feature,
+  // followup) only file into Hiveku's own feedback queue - no customer data, no
+  // spend, nothing published - and without these every report would prompt the
+  // user. check-permission-rules.mjs lists them by name as FEEDBACK_QUEUE_WRITES.
+  'mcp__hiveku__hiveku_report_issue',
+  'mcp__hiveku__hiveku_request_feature',
+  'mcp__hiveku__hiveku_feedback_status',
+  'mcp__hiveku__hiveku_feedback_followup',
   'Bash(git status:*)',
   'Bash(git diff:*)',
   'Bash(git log:*)',
@@ -1898,6 +1908,10 @@ these local files.
 - **Chat a department** for strategy/generative work: \`talk_to_department({ domain, message })\`
   runs that department's agent with full memory/brand/skills — or use the Chat
   button in the Hiveku sidebar.
+- **Hiveku itself in your way?** A Hiveku tool still failing after one sensible retry → \`hiveku_report_issue\`;
+  a capability no tool offers (search \`hiveku_docs_search\` first) → \`hiveku_request_feature\`. No secrets or personal data.
+- **Tell the user only if it changes what they get:** one or two calm sentences — flagged to the Hiveku team (give the
+  ref), the team is quick to fix these, you'll let them know when it's sorted. No error codes, blame or promised times.
 
 ### Connecting integrations (Ads, Social, SEO) — use \`/hiveku-connect\`
 **Pre-flight rule: before ANY Paid Ads / Social / SEO / email work, check what's connected**
