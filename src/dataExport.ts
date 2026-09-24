@@ -223,13 +223,25 @@ export async function exportDepartments(
   } catch {
     /* first export */
   }
+  // `failed` is rewritten for the departments this export fetched, and KEPT for
+  // everything it did not: the account memory's entry (department `account`,
+  // written by the copy refresh and by the plugin's pull) and any department
+  // left out of a partial export. Dropping them told an agent reading STATUS.json
+  // that a stale file was current.
+  const exported = new Set(out.map((d) => d.id));
+  const priorFailed = (Array.isArray(prior.failed) ? (prior.failed as Array<Record<string, unknown>>) : []).filter(
+    (f) => f && typeof f.department === 'string' && !exported.has(f.department),
+  );
   await writeJson(statusPath, {
     ...prior,
     account: accountLabel,
     fetched_at: fetchedAt,
     departments: out.map((d) => d.id),
     dataset_count: datasets.length,
-    failed: datasets.filter((d) => d.error).map((d) => ({ department: d.department, dataset: d.id, error: d.error })),
+    failed: [
+      ...priorFailed,
+      ...datasets.filter((d) => d.error).map((d) => ({ department: d.department, dataset: d.id, error: d.error })),
+    ],
     truncated: datasets
       .filter((d) => d.truncated)
       .map((d) => ({ department: d.department, dataset: d.id, returned: d.count, total: d.total ?? null })),

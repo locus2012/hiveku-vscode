@@ -70,7 +70,7 @@ import {
   type ProjectLink,
 } from './workspace';
 import { registerHivekuFs, envUri, accountMemoryUri } from './platformFs';
-import { fetchAccountMemory, writeAccountMemoryFile, accountMemoryDashboardUrl } from './accountMemory';
+import { refreshAccountMemoryCopy, accountMemoryDashboardUrl, type AccountMemoryCopyResult } from './accountMemory';
 import { ACCOUNT_MEMORY_OPEN_COMMAND, ACCOUNT_MEMORY_DASHBOARD_COMMAND } from './consoleTree';
 import { openDatabasePanel } from './databasePanel';
 
@@ -1864,19 +1864,24 @@ async function workspaceFolderForAccount(accountId: string): Promise<string | un
 }
 
 /**
- * Refresh the read-only local copy at hiveku-data/account/ACCOUNT_MEMORY.md.
+ * Refresh the read-only local copy at hiveku-data/account/ACCOUNT_MEMORY.md and
+ * record the result in hiveku-data/STATUS.json (an `account_memory` block, and
+ * a `failed` entry while the read fails), the same way the plugin's pull does.
  * Never fatal to the download it rides on (an older MCP server has no
- * account_memory_get); the failure goes to the log.
+ * account_memory_get): a failure keeps the previous copy and is also logged.
  */
-async function saveAccountMemoryCopy(client: HivekuMcpClient, account: AccountRecord, dir: string): Promise<boolean> {
-  try {
-    const mem = await fetchAccountMemory(client);
-    await writeAccountMemoryFile(dir, mem, { accountId: account.accountId, appUrl: appUrl() });
-    return true;
-  } catch (err) {
-    log.appendLine(`[account memory] ${account.label}: not saved: ${errMsg(err)}`);
-    return false;
+async function saveAccountMemoryCopy(
+  client: HivekuMcpClient,
+  account: AccountRecord,
+  dir: string,
+): Promise<AccountMemoryCopyResult> {
+  const result = await refreshAccountMemoryCopy(client, dir, { accountId: account.accountId, appUrl: appUrl() });
+  if (!result.ok) {
+    log.appendLine(
+      `[account memory] ${account.label}: not saved${result.kept ? ' (kept the previous copy)' : ''}: ${result.error}`,
+    );
   }
+  return result;
 }
 
 /** Open the account memory as a read-only document (live from Hiveku). */

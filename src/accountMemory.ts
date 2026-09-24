@@ -275,3 +275,80 @@ export async function writeAccountMemoryFile(
   await writeReadOnlyFile(file, text);
   return file;
 }
+
+/** STATUS.json's name for the account memory: it is not a department. */
+export const ACCOUNT_STATUS_DEPARTMENT = 'account';
+export const ACCOUNT_STATUS_DATASET = 'account-memory';
+/** Always forward slashes: the plugin writes the same value on every platform it is tested on. */
+const ACCOUNT_MEMORY_REL = 'hiveku-data/account/ACCOUNT_MEMORY.md';
+
+export type AccountMemoryCopyResult =
+  | { ok: true; fetched_at: string; version: number; suggestions: number; file: string }
+  | { ok: false; fetched_at: string; error: string; kept: boolean };
+
+/**
+ * Record the copy's state in hiveku-data/STATUS.json exactly as the plugin's
+ * pull does (lib/pulldata.mjs): an `account_memory` block, and in `failed` one
+ * `{ department: 'account', dataset: 'account-memory', error }` entry while the
+ * last read failed. Every other key and every other `failed` entry is kept.
+ * Agents read `failed` first to learn whether a local file is current.
+ */
+export async function recordAccountMemoryStatus(baseDir: string, result: AccountMemoryCopyResult): Promise<void> {
+  const file = path.join(baseDir, 'hiveku-data', 'STATUS.json');
+  let status: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(await fs.readFile(file, 'utf8')) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) status = parsed as Record<string, unknown>;
+  } catch {
+    /* no STATUS.json yet */
+  }
+  const error = result.ok ? '' : result.error.slice(0, 200);
+  status.account_memory = {
+    file: ACCOUNT_MEMORY_REL,
+    read_only: true,
+    fetched_at: result.fetched_at,
+    ...(result.ok ? { version: result.version, suggestions: result.suggestions } : { error, kept_previous: result.kept }),
+  };
+  const others = (Array.isArray(status.failed) ? (status.failed as Array<Record<string, unknown>>) : []).filter(
+    (f) => !(f && f.department === ACCOUNT_STATUS_DEPARTMENT),
+  );
+  status.failed = result.ok
+    ? others
+    : [...others, { department: ACCOUNT_STATUS_DEPARTMENT, dataset: ACCOUNT_STATUS_DATASET, error }];
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(status, null, 2) + '\n', 'utf8');
+}
+
+/**
+ * Read the account memory, write the read-only copy, and record the result in
+ * STATUS.json. Never throws: a failed read keeps the previous copy (`kept`
+ * says whether there was one) and is recorded under `failed`.
+ */
+export async function refreshAccountMemoryCopy(
+  client: ToolCaller,
+  baseDir: string,
+  opts: { accountId: string; appUrl?: string },
+): Promise<AccountMemoryCopyResult> {
+  const fetchedAt = new Date().toISOString();
+  let result: AccountMemoryCopyResult;
+  try {
+    const mem = await fetchAccountMemory(client);
+    await writeAccountMemoryFile(baseDir, mem, { accountId: opts.accountId, fetchedAt, appUrl: opts.appUrl });
+    result = { ok: true, fetched_at: fetchedAt, version: mem.version, suggestions: mem.suggestions.length, file: ACCOUNT_MEMORY_REL };
+  } catch (err) {
+    let kept = false;
+    try {
+      await fs.access(path.join(baseDir, ACCOUNT_MEMORY_DIR, ACCOUNT_MEMORY_FILE));
+      kept = true;
+    } catch {
+      /* no previous copy */
+    }
+    result = { ok: false, fetched_at: fetchedAt, error: err instanceof Error ? err.message : String(err), kept };
+  }
+  try {
+    await recordAccountMemoryStatus(baseDir, result);
+  } catch {
+    /* STATUS.json is a best-effort marker; the copy itself is already settled */
+  }
+  return result;
+}

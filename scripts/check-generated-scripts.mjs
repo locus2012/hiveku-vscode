@@ -121,7 +121,7 @@ await checkAsync('.hiveku/pull-data.mjs bakes HivekuDataRunner/<version> in and 
   assert.ok(agent, m[1]);
   assert.equal(agent[1], 'HivekuDataRunner');
   assert.equal(agent[2], pkg.version);
-  assert.equal(dr.RUNNER_VERSION, 4);
+  assert.equal(dr.RUNNER_VERSION, 5);
   nodeCheck(join(tmp, dr.RUNNER_REL_PATH));
 });
 
