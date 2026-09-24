@@ -17,6 +17,7 @@ import { writeRoleSlashCommands, roleClaudeMdBlock, MULTI_SESSION_BLOCK } from '
 import { roleById } from './roles';
 import { writeDataRunner } from './dataRunner';
 import { writeAgencySkills } from './agencySkills';
+import { isAccountMemoryDomain, ACCOUNT_MEMORY_READONLY_GLOB } from './accountMemory';
 
 /** memory `type` → local folder (matches hiveku-sync TYPE_TO_FOLDER). */
 export const TYPE_TO_FOLDER: Record<string, string> = {
@@ -118,6 +119,11 @@ export async function fetchKnowledge(client: HivekuMcpClient): Promise<Knowledge
       continue; // a type may be unavailable on some profiles
     }
     for (const raw of entries) {
+      // The account memory is not a department's memory and has no save path
+      // here (owners edit it on the dashboard). Current servers never list it;
+      // an older one would have filed `account` as a department and written the
+      // owner's document out as an ordinary, apparently editable entry.
+      if (isAccountMemoryDomain(raw.domain)) continue;
       const department = departmentOf(raw);
       const entry: KnowledgeEntry = { ...raw, type, department };
       if (!index.has(department)) index.set(department, new Map());
@@ -1274,6 +1280,17 @@ export async function writeWindowIdentity(
   // folder to GitHub. Only set when the user hasn't chosen; a dev who genuinely
   // wants Git can flip it back. The Hiveku SCM provider is unaffected by this.
   if (settings['git.enabled'] === undefined) settings['git.enabled'] = false;
+  // The local account memory copy (hiveku-data/account/) opens read-only: it is
+  // edited on the Hiveku dashboard and nothing uploads it. Added beside any
+  // patterns the user set; a user's explicit false for it wins.
+  const readonlyInclude =
+    settings['files.readonlyInclude'] && typeof settings['files.readonlyInclude'] === 'object'
+      ? (settings['files.readonlyInclude'] as Record<string, unknown>)
+      : {};
+  if (readonlyInclude[ACCOUNT_MEMORY_READONLY_GLOB] === undefined) {
+    readonlyInclude[ACCOUNT_MEMORY_READONLY_GLOB] = true;
+    settings['files.readonlyInclude'] = readonlyInclude;
+  }
   // Claude Code autonomy — WORKSPACE-SCOPED. The Claude Code VS Code extension
   // reads its OWN settings (not .claude/settings.json), and because these live in
   // THIS folder's .vscode/settings.json they apply only while this Hiveku

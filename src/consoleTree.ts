@@ -4,6 +4,9 @@
  *   Forney Corporation            ← account
  *   ├─ Tasks                      ← opens the console Tasks board
  *   ├─ Automations                ← opens the console Automations tab
+ *   ├─ Account memory             ← read-only document; owners edit it on the dashboard
+ *   │   ├─ Edit on the dashboard
+ *   │   └─ "Closed on Mondays…"   ← a suggestion from an agent, not reviewed yet
  *   ├─ Outbound (BDR)             ← department; expand to datasets
  *   │   ├─ Campaigns      12      ← opens the console focused on this dataset
  *   │   └─ Leads         340
@@ -23,14 +26,28 @@ import * as api from './hivekuApi';
 import { mapLimit, departmentById, fetchDataset } from './deptData';
 import { effectiveDepartments, roleById } from './roles';
 import { AUTO_EXPAND_MAX_ACCOUNTS } from './tree';
+import {
+  fetchAccountMemory,
+  formatWhen,
+  oneLine,
+  suggestionByline,
+  type AccountMemory,
+  type AccountMemorySuggestion,
+} from './accountMemory';
 
 interface AccountNode { kind: 'account'; record: AccountRecord; }
 interface SectionNode { kind: 'section'; record: AccountRecord; tab: 'tasks' | 'automations'; label: string; icon: string; }
 interface DeptNode { kind: 'dept'; record: AccountRecord; deptId: string; label: string; }
 interface DatasetNode { kind: 'dataset'; record: AccountRecord; deptId: string; datasetId: string; label: string; count?: number; }
-interface MessageNode { kind: 'message'; label: string; command?: { command: string; title: string; arguments?: unknown[] }; icon?: string; }
+interface MessageNode { kind: 'message'; label: string; command?: { command: string; title: string; arguments?: unknown[] }; icon?: string; tooltip?: string; }
+interface AccountMemoryNode { kind: 'accountMemory'; record: AccountRecord; }
+interface SuggestionNode { kind: 'memorySuggestion'; record: AccountRecord; suggestion: AccountMemorySuggestion; }
 
-export type ConsoleNode = AccountNode | SectionNode | DeptNode | DatasetNode | MessageNode;
+export type ConsoleNode = AccountNode | SectionNode | DeptNode | DatasetNode | MessageNode | AccountMemoryNode | SuggestionNode;
+
+/** Commands the Account memory node uses (registered in extension.ts). */
+export const ACCOUNT_MEMORY_OPEN_COMMAND = 'hiveku.accountMemoryOpen';
+export const ACCOUNT_MEMORY_DASHBOARD_COMMAND = 'hiveku.accountMemoryEditOnDashboard';
 
 type EntitlementsFor = (accountId: string) => Promise<{ page_access?: Record<string, boolean> } | null>;
 
@@ -41,6 +58,8 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
   private readonly entCache = new Map<string, Record<string, boolean> | undefined>();
   /** `${accountId}:${deptId}` → datasetId → count. */
   private readonly countCache = new Map<string, Map<string, number>>();
+  /** accountId → account memory, fetched when its node is expanded. */
+  private readonly memoryCache = new Map<string, AccountMemory>();
   private filter = '';
   /** When true, non-role departments are listed too (toggled via hiveku.consoleShowAll). */
   showAll = false;
@@ -78,6 +97,7 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
   refresh(): void {
     this.entCache.clear();
     this.countCache.clear();
+    this.memoryCache.clear();
     this._onDidChange.fire();
   }
 
@@ -132,10 +152,45 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         item.tooltip = node.count !== undefined ? `${node.label} — ${node.count} rows` : node.label;
         return item;
       }
+      case 'accountMemory': {
+        const item = new vscode.TreeItem('Account memory', vscode.TreeItemCollapsibleState.Collapsed);
+        item.iconPath = new vscode.ThemeIcon('book');
+        item.contextValue = 'hivekuConsoleAccountMemory';
+        const mem = this.memoryCache.get(node.record.accountId);
+        if (mem) {
+          const waiting = mem.suggestions.length;
+          item.description = [
+            mem.version > 0 ? 'read-only' : 'not written yet',
+            waiting ? `${waiting} suggestion${waiting === 1 ? '' : 's'}` : '',
+          ]
+            .filter(Boolean)
+            .join(' · ');
+        } else {
+          item.description = 'read-only';
+        }
+        item.tooltip =
+          'What every department agent reads about this business. Read-only here: ' +
+          'owners and admins edit it on the Hiveku dashboard. Expand for the suggestions agents made.';
+        item.command = { command: ACCOUNT_MEMORY_OPEN_COMMAND, title: 'Open', arguments: [{ record: node.record }] };
+        return item;
+      }
+      case 'memorySuggestion': {
+        const s = node.suggestion;
+        const item = new vscode.TreeItem(oneLine(s.text), vscode.TreeItemCollapsibleState.None);
+        item.iconPath = new vscode.ThemeIcon('lightbulb');
+        item.contextValue = 'hivekuConsoleAccountMemorySuggestion';
+        item.description = suggestionByline(s);
+        item.tooltip =
+          `${oneLine(s.text)}\n\nSuggested by ${oneLine(s.source)}, ${formatWhen(s.at)}. ` +
+          'No owner has reviewed it yet: an owner keeps or removes it on the dashboard.';
+        item.command = { command: ACCOUNT_MEMORY_OPEN_COMMAND, title: 'Open', arguments: [{ record: node.record }] };
+        return item;
+      }
       default: {
         const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.None);
         item.iconPath = new vscode.ThemeIcon(node.icon ?? 'info');
         if (node.command) item.command = node.command;
+        if (node.tooltip) item.tooltip = node.tooltip;
         return item;
       }
     }
@@ -162,6 +217,9 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
       const sections: ConsoleNode[] = [
         { kind: 'section', record: node.record, tab: 'tasks', label: 'Tasks', icon: 'checklist' },
         { kind: 'section', record: node.record, tab: 'automations', label: 'Automations', icon: 'zap' },
+        // No fetch here: the memory loads when this node is expanded, so a big
+        // roster does not fire one account_memory_get per account on reveal.
+        { kind: 'accountMemory', record: node.record },
       ];
       let pageAccess: Record<string, boolean> | undefined;
       try {
@@ -208,6 +266,44 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         }
       }
       return [...sections, ...primaryNodes, ...tail];
+    }
+
+    if (node.kind === 'accountMemory') {
+      const edit: ConsoleNode = {
+        kind: 'message',
+        label: 'Edit on the dashboard',
+        icon: 'link-external',
+        tooltip: 'Owners and admins edit the account memory on the Hiveku dashboard. Opens it in your browser.',
+        command: { command: ACCOUNT_MEMORY_DASHBOARD_COMMAND, title: 'Edit on the dashboard', arguments: [{ record: node.record }] },
+      };
+      let mem = this.memoryCache.get(node.record.accountId);
+      if (!mem) {
+        try {
+          const client = await this.clientFor(node.record.accountId);
+          mem = await fetchAccountMemory(client);
+          this.memoryCache.set(node.record.accountId, mem);
+          // Repaint the node itself so its description shows the count.
+          this._onDidChange.fire(node);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return [
+            edit,
+            {
+              kind: 'message',
+              label: 'Could not load the account memory',
+              icon: 'warning',
+              tooltip: msg,
+            },
+          ];
+        }
+      }
+      if (mem.suggestions.length === 0) {
+        return [edit, { kind: 'message', label: 'No suggestions from agents are waiting', icon: 'info' }];
+      }
+      return [
+        edit,
+        ...mem.suggestions.map((suggestion): ConsoleNode => ({ kind: 'memorySuggestion', record: node.record, suggestion })),
+      ];
     }
 
     if (node.kind === 'dept') {

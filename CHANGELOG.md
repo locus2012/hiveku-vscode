@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- **Account memory, read-only.** Each account in the Account Console tree has an "Account memory" node: the document of business facts every department agent reads, opened as a read-only editor (`hiveku:/account-memory/<accountId>/ACCOUNT_MEMORY.md`, live from `account_memory_get`), with "Edit on the dashboard" (tree row, inline icon, editor title bar, palette) opening `app.hiveku.com/<accountId>/dashboard/memory`, and the suggestions agents made that no owner has reviewed listed under it with who and when. Saving it is refused with a message naming the dashboard page; no tool call is made. "Download Everything" and a full "Download Department Data" also write `hiveku-data/account/ACCOUNT_MEMORY.md` (mode 0444, same bytes as the plugin's `hiveku:pull` copy), the account folder opens that path read-only (`files.readonlyInclude`), and nothing uploads it. The `account` and `account-suggestions` rows are never filed as a department in the knowledge download or listed as editable in the console Knowledge tab. `npm test` (node --test on the compiled extension) covers it.
+
 ## 0.84.1
 - **The agency skills are re-vendored from plugin 0.26.21.** The web agency's forms reference now says that everything after `||` in a merge field is literal text (no chaining, quote a default that looks like a path), that a form wired to a webhook never auto-pauses its workflow (its failures count and reach the client only through failure alerts, which every lead form should turn on), and how to tell a failing form from a paused one. The orient, phone and PPC references pick up the plugin's other changes since 0.26.18.
 
