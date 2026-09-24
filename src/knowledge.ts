@@ -949,15 +949,24 @@ allowed-tools: mcp__hiveku__memory_create, mcp__hiveku__memory_update, mcp__hive
 ---
 Record a learning to Hiveku so every department stays in sync. ${idLine}
 
-1. Pick the department this memory belongs to. Memory domains are a FREE-FORM label — use the one the
-   account already uses: call \`memory_list\` and reuse an existing \`domain\` value rather than inventing
-   one, or a plain slug like \`dev\` / \`marketing\` / \`sales\` / \`seo\` / \`helpdesk\` if none fits.
-   Do NOT use \`list_departments\` for this — it returns the CHAT-agent domains, a different and smaller
-   vocabulary, and picking from it will split your memory across two naming schemes.
-2. Check for an existing entry to refine: \`memory_list({ domain: "<department>" })\`.
-3. Write it: \`memory_create({ type: "memory", name: "<department>", content })\` — \`content\` is concise markdown:
-   what you did, what you learned, why it matters, how to apply next time. On a 409 (already exists) use
-   \`memory_update\` instead of duplicating.
+Each department's memory is ONE document, and \`memory_update\` replaces the WHOLE of it: sending only
+today's note deletes everything the department had. So always read, merge, then write.
+
+1. Pick the department. The domain is NOT free-form; use one of
+   \`marketing\`, \`content\`, \`seo\`, \`social\`, \`ppc\`, \`outbound\`, \`branding\`, \`customer_avatar\`, \`customer_journey\`,
+   \`website_design\`, \`knowledge_base\`, \`workflow\`, \`before_after_grid\`, \`email\`, \`sales\`, \`helpdesk\`, \`production\`,
+   \`accounting\`, \`comms\`, \`coder\`, \`orchestrator\`.
+   Anything else (\`dev\`, \`crm\`, \`pm\`, \`analytics\`, \`web\`) is saved but never reaches
+   any agent. Code and site work goes under \`coder\`.
+2. Read the current document: \`memory_list({ domain: "<department>" })\`. Its \`content\` is the WHOLE
+   department memory.
+3. Merge: add your note (what you did, what you learned, why it matters, how to apply next time) to that
+   full text. If today proved an existing line wrong, fix that line instead of adding a contradiction.
+4. Send the whole merged document: \`memory_update({ memory_id, content })\`. Only when step 2 found no
+   entry, \`memory_create({ type: "memory", name: "<department>", content })\`; a 409 there means someone
+   created it meanwhile, so go back to step 2, read and merge. Never overwrite.
+The account memory (\`hiveku-data/account/ACCOUNT_MEMORY.md\`) is read-only: owners edit it on the Hiveku
+dashboard. To propose one line for it, use \`account_memory_append\`.
 The local \`memory/<dept>/\` files are only a mirror — Hiveku is the source of truth, and persisting here is
 what brings the other departments + dashboard agents up to speed.
 `,
@@ -1447,11 +1456,15 @@ Manager), NOT in the code, and is injected into the deployed Lambdas + Fly previ
 ### Keep Hiveku in sync — it is the source of truth (memory + PM)
 Hiveku, NOT your local files, is the system of record. After meaningful work, write back so every
 department and the dashboard agents stay current — don't let what you learned or did live only on disk.
-- **Department memory:** capture what you learned / did / decided into the RIGHT department's memory:
-  \`memory_create({ type: "memory", name: "<department>", content })\` (\`name\` is the department/domain,
-  e.g. \`"seo"\`, \`"marketing"\`, \`"dev"\`; \`content\` is markdown — what you did, what you learned, why it
-  matters, how to apply next time). It returns 409 if it already exists → \`memory_update\` instead; check
-  first with \`memory_list\`. The local \`memory/<dept>/*.md\` files are a MIRROR — persisting to Hiveku is
+- **Department memory:** capture what you learned / did / decided into the RIGHT department's memory.
+  Each department has ONE document and \`memory_update\` replaces all of it, so read it
+  (\`memory_list({ domain: "<department>" })\`), merge your note (what you did, what you learned, why it
+  matters, how to apply next time) into the full text, then send the whole document with
+  \`memory_update({ memory_id, content })\`. Only when none exists, \`memory_create({ type: "memory", name:
+  "<department>", content })\`; a 409 means one does, so read and merge. The domain is not free-form: use a
+  department such as \`seo\`, \`marketing\`, \`sales\` or \`coder\` (code and site work); \`dev\` is saved
+  but never reaches any agent. The account memory is read-only: suggest a line with
+  \`account_memory_append\`. The local \`memory/<dept>/*.md\` files are a MIRROR — persisting to Hiveku is
   what keeps all departments up to speed. \`/hiveku-remember\` wraps this.
 ### Work tracking — PM tasks are REQUIRED, and attributed to YOU (the authenticated user)
 **If the work isn't documented in a PM task, it didn't happen.** This applies to EVERY department
@@ -1978,7 +1991,8 @@ It reports, per knowledge item:
 - \`changed_remote\` — updated on Hiveku since you pulled (local is STALE → re-download)
 - \`new_remote\` — exists on Hiveku, not pulled yet
 - \`deleted_remote\` — gone on Hiveku but still local
-- \`locally_modified\` — you edited the local file (push via \`memory_update\` to persist)
+- \`locally_modified\` — you edited the local file (to persist, merge it into the current Hiveku copy
+  from \`memory_list\` and send the whole document with \`memory_update\`)
 If that file is missing or old, re-run the sync check or re-download from the sidebar.
 Local memory files are read-only as far as Hiveku is concerned — persist changes with
 \`memory_create\` / \`memory_update\` / \`memory_delete\`, then re-download.

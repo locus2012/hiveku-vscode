@@ -30,9 +30,12 @@ function mcp(tools: string[]): string {
 }
 
 const PERSIST_STEP =
-  'Finish every session of work the same way: persist notable learnings to department memory ' +
-  '(`memory_list` → `memory_create({ type: "memory", name: "<dept>", content })` or `memory_update`), ' +
-  'and reflect the work in Hiveku PM — `pm_tasks_create`/`pm_tasks_update`/`pm_tasks_complete`. ' +
+  'Finish every session of work the same way: persist notable learnings to department memory. ' +
+  'Each department has ONE memory document and `memory_update` replaces all of it, so read it ' +
+  '(`memory_list({ domain: "<dept>" })`), merge your note into the full text, and send the whole ' +
+  'document with `memory_update({ memory_id, content })`. Only when the department has none, ' +
+  '`memory_create({ type: "memory", name: "<dept>", content })`; a 409 there means one exists, so read ' +
+  'and merge. Then reflect the work in Hiveku PM — `pm_tasks_create`/`pm_tasks_update`/`pm_tasks_complete`. ' +
   'Hiveku, not this folder, is the source of truth.';
 
 function dailyCommand(role: Role): string {
@@ -90,8 +93,10 @@ Classify: **RAW** (no brand guide, no avatars, empty memory) / **PARTIAL** (some
    \`customer_journey_populate\` the same way. These tools refuse without grounding — that is why
    research came first.
 4. **Seed department memory:** for each discipline this account will run, write the operating
-   facts you learned — \`memory_create({ type: "memory", name: "<dept>", content })\` (ICP summary,
-   offer, voice notes, competitors, constraints). This is what makes every future
+   facts you learned (ICP summary, offer, voice notes, competitors, constraints). Read first with
+   \`memory_list({ domain: "<dept>" })\`: if the department already has a document, merge into it and
+   send the whole document with \`memory_update({ memory_id, content })\`; only if it has none,
+   \`memory_create({ type: "memory", name: "<dept>", content })\`. This is what makes every future
    \`account_context_get\` call rich instead of empty.
 5. Show the user what you built (brand voice line, avatar names, journey stages) and refine on
    their feedback (\`brand_guide_update\`, \`customer_avatar_update\`).
@@ -336,8 +341,9 @@ its way of working gets codified once and shared with every operator AND the das
    - an HTML comment tag \`<!-- department: <dept> -->\` near the top (e.g. ppc, seo, sales, accounting).
 3. Pick a kebab-case slug (e.g. \`ppc-weekly-tune\`). Save it BOTH places with IDENTICAL content:
    - locally: \`.claude/commands/hiveku-<dept>-<slug>.md\` (usable immediately as a slash command),
-   - to Hiveku: \`memory_create({ type: "command", name: "<slug>", content })\` — on a 409, use
-     \`memory_update\` instead.
+   - to Hiveku: \`memory_create({ type: "command", name: "<slug>", content })\`. A 409 means a command
+     with that slug already exists: read it (\`memory_list({ type: "command" })\`), then pick a new slug
+     or, with the user's yes, send the whole revised command with \`memory_update({ memory_id, content })\`.
 4. Tell the user: the command now syncs to every operator of this account ("Hiveku: Download
    Everything" / Check Knowledge Sync) and is visible in the dashboard under its department.
 To EDIT an account command later, change the Hiveku entry (\`memory_update\`) — Hiveku is the
@@ -862,7 +868,9 @@ Run this account's weekly pass. Follow the **${s.skill}** skill's weekly cadence
 1. Context first: \`account_context_get({ domain: "${role.knowledgeDomains[0]}" })\`.
 2. Work the checklist: ${s.weekly}.
 3. Every change is confirmed before applying; every work item lands as a PM task.
-4. Close with a 5-line "what changed / what's next" note → \`memory_create\`/\`memory_update\` (name "${role.knowledgeDomains[0]}").
+4. Close with a 5-line "what changed / what's next" note merged into the "${role.knowledgeDomains[0]}" memory: read it
+   (\`memory_list({ domain: "${role.knowledgeDomains[0]}" })\`), add the note to the full text, and send the whole
+   document with \`memory_update({ memory_id, content })\`.
 `,
     'hiveku-report': `---
 description: Monthly client-grade report (role: ${role.label}) — what an agency sends its clients.
