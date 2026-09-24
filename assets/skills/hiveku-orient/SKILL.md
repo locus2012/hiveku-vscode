@@ -266,6 +266,11 @@ Always read-modify-write:
 2. Append your note to that text.
 3. `memory_update({ memory_id, content })` with the FULL merged document.
 
+`memory_update`, `memory_delete`, `memory_restore_version`, `memory_bulk_create` and
+`account_memory_append` always ask the person first, even when their settings allow every Hiveku
+tool. Before the call, say in one line what will change so the prompt is easy to answer.
+`memory_create` and the reads do not ask.
+
 If no entry exists, `memory_create({ type: 'memory', name: '<dept>', content })`; a 409 means one
 already exists, so go back to step 1 rather than duplicating.
 
@@ -286,7 +291,9 @@ dashboard (Account memory). `memory_list` does not show it, and `memory_create` 
 `account_context_get`). The only write is `account_memory_append({ text })`, which SUGGESTS one
 line for an owner to keep or remove and never changes the owner's text (it is on the ask list).
 There is no set or replace tool. When the user wants what it says changed, tell them it is edited
-on the dashboard.
+on the dashboard. `/hiveku:pull` and `/hiveku:knowledge` keep a read-only copy at
+`hiveku-data/account/ACCOUNT_MEMORY.md` whose header links the dashboard page; editing that file
+changes nothing.
 
 **Deleting memory.** `memory_delete` removes one entry by UUID; the entry is snapshotted into
 version history before deletion (`changed_by: "olympus_agent_delete"`), so it remains recoverable.
