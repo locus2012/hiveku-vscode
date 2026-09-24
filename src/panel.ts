@@ -103,6 +103,10 @@ export interface ActionUi {
   confirm(message: string, detail: string, button: string): Promise<boolean>;
   /** Modal warning with no choice to make. */
   warn(message: string, detail: string): Promise<void>;
+  /** Non-modal information message; with a button, true only when the operator chose it. */
+  inform(message: string, button?: string): Promise<boolean>;
+  /** Open a page of this account's Hiveku dashboard; `sub` is the path below /<accountId>/dashboard/. */
+  openDashboard(sub: string): Promise<void>;
 }
 
 /**
@@ -116,8 +120,12 @@ function subjectAndAccount(subject: string, accountLabel: string): string {
   return [subject && `Subject: ${subject}`, `Account: ${accountLabel}`].filter(Boolean).join('\n');
 }
 
-/** The VS Code ActionUi. Every modal names the subject and the account, like the confirm modal. */
-export function modalActionUi(subject: string, accountLabel: string): ActionUi {
+/**
+ * The VS Code ActionUi. Every modal names the subject and the account, like the
+ * confirm modal. `dashBase` is the account's dashboard root
+ * (`<app>/<accountId>/dashboard`), for openDashboard.
+ */
+export function modalActionUi(subject: string, accountLabel: string, dashBase: string): ActionUi {
   const whereLines = subjectAndAccount(subject, accountLabel);
   return {
     subject,
@@ -127,6 +135,16 @@ export function modalActionUi(subject: string, accountLabel: string): ActionUi {
       (await vscode.window.showWarningMessage(message, { modal: true, detail: `${detail}\n\n${whereLines}` }, button)) === button,
     warn: async (message, detail) => {
       await vscode.window.showWarningMessage(message, { modal: true, detail: `${detail}\n\n${whereLines}` });
+    },
+    inform: async (message, button) => {
+      if (!button) {
+        void vscode.window.showInformationMessage(message);
+        return false;
+      }
+      return (await vscode.window.showInformationMessage(message, button)) === button;
+    },
+    openDashboard: async (sub) => {
+      await vscode.env.openExternal(vscode.Uri.parse(`${dashBase}/${sub.replace(/^\/+/, '')}`));
     },
   };
 }
@@ -437,7 +455,7 @@ export function openModulePanel(
     }
     let result: unknown;
     if (action.run) {
-      const outcome = await action.run(client, args, modalActionUi(subject, account.label));
+      const outcome = await action.run(client, args, modalActionUi(subject, account.label, dashBase));
       if (!outcome) return;
       result = outcome.result;
     } else {

@@ -2371,3 +2371,211 @@ export async function talkToDepartment(
     return { reply: text, sessionId: sessionId ?? null, isError: false, actedWithoutReply: false, warning: null }; // already plain text
   }
 }
+
+// ============================================================
+// Form capture: which of a site's forms Hiveku records AUTOMATICALLY (the
+// built-in capture script, the analytics embed) and turns into a CRM contact,
+// a lead notification and possibly an ad conversion. The policy lives on the
+// project: the switch (enabled), the site type (mode "all" = Marketing site,
+// "allowlist" = Web app), the sign-in default, and path and form rules. The
+// update is a MERGE: path_rules / form_rules name only the keys they change
+// ("remove" deletes one) and every key not sent is kept.
+//
+// The erase (marketing_form_capture_purge) is PERMANENT. Its default call is a
+// dry run: counts per form, the contacts it would erase and keep, what it
+// cannot undo, and a confirm_token good for 15 minutes. Only a second call
+// with confirm: true and that token erases, one batch at a time. Refusals are
+// 4xx and change nothing: 403 agent_execute_disabled (erasing through an agent
+// key is switched off server-side for now; the dashboard's Erase button
+// works), 409 stale_plan (the set changed since the dry run), 400 with a token
+// reason such as expired.
+// ============================================================
+
+export type FormCaptureRuleAction = 'exclude' | 'include' | 'remove';
+
+/** marketing_form_capture_settings_update's fields besides project_id. */
+export interface FormCapturePatch {
+  enabled?: boolean;
+  mode?: 'all' | 'allowlist';
+  skip_sign_in_forms?: boolean;
+  path_rules?: Record<string, FormCaptureRuleAction>;
+  form_rules?: Record<string, FormCaptureRuleAction>;
+}
+
+/** A what-if for marketing_form_capture_preview: the current policy plus these changes. Path lists are comma-separated. */
+export interface FormCapturePreviewChange {
+  enabled?: boolean;
+  mode?: 'all' | 'allowlist';
+  skip_sign_in_forms?: boolean;
+  exclude_paths?: string;
+  include_paths?: string;
+}
+
+/** A 4xx answer from a form capture tool. Nothing was changed or erased. */
+export interface FormCaptureRefusal {
+  status: number;
+  /** The route's code when it sent one (agent_execute_disabled, stale_plan, expired, ...), else ''. */
+  code: string;
+  /** The route's own sentence, to show as it is. */
+  message: string;
+}
+
+/** The refusal inside a failed form capture call, or null for anything that is not a 4xx (which still throws). */
+export function formCaptureRefusal(err: unknown): FormCaptureRefusal | null {
+  if (!(err instanceof McpToolError)) return null;
+  const outer = err.payload;
+  if (!outer || typeof outer !== 'object' || Array.isArray(outer)) return null;
+  const o = outer as Record<string, unknown>;
+  const status = typeof o.status === 'number' ? o.status : 0;
+  if (status < 400 || status >= 500) return null;
+  // The MCP proxy nests the route body under `details`; a direct body is top-level.
+  const body = o.details && typeof o.details === 'object' && !Array.isArray(o.details)
+    ? (o.details as Record<string, unknown>)
+    : o;
+  const code = typeof body.code === 'string' ? body.code : typeof o.code === 'string' ? o.code : '';
+  const sentence = [body.error, o.error].find((v): v is string => typeof v === 'string' && v.trim() !== '');
+  return { status, code, message: sentence ? sentence.trim() : `Refused (HTTP ${status}).` };
+}
+
+const formCaptureObject = (v: unknown): Record<string, unknown> =>
+  v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+
+/** A tool answer's `data` (or the answer itself when unwrapped), as an object. */
+function formCaptureData(res: unknown): Record<string, unknown> {
+  return formCaptureObject(unwrap<unknown>(res));
+}
+
+/** The project's capture policy (marketing_form_capture_settings_get), unwrapped. */
+export async function formCaptureSettingsGet(client: HivekuMcpClient, projectId: string): Promise<Record<string, unknown>> {
+  return formCaptureData(await client.callToolJson<unknown>('marketing_form_capture_settings_get', { project_id: projectId }));
+}
+
+/** What the current policy plus `change` would do, NOT saved: `{ candidate, impact, forms, saved: false }`. */
+export async function formCapturePreview(
+  client: HivekuMcpClient,
+  projectId: string,
+  change: FormCapturePreviewChange,
+): Promise<Record<string, unknown>> {
+  return formCaptureData(await client.callToolJson<unknown>('marketing_form_capture_preview', { project_id: projectId, ...change }));
+}
+
+/** Change the policy (a merge). The raw answer: the settings plus `impact` and `conversions_held` under data. */
+export async function formCaptureSettingsUpdate(
+  client: HivekuMcpClient,
+  projectId: string,
+  patch: FormCapturePatch,
+): Promise<unknown> {
+  return client.callToolJson<unknown>('marketing_form_capture_settings_update', { project_id: projectId, ...patch });
+}
+
+/** One batch of the erase, as its dry run describes it (the server's PurgePreview, the fields a review shows). */
+export interface FormCapturePurgePlan {
+  /** Every submission the current rules exclude, across all batches. */
+  total_excluded_submissions: number;
+  batch: {
+    submissions: number;
+    contacts_erasable: number;
+    contacts_kept: number;
+    by_form: Array<{ form_key: string | null; name: string; submissions: number; reason_text: string }>;
+    /** existed_before, created_later, other_account, referenced_by_<table>. */
+    contacts_kept_by_reason: Record<string, number>;
+    /** Submissions that also came in through a hosted form or a webhook: never erased. */
+    mixed_groups_left_alone: number;
+    offline_conversions: { pending: number; already_uploaded: Record<string, number> };
+    workflow_runs_to_redact: number;
+  };
+  more_available: boolean;
+  cannot_undo: string[];
+  /** null when nothing the current rules exclude is left to erase. */
+  confirm_token: string | null;
+}
+
+const formCaptureCount = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const formCaptureCounts = (v: unknown): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const [key, n] of Object.entries(formCaptureObject(v))) {
+    const count = formCaptureCount(n);
+    if (count) out[key] = count;
+  }
+  return out;
+};
+
+/**
+ * Read a dry run. Its counts are what the operator confirms, so an answer
+ * missing any of them is refused here rather than shown as zeros.
+ */
+export function readFormCapturePurgePlan(raw: unknown): FormCapturePurgePlan {
+  const d = formCaptureData(raw);
+  const b = formCaptureObject(d.batch);
+  const submissions = formCaptureCount(b.submissions);
+  const erasable = formCaptureCount(b.contacts_erasable);
+  const kept = formCaptureCount(b.contacts_kept);
+  const token = d.confirm_token;
+  if (submissions === null || erasable === null || kept === null || (token !== null && typeof token !== 'string')) {
+    throw new Error('marketing_form_capture_purge answered its dry run in a shape this extension cannot read. Nothing was erased.');
+  }
+  const conversions = formCaptureObject(b.offline_conversions);
+  const byForm = Array.isArray(b.by_form) ? b.by_form.map(formCaptureObject) : [];
+  return {
+    total_excluded_submissions: formCaptureCount(d.total_excluded_submissions) ?? submissions,
+    batch: {
+      submissions,
+      contacts_erasable: erasable,
+      contacts_kept: kept,
+      by_form: byForm.map((f) => ({
+        form_key: typeof f.form_key === 'string' ? f.form_key : null,
+        name: typeof f.name === 'string' ? f.name : '',
+        submissions: formCaptureCount(f.submissions) ?? 0,
+        reason_text: typeof f.reason_text === 'string' ? f.reason_text : '',
+      })),
+      contacts_kept_by_reason: formCaptureCounts(b.contacts_kept_by_reason),
+      mixed_groups_left_alone: formCaptureCount(b.mixed_groups_left_alone) ?? 0,
+      offline_conversions: {
+        pending: formCaptureCount(conversions.pending) ?? 0,
+        already_uploaded: formCaptureCounts(conversions.already_uploaded),
+      },
+      workflow_runs_to_redact: formCaptureCount(b.workflow_runs_to_redact) ?? 0,
+    },
+    more_available: d.more_available === true,
+    cannot_undo: (Array.isArray(d.cannot_undo) ? d.cannot_undo : []).filter(
+      (line): line is string => typeof line === 'string' && line.trim() !== '',
+    ),
+    confirm_token: typeof token === 'string' && token ? token : null,
+  };
+}
+
+/** The erase's dry run for one batch: what it would remove. Erases nothing. */
+export async function formCapturePurgeDryRun(client: HivekuMcpClient, projectId: string): Promise<FormCapturePurgePlan> {
+  const res = await client.callToolJson<unknown>('marketing_form_capture_purge', { project_id: projectId, dry_run: true });
+  return readFormCapturePurgePlan(res);
+}
+
+export type FormCapturePurgeOutcome =
+  | { executed: true; result: unknown }
+  | { executed: false; refusal: FormCaptureRefusal };
+
+/**
+ * Erase the batch a dry run showed, bound to it by its confirm_token (neither
+ * call sends since/limit, so both use the same defaults). A 4xx comes back as
+ * a refusal with nothing erased. Anything else throws, and then the erase may
+ * or may not have run: the tool is sent once and never retried.
+ */
+export async function formCapturePurge(
+  client: HivekuMcpClient,
+  projectId: string,
+  confirmToken: string,
+): Promise<FormCapturePurgeOutcome> {
+  try {
+    const result = await client.callToolJson<unknown>('marketing_form_capture_purge', {
+      project_id: projectId,
+      dry_run: false,
+      confirm: true,
+      confirm_token: confirmToken,
+    });
+    return { executed: true, result };
+  } catch (err) {
+    const refusal = formCaptureRefusal(err);
+    if (refusal) return { executed: false, refusal };
+    throw err;
+  }
+}

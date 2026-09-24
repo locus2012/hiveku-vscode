@@ -428,8 +428,10 @@ Social report. Follow the **hiveku-social-agency** skill. 1. \`social_analytics_
  * command was written anywhere, so the reference dangled in every dev
  * workspace. No inline fallbacks: neither command existed here before it was
  * vendored, so a build whose assets are missing warns and writes nothing.
+ * /hiveku-form-capture (2026-09-24) is here too: a web app should be set to
+ * Web app capture when it is built, and the marketer role carries it as well.
  */
-const DEV_COMMANDS = ['webflow', 'cms'] as const;
+const DEV_COMMANDS = ['webflow', 'cms', 'form-capture'] as const;
 
 /**
  * The marketer role's email commands, the expert interview
@@ -439,9 +441,10 @@ const DEV_COMMANDS = ['webflow', 'cms'] as const;
  * third part of the VENDORED_COMMANDS mirror (see SOCIAL_COMMANDS,
  * DEV_COMMANDS). No inline fallbacks: a build whose assets are missing warns
  * and writes nothing rather than scaffolding the stale literals these
- * replaced.
+ * replaced. /hiveku-form-capture (2026-09-24, shared with DEV_COMMANDS): which
+ * forms become leads, and "leads are down" can be a capture rule.
  */
-const MARKETER_COMMANDS = ['email', 'email-review', 'sme-interview', 'bofu', 'refresh'] as const;
+const MARKETER_COMMANDS = ['email', 'email-review', 'sme-interview', 'bofu', 'refresh', 'form-capture'] as const;
 
 /**
  * The SEO role's decay sweep (/hiveku-seo-decay), the plugin's own file; the

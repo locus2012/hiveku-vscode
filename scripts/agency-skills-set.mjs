@@ -126,6 +126,13 @@ export const VENDORED_COMMANDS = [
   'call-tracking',
   'call-report',
   'tracking-check',
+  // 2026-09-24: the form capture play (/hiveku:form-capture): which of a
+  // site's forms Hiveku captures automatically, Web app mode for sites with
+  // sign-ins and data entry, path and form rules previewed before they are
+  // saved, and the dry-run-first permanent erase. Written by DEV_COMMANDS and
+  // MARKETER_COMMANDS in src/roleCommands.ts. Skipped with a NOTE until the
+  // plugin release carries commands/form-capture.md.
+  'form-capture',
 ];
 
 export const DEFAULT_PLUGIN_ROOT = join(EXTENSION_ROOT, '..', 'hiveku-claude-plugin');

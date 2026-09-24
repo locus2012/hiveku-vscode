@@ -517,6 +517,11 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__seo_content_decay',
   'mcp__hiveku__seo_cannibalization',
   'mcp__hiveku__account_audit_health',
+  // Form capture's what-if (a GET that saves nothing), by EXACT name: agents
+  // are taught to preview a path rule before excluding it. The settings _get
+  // and the _list already match the globs above; the settings update and the
+  // purge (a permanent erase) match nothing here and keep prompting.
+  'mcp__hiveku__marketing_form_capture_preview',
   // The feedback loop (2026-09-24), by EXACT name: no glob here matches them,
   // and there is deliberately no '*_status' glob (see above). The one knowing
   // exception to "reads only": the three writes (report_issue, request_feature,

@@ -8,9 +8,26 @@
  * so this is safe to ship broad and tighten against a live account.
  */
 
-import type { ActionSpec, ModuleSpec } from './panel';
-import { maskSecret, workflowEnable } from './hivekuApi';
-import type { WorkflowValidationIssue } from './hivekuApi';
+import type { ActionSpec, ActionUi, ModuleSpec } from './panel';
+import {
+  formCapturePreview,
+  formCapturePurge,
+  formCapturePurgeDryRun,
+  formCaptureRefusal,
+  formCaptureSettingsGet,
+  formCaptureSettingsUpdate,
+  maskSecret,
+  workflowEnable,
+} from './hivekuApi';
+import type {
+  FormCapturePatch,
+  FormCapturePreviewChange,
+  FormCapturePurgeOutcome,
+  FormCapturePurgePlan,
+  FormCaptureRuleAction,
+  WorkflowValidationIssue,
+} from './hivekuApi';
+import type { HivekuMcpClient } from './mcpClient';
 
 const open = (label = 'Open in Hiveku', sub?: string) =>
   ({ id: 'open', label, kind: 'open' as const, ...(sub ? { sub } : {}) });
@@ -866,6 +883,410 @@ export function moduleGroupGate(m: ModuleSpec): { group: string; gate?: string }
   return { group: m.group ?? meta?.group ?? 'Other', gate: m.gate ?? meta?.gate };
 }
 
+// ============================================================
+// Form capture is PER SITE: which forms Hiveku records automatically (the
+// built-in capture script, the analytics embed and its replay) and turns into
+// a CRM contact, a lead notification and possibly an ad conversion. On a web
+// app that made sign-ins, admin screens and end-user data entry into "leads".
+//
+// Rows are the forms marketing_form_capture_list has seen, with whether each
+// is captured now and why. Always capture / Never capture / Default set the
+// form's own rule (a form_rules merge; "remove" deletes it). The header works
+// on the site: the switch, the site type (mode "all" = Marketing site,
+// "allowlist" = Web app) and path rules. Each of those is PREVIEWED first
+// (marketing_form_capture_preview saves nothing) and the confirmation lists
+// the forms it would move, so a real lead form is never excluded unseen.
+//
+// Erase excluded... is PERMANENT: a dry run shows one batch in a modal, and
+// only "Erase permanently" sends the erase, bound to that review by its
+// confirm_token. Until erasing through agent keys is switched on, the server
+// refuses it (403 agent_execute_disabled) and the panel sends the operator to
+// the dashboard. One batch per click: when more remain it says so, and the
+// operator runs it again, so nothing loops unseen.
+// ============================================================
+
+const CAPTURE_UPDATE_TOOL = 'marketing_form_capture_settings_update';
+/** The list's window, pinned in the section args so the field label is true. */
+const CAPTURE_WINDOW_DAYS = 90;
+const MAX_LISTED_FORMS = 10;
+const ERASE_LABEL = 'Erase excluded...';
+const CAPTURE_DASHBOARD_PATH = 'Analytics > Forms > Capture';
+/** The project's Analytics tab, Forms view, which holds Capture. */
+const captureDashboardSub = (projectId: string): string => `${projectId}/analytics?tab=analytics&view=forms`;
+
+// Pick-list labels. The engine passes the chosen label through as the value,
+// so each run maps it back, and anything else stops the action.
+const CAPTURE_ON = 'Capture on';
+const CAPTURE_OFF = 'Capture off';
+const SITE_MARKETING = 'Marketing site: capture every form except the ones excluded';
+const SITE_WEB_APP = 'Web app: capture only the forms you include';
+const PATH_EXCLUDE = 'Exclude: do not capture forms on these pages';
+const PATH_INCLUDE = 'Include: capture forms on these pages';
+const PATH_REMOVE = 'Remove the rule for this path';
+
+type CaptureRun = NonNullable<ActionSpec['run']>;
+type CaptureOutcome = { result: unknown } | null;
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+/** A tool answer's `data`, or the answer itself when it is not wrapped. */
+const dataOf = (result: unknown): Record<string, unknown> => {
+  const top = asRecord(result);
+  return 'data' in top ? asRecord(top.data) : top;
+};
+const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
+const CAPTURE_STATUS_TEXT: Record<string, string> = { captured: 'captured', not_captured: 'not captured', mixed: 'partly captured' };
+const statusText = (value: unknown): string => CAPTURE_STATUS_TEXT[asString(value)] ?? (asString(value) || 'unknown');
+const formLabel = (form: Record<string, unknown>): string => asString(form.name) || asString(form.form_key) || '(unnamed form)';
+
+/** marketing_form_capture_list answers { settings, forms, totals, ... } under data; one row per form. */
+function captureFormRows(raw: unknown): Array<Record<string, unknown>> {
+  const forms = dataOf(raw).forms;
+  // Zero rows from a shape we cannot read would render as a quiet site.
+  if (!Array.isArray(forms)) {
+    throw new Error('Could not read the form list from marketing_form_capture_list. This is a display fault, not a site with no forms.');
+  }
+  return forms
+    .filter((form) => !!form && typeof form === 'object' && !Array.isArray(form))
+    .map(asRecord)
+    .map((form) => {
+      const reason = asString(form.reason_text);
+      const skipped = asFiniteNumber(form.skipped_30d) ?? 0;
+      const erasable = asFiniteNumber(form.recorded_now_excluded) ?? 0;
+      return {
+        ...form,
+        capture: form.status === 'mixed' ? `Partly captured; latest: ${reason || 'unknown'}` : reason || statusText(form.status),
+        rule_label: form.rule === 'include' ? 'Always capture' : form.rule === 'exclude' ? 'Never capture' : '',
+        skipped: skipped > 0 ? skipped : undefined,
+        erasable: erasable > 0 ? erasable : undefined,
+      };
+    });
+}
+
+/** What a saved change did, from the update's answer: the forms it moved and the conversions held back. */
+function captureSavedNote(result: unknown): string {
+  const data = dataOf(result);
+  const impact = asRecord(data.impact);
+  const forms = Array.isArray(impact.by_form) ? impact.by_form.map(asRecord) : [];
+  const parts = ['Saved.'];
+  if (forms.length) {
+    const named = forms.slice(0, 3).map((f) => `${formLabel(f)} (now ${statusText(f.after)})`).join(', ');
+    parts.push(`${plural(forms.length, 'form')} changed: ${named}${forms.length > 3 ? ` and ${forms.length - 3} more` : ''}.`);
+  } else if (Array.isArray(impact.by_form)) {
+    // Only a reported empty list means nothing moved; a missing one says nothing.
+    parts.push(`No form with recorded submissions in the last ${asFiniteNumber(impact.window_days) ?? CAPTURE_WINDOW_DAYS} days changed.`);
+  }
+  const held = asFiniteNumber(data.conversions_held) ?? 0;
+  if (held > 0) parts.push(`${plural(held, 'queued ad conversion')} held back.`);
+  if ((asFiniteNumber(impact.newly_excluded) ?? 0) > 0) {
+    parts.push(`Submissions already recorded from newly excluded forms stay until you run ${ERASE_LABEL}`);
+  }
+  return parts.join(' ');
+}
+
+/** The forms a candidate policy would move, from a preview's `impact` (it lists only forms whose status changes). */
+function captureImpactText(rawImpact: unknown): string {
+  const impact = asRecord(rawImpact);
+  // Never turn a preview we cannot read into "nothing would change".
+  if (!Array.isArray(impact.by_form)) return 'The preview did not say which forms this changes.';
+  const days = asFiniteNumber(impact.window_days) ?? CAPTURE_WINDOW_DAYS;
+  const forms = impact.by_form.map(asRecord);
+  const capped = impact.truncated === true
+    ? '\n(This site has more distinct forms than one check covers, so these counts may be low.)'
+    : '';
+  if (!forms.length) return `No form with recorded submissions in the last ${days} days would change.${capped}`;
+  const lines = forms
+    .slice(0, MAX_LISTED_FORMS)
+    .map((f) => `- ${formLabel(f)}: ${statusText(f.before)} -> ${statusText(f.after)} (${plural(asFiniteNumber(f.submissions) ?? 0, 'submission')})`);
+  if (forms.length > MAX_LISTED_FORMS) lines.push(`- and ${forms.length - MAX_LISTED_FORMS} more`);
+  const stop = asFiniteNumber(impact.newly_excluded) ?? 0;
+  const start = asFiniteNumber(impact.newly_included) ?? 0;
+  const head = `Of the last ${days} days of recorded submissions, ${stop} would no longer be captured and ${start} would start being captured:`;
+  return [head, ...lines].join('\n') + capped;
+}
+
+/** Run a capture flow; a 4xx (nothing changed) shows the route's own sentence instead of raw JSON. */
+async function captureRefusalsAsWarnings(ui: ActionUi, heading: string, flow: () => Promise<CaptureOutcome>): Promise<CaptureOutcome> {
+  try {
+    return await flow();
+  } catch (err) {
+    const refusal = formCaptureRefusal(err);
+    if (!refusal) throw err;
+    await ui.warn(heading, refusal.message);
+    return null;
+  }
+}
+
+/** Refuse a form-rule click that would change nothing. */
+function captureRuleGuard(row: Record<string, unknown>, action: FormCaptureRuleAction): string | null {
+  if (!asString(row.form_key)) return 'This form has no key, so it cannot have a rule of its own.';
+  const rule = asString(row.rule);
+  if (action === 'include' && rule === 'include') return 'This form is already set to Always capture.';
+  if (action === 'exclude' && rule === 'exclude') return 'This form is already set to Never capture.';
+  if (action === 'remove' && !rule) return "This form has no rule of its own: it already follows the site's capture settings.";
+  return null;
+}
+
+/** Always capture / Never capture / Default: the form's own rule, merged into form_rules. */
+function captureFormRule(id: string, label: string, action: FormCaptureRuleAction, confirm?: string): ActionSpec {
+  return {
+    id,
+    label,
+    kind: 'tool',
+    tool: CAPTURE_UPDATE_TOOL,
+    args: (r) => ({ form_rules: { [asString(r.form_key)]: action } }),
+    guard: (r) => captureRuleGuard(r, action),
+    ...(confirm ? { confirm } : {}),
+    run: (client, args, ui) =>
+      captureRefusalsAsWarnings(ui, 'Not saved.', async () => ({
+        result: await ui.progress(`${label}…`, () =>
+          formCaptureSettingsUpdate(client, asString(args.project_id), {
+            form_rules: args.form_rules as Record<string, FormCaptureRuleAction>,
+          }),
+        ),
+      })),
+    done: captureSavedNote,
+    successReload: true,
+  };
+}
+
+interface CaptureChange {
+  patch: FormCapturePatch;
+  preview: FormCapturePreviewChange;
+  question: (site: string) => string;
+  explain: string;
+  button: string;
+}
+
+/** Preview a site change, confirm it with the forms it would move, then save it. */
+async function previewConfirmSave(
+  client: HivekuMcpClient,
+  projectId: string,
+  ui: ActionUi,
+  change: CaptureChange,
+): Promise<CaptureOutcome> {
+  const preview = await ui.progress('Checking which forms this changes…', () => formCapturePreview(client, projectId, change.preview));
+  const site = asString(asRecord(preview.candidate).project_name) || 'this site';
+  const ok = await ui.confirm(change.question(site), `${change.explain}\n\n${captureImpactText(preview.impact)}`, change.button);
+  if (!ok) return null;
+  return { result: await ui.progress('Saving…', () => formCaptureSettingsUpdate(client, projectId, change.patch)) };
+}
+
+const captureSwitch: CaptureRun = (client, args, ui) =>
+  captureRefusalsAsWarnings(ui, 'Not saved.', async () => {
+    const choice = asString(args.capture);
+    if (choice !== CAPTURE_ON && choice !== CAPTURE_OFF) return null;
+    const enabled = choice === CAPTURE_ON;
+    return previewConfirmSave(client, asString(args.project_id), ui, {
+      patch: { enabled },
+      preview: { enabled },
+      question: (site) => `Turn automatic form capture ${enabled ? 'on' : 'off'} for ${site}?`,
+      explain: enabled
+        ? 'Forms on this site are captured again, following the site type, the sign-in default and the path and form rules. Each captured submission creates a contact, a lead notification and possibly an ad conversion.'
+        : 'No form on this site is captured automatically, whatever the other rules say: new submissions stop creating contacts, lead notifications and ad conversions. Hosted Hiveku forms and wired webhooks are not affected. Submissions already recorded stay until erased.',
+      button: enabled ? 'Turn capture on' : 'Turn capture off',
+    });
+  });
+
+const captureSiteType: CaptureRun = (client, args, ui) =>
+  captureRefusalsAsWarnings(ui, 'Not saved.', async () => {
+    const choice = asString(args.site_type);
+    if (choice !== SITE_MARKETING && choice !== SITE_WEB_APP) return null;
+    const webApp = choice === SITE_WEB_APP;
+    const mode = webApp ? 'allowlist' : 'all';
+    return previewConfirmSave(client, asString(args.project_id), ui, {
+      patch: { mode },
+      preview: { mode },
+      question: (site) => `Treat ${site} as a ${webApp ? 'Web app' : 'Marketing site'}?`,
+      explain: webApp
+        ? 'Only forms something includes are captured: a form set to Always capture, an included path, or data-hiveku-capture="on" in the site code. Sign-ins, admin screens and end-user data entry stop becoming leads. If a real lead form is in the list below, set it to Always capture first.'
+        : 'Every form is captured except the ones a rule excludes, and credential-only sign-in forms while the sign-in default is on.',
+      button: webApp ? 'Make it a Web app' : 'Make it a Marketing site',
+    });
+  });
+
+/** A path rule's key as the server stores it (parseGlob): trimmed, lower case, no doubled or trailing slash. */
+const pathRuleKey = (value: string): string => {
+  const glob = value.trim().toLowerCase().replace(/\/{2,}/g, '/');
+  return glob.length > 1 ? glob.replace(/\/+$/, '') : glob;
+};
+
+/** Removing has no preview (the what-if only adds rules), so it reads the rules and confirms the one it removes. */
+async function removePathRule(client: HivekuMcpClient, projectId: string, typed: string, ui: ActionUi): Promise<CaptureOutcome> {
+  const settings = await ui.progress('Reading the path rules…', () => formCaptureSettingsGet(client, projectId));
+  const site = asString(settings.project_name) || 'this site';
+  const rules = (Array.isArray(settings.path_rules) ? settings.path_rules : []).map(asRecord);
+  const rule = rules.find((r) => pathRuleKey(asString(r.path)) === pathRuleKey(typed));
+  if (!rule) {
+    const current = rules.map((r) => `${asString(r.path)} (${asString(r.action)})`).join(', ');
+    await ui.inform(`${site} has no path rule for ${typed}. ${current ? `Its path rules: ${current}.` : 'It has no path rules.'}`);
+    return null;
+  }
+  const path = asString(rule.path);
+  const ok = await ui.confirm(
+    `Remove the path rule ${path} (${asString(rule.action)}) from ${site}?`,
+    'Forms on matching pages go back to the other rules: their own form rules, the sign-in default, other path rules and the site type.',
+    'Remove rule',
+  );
+  if (!ok) return null;
+  return { result: await ui.progress('Saving…', () => formCaptureSettingsUpdate(client, projectId, { path_rules: { [path]: 'remove' } })) };
+}
+
+const capturePathRule: CaptureRun = (client, args, ui) =>
+  captureRefusalsAsWarnings(ui, 'Not saved.', async () => {
+    const projectId = asString(args.project_id);
+    const path = asString(args.path).trim();
+    const choice = asString(args.rule);
+    if (!path) {
+      await ui.inform('No path given. A path rule names the pages it covers, starting with /: for example /login or /portal/*.');
+      return null;
+    }
+    // The what-if takes comma-separated lists, so a comma would preview two rules and save one.
+    if (path.includes(',')) {
+      await ui.inform('One path per rule: leave out commas.');
+      return null;
+    }
+    if (choice === PATH_REMOVE) return removePathRule(client, projectId, path, ui);
+    if (choice !== PATH_EXCLUDE && choice !== PATH_INCLUDE) return null;
+    const exclude = choice === PATH_EXCLUDE;
+    return previewConfirmSave(client, projectId, ui, {
+      patch: { path_rules: { [path]: exclude ? 'exclude' : 'include' } },
+      preview: exclude ? { exclude_paths: path } : { include_paths: path },
+      question: (site) => (exclude ? `Stop capturing forms on ${path} for ${site}?` : `Capture forms on ${path} for ${site}?`),
+      explain: exclude
+        ? 'Forms on matching pages stop creating contacts, lead notifications and ad conversions, unless something more specific says otherwise (the form\'s own rule, or data-hiveku-capture="on" in the site code). Check the list below: no real lead form should be in it.'
+        : "Forms on matching pages are captured, even on a Web app site, unless something more specific says otherwise (the form's own rule, its markup, the sign-in default, or a more specific excluded path).",
+      button: exclude ? 'Exclude path' : 'Include path',
+    });
+  });
+
+/** The erase review: what one batch removes, what it keeps, and what it cannot reach. */
+function purgeReviewText(plan: FormCapturePurgePlan): string {
+  const b = plan.batch;
+  const lines = [
+    "These are submissions Hiveku captured automatically that the site's capture rules now exclude. There is no undo.",
+    '',
+    'By form:',
+    ...b.by_form
+      .slice(0, MAX_LISTED_FORMS)
+      .map((f) => `- ${f.name || f.form_key || '(unnamed form)'}: ${plural(f.submissions, 'submission')}${f.reason_text ? ` (${f.reason_text})` : ''}`),
+  ];
+  if (b.by_form.length > MAX_LISTED_FORMS) lines.push(`- and ${b.by_form.length - MAX_LISTED_FORMS} more forms`);
+  const keptWhy = Object.entries(b.contacts_kept_by_reason)
+    .map(([why, n]) => `${why.replace(/_/g, ' ')}: ${n}`)
+    .join(', ');
+  lines.push(
+    '',
+    `Contacts: ${b.contacts_erasable} erased (they exist only because of these submissions)` +
+      (b.contacts_kept ? `, ${b.contacts_kept} kept because they have other history${keptWhy ? ` (${keptWhy})` : ''}` : '') +
+      '.',
+  );
+  const also: string[] = [];
+  if (b.offline_conversions.pending) also.push(`${plural(b.offline_conversions.pending, 'queued ad conversion')} removed before upload`);
+  const uploaded = Object.entries(b.offline_conversions.already_uploaded).map(([platform, n]) => `${n} on ${platform}`);
+  if (uploaded.length) also.push(`conversions already uploaded stay on the ad platform (${uploaded.join(', ')})`);
+  if (b.workflow_runs_to_redact) also.push(`${plural(b.workflow_runs_to_redact, 'automation run')} cleared of these submissions`);
+  if (b.mixed_groups_left_alone) {
+    also.push(`${plural(b.mixed_groups_left_alone, 'submission')} that also came in through a hosted form or a webhook left alone`);
+  }
+  if (also.length) lines.push(`Also: ${also.join('; ')}.`);
+  if (plan.cannot_undo.length) lines.push('', 'Not undone by this erase:', ...plan.cannot_undo.map((line) => `- ${line}`));
+  if (plan.more_available) {
+    lines.push(
+      '',
+      `This is one batch: ${b.submissions} of the ${plan.total_excluded_submissions} excluded submissions. Afterwards, run ${ERASE_LABEL} again to review the next batch.`,
+    );
+  }
+  return lines.join('\n');
+}
+
+/** The erase's completion message, from its execute answer. */
+function purgeDoneNote(result: unknown): string {
+  const data = dataOf(result);
+  if (data.erased === null) return 'Nothing was left to erase: it may have been erased from the dashboard since the review.';
+  if (!data.erased || typeof data.erased !== 'object') {
+    return `The erase ran, but its answer did not say how much it erased. Run ${ERASE_LABEL} again: its review counts what is left.`;
+  }
+  const erased = asRecord(data.erased);
+  const kept = asFiniteNumber(data.contacts_kept) ?? 0;
+  const parts = [
+    `Erased ${plural(asFiniteNumber(erased.submissions) ?? 0, 'submission')} and ${plural(asFiniteNumber(erased.contacts) ?? 0, 'contact')}` +
+      (kept ? `; ${plural(kept, 'contact')} kept because they have other history.` : '.'),
+  ];
+  if (data.more_available === true) parts.push(`More excluded submissions remain: run ${ERASE_LABEL} again to review the next batch.`);
+  return parts.join(' ');
+}
+
+/** Erase excluded...: dry run, a modal review, then one confirmed batch. */
+const eraseExcludedSubmissions: CaptureRun = async (client, args, ui) => {
+  const projectId = asString(args.project_id);
+  let plan: FormCapturePurgePlan;
+  let site = 'this site';
+  try {
+    const [dryRun, settings] = await ui.progress('Reviewing what would be erased…', () =>
+      Promise.all([
+        formCapturePurgeDryRun(client, projectId),
+        // Only for the site's name in the modal; the review does not depend on it.
+        formCaptureSettingsGet(client, projectId).catch((): Record<string, unknown> => ({})),
+      ]),
+    );
+    plan = dryRun;
+    site = asString(settings.project_name) || site;
+  } catch (err) {
+    const refusal = formCaptureRefusal(err);
+    if (!refusal) throw err;
+    await ui.warn('Could not review the erase. Nothing was erased.', refusal.message);
+    return null;
+  }
+  const token = plan.confirm_token;
+  if (!token || plan.batch.submissions === 0) {
+    await ui.inform(
+      `Nothing to erase on ${site}: its capture rules exclude no recorded submission. Exclude forms first (Never capture, a path rule, Web app, or capture off), then erase.`,
+    );
+    return null;
+  }
+  const erase = await ui.confirm(
+    `Permanently erase ${plural(plan.batch.submissions, 'captured submission')} from ${site}?`,
+    purgeReviewText(plan),
+    'Erase permanently',
+  );
+  if (!erase) return null;
+  let outcome: FormCapturePurgeOutcome;
+  try {
+    outcome = await ui.progress('Erasing…', () => formCapturePurge(client, projectId, token));
+  } catch (err) {
+    // Sent once and never re-sent: after a 5xx or a dropped connection it may or may not have run.
+    await ui.warn(
+      'The erase did not answer cleanly, so it may or may not have run.',
+      `${err instanceof Error ? err.message : String(err)}\n\nIt is never sent twice. Run ${ERASE_LABEL} again: its review counts what is still there.`,
+    );
+    return null;
+  }
+  if (outcome.executed) return { result: outcome.result };
+  const { refusal } = outcome;
+  if (refusal.code === 'agent_execute_disabled') {
+    const open = await ui.inform(
+      `Nothing was erased. Erasing from VS Code is not switched on yet: erase from the Hiveku dashboard instead (${CAPTURE_DASHBOARD_PATH} > Erase).`,
+      'Open dashboard',
+    );
+    if (open) await ui.openDashboard(captureDashboardSub(projectId));
+    return null;
+  }
+  if (refusal.code === 'stale_plan') {
+    await ui.warn(
+      'Nothing was erased: the set changed since the review.',
+      `New submissions arrived, a capture rule changed, or some were erased elsewhere after the review. Run ${ERASE_LABEL} again to review the current set.`,
+    );
+    return null;
+  }
+  if (refusal.code === 'expired') {
+    await ui.warn('Nothing was erased: the review expired.', `A review is good for 15 minutes. Run ${ERASE_LABEL} again.`);
+    return null;
+  }
+  await ui.warn('Nothing was erased.', refusal.message);
+  return null;
+};
+
 /**
  * Project-scoped module — every section's tool gets { project_id } merged in by
  * the engine (opened with a project context). Covers the dev/infra surface
@@ -912,6 +1333,79 @@ export const PROJECT_MODULE: ModuleSpec = {
     },
     { id: 'apages', label: 'Top pages', tool: 'analytics_pages', titleKeys: ['page_path'], fields: [{ keys: ['views'], label: 'views' }, { keys: ['entries'], label: 'entries' }], empty: 'No analytics yet.' },
     { id: 'asources', label: 'Traffic sources', tool: 'analytics_traffic_sources', titleKeys: ['source_type', 'source', 'medium', 'campaign'], fields: [{ keys: ['total_sessions'], label: 'sessions' }, { keys: ['total_users'], label: 'users' }], empty: 'No analytics yet.' },
+    {
+      // See "Form capture is PER SITE" above. Header changes are previewed in
+      // their own confirmation (after the pick), so none carries a static confirm.
+      id: 'formcapture',
+      label: 'Form capture',
+      tool: 'marketing_form_capture_list',
+      args: { days: CAPTURE_WINDOW_DAYS },
+      transform: captureFormRows,
+      titleKeys: ['name', 'form_key'],
+      fields: [
+        { keys: ['page_path'], label: 'page' },
+        { keys: ['capture'] },
+        { keys: ['submissions'], label: `submissions (${CAPTURE_WINDOW_DAYS}d)` },
+        { keys: ['skipped'], label: 'skipped (30d)' },
+        { keys: ['rule_label'], label: 'rule' },
+        { keys: ['erasable'], label: 'recorded, now excluded' },
+      ],
+      rowActions: [
+        captureFormRule('always', 'Always capture', 'include'),
+        captureFormRule(
+          'never',
+          'Never capture',
+          'exclude',
+          'Stop capturing this form? New submissions from it will not create contacts, notifications or conversions.',
+        ),
+        captureFormRule('default', 'Default', 'remove'),
+      ],
+      headerActions: [
+        {
+          id: 'capture',
+          label: 'Capture on/off',
+          kind: 'tool',
+          tool: CAPTURE_UPDATE_TOOL,
+          inputs: [{ key: 'capture', label: 'Automatic form capture for this site', options: [CAPTURE_ON, CAPTURE_OFF] }],
+          run: captureSwitch,
+          done: captureSavedNote,
+          successReload: true,
+        },
+        {
+          id: 'sitetype',
+          label: 'Site type',
+          kind: 'tool',
+          tool: CAPTURE_UPDATE_TOOL,
+          inputs: [{ key: 'site_type', label: 'What kind of site is this?', options: [SITE_MARKETING, SITE_WEB_APP] }],
+          run: captureSiteType,
+          done: captureSavedNote,
+          successReload: true,
+        },
+        {
+          id: 'pathrule',
+          label: '+ Path rule',
+          kind: 'tool',
+          tool: CAPTURE_UPDATE_TOOL,
+          inputs: [
+            { key: 'path', label: 'Pages, starting with /: /login is that page only, /portal/* is /portal and everything below it, a * inside the path is one segment' },
+            { key: 'rule', label: 'Forms on those pages', options: [PATH_EXCLUDE, PATH_INCLUDE, PATH_REMOVE] },
+          ],
+          run: capturePathRule,
+          done: captureSavedNote,
+          successReload: true,
+        },
+        {
+          id: 'erase',
+          label: ERASE_LABEL,
+          kind: 'tool',
+          tool: 'marketing_form_capture_purge',
+          run: eraseExcludedSubmissions,
+          done: purgeDoneNote,
+          successReload: true,
+        },
+      ],
+      empty: `No form on this site was captured automatically in the last ${CAPTURE_WINDOW_DAYS} days. The switch, the site type and path rules still apply to new submissions.`,
+    },
     { id: 'sbusers', label: 'Auth users', tool: 'supabase_auth_users_list', titleKeys: ['email', 'id'], fields: [{ keys: ['created_at'], date: true }], empty: 'No users / no DB.' },
     { id: 'sbstorage', label: 'Storage buckets', tool: 'supabase_storage_list', titleKeys: ['name', 'id'], empty: 'No buckets.' },
     { id: 'sbfns', label: 'Edge functions', tool: 'supabase_edge_functions_list', titleKeys: ['name', 'slug'], empty: 'No functions.' },
