@@ -155,7 +155,7 @@ describe('G18: generated commands and CLAUDE.md teach read, merge, then write th
     const { project } = await scaffoldBoth('dev');
     const remember = await fs.readFile(path.join(project, '.claude', 'commands', 'hiveku-remember.md'), 'utf8');
     const read = remember.indexOf('memory_list({ domain');
-    const write = remember.indexOf('memory_update({ memory_id, content })');
+    const write = remember.indexOf('memory_update({ memory_id, content, reason, expected_version })');
     assert.ok(read !== -1 && write !== -1 && read < write, 'reads with memory_list before memory_update');
     assert.match(remember, /WHOLE/);
     for (const domain of CANONICAL_DOMAINS) assert.match(remember, new RegExp('`' + domain + '`'));
