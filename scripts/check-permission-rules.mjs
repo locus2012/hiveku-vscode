@@ -95,6 +95,19 @@ const POST_READS = new Set([
   'email_campaign_metrics', 'content_page_views_get',
 ]);
 
+/**
+ * Writes the allow-list approves ON PURPOSE, by exact name. Not reads, so they
+ * do not belong in POST_READS.
+ *
+ * The agent feedback loop (2026-09-24): these file into Hiveku's own feedback
+ * queue and nothing else - no customer data, no spend, nothing published - and
+ * a prompt on every report would teach agents to stop reporting. Nothing that
+ * touches a customer, spends money or changes the live site may join this list.
+ */
+const FEEDBACK_QUEUE_WRITES = new Set([
+  'hiveku_report_issue', 'hiveku_request_feature', 'hiveku_feedback_followup',
+]);
+
 const problems = [];
 
 // ── (a) syntax ────────────────────────────────────────────────────────────
@@ -141,7 +154,8 @@ if (!existsSync(REGISTRY)) {
       t.mapping &&
       t.mapping.method !== 'GET' &&
       t.readOnlyHint !== true &&
-      !POST_READS.has(t.name),
+      !POST_READS.has(t.name) &&
+      !FEEDBACK_QUEUE_WRITES.has(t.name),
   );
   for (const t of leaked) {
     problems.push(
@@ -150,8 +164,10 @@ if (!existsSync(REGISTRY)) {
     );
   }
   if (problems.length === 0) {
+    const queueWrites = [...approved].filter((n) => FEEDBACK_QUEUE_WRITES.has(n)).length;
     console.log(
-      `✓ ${rules.length} allow rules, ${denied.size} denied — ${approved.size} read tools auto-approved, 0 mutations`,
+      `✓ ${rules.length} allow rules, ${denied.size} denied — ${approved.size - queueWrites} read tools auto-approved` +
+        (queueWrites ? `, ${queueWrites} feedback-queue writes by name, 0 other mutations` : ', 0 mutations'),
     );
   }
 }

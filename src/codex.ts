@@ -105,6 +105,10 @@ Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
   once. Never borrow another member's id or an id from another account.
 - **Every completed task ends with an "Owner update"** — 2–4 calm, plain-language sentences a busy
   owner can skim: benefit first, no alarm vocabulary, no self-blaming narration, accurate.
+- **Hiveku itself in your way?** A Hiveku tool still failing after one sensible retry → \`hiveku_report_issue\`;
+  a capability no tool offers (search \`hiveku_docs_search\` first) → \`hiveku_request_feature\`. No secrets or personal data.
+- **Tell the user only if it changes what they get:** one or two calm sentences — flagged to the Hiveku team (give the
+  ref), the team is quick to fix these, you'll let them know when it's sorted. No error codes, blame or promised times.
 - Never read or print \`.env.local\` / \`.env.*.local\` contents.
 - Video generation is paid + capped — \`marketing_generate_video\` with \`dry_run: true\` first.
 ${AGENTS_END}`;
