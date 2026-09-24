@@ -2017,9 +2017,13 @@ export function consoleHtml(webview: Pick<vscode.Webview, 'cspSource'>, label: s
     // The memory Activity section: who changed this account's memory, from
     // which app, when and why. Every value is set as text, never as markup:
     // entry names and reasons are other people's and agents' free text.
-    var ACT={rows:[],next:null,host:null,unavailable:false};
+    var ACT={rows:[],next:null,host:null,unavailable:false,olderError:false};
+    // One "Show older changes" answer. A failed page keeps the cursor, so the
+    // button stays and asks for the same page again, and says it failed:
+    // dropping the button would make the list look complete.
+    function applyActivityPage(act,m){if(m.error&&!(m.rows||[]).length){act.olderError=true;return act;}act.rows=act.rows.concat(m.rows||[]);act.next=m.nextCursor||null;act.olderError=false;return act;}
     function renderMemActivity(d){
-      ACT.rows=(d.activity||[]).slice();ACT.next=d.activityNext||null;ACT.unavailable=!!d.activityUnavailable;
+      ACT.rows=(d.activity||[]).slice();ACT.next=d.activityNext||null;ACT.unavailable=!!d.activityUnavailable;ACT.olderError=false;
       var sec=el('div','sec');sec.id='ds-activity';
       sec.appendChild(el('span',null,'Activity'));
       sec.appendChild(el('span','ct','who changed this memory, from which app, when and why'));
@@ -2049,6 +2053,7 @@ export function consoleHtml(webview: Pick<vscode.Webview, 'cspSource'>, label: s
       }));
       host.appendChild(el('div','muted','Reasons given through Claude Code, Codex, VS Code, background jobs, helpdesk and comms are shown on the Hiveku dashboard only.'));
       if(ACT.next){
+        if(ACT.olderError)host.appendChild(el('div','muted','Could not load older changes. Try again.'));
         var more=btn('Show older changes','ghost',function(){more.disabled=true;more.textContent='Loading...';vscode.postMessage({type:'memactivity',cursor:ACT.next});});
         host.appendChild(more);
       }
@@ -2185,8 +2190,7 @@ export function consoleHtml(webview: Pick<vscode.Webview, 'cspSource'>, label: s
       if(m.type==='ppcads'){renderAds(m.id,m.ads||[]);return;}
       if(m.type==='memactivitypage'){
         if(current!=='knowledge')return;
-        ACT.rows=ACT.rows.concat(m.rows||[]);ACT.next=m.nextCursor||null;
-        if(m.error&&!(m.rows||[]).length)ACT.next=null;
+        applyActivityPage(ACT,m);
         drawMemActivity();return;
       }
       if(m.type!=='tab')return;

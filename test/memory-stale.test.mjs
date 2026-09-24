@@ -323,6 +323,38 @@ describe('HivekuFileSystem memory saves', () => {
     assert.deepEqual(writes(client).map((w) => w.args.reason), ['Tidied the pricing section', 'Tidied the pricing section']);
   });
 
+  test('with auto save on, closing the tab forgets the reason: reopening asks again', async () => {
+    config.set('autoSave', 'afterDelay');
+    const { client, provider, uri } = setup({
+      answers: { memory_get: versions({ version: 3, content: 'v3' }), memory_update: { data: { version: 3 } } },
+      input: ['Tidied the pricing section', 'Added the Leeds showroom'],
+    });
+    await provider.readFile(uri);
+    await provider.writeFile(uri, enc.encode('a'));
+    provider.forget(uri); // the tab closed
+    await provider.readFile(uri);
+    await provider.writeFile(uri, enc.encode('ab'));
+    assert.equal(calls.inputs.length, 2);
+    assert.equal(calls.inputs[1][0].value, '', 'the old reason is not pre-filled either');
+    assert.deepEqual(writes(client).map((w) => w.args.reason), ['Tidied the pricing section', 'Added the Leeds showroom']);
+  });
+
+  test('closing a hiveku document tells the provider to forget it; other schemes do not', async () => {
+    const closers = [];
+    vscodeStub.workspace.onDidCloseTextDocument = (fn) => { closers.push(fn); return { dispose() {} }; };
+    let provider;
+    vscodeStub.workspace.registerFileSystemProvider = (_scheme, p) => { provider = p; return { dispose() {} }; };
+    const context = { subscriptions: [] };
+    platformFs.registerHivekuFs(context, async () => fakeClient({}), () => 'https://app.example.test');
+    assert.equal(closers.length, 1);
+    const forgotten = [];
+    provider.forget = (u) => forgotten.push(u.toString());
+    const uri = platformFs.memoryUri(ACCOUNT, MEM, 'sales');
+    closers[0]({ uri });
+    closers[0]({ uri: vscodeStub.Uri.parse('file:/tmp/notes.md') });
+    assert.deepEqual(forgotten, [uri.toString()]);
+  });
+
   test('a deleted entry is a plain failure that says so', async () => {
     const { provider, uri } = setup({ answers: { memory_get: { data: null } } });
     await assert.rejects(provider.writeFile(uri, enc.encode('mine')));

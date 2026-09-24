@@ -169,7 +169,11 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
   private readonly mtimes = new Map<string, number>();
   /** memory uri → the version this editor was given, and when (the stale-edit check). */
   private readonly opened = new Map<string, OpenedMemory>();
-  /** memory uri → the last "What changed?" answer, offered again on the next save. */
+  /**
+   * memory uri → the last "What changed?" answer, offered again on the next
+   * save while that document stays open. Cleared when it closes (forget), so
+   * a later, unrelated edit is asked again instead of reusing an old reason.
+   */
   private readonly reasons = new Map<string, string>();
   /** `${accountId}/${memoryId}` → the newer Hiveku text shown by Compare and merge. */
   private readonly newer = new Map<string, string>();
@@ -181,6 +185,17 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
 
   private dashboardUrl(accountId: string): string {
     return accountMemoryDashboardUrl(this.appUrlFor(), accountId);
+  }
+
+  /**
+   * A document on this scheme closed: drop what was kept for it while it was
+   * open (its "What changed?" answer and the version it was given). The next
+   * open reads the entry again and the next save asks for a reason again.
+   */
+  forget(uri: vscode.Uri): void {
+    const key = uri.toString();
+    this.reasons.delete(key);
+    this.opened.delete(key);
   }
 
   watch(): vscode.Disposable {
@@ -422,7 +437,8 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
   /**
    * "What changed? (optional)". Empty, or Escape, means no reason, never a
    * cancelled save. With auto save on, ask once per open document (a prompt
-   * every few seconds would be unusable) and reuse the answer.
+   * every few seconds would be unusable) and reuse the answer until that
+   * document closes (forget).
    */
   private async askReason(key: string): Promise<string | undefined> {
     const previous = this.reasons.get(key);
@@ -500,9 +516,14 @@ export function registerHivekuFs(
   clientFor: ClientFor,
   appUrlFor: AppUrlFor = () => DEFAULT_APP_URL,
 ): void {
+  const provider = new HivekuFileSystem(clientFor, appUrlFor);
   context.subscriptions.push(
-    vscode.workspace.registerFileSystemProvider(HIVEKU_SCHEME, new HivekuFileSystem(clientFor, appUrlFor), {
+    vscode.workspace.registerFileSystemProvider(HIVEKU_SCHEME, provider, {
       isCaseSensitive: true,
+    }),
+    // "Ask once per open document": what was kept for a document goes when it closes.
+    vscode.workspace.onDidCloseTextDocument((doc) => {
+      if (doc.uri.scheme === HIVEKU_SCHEME) provider.forget(doc.uri);
     }),
   );
 }

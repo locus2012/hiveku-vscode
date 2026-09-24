@@ -146,6 +146,27 @@ describe('Knowledge tab: last changed by and Activity', () => {
     assert.doesNotMatch(script.slice(script.indexOf('function renderMemActivity')), /innerHTML/);
   });
 
+  test('a failed "Show older changes" keeps the button and says so; the next page clears it', () => {
+    const html = consolePanel.consoleHtml({ cspSource: 'vscode-resource:' }, 'Western Stairlifts');
+    const script = html.slice(html.indexOf('<script nonce='), html.lastIndexOf('</script>')).replace(/^<script[^>]*>/, '');
+    const line = script.split('\n').find((l) => l.trim().startsWith('function applyActivityPage(act,m)'));
+    assert.ok(line, 'the page handler is one function the test can run');
+    const applyActivityPage = vm.runInNewContext(`${line}; applyActivityPage`);
+    const act = { rows: [{ entry: 'sales' }], next: 'older-1', olderError: false };
+    applyActivityPage(act, { rows: [], nextCursor: null, error: true });
+    assert.equal(act.next, 'older-1', 'the cursor is kept, so the button stays and asks for the same page');
+    assert.equal(act.olderError, true);
+    assert.equal(act.rows.length, 1);
+    applyActivityPage(act, { rows: [{ entry: 'marketing' }], nextCursor: null });
+    assert.deepEqual([act.rows.length, act.next, act.olderError], [2, null, false]);
+    // The view shows the failure beside the button, only while there is one.
+    const draw = script.slice(script.indexOf('function drawMemActivity'), script.indexOf('function renderKnowDash'));
+    assert.match(draw, /if\(ACT\.olderError\)host\.appendChild\(el\('div','muted','Could not load older changes\. Try again\.'\)\);/);
+    assert.ok(draw.indexOf('ACT.olderError') > draw.indexOf('if(ACT.next){'));
+    // The message handler goes through it (no second copy of the rule).
+    assert.match(script, /m\.type==='memactivitypage'\)\{\s*if\(current!=='knowledge'\)return;\s*applyActivityPage\(ACT,m\);/);
+  });
+
   test('negative control: the syntax check catches a broken script', () => {
     assert.throws(() => new vm.Script("host.appendChild(el('div','muted','Each entry's History'));"));
   });
