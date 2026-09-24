@@ -2,7 +2,7 @@
   "name": "hiveku-vscode",
   "displayName": "Hiveku",
   "description": "Run entire Hiveku accounts from VS Code with Claude Code — role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
-  "version": "0.84.1",
+  "version": "0.85.0",
   "publisher": "hiveku",
   "license": "MIT",
   "icon": "icon.png",
@@ -451,6 +451,16 @@
         "title": "Hiveku: Search Accounts…",
         "category": "Hiveku",
         "icon": "$(search)"
+      },
+      {
+        "command": "hiveku.accountMemoryOpen",
+        "title": "Hiveku: Open Account Memory (read-only)",
+        "icon": "$(book)"
+      },
+      {
+        "command": "hiveku.accountMemoryEditOnDashboard",
+        "title": "Hiveku: Edit Account Memory on the Dashboard",
+        "icon": "$(link-external)"
       }
     ],
     "viewsContainers": {
@@ -870,6 +880,26 @@
           "command": "hiveku.newTask",
           "when": "view == hiveku.console && viewItem == hivekuConsoleSection.tasks",
           "group": "inline"
+        },
+        {
+          "command": "hiveku.accountMemoryEditOnDashboard",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccountMemory",
+          "group": "inline"
+        },
+        {
+          "command": "hiveku.accountMemoryOpen",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccountMemory",
+          "group": "0_open@0"
+        },
+        {
+          "command": "hiveku.accountMemoryEditOnDashboard",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccountMemory",
+          "group": "0_open@1"
+        },
+        {
+          "command": "hiveku.accountMemoryEditOnDashboard",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccountMemorySuggestion",
+          "group": "inline"
         }
       ],
       "editor/context": [
@@ -958,6 +988,13 @@
           "command": "hiveku.discardFile",
           "when": "scmProvider == hiveku",
           "group": "inline"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "hiveku.accountMemoryEditOnDashboard",
+          "when": "resourceScheme == hiveku && resourcePath =~ /^\\/account-memory\\//",
+          "group": "navigation"
         }
       ]
     },
@@ -1093,7 +1130,8 @@
     "gen:skills": "node scripts/gen-agency-skills.mjs",
     "check:skills": "node scripts/check-agency-skills-drift.mjs",
     "sync:skills": "npm run gen:skills && npm run check:skills",
-    "check:generated-scripts": "node scripts/check-generated-scripts.mjs"
+    "check:generated-scripts": "node scripts/check-generated-scripts.mjs",
+    "test": "npm run compile && node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "tar": "^7.4.3"

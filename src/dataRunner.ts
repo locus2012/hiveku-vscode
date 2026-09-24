@@ -26,7 +26,13 @@ import { hivekuUserAgent } from './hivekuUserAgent';
 // Bumped so a folder's STATUS.json says which runner actually wrote it.
 // v4: every request identifies as Hiveku (HivekuDataRunner/<extension version>),
 // baked in at write time because this script runs outside the extension host.
-export const RUNNER_VERSION = 4;
+// v5: `account` is a target, and every run except --dataset refreshes the
+// read-only hiveku-data/account/ACCOUNT_MEMORY.md (same bytes as the extension
+// and the plugin) and records it in STATUS.json the way the plugin does
+// (`account_memory`, and a `failed` entry while the read fails). `failed` is now
+// computed from the per-department blocks (it read top-level keys and was
+// always empty) and keeps the entries of departments this run did not touch.
+export const RUNNER_VERSION = 5;
 export const RUNNER_REL_PATH = path.join('.hiveku', 'pull-data.mjs');
 
 /**
@@ -72,11 +78,16 @@ function runnerScript(): string {
 //   node .hiveku/pull-data.mjs --stale 12       pull default departments older than N hours (default 12)
 //   node .hiveku/pull-data.mjs --dataset ppc:campaigns   refresh ONE dataset (e.g. after a write)
 //   node .hiveku/pull-data.mjs --list           departments + local freshness
+//   node .hiveku/pull-data.mjs account          refresh only the account memory copy
+//
+// Every run except --dataset also refreshes hiveku-data/account/ACCOUNT_MEMORY.md,
+// a READ-ONLY copy of the account memory: owners and admins edit it on the Hiveku
+// dashboard, and nothing uploads this file.
 //
 // Reads the account MCP endpoint + key from ./.mcp.json (never prints the key).
 // Requires Node 18+.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, chmodSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -352,6 +363,168 @@ function writeDeptDocs(dept) {
   writeFileSync(path.join(dir, 'README.md'), md, 'utf8');
 }
 
+// ── Account memory (read-only copy) ─────────────────────────────────────────
+// The account memory is the one document of business facts every department
+// agent reads. It is NOT a department: owners and admins edit it on the Hiveku
+// dashboard, nothing uploads this copy, and every run except --dataset (a
+// targeted refresh after a write) refreshes hiveku-data/account/ACCOUNT_MEMORY.md.
+// The renderer is a port of the extension's src/accountMemory.ts, which writes
+// the same bytes as the Claude Code plugin and hiveku-sync: one file, whichever
+// tool refreshed it last. Keep them in step (the extension's tests compare bytes).
+var ACCOUNT_TARGET = 'account';
+var ACCOUNT_MEMORY_TOOL = 'account_memory_get';
+var ACCOUNT_MEMORY_REL = 'hiveku-data/account/ACCOUNT_MEMORY.md';
+var ACCOUNT_MEMORY_PATH = path.join(DATA, 'account', 'ACCOUNT_MEMORY.md');
+var APP_URL = 'https://app.hiveku.com';
+var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// A changed shape is an ERROR, never an empty memory written over a real one.
+function normalizeAccountMemory(payload) {
+  var inner = payload && typeof payload === 'object' && !Array.isArray(payload) && 'data' in payload ? payload.data : payload;
+  if (!inner || typeof inner !== 'object' || Array.isArray(inner)) {
+    throw new Error(ACCOUNT_MEMORY_TOOL + ' returned an unexpected shape (no object)');
+  }
+  if (typeof inner.content !== 'string' || !Number.isFinite(Number(inner.version))) {
+    throw new Error(ACCOUNT_MEMORY_TOOL + ' returned an unexpected shape (no content or version)');
+  }
+  var raw = Array.isArray(inner.suggestions) ? inner.suggestions : [];
+  return {
+    content: inner.content,
+    version: Number(inner.version),
+    updated_at: typeof inner.updated_at === 'string' ? inner.updated_at : null,
+    suggestions: raw
+      .filter(function (s) { return s && typeof s === 'object' && typeof s.text === 'string' && s.text.trim(); })
+      .map(function (s) {
+        return {
+          id: typeof s.id === 'string' ? s.id : '',
+          at: typeof s.at === 'string' ? s.at : '',
+          source: typeof s.source === 'string' && s.source.trim() ? s.source : 'Unknown',
+          text: s.text,
+        };
+      }),
+    suggestions_version: Number.isFinite(Number(inner.suggestions_version)) ? Number(inner.suggestions_version) : 0,
+    truncated: inner.truncated === true,
+  };
+}
+function amWhen(value) {
+  if (!value) return 'unknown time';
+  var d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+}
+function amOneLine(value) { return String(value).replace(/[\\r\\n\\u2028\\u2029]+/g, ' ').trim(); }
+function amYaml(value) { return '"' + String(value).replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"') + '"'; }
+// Account-scoped when the id is a real UUID; the unscoped page otherwise, never a half-built URL.
+function accountMemoryDashboardUrl(accountId) {
+  return typeof accountId === 'string' && UUID_RE.test(accountId)
+    ? APP_URL + '/' + accountId.toLowerCase() + '/dashboard/memory'
+    : APP_URL + '/dashboard/memory';
+}
+function renderAccountMemory(memory, accountId, fetchedAt) {
+  var editUrl = accountMemoryDashboardUrl(accountId);
+  var fm = ['---', 'read_only: true', 'source_tool: ' + ACCOUNT_MEMORY_TOOL, 'version: ' + memory.version]
+    .concat(memory.updated_at ? ['updated_at: ' + amYaml(memory.updated_at)] : [])
+    .concat([
+      'suggestions: ' + memory.suggestions.length,
+      'suggestions_version: ' + memory.suggestions_version,
+      'fetched_at: ' + amYaml(fetchedAt),
+      'edit_url: ' + amYaml(editUrl),
+      '---',
+      '',
+    ]);
+  var lines = [
+    '# Account memory',
+    '',
+    '> This is a read-only copy of the account memory, the facts about the business that every',
+    '> Hiveku department agent reads. Owners and admins edit it on the Hiveku dashboard:',
+    '> ' + editUrl,
+    '>',
+    '> Changes made to this file are not saved to Hiveku. The next pull replaces this file, and',
+    '> nothing uploads it. To add a fact, suggest it with account_memory_append (an owner or admin',
+    '> reviews it on the dashboard), or ask an owner or admin to change the document there.',
+    '> It is internal to the team: do not quote it to customers.',
+    '',
+  ];
+  if (memory.version > 0 && memory.content.trim()) {
+    lines.push('Version ' + memory.version + ', last changed ' + amWhen(memory.updated_at) + '.');
+    if (memory.truncated) {
+      lines.push('Agents see a shortened version: with the suggestions, it is longer than the 8,000 characters they read.');
+    }
+    lines.push('', '---', '', memory.content.replace(/\\s+$/, ''), '', '---', '');
+  } else {
+    lines.push('Nothing has been written yet. An owner or admin can start it on the dashboard.', '');
+  }
+  lines.push('# Suggestions from agents, not reviewed yet', '');
+  if (memory.suggestions.length) {
+    lines.push('These lines are not part of the account memory until an owner or admin keeps them on the dashboard.', '');
+    for (const s of memory.suggestions) {
+      lines.push('- ' + amOneLine(s.text) + ' (suggested by ' + amOneLine(s.source) + ', ' + amWhen(s.at) + ')');
+    }
+  } else {
+    lines.push('None waiting.');
+  }
+  lines.push('');
+  return fm.join(NL) + lines.join(NL);
+}
+// Replace the copy even when a previous run left it read-only: write a temp
+// beside it and rename over it (a rename needs the FOLDER writable). Windows
+// refuses a rename onto a read-only file, so on that refusal open it and retry.
+function writeReadOnlyFile(file, text) {
+  mkdirSync(path.dirname(file), { recursive: true });
+  var tmp = path.join(path.dirname(file), '.' + path.basename(file) + '.' + process.pid + '.tmp');
+  writeFileSync(tmp, text, 'utf8');
+  try {
+    renameSync(tmp, file);
+  } catch (err) {
+    if (!err || (err.code !== 'EPERM' && err.code !== 'EACCES')) { try { unlinkSync(tmp); } catch { /* gone */ } throw err; }
+    chmodSync(file, 0o644);
+    renameSync(tmp, file);
+  }
+  chmodSync(file, 0o444);
+}
+// The key is pinned to one account, so get_account_info's first row is it. Any
+// failure (a narrowed profile, an older server) gives the unscoped dashboard link.
+async function resolveAccountId() {
+  try {
+    var r = await callTool('get_account_info', {});
+    var data = r && typeof r === 'object' && 'data' in r ? r.data : r;
+    var row = Array.isArray(data) ? data[0] : data;
+    var id = row && typeof row.id === 'string' ? row.id.trim() : '';
+    return UUID_RE.test(id) ? id : null;
+  } catch { return null; }
+}
+// Never throws. A failed read keeps the previous copy (kept says whether there was one).
+async function syncAccountMemory() {
+  var fetchedAt = new Date().toISOString();
+  var memory;
+  try {
+    memory = normalizeAccountMemory(await callTool(ACCOUNT_MEMORY_TOOL, {}));
+  } catch (err) {
+    var error = String(err && err.message ? err.message : err);
+    var kept = existsSync(ACCOUNT_MEMORY_PATH);
+    console.log('  account/ACCOUNT_MEMORY.md: ERROR ' + error.slice(0, 120) + (kept ? ' (kept previous copy)' : ''));
+    return { ok: false, error: error, kept: kept, fetched_at: fetchedAt };
+  }
+  try {
+    writeReadOnlyFile(ACCOUNT_MEMORY_PATH, renderAccountMemory(memory, await resolveAccountId(), fetchedAt));
+  } catch (err) {
+    var werr = String(err && err.message ? err.message : err);
+    console.log('  account/ACCOUNT_MEMORY.md: ERROR ' + werr.slice(0, 120));
+    return { ok: false, error: werr, kept: existsSync(ACCOUNT_MEMORY_PATH), fetched_at: fetchedAt };
+  }
+  var n = memory.suggestions.length;
+  console.log('  account/ACCOUNT_MEMORY.md: ' + (memory.version > 0 ? 'version ' + memory.version : 'empty') + ', '
+    + n + ' suggestion' + (n === 1 ? '' : 's') + ' (read-only; edit on the dashboard)');
+  return { ok: true, version: memory.version, suggestions: n, fetched_at: fetchedAt };
+}
+// fetched_at from the copy's front matter, or null when there is no copy.
+function accountMemoryFreshness() {
+  try {
+    var m = /^fetched_at:\\s*"([^"]+)"\\s*$/m.exec(readFileSync(ACCOUNT_MEMORY_PATH, 'utf8'));
+    return m ? m[1] : null;
+  } catch { return null; }
+}
+
 // ── Pull one department (same file shapes as the extension's export) ────────
 async function pullDept(dept, onlyDataset) {
   const dir = path.join(DATA, dept.id);
@@ -433,17 +606,23 @@ const argv = process.argv.slice(2);
 const byId = new Map(manifest.departments.map((d) => [d.id, d]));
 function usage() {
   console.log('Departments (* = your defaults): ' + manifest.departments.map((d) => (manifest.default_departments.includes(d.id) ? d.id + '*' : d.id)).join(' '));
-  console.log('Usage: node .hiveku/pull-data.mjs <dept ...> | --default | --all | --stale [hours] | --dataset <dept:id> | --list');
+  console.log('Usage: node .hiveku/pull-data.mjs <dept ...> | account | --default | --all | --stale [hours] | --dataset <dept:id> | --list');
+  console.log('Every run except --dataset also refreshes ' + ACCOUNT_MEMORY_REL + ' (read-only; owners edit it on the dashboard).');
 }
 async function main() {
   let targets = [];
   let onlyDataset = null;
+  // The account memory rides along with every run (one small read), never with
+  // --dataset, which is a targeted refresh after a write.
+  let withAccountMemory = true;
   if (argv.includes('--list') || argv.length === 0) {
     for (const d of manifest.departments) {
       const fresh = deptFreshness(d.id);
       const mark = manifest.default_departments.includes(d.id) ? '*' : ' ';
       console.log(mark + ' ' + d.id.padEnd(12) + (fresh ? 'fetched ' + fresh : 'not downloaded'));
     }
+    const accountFresh = accountMemoryFreshness();
+    console.log('  ' + ACCOUNT_TARGET.padEnd(12) + (accountFresh ? 'fetched ' + accountFresh : 'not downloaded') + ' (account memory, read-only)');
     if (argv.length === 0) usage();
     return;
   }
@@ -455,7 +634,7 @@ async function main() {
       console.error('Unknown dataset "' + parts[1] + '" for ' + dept.id + '. Valid: ' + dept.datasets.map((ds) => ds.id).join(', '));
       process.exit(1);
     }
-    targets = [dept]; onlyDataset = parts[1];
+    targets = [dept]; onlyDataset = parts[1]; withAccountMemory = false;
   } else if (argv.includes('--all')) {
     targets = manifest.departments;
   } else if (argv.includes('--default')) {
@@ -466,16 +645,33 @@ async function main() {
     const cutoff = new Date(Date.now() - hours * 3600000).toISOString();
     targets = manifest.default_departments.map((id) => byId.get(id)).filter(Boolean)
       .filter((d) => { const f = deptFreshness(d.id); return !f || f < cutoff; });
-    if (!targets.length) { console.log('All default departments fresh (within ' + hours + 'h).'); return; }
+    const accountFresh = accountMemoryFreshness();
+    withAccountMemory = !accountFresh || accountFresh < cutoff;
+    if (!targets.length && !withAccountMemory) { console.log('All default departments fresh (within ' + hours + 'h).'); return; }
   } else {
-    const unknown = argv.filter((a) => !byId.has(a));
+    const named = argv.filter((a) => a !== ACCOUNT_TARGET);
+    const unknown = named.filter((a) => !byId.has(a));
     if (unknown.length) { console.error('Unknown department(s): ' + unknown.join(', ')); usage(); process.exit(1); }
-    targets = argv.map((a) => byId.get(a));
+    targets = named.map((a) => byId.get(a));
   }
   let statusAll = {};
   const statusFile = path.join(DATA, 'STATUS.json');
   try { statusAll = JSON.parse(readFileSync(statusFile, 'utf8')); } catch { statusAll = {}; }
-  if (!statusAll.departments) statusAll.departments = {};
+  if (!statusAll || typeof statusAll !== 'object' || Array.isArray(statusAll)) statusAll = {};
+  // The extension's exporter records failures in a top-level \`failed\` array
+  // and writes \`departments\` as an ARRAY of ids. Keep the failures of every
+  // department this run does not touch, and normalize \`departments\` to the
+  // object this runner keys by id (a named key on an array vanishes in JSON).
+  const targetIds = new Set(targets.map((d) => d.id));
+  const priorFailed = Array.isArray(statusAll.failed)
+    ? statusAll.failed.filter((f) => f && typeof f.department === 'string' && !targetIds.has(f.department))
+    : [];
+  if (!statusAll.departments || typeof statusAll.departments !== 'object' || Array.isArray(statusAll.departments)) statusAll.departments = {};
+  let accountMemory = null;
+  if (withAccountMemory) {
+    console.log('Account memory (' + ACCOUNT_TARGET + ')');
+    accountMemory = await syncAccountMemory();
+  }
   let okDepts = 0;
   for (const dept of targets) {
     console.log(dept.label + ' (' + dept.id + ')');
@@ -496,16 +692,33 @@ async function main() {
   // regardless of which writer refreshed last. \`failed\` is the important one:
   // an empty dataset file means "not retrieved" here, not "no data".
   statusAll.fetched_at = nowIso;
-  statusAll.failed = Object.keys(statusAll)
-    .filter((k) => statusAll[k] && typeof statusAll[k] === 'object' && statusAll[k].datasets)
-    .flatMap((k) =>
-      Object.entries(statusAll[k].datasets)
-        .filter(([, v]) => v && v.error)
-        .map(([ds, v]) => ({ department: k, dataset: ds, error: String(v.error).slice(0, 200) })),
+  const freshFailed = Object.entries(statusAll.departments).flatMap(([k, v]) =>
+    Object.entries((v && v.datasets) || {})
+      .filter(([, d]) => d && d.error)
+      .map(([ds, d]) => ({ department: k, dataset: ds, error: String(d.error).slice(0, 200) })),
+  );
+  // The account memory is not a department, so it has its own entry (the
+  // plugin's shape). A run that read it replaces that entry; a run that did not keeps it.
+  let accountFailed = priorFailed.filter((f) => f.department === ACCOUNT_TARGET);
+  // Departments with a block are recomputed above; keep the rest as they were.
+  const otherPriorFailed = priorFailed.filter((f) => f.department !== ACCOUNT_TARGET && !(f.department in statusAll.departments));
+  if (accountMemory) {
+    statusAll.account_memory = Object.assign(
+      { file: ACCOUNT_MEMORY_REL, read_only: true, fetched_at: accountMemory.fetched_at },
+      accountMemory.ok
+        ? { version: accountMemory.version, suggestions: accountMemory.suggestions }
+        : { error: accountMemory.error.slice(0, 200), kept_previous: accountMemory.kept },
     );
+    accountFailed = accountMemory.ok
+      ? []
+      : [{ department: ACCOUNT_TARGET, dataset: 'account-memory', error: accountMemory.error.slice(0, 200) }];
+  }
+  statusAll.failed = otherPriorFailed.concat(accountFailed, freshFailed);
   statusAll.runner_version = ${RUNNER_VERSION};
   writeJson(statusFile, statusAll);
   if (targets.length && okDepts === 0) { console.error('Every dataset failed — check the account key in .mcp.json.'); process.exit(1); }
+  // Only the account memory was asked for: its one read is the whole run.
+  if (!targets.length && accountMemory && !accountMemory.ok) { console.error('The account memory could not be read; the previous copy (if any) was kept.'); process.exit(1); }
   console.log('Done. Data in hiveku-data/ — work from these local files; use live MCP tools for writes.');
 }
 main().catch((err) => { console.error(err && err.message ? err.message : err); process.exit(1); });

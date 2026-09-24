@@ -23,6 +23,7 @@ import { openTaskDetail } from './taskDetail';
 import { effectiveDepartments } from './roles';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
 import { cmsEntryUri, memoryUri } from './platformFs';
+import { isAccountMemoryDomain } from './accountMemory';
 
 type ClientFor = (accountId: string) => Promise<HivekuMcpClient>;
 
@@ -389,14 +390,16 @@ async function loadMediaTab(client: HivekuMcpClient): Promise<Record<string, unk
 }
 
 /** Knowledge & Memory tab — the account's AI brain, editable. */
-async function loadKnowledgeTab(client: HivekuMcpClient): Promise<Record<string, unknown>> {
+export async function loadKnowledgeTab(client: HivekuMcpClient): Promise<Record<string, unknown>> {
   const [memories, kbs] = await Promise.all([
     api.listMemoryAll(client).catch(() => [] as api.MemoryEntry[]),
     api.kbList(client).catch(() => [] as api.KnowledgeBase[]),
   ]);
   return {
     kind: 'knowdash',
-    memories: memories.map((m) => ({
+    // The account memory has its own read-only node (Account memory in the
+    // console tree); it is never an editable row here.
+    memories: memories.filter((m) => !isAccountMemoryDomain(m.domain)).map((m) => ({
       id: String(m.id ?? ''),
       domain: String(m.domain ?? ''),
       type: String(m.type ?? 'memory'),

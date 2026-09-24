@@ -6,6 +6,12 @@
  *   hiveku:/env/<accountId>/<projectId>/<name>.env       project secrets (AWS SM)
  *   hiveku:/cms/<accountId>/<projectId>/<collection>/<slug>.json   CMS entry
  *   hiveku:/memory/<accountId>/<memoryId>/<name>.md      account AI memory entry
+ *   hiveku:/account-memory/<accountId>/ACCOUNT_MEMORY.md  the account memory (READ-ONLY)
+ *
+ * The account memory is the one family with no save: owners and admins edit it
+ * on the Hiveku dashboard and there is no MCP tool that sets it. stat() marks
+ * it read-only (the editor will not take typing) and writeFile() refuses with a
+ * message naming the dashboard page, so a save can never look like it worked.
  *
  * The provider is deliberately stateless against the platform (every read is a
  * live fetch, every save a live write) — the platform is the source of truth,
@@ -18,8 +24,17 @@ import * as vscode from 'vscode';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
 import { quote as quoteEnvValue, parseEnvFile } from './env';
+import {
+  ACCOUNT_MEMORY_FILE,
+  accountMemoryDashboardUrl,
+  accountMemoryReadOnlyMessage,
+  fetchAccountMemory,
+  renderAccountMemoryDocument,
+} from './accountMemory';
 
 type ClientFor = (accountId: string) => Promise<HivekuMcpClient>;
+type AppUrlFor = () => string;
+const DEFAULT_APP_URL = 'https://app.hiveku.com';
 
 export const HIVEKU_SCHEME = 'hiveku';
 
@@ -49,8 +64,13 @@ export function memoryUri(accountId: string, memoryId: string, domain: string): 
   return vscode.Uri.parse(`${HIVEKU_SCHEME}:/memory/${accountId}/${memoryId}/${name}.md`);
 }
 
+/** The account memory, read-only (see the header). */
+export function accountMemoryUri(accountId: string): vscode.Uri {
+  return vscode.Uri.parse(`${HIVEKU_SCHEME}:/account-memory/${accountId}/${ACCOUNT_MEMORY_FILE}`);
+}
+
 interface ParsedUri {
-  kind: 'env' | 'cms' | 'memory';
+  kind: 'env' | 'cms' | 'memory' | 'account-memory';
   accountId: string;
   projectId?: string;
   collectionId?: string;
@@ -77,6 +97,9 @@ function parse(uri: vscode.Uri): ParsedUri {
   }
   if (kind === 'memory' && parts.length >= 4) {
     return { kind, accountId: parts[1], memoryId: parts[2] };
+  }
+  if (kind === 'account-memory' && parts.length >= 3 && parts[1]) {
+    return { kind, accountId: parts[1] };
   }
   throw vscode.FileSystemError.FileNotFound(uri);
 }
@@ -110,19 +133,28 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
   /** uri → last read/write time; stat() must NOT invent a new mtime per call. */
   private readonly mtimes = new Map<string, number>();
 
-  constructor(private readonly clientFor: ClientFor) {}
+  constructor(
+    private readonly clientFor: ClientFor,
+    private readonly appUrlFor: AppUrlFor = () => DEFAULT_APP_URL,
+  ) {}
+
+  private dashboardUrl(accountId: string): string {
+    return accountMemoryDashboardUrl(this.appUrlFor(), accountId);
+  }
 
   watch(): vscode.Disposable {
     return new vscode.Disposable(() => undefined);
   }
 
   stat(uri: vscode.Uri): vscode.FileStat {
-    parse(uri); // validates the shape (throws FileNotFound on garbage)
+    const p = parse(uri); // validates the shape (throws FileNotFound on garbage)
     return {
       type: vscode.FileType.File,
       ctime: 0,
       mtime: this.mtimes.get(uri.toString()) ?? 0,
       size: this.sizes.get(uri.toString()) ?? 0,
+      // The editor opens it locked ("Cannot edit in read-only editor").
+      ...(p.kind === 'account-memory' ? { permissions: vscode.FilePermission.Readonly } : {}),
     };
   }
 
@@ -156,6 +188,13 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
       }
     } else if (p.kind === 'cms') {
       text = await this.readCmsEntry(client, p);
+    } else if (p.kind === 'account-memory') {
+      const mem = await fetchAccountMemory(client);
+      text = renderAccountMemoryDocument(mem, {
+        accountId: p.accountId,
+        fetchedAt: new Date().toISOString(),
+        appUrl: this.appUrlFor(),
+      });
     } else {
       const entry = await api.memoryGet(client, p.memoryId!);
       if (!entry) throw vscode.FileSystemError.FileNotFound(uri);
@@ -193,6 +232,16 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
 
   async writeFile(uri: vscode.Uri, content: Uint8Array): Promise<void> {
     const p = parse(uri);
+    if (p.kind === 'account-memory') {
+      // Refused BEFORE any client or tool call: there is nothing to save it with,
+      // and a save that returned quietly would look like it had worked.
+      const url = this.dashboardUrl(p.accountId);
+      const message = accountMemoryReadOnlyMessage(url);
+      void vscode.window.showErrorMessage(message, 'Edit on the dashboard').then((pick) => {
+        if (pick === 'Edit on the dashboard') void vscode.env.openExternal(vscode.Uri.parse(url));
+      });
+      throw vscode.FileSystemError.NoPermissions(message);
+    }
     const client = await this.clientFor(p.accountId);
     const text = dec.decode(content);
     try {
@@ -271,9 +320,13 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
 }
 
 /** Register the provider once at activation. */
-export function registerHivekuFs(context: vscode.ExtensionContext, clientFor: ClientFor): void {
+export function registerHivekuFs(
+  context: vscode.ExtensionContext,
+  clientFor: ClientFor,
+  appUrlFor: AppUrlFor = () => DEFAULT_APP_URL,
+): void {
   context.subscriptions.push(
-    vscode.workspace.registerFileSystemProvider(HIVEKU_SCHEME, new HivekuFileSystem(clientFor), {
+    vscode.workspace.registerFileSystemProvider(HIVEKU_SCHEME, new HivekuFileSystem(clientFor, appUrlFor), {
       isCaseSensitive: true,
     }),
   );

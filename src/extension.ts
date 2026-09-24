@@ -69,7 +69,9 @@ import {
   walkFiles,
   type ProjectLink,
 } from './workspace';
-import { registerHivekuFs, envUri } from './platformFs';
+import { registerHivekuFs, envUri, accountMemoryUri } from './platformFs';
+import { refreshAccountMemoryCopy, accountMemoryDashboardUrl, type AccountMemoryCopyResult } from './accountMemory';
+import { ACCOUNT_MEMORY_OPEN_COMMAND, ACCOUNT_MEMORY_DASHBOARD_COMMAND } from './consoleTree';
 import { openDatabasePanel } from './databasePanel';
 
 let accounts: AccountStore;
@@ -491,6 +493,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.showEnvLogs', (node) => showEnvLogsForNode(node)),
     vscode.commands.registerCommand('hiveku.envLogs', () => withScm((s) => envLogsForScm(s))),
     vscode.commands.registerCommand('hiveku.consoleOpen', (arg) => openConsoleFocused(arg)),
+    vscode.commands.registerCommand(ACCOUNT_MEMORY_OPEN_COMMAND, (arg) => openAccountMemory(arg)),
+    vscode.commands.registerCommand(ACCOUNT_MEMORY_DASHBOARD_COMMAND, (arg) => editAccountMemoryOnDashboard(arg)),
     vscode.commands.registerCommand('hiveku.openProjectEnv', (node) => openProjectEnv(node)),
     vscode.commands.registerCommand('hiveku.projectDatabase', (node) => openProjectDatabase(node)),
     vscode.commands.registerCommand('hiveku.refreshConsole', () => {
@@ -511,7 +515,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   // hiveku: virtual documents (.env secrets, CMS entries, memory) — editor-native CRUD.
-  registerHivekuFs(context, clientForAccount);
+  registerHivekuFs(context, clientForAccount, appUrl);
   // A saved CMS/memory doc should reflect in the open console tab behind it.
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((doc) => {
@@ -1663,6 +1667,8 @@ async function downloadEverything(node?: { record?: AccountRecord }): Promise<vo
         deptCount = results.length;
         deptDatasetsFailed = failedDatasets(results).length;
         deptAllFailed = everyDepartmentFailed(results);
+        progress.report({ message: 'account memory' });
+        await saveAccountMemoryCopy(client, record, dir);
         await ensureDataGitignored(dir).catch(() => undefined);
       },
     );
@@ -1858,6 +1864,58 @@ async function workspaceFolderForAccount(accountId: string): Promise<string | un
 }
 
 /**
+ * Refresh the read-only local copy at hiveku-data/account/ACCOUNT_MEMORY.md and
+ * record the result in hiveku-data/STATUS.json (an `account_memory` block, and
+ * a `failed` entry while the read fails), the same way the plugin's pull does.
+ * Never fatal to the download it rides on (an older MCP server has no
+ * account_memory_get): a failure keeps the previous copy and is also logged.
+ */
+async function saveAccountMemoryCopy(
+  client: HivekuMcpClient,
+  account: AccountRecord,
+  dir: string,
+): Promise<AccountMemoryCopyResult> {
+  const result = await refreshAccountMemoryCopy(client, dir, { accountId: account.accountId, appUrl: appUrl() });
+  if (!result.ok) {
+    log.appendLine(
+      `[account memory] ${account.label}: not saved${result.kept ? ' (kept the previous copy)' : ''}: ${result.error}`,
+    );
+  }
+  return result;
+}
+
+/** Open the account memory as a read-only document (live from Hiveku). */
+async function openAccountMemory(arg?: { record?: AccountRecord }): Promise<void> {
+  const record = arg?.record ?? (await accounts.pick('Open the account memory for which account?'));
+  if (!record) return;
+  try {
+    const doc = await vscode.workspace.openTextDocument(accountMemoryUri(record.accountId));
+    await vscode.window.showTextDocument(doc, { preview: true });
+  } catch (err) {
+    vscode.window.showErrorMessage(`Could not open the account memory for ${record.label}: ${errMsg(err)}`);
+  }
+}
+
+/**
+ * Owners and admins edit the account memory on the dashboard; open it there.
+ * Called from the tree (a node carrying `record`), from the read-only editor's
+ * title bar (the document's hiveku:/account-memory/<accountId>/... URI), or
+ * from the palette (asks which account).
+ */
+async function editAccountMemoryOnDashboard(arg?: { record?: AccountRecord } | vscode.Uri): Promise<void> {
+  let accountId: string | undefined;
+  if (arg instanceof vscode.Uri) {
+    const seg = arg.path.replace(/^\/+/, '').split('/');
+    if (arg.scheme === 'hiveku' && seg[0] === 'account-memory') accountId = seg[1];
+  } else {
+    accountId = arg?.record?.accountId;
+  }
+  if (!accountId) accountId = (await accounts.pick('Edit the account memory for which account?'))?.accountId;
+  if (!accountId) return;
+  await vscode.env.openExternal(vscode.Uri.parse(accountMemoryDashboardUrl(appUrl(), accountId)));
+}
+
+/**
  * Download a department's operational data (SEO rankings/backlinks, CRM, ads, …)
  * to `hiveku-data/<dept>/*.json` in the account's own folder, so Claude Code can
  * analyze it locally like project code. Gated to the account's entitled departments.
@@ -1918,8 +1976,13 @@ async function downloadData(node: { record: AccountRecord } | undefined, only?: 
     const client = await clientForAccount(account.accountId);
     const results = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Downloading ${account.label} data…` },
-      (progress) =>
-        exportDepartments(client, chosen, baseDir, account.label, (m) => progress.report({ message: m })),
+      async (progress) => {
+        const out = await exportDepartments(client, chosen, baseDir!, account.label, (m) => progress.report({ message: m }));
+        // A full data download also refreshes the read-only account memory copy;
+        // a single-department download leaves it alone.
+        if (!only) await saveAccountMemoryCopy(client, account, baseDir!);
+        return out;
+      },
     );
     await ensureDataGitignored(baseDir);
     const total = results.reduce((n, d) => n + d.datasets.reduce((m, x) => m + x.count, 0), 0);

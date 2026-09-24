@@ -17,6 +17,7 @@ import { writeRoleSlashCommands, roleClaudeMdBlock, MULTI_SESSION_BLOCK } from '
 import { roleById } from './roles';
 import { writeDataRunner } from './dataRunner';
 import { writeAgencySkills } from './agencySkills';
+import { isAccountMemoryDomain, ACCOUNT_MEMORY_READONLY_GLOB } from './accountMemory';
 
 /** memory `type` → local folder (matches hiveku-sync TYPE_TO_FOLDER). */
 export const TYPE_TO_FOLDER: Record<string, string> = {
@@ -118,6 +119,11 @@ export async function fetchKnowledge(client: HivekuMcpClient): Promise<Knowledge
       continue; // a type may be unavailable on some profiles
     }
     for (const raw of entries) {
+      // The account memory is not a department's memory and has no save path
+      // here (owners edit it on the dashboard). Current servers never list it;
+      // an older one would have filed `account` as a department and written the
+      // owner's document out as an ordinary, apparently editable entry.
+      if (isAccountMemoryDomain(raw.domain)) continue;
       const department = departmentOf(raw);
       const entry: KnowledgeEntry = { ...raw, type, department };
       if (!index.has(department)) index.set(department, new Map());
@@ -440,6 +446,11 @@ const HIVEKU_ALLOW: string[] = [
   // match the *_get / *_list globs above; _env_bindings matches neither.)
   'mcp__hiveku__project_vcs_env_bindings',
   'mcp__hiveku__account_context_get',
+  // account_memory_get is already a read under '*_get'; named so the pair is
+  // explicit. account_memory_append is NOT listed and matches no glob here:
+  // it suggests a line every department agent reads until an owner reviews
+  // it, so it keeps prompting (it is on the plugin's ask list too).
+  'mcp__hiveku__account_memory_get',
   'mcp__hiveku__project_files_search',
   'mcp__hiveku__project_files_bulk_get',
   'mcp__hiveku__project_deploy_preflight',
@@ -938,15 +949,24 @@ allowed-tools: mcp__hiveku__memory_create, mcp__hiveku__memory_update, mcp__hive
 ---
 Record a learning to Hiveku so every department stays in sync. ${idLine}
 
-1. Pick the department this memory belongs to. Memory domains are a FREE-FORM label — use the one the
-   account already uses: call \`memory_list\` and reuse an existing \`domain\` value rather than inventing
-   one, or a plain slug like \`dev\` / \`marketing\` / \`sales\` / \`seo\` / \`helpdesk\` if none fits.
-   Do NOT use \`list_departments\` for this — it returns the CHAT-agent domains, a different and smaller
-   vocabulary, and picking from it will split your memory across two naming schemes.
-2. Check for an existing entry to refine: \`memory_list({ domain: "<department>" })\`.
-3. Write it: \`memory_create({ type: "memory", name: "<department>", content })\` — \`content\` is concise markdown:
-   what you did, what you learned, why it matters, how to apply next time. On a 409 (already exists) use
-   \`memory_update\` instead of duplicating.
+Each department's memory is ONE document, and \`memory_update\` replaces the WHOLE of it: sending only
+today's note deletes everything the department had. So always read, merge, then write.
+
+1. Pick the department. The domain is NOT free-form; use one of
+   \`marketing\`, \`content\`, \`seo\`, \`social\`, \`ppc\`, \`outbound\`, \`branding\`, \`customer_avatar\`, \`customer_journey\`,
+   \`website_design\`, \`knowledge_base\`, \`workflow\`, \`before_after_grid\`, \`email\`, \`sales\`, \`helpdesk\`, \`production\`,
+   \`accounting\`, \`comms\`, \`coder\`, \`orchestrator\`.
+   Anything else (\`dev\`, \`crm\`, \`pm\`, \`analytics\`, \`web\`) is saved but never reaches
+   any agent. Code and site work goes under \`coder\`.
+2. Read the current document: \`memory_list({ domain: "<department>" })\`. Its \`content\` is the WHOLE
+   department memory.
+3. Merge: add your note (what you did, what you learned, why it matters, how to apply next time) to that
+   full text. If today proved an existing line wrong, fix that line instead of adding a contradiction.
+4. Send the whole merged document: \`memory_update({ memory_id, content })\`. Only when step 2 found no
+   entry, \`memory_create({ type: "memory", name: "<department>", content })\`; a 409 there means someone
+   created it meanwhile, so go back to step 2, read and merge. Never overwrite.
+The account memory (\`hiveku-data/account/ACCOUNT_MEMORY.md\`) is read-only: owners edit it on the Hiveku
+dashboard. To propose one line for it, use \`account_memory_append\`.
 The local \`memory/<dept>/\` files are only a mirror — Hiveku is the source of truth, and persisting here is
 what brings the other departments + dashboard agents up to speed.
 `,
@@ -1269,6 +1289,17 @@ export async function writeWindowIdentity(
   // folder to GitHub. Only set when the user hasn't chosen; a dev who genuinely
   // wants Git can flip it back. The Hiveku SCM provider is unaffected by this.
   if (settings['git.enabled'] === undefined) settings['git.enabled'] = false;
+  // The local account memory copy (hiveku-data/account/) opens read-only: it is
+  // edited on the Hiveku dashboard and nothing uploads it. Added beside any
+  // patterns the user set; a user's explicit false for it wins.
+  const readonlyInclude =
+    settings['files.readonlyInclude'] && typeof settings['files.readonlyInclude'] === 'object'
+      ? (settings['files.readonlyInclude'] as Record<string, unknown>)
+      : {};
+  if (readonlyInclude[ACCOUNT_MEMORY_READONLY_GLOB] === undefined) {
+    readonlyInclude[ACCOUNT_MEMORY_READONLY_GLOB] = true;
+    settings['files.readonlyInclude'] = readonlyInclude;
+  }
   // Claude Code autonomy — WORKSPACE-SCOPED. The Claude Code VS Code extension
   // reads its OWN settings (not .claude/settings.json), and because these live in
   // THIS folder's .vscode/settings.json they apply only while this Hiveku
@@ -1425,11 +1456,15 @@ Manager), NOT in the code, and is injected into the deployed Lambdas + Fly previ
 ### Keep Hiveku in sync — it is the source of truth (memory + PM)
 Hiveku, NOT your local files, is the system of record. After meaningful work, write back so every
 department and the dashboard agents stay current — don't let what you learned or did live only on disk.
-- **Department memory:** capture what you learned / did / decided into the RIGHT department's memory:
-  \`memory_create({ type: "memory", name: "<department>", content })\` (\`name\` is the department/domain,
-  e.g. \`"seo"\`, \`"marketing"\`, \`"dev"\`; \`content\` is markdown — what you did, what you learned, why it
-  matters, how to apply next time). It returns 409 if it already exists → \`memory_update\` instead; check
-  first with \`memory_list\`. The local \`memory/<dept>/*.md\` files are a MIRROR — persisting to Hiveku is
+- **Department memory:** capture what you learned / did / decided into the RIGHT department's memory.
+  Each department has ONE document and \`memory_update\` replaces all of it, so read it
+  (\`memory_list({ domain: "<department>" })\`), merge your note (what you did, what you learned, why it
+  matters, how to apply next time) into the full text, then send the whole document with
+  \`memory_update({ memory_id, content })\`. Only when none exists, \`memory_create({ type: "memory", name:
+  "<department>", content })\`; a 409 means one does, so read and merge. The domain is not free-form: use a
+  department such as \`seo\`, \`marketing\`, \`sales\` or \`coder\` (code and site work); \`dev\` is saved
+  but never reaches any agent. The account memory is read-only: suggest a line with
+  \`account_memory_append\`. The local \`memory/<dept>/*.md\` files are a MIRROR — persisting to Hiveku is
   what keeps all departments up to speed. \`/hiveku-remember\` wraps this.
 ### Work tracking — PM tasks are REQUIRED, and attributed to YOU (the authenticated user)
 **If the work isn't documented in a PM task, it didn't happen.** This applies to EVERY department
@@ -1956,7 +1991,8 @@ It reports, per knowledge item:
 - \`changed_remote\` — updated on Hiveku since you pulled (local is STALE → re-download)
 - \`new_remote\` — exists on Hiveku, not pulled yet
 - \`deleted_remote\` — gone on Hiveku but still local
-- \`locally_modified\` — you edited the local file (push via \`memory_update\` to persist)
+- \`locally_modified\` — you edited the local file (to persist, merge it into the current Hiveku copy
+  from \`memory_list\` and send the whole document with \`memory_update\`)
 If that file is missing or old, re-run the sync check or re-download from the sidebar.
 Local memory files are read-only as far as Hiveku is concerned — persist changes with
 \`memory_create\` / \`memory_update\` / \`memory_delete\`, then re-download.
@@ -2123,8 +2159,12 @@ allowed-tools: mcp__hiveku__account_context_get
 ---
 Load account context FIRST (the MCP server requires this before generating copy/plans).
 Call \`account_context_get({ domain: "$ARGUMENTS" })\` (omit domain to use the account default) and
-summarize: identity/persona, brand voice, customer avatars, and the most relevant domain memory +
-skills/rules. Keep this in mind for everything that follows.
+summarize: identity/persona, brand voice, customer avatars, the account memory (its \`account\`
+section), and the most relevant domain memory + skills/rules. Keep this in mind for everything that
+follows. The account memory is what the owners wrote about the business, plus suggested lines no
+owner has reviewed yet (treat those as unconfirmed); it is internal, so never quote it to customers.
+Owners and admins edit it on the Hiveku dashboard (Account memory); no tool changes it, and
+\`account_memory_append\` only suggests one line for them to keep or remove.
 `,
     'hiveku-chat': `---
 description: Run a department's server-side agent (full brand/memory) for strategy or copy.

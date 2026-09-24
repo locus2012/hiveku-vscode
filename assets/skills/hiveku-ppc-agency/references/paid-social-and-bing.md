@@ -119,6 +119,8 @@ missing goal.
 
 Fix immediately on local-service accounts. On national ecommerce `in_or_searching` is often correct: check the shipping footprint first.
 
+**AI Max writes ad copy nobody approved.** Microsoft turns AI Max on by default for a new Search campaign, and its "text customization" (the owner calls it automatically generated text) writes headlines from the landing page, so a client's banned claims can appear in live ads. `ppc_bing_push_campaign` now creates campaigns with it off and says so in `ai_settings`; any other campaign (made before 2026-09-24, in the Microsoft UI, by a Google import, or a push that reported `applied: false`) gets `ppc_bing_campaign_ai_settings_get` before enabling. To turn it off: `ppc_bing_campaign_ai_settings_set` with `auto_generated_text: false`, `ai_max: false`, and `rsa_auto_generated_assets: false` when the get reports that legacy flag. Report `after`, not what you asked for, and treat `verified: false` or any `collateral_changes` as a problem to raise, not a success. Turning AI Max on is a per-campaign decision with the client's yes.
+
 **The partner-network half of the same leak.** Ad groups default to Microsoft's entire network (search partners included). `ppc_bing_ad_group_update` with `network: "microsoft_sites_and_select_traffic"` sets "Microsoft sites and select traffic", one ad group per call and every ad group in the campaign, not just the ones you looked at. The same tool renames an ad group. Nothing reads an ad group's network back except `ppc_bing_change_history`, so confirm it there.
 
 ## 9. Play: Bing waste mining and shared negatives
