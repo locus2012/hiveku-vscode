@@ -174,8 +174,10 @@ Two invariants first. (1) **Bindings decide which tree a tier ships**, never the
   `project_checkpoint_get` to inspect it, and `project_checkpoint_restore_dry_run` BEFORE
   `project_checkpoint_restore` - always dry-run a restore first so you see exactly what it
   will change. Restore is ADDITIVE: it overwrites current files from the snapshot but never
-  removes a file that exists now and was not in the checkpoint. Never re-run a restore as
-  verification; verify by reading files and building.
+  removes a file that exists now and was not in the checkpoint. It leaves the live database
+  alone unless you pass `restore_database: true` (only when the user explicitly asks for their
+  data back; the dry run's `database` section says whether the checkpoint holds a copy). Never
+  re-run a restore as verification; verify by reading files and building.
 
 ## Point-in-time restore (a regression with no nearby checkpoint)
 
