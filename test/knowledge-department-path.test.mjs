@@ -4,7 +4,8 @@
  * caller on the account can write. Only a plain lowercase name may become a
  * directory (or part of a .claude/commands file name); any other domain files
  * under general, and nothing is written, or deleted, outside the account
- * folder.
+ * folder. The file name comes from the same stored data, so one that names a
+ * Windows device is renamed, and a row the disk refuses does not stop the rest.
  *
  * Hostile names are assembled from parts at run time and referred to by
  * placeholder ("a traversal name", "an absolute name").
@@ -166,6 +167,102 @@ describe('knowledge download', () => {
     const manifest = JSON.parse(await fs.readFile(path.join(rootDir, '.hiveku', 'knowledge-manifest.json'), 'utf8'));
     assert.deepEqual(Object.keys(manifest.entries), ['seo']);
   });
+
+  test('safeFileStem renames a stem that names a Windows device and keeps every other stem', () => {
+    assert.equal(knowledge.safeFileStem('com1'), 'com1-entry');
+    assert.equal(knowledge.safeFileStem('nul'), 'nul-entry');
+    // The part before the first dot decides, so the suffix goes there.
+    assert.equal(knowledge.safeFileStem('nul.txt'), 'nul-entry.txt');
+    assert.equal(knowledge.safeFileStem('lpt9.x.y'), 'lpt9-entry.x.y');
+    for (const stem of ['con', 'prn', 'aux', 'nul', 'com0', 'com9', 'lpt0', 'lpt9', 'nul.txt', 'con.md']) {
+      assert.equal(knowledge.WINDOWS_DEVICE_NAME.test(`${knowledge.safeFileStem(stem)}.md`), false, stem);
+    }
+    // Negative control: near-names and ordinary stems are unchanged.
+    for (const stem of ['console', 'null', 'auxiliary', 'com10', 'lpt', 'connect', 'prn-team', 'keyword-strategy', 'unnamed']) {
+      assert.equal(knowledge.safeFileStem(stem), stem);
+    }
+  });
+
+  test('an entry whose file name would be a Windows device is written under a safe name, and later downloads agree', async () => {
+    const { rootDir } = await layout();
+    const client = listingClient({
+      memory: [
+        // A plain memory row: the server sets its name to its domain.
+        { id: 'd1', name: 'com1', domain: 'com1', content: 'device-named domain', version: 1 },
+        // Negative controls: near-names keep their own folder and file name.
+        { id: 'n1', name: 'console', domain: 'console', content: 'near-name', version: 1 },
+        { id: 'n2', name: 'com10', domain: 'com10', content: 'near-name', version: 1 },
+      ],
+      skill: [{ id: 'd2', name: 'nul', domain: '_skill:nul', content: 'device-named skill', version: 1 }],
+    });
+
+    const failed = [];
+    assert.equal(await knowledge.writeEntries(rootDir, knowledge.selectEntries(await knowledge.fetchKnowledge(client)), failed), 4);
+    assert.deepEqual(failed, []);
+    const deviceFile = path.join(rootDir, 'memory', 'general', 'com1-entry.md');
+    const skillFile = path.join(rootDir, 'skills', 'general', 'nul-entry.md');
+    assert.match(await fs.readFile(deviceFile, 'utf8'), /device-named domain/);
+    assert.match(await fs.readFile(skillFile, 'utf8'), /device-named skill/);
+    assert.match(await fs.readFile(path.join(rootDir, 'memory', 'console', 'console.md'), 'utf8'), /near-name/);
+    await fs.access(path.join(rootDir, 'memory', 'com10', 'com10.md'));
+    const filesAfterFirst = (await listFiles(rootDir)).sort();
+    for (const file of filesAfterFirst) {
+      assert.equal(knowledge.WINDOWS_DEVICE_NAME.test(path.basename(file)), false, `device-named file: ${path.relative(rootDir, file)}`);
+    }
+    const manifest = JSON.parse(await fs.readFile(path.join(rootDir, '.hiveku', 'knowledge-manifest.json'), 'utf8'));
+    assert.equal(manifest.entries.com1.file, 'memory/general/com1-entry.md');
+    assert.equal(manifest.entries['_skill:nul'].file, 'skills/general/nul-entry.md');
+
+    // The next download writes the same files: nothing added beside them.
+    assert.equal(await knowledge.writeEntries(rootDir, knowledge.selectEntries(await knowledge.fetchKnowledge(client))), 4);
+    assert.deepEqual((await listFiles(rootDir)).sort(), filesAfterFirst);
+
+    // The status check reads the files the manifest names: all four are in sync.
+    const status = await knowledge.computeSyncStatus(client, rootDir);
+    assert.equal(status.in_sync, 4);
+    assert.deepEqual([status.missing_local, status.locally_modified, status.deleted_remote], [[], [], []]);
+  });
+
+  test('a row the disk refuses is reported and the rest of the download still lands', async () => {
+    const { rootDir } = await layout();
+    const row = (id, name, domain, department, content, version, type = 'memory') => ({ id, name, domain, content, version, type, department });
+    const seoFile = path.join(rootDir, 'memory', 'seo', 'keyword-strategy.md');
+    await knowledge.writeEntries(rootDir, [
+      row('m1', 'Keyword strategy', 'seo', 'seo', 'first', 1),
+      row('m2', 'Pipeline rules', 'sales', 'sales', 'first', 1),
+    ]);
+    const manifestPath = path.join(rootDir, '.hiveku', 'knowledge-manifest.json');
+    const first = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+
+    // Two rows this disk cannot take: a department folder that cannot be
+    // created (a file is in the way), and an entry file that cannot be written
+    // (a folder is in the way). Both come first, so the rest shows the download
+    // carried on.
+    await fs.writeFile(path.join(rootDir, 'memory', 'ppc'), 'in the way', 'utf8');
+    await fs.rename(seoFile, seoFile + '.kept');
+    await fs.mkdir(seoFile);
+    const failed = [];
+    const n = await knowledge.writeEntries(
+      rootDir,
+      [
+        row('m3', 'Bid notes', 'ppc', 'ppc', 'second', 1),
+        row('m1', 'Keyword strategy', 'seo', 'seo', 'second', 2),
+        row('m2', 'Pipeline rules', 'sales', 'sales', 'second', 2),
+        row('r1', 'No emojis', 'email', 'email', 'never', 1, 'rule'),
+      ],
+      failed,
+    );
+
+    assert.equal(n, 2);
+    assert.deepEqual(failed, ['ppc', 'seo']);
+    assert.match(await fs.readFile(path.join(rootDir, 'memory', 'sales', 'pipeline-rules.md'), 'utf8'), /second/);
+    await fs.access(path.join(rootDir, 'rules', 'email', 'no-emojis.md'));
+    // A write that failed is not a deletion: the last download's row is kept.
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+    assert.deepEqual(manifest.entries.seo, first.entries.seo);
+    assert.equal(Object.hasOwn(manifest.entries, 'ppc'), false);
+    assert.equal(manifest.entries.sales.version, 2);
+  });
 });
 
 describe('account command sync', () => {
@@ -216,6 +313,34 @@ describe('account command sync', () => {
     assert.equal(await exists(path.join(rootDir, ownedRel)), false);
     const manifest = JSON.parse(await fs.readFile(path.join(rootDir, '.hiveku', 'synced-commands.json'), 'utf8'));
     assert.deepEqual(manifest.files, {});
+  });
+
+  test('a command or agent whose slug names a Windows device keeps the file name older builds gave it', async () => {
+    const { rootDir } = await layout();
+    const index = new Map([
+      [
+        'general',
+        new Map([
+          ['command', [{ id: 'c1', domain: '_command:nul', name: 'Nul', content: 'run it', type: 'command', department: 'general' }]],
+          ['agent', [{ id: 'a1', domain: '_agent:con', name: 'Con', content: 'be it', type: 'agent', department: 'general' }]],
+        ]),
+      ],
+    ]);
+    const first = await commandSync.syncAccountCommands(index, rootDir);
+    // No file the sync writes is named like a device...
+    for (const rel of first.written) {
+      assert.equal(knowledge.WINDOWS_DEVICE_NAME.test(path.basename(rel)), false, `device-named file: ${rel}`);
+    }
+    // ...and the "hiveku-" prefix keeps these names as they were, so a folder
+    // synced by an older build keeps its files and slash commands.
+    assert.deepEqual(first.written, [
+      path.join('.claude', 'commands', 'hiveku-general-nul.md'),
+      path.join('.claude', 'agents', 'hiveku-con.md'),
+    ]);
+    const again = await commandSync.syncAccountCommands(index, rootDir);
+    assert.deepEqual([again.written, again.removed, again.skippedLocalEdits], [[], [], []]);
+    assert.deepEqual(await fs.readdir(path.join(rootDir, '.claude', 'commands')), ['hiveku-general-nul.md']);
+    assert.deepEqual(await fs.readdir(path.join(rootDir, '.claude', 'agents')), ['hiveku-con.md']);
   });
 });
 

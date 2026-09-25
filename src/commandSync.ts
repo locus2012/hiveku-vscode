@@ -24,9 +24,18 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { type KnowledgeEntry, type KnowledgeIndex, isInsideRoot, selectEntries } from './knowledge';
+import { type KnowledgeEntry, type KnowledgeIndex, isInsideRoot, safeFileStem, selectEntries } from './knowledge';
 
 const MANIFEST = path.join('.hiveku', 'synced-commands.json');
+
+/**
+ * A file under .claude/<dir>/. The "hiveku-" prefix already keeps every stem
+ * off the Windows device names; safeFileStem is the backstop for any future
+ * name shape, and a no-op for today's, so no synced path changes.
+ */
+function claudeFile(dir: 'commands' | 'agents', stem: string): string {
+  return path.join('.claude', dir, `${safeFileStem(stem)}.md`);
+}
 
 interface ManifestFile {
   files: Record<string, { domain: string; content_sha: string; synced_at: string }>;
@@ -113,15 +122,15 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
   for (const entry of selectEntries(index, { type: 'command' })) {
     const slug = slugFromDomain(entry, '_command:');
     const dept = entry.department || 'general';
-    let rel = path.join('.claude', 'commands', `hiveku-${dept}-${slug}.md`);
+    let rel = claudeFile('commands', `hiveku-${dept}-${slug}`);
     // Slug collision after normalization: suffix by domain hash.
-    if (remote.has(rel)) rel = path.join('.claude', 'commands', `hiveku-${dept}-${slug}-${sha(entry.domain || slug).slice(0, 6)}.md`);
+    if (remote.has(rel)) rel = claudeFile('commands', `hiveku-${dept}-${slug}-${sha(entry.domain || slug).slice(0, 6)}`);
     remote.set(rel, { domain: entry.domain || `_command:${slug}`, body: renderCommand(entry) });
   }
   for (const entry of selectEntries(index, { type: 'agent' })) {
     const slug = slugFromDomain(entry, '_agent:');
-    let rel = path.join('.claude', 'agents', `hiveku-${slug}.md`);
-    if (remote.has(rel)) rel = path.join('.claude', 'agents', `hiveku-${slug}-${sha(entry.domain || slug).slice(0, 6)}.md`);
+    let rel = claudeFile('agents', `hiveku-${slug}`);
+    if (remote.has(rel)) rel = claudeFile('agents', `hiveku-${slug}-${sha(entry.domain || slug).slice(0, 6)}`);
     remote.set(rel, { domain: entry.domain || `_agent:${slug}`, body: renderAgent(entry, slug) });
   }
 

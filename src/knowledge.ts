@@ -107,6 +107,22 @@ function asDepartment(value: string | null | undefined): string | null {
   return typeof value === 'string' && DEPARTMENT_NAME.test(value) && !WINDOWS_DEVICE_NAME.test(value) ? value : null;
 }
 
+/** Added after the device part of a file stem that names a Windows device. */
+export const DEVICE_STEM_SUFFIX = '-entry';
+
+/**
+ * The same device names are no safer as FILE names: on Windows, `nul.md` or
+ * `com1.md` opens the device, not a file in the folder (the part before the
+ * first dot decides, so `nul.txt.md` does too). An entry's file stem is its
+ * name, and a plain memory row's name is its domain, so stored data picks it.
+ * Such a stem gets DEVICE_STEM_SUFFIX after its device part (com1 becomes
+ * com1-entry, nul.txt becomes nul-entry.txt). The result depends only on the
+ * stem, so every download writes the same file and the manifest records it.
+ */
+export function safeFileStem(stem: string): string {
+  return WINDOWS_DEVICE_NAME.test(stem) ? stem.replace(/^[^.]*/, (head) => head + DEVICE_STEM_SUFFIX) : stem;
+}
+
 export function departmentOf(entry: { domain?: string; content?: string }): string {
   if (entry.domain && !entry.domain.startsWith('_')) return asDepartment(entry.domain) ?? GENERAL;
   // The tag match is case-insensitive; file it lowercased, as the plugin does.
@@ -258,19 +274,32 @@ function keyOf(entry: { domain?: string; type: string }): string {
   return entry.domain ?? `${entry.type}:unknown`;
 }
 
-/** Write entries to <type-folder>/<department>/<name>.md and update the sync manifest. */
-export async function writeEntries(baseDir: string, entries: KnowledgeEntry[]): Promise<number> {
+/**
+ * Write entries to <type-folder>/<department>/<name>.md and update the sync
+ * manifest. Returns how many were written. A row the disk refuses (a folder or
+ * file in the way, a permission error) is skipped and its key is pushed onto
+ * `failed`; the other rows are still written, and the manifest keeps what the
+ * last download recorded for that row, since its file on disk is the old one.
+ */
+export async function writeEntries(baseDir: string, entries: KnowledgeEntry[], failed: string[] = []): Promise<number> {
   const manifest = (await readManifest(baseDir)) ?? { synced_at: '', entries: {} };
   const now = new Date().toISOString();
   let written = 0;
   for (const entry of entries) {
     const folder = TYPE_TO_FOLDER[entry.type] ?? entry.type;
-    const rel = path.join(folder, entry.department, `${safeSlug(entry.name)}.md`);
+    const rel = path.join(folder, entry.department, `${safeFileStem(safeSlug(entry.name))}.md`);
     // Entries reach here from fetchKnowledge (department already shaped) or
     // from any other caller; either way nothing is written outside baseDir.
     if (!isInsideRoot(baseDir, path.join(baseDir, rel))) continue;
     const rendered = renderEntry(entry);
-    await writeAtomic(path.join(baseDir, rel), rendered);
+    try {
+      await writeAtomic(path.join(baseDir, rel), rendered);
+    } catch {
+      // One row must not abort the download of every other row (and, in
+      // Download Everything, the command sync, sites and department data).
+      failed.push(keyOf(entry));
+      continue;
+    }
     manifest.entries[keyOf(entry)] = {
       id: entry.id,
       type: entry.type,
