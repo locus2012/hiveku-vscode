@@ -28,6 +28,18 @@ import type {
   WorkflowValidationIssue,
 } from './hivekuApi';
 import type { HivekuMcpClient } from './mcpClient';
+import {
+  ASSISTANT_KNOWLEDGE_PROMPT,
+  ASSISTANT_KNOWLEDGE_TOOL,
+  ASSISTANT_SETTINGS_SUB,
+  assistantKnowledgeRows,
+} from './assistantKnowledge';
+import {
+  TICKET_SUBJECT_FENCE_SOURCE,
+  UNTRUSTED_PROMPT_NOTE,
+  displayUntrusted,
+  fencedForAgent,
+} from './untrustedText';
 
 const open = (label = 'Open in Hiveku', sub?: string) =>
   ({ id: 'open', label, kind: 'open' as const, ...(sub ? { sub } : {}) });
@@ -345,6 +357,70 @@ const EMAIL_SEND_NOW: ActionSpec = {
   },
 };
 
+// ============================================================
+// Ticket subjects arrive FENCED. Since 2026-09-24 the Olympus API wraps every
+// helpdesk subject in <untrusted_external_content source="helpdesk_ticket_subject">
+// because a stranger wrote it (an email subject line, a chat visitor's first
+// message) and AI agents read the same answer.
+//
+// A person reading the list sees the words: each row gets display_title with
+// the fence stripped, and that is the title the panel lists, filters on and
+// names in its modals. The raw subject stays on the row untouched, and "Copy
+// for Claude" builds its prompt from it with the fence kept (or added, if an
+// older server sent it bare) plus one line saying what the fence means. The
+// stripped text never goes to an AI. See untrustedText.ts.
+// ============================================================
+
+const isRow = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+/** First array property whose elements are objects (preferred), else the first array: the panel engine's rule. */
+function firstObjectArray(obj: Record<string, unknown>): unknown[] | undefined {
+  let fallback: unknown[] | undefined;
+  for (const value of Object.values(obj)) {
+    if (!Array.isArray(value)) continue;
+    if (value.length && typeof value[0] === 'object' && value[0] !== null) return value;
+    fallback ??= value;
+  }
+  return fallback;
+}
+
+/**
+ * The row array from a list tool's answer, found the way the panel engine
+ * finds it ([...], { data: [...] }, { data: { tickets: [...] } }). A shape it
+ * cannot read throws: zero rows from it would render as a quiet inbox.
+ */
+function listToolRows(raw: unknown, tool: string): unknown[] {
+  const inner = isRow(raw) && 'data' in raw ? raw.data : raw;
+  if (Array.isArray(inner)) return inner;
+  const nested = (isRow(inner) && firstObjectArray(inner)) || (isRow(raw) && firstObjectArray(raw));
+  if (nested) return nested;
+  if (inner === null || inner === undefined || (isRow(inner) && Object.keys(inner).length === 0)) return [];
+  throw new Error(`Could not read the response from ${tool}. This is a display fault, not an empty list: the tickets may exist.`);
+}
+
+/** Ticket rows with display_title: the subject (or title) as a person reads it. Everything else is untouched. */
+export const helpdeskTicketRows =
+  (tool: string) =>
+  (raw: unknown): Array<Record<string, unknown>> =>
+    listToolRows(raw, tool)
+      .filter(isRow)
+      .map((ticket) => ({ ...ticket, display_title: displayUntrusted(ticket.subject) || displayUntrusted(ticket.title) }));
+
+const TICKET_TITLE_KEYS = ['display_title', 'subject', 'title'];
+
+/** "Copy for Claude" on a ticket: the subject stays fenced, and the prompt says what the fence means. */
+export function ticketCopyPrompt(row: Record<string, unknown>): string {
+  const id = String(row.id ?? row.ticket_id ?? '');
+  const subject = fencedForAgent(asString(row.subject) || asString(row.title), TICKET_SUBJECT_FENCE_SOURCE);
+  return [
+    subject ? `In Hiveku, handle helpdesk ticket ${id}. Its subject:` : `In Hiveku, handle helpdesk ticket ${id}.`,
+    ...(subject ? [subject] : []),
+    UNTRUSTED_PROMPT_NOTE,
+    `Load it with helpdesk_ticket_get({ id: "${id}", include: "messages" }), then draft a reply (send via helpdesk_ticket_send_reply once I approve).`,
+  ].join('\n');
+}
+
 export const MODULES: ModuleSpec[] = [
   {
     id: 'crm',
@@ -459,7 +535,8 @@ export const MODULES: ModuleSpec[] = [
         label: 'Open tickets',
         tool: 'helpdesk_ticket_list',
         args: { status: 'open' },
-        titleKeys: ['subject', 'title'],
+        transform: helpdeskTicketRows('helpdesk_ticket_list'),
+        titleKeys: TICKET_TITLE_KEYS,
         fields: [
           { keys: ['status'] },
           { keys: ['priority'] },
@@ -470,15 +547,44 @@ export const MODULES: ModuleSpec[] = [
           { id: 'reply', label: 'Reply', kind: 'tool', tool: 'helpdesk_ticket_send_reply', args: (r) => ({ id: r.id ?? r.ticket_id }), inputs: [{ key: 'body', label: 'Reply message' }] },
           { id: 'status', label: 'Status', kind: 'tool', tool: 'helpdesk_ticket_set_status', args: (r) => ({ id: r.id ?? r.ticket_id }), inputs: [{ key: 'status', label: 'New status', options: ['open', 'pending', 'resolved', 'closed'] }] },
           { id: 'priority', label: 'Priority', kind: 'tool', tool: 'helpdesk_ticket_set_priority', args: (r) => ({ id: r.id ?? r.ticket_id }), inputs: [{ key: 'priority', label: 'Priority', options: ['low', 'normal', 'high', 'urgent'] }] },
-          { id: 'claude', label: 'Copy for Claude', kind: 'copy', copyTemplate: (r) => `In Hiveku, handle helpdesk ticket ${r.id ?? r.ticket_id} — "${r.subject || r.title || ''}". Load it with helpdesk_ticket_get({ id: "${r.id ?? r.ticket_id}", include: "messages" }), then draft a reply (send via helpdesk_ticket_send_reply once I approve).` },
+          { id: 'claude', label: 'Copy for Claude', kind: 'copy', copyTemplate: ticketCopyPrompt },
           chat('knowledge_base', 'Draft reply'),
         ],
         detail: { tool: 'helpdesk_ticket_get', idKeys: ['id', 'ticket_id'], idArg: 'id' },
         empty: 'No open tickets.',
       },
-      { id: 'overdue', label: 'Overdue', tool: 'helpdesk_tickets_overdue', titleKeys: ['subject', 'title'], fields: [{ keys: ['priority'] }], empty: 'Nothing overdue.' },
+      {
+        id: 'overdue',
+        label: 'Overdue',
+        tool: 'helpdesk_tickets_overdue',
+        transform: helpdeskTicketRows('helpdesk_tickets_overdue'),
+        titleKeys: TICKET_TITLE_KEYS,
+        fields: [{ keys: ['priority'] }],
+        empty: 'Nothing overdue.',
+      },
       { id: 'queues', label: 'Queues', tool: 'helpdesk_queues_list', titleKeys: ['name'], empty: 'No queues.' },
       { id: 'macros', label: 'Macros', tool: 'helpdesk_macros_list', titleKeys: ['name', 'title'], empty: 'No macros.' },
+      {
+        // Read-only: what the website chat assistant can answer from. See assistantKnowledge.ts.
+        id: 'assistant',
+        label: 'Website assistant knowledge',
+        tool: ASSISTANT_KNOWLEDGE_TOOL,
+        transform: assistantKnowledgeRows,
+        titleKeys: ['title'],
+        fields: [
+          { keys: ['state'] },
+          { keys: ['amount'] },
+          { keys: ['last_read_at'], label: 'last read', date: true },
+          { keys: ['last_synced_at'], label: 'last synced', date: true },
+          { keys: ['next_read_at'], label: 'next read', date: true },
+          { keys: ['reason'], label: 'why' },
+        ],
+        headerActions: [
+          open('Open assistant settings', ASSISTANT_SETTINGS_SUB),
+          { id: 'claude', label: 'Copy for Claude', kind: 'copy', copyTemplate: () => ASSISTANT_KNOWLEDGE_PROMPT },
+        ],
+        empty: 'The website assistant knowledge status came back empty.',
+      },
     ],
   },
   {
