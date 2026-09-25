@@ -97,6 +97,21 @@ describe('department names', () => {
     assert.equal(knowledge.departmentOf({ domain: '_identity:x', content: `department: ${'t'.repeat(60)}` }), 'general');
   });
 
+  test('a name Windows keeps for a device files under general; near-names are kept', () => {
+    const devices = ['con', 'prn', 'aux', 'nul', 'com0', 'com1', 'com9', 'lpt0', 'lpt1', 'lpt9'];
+    for (const domain of devices) {
+      assert.equal(knowledge.departmentOf({ domain, content: '' }), 'general', `${domain} must file under general`);
+    }
+    // A content tag is lowercased first, so an uppercase device name is caught too.
+    assert.equal(knowledge.departmentOf({ domain: '_command:x', content: '<!-- department: NUL -->' }), 'general');
+    // With an extension it is still a device name on Windows.
+    for (const name of ['nul.txt', 'CON', 'com1.md', 'lpt9.x.y']) assert.equal(knowledge.WINDOWS_DEVICE_NAME.test(name), true, name);
+    // Negative control: names that only start like one are ordinary departments.
+    for (const name of ['console', 'null', 'auxiliary', 'com10', 'lpt', 'connect', 'prn-team']) {
+      assert.equal(knowledge.departmentOf({ domain: name, content: '' }), name);
+    }
+  });
+
   test('isInsideRoot: inside is true; the root itself, a prefix sibling, a climb and an absolute path are not', () => {
     const root = path.join(os.tmpdir(), 'hiveku-root-check');
     assert.equal(knowledge.isInsideRoot(root, path.join(root, 'memory', 'seo', 'a.md')), true);
@@ -201,5 +216,88 @@ describe('account command sync', () => {
     assert.equal(await exists(path.join(rootDir, ownedRel)), false);
     const manifest = JSON.parse(await fs.readFile(path.join(rootDir, '.hiveku', 'synced-commands.json'), 'utf8'));
     assert.deepEqual(manifest.files, {});
+  });
+});
+
+/**
+ * Older builds kept a department tag's case (hiveku-SEO-audit.md); this one
+ * lowercases it (hiveku-seo-audit.md). On a case-insensitive disk, the macOS
+ * and Windows default, those two names are one file, and the first sync after
+ * the upgrade used to delete it as "gone upstream". Each test holds on both
+ * kinds of disk; `insensitive` picks the expectations that differ.
+ */
+describe('account command sync across a department case change', () => {
+  const commandIndex = (department, entry) =>
+    new Map([[department, new Map([['command', [{ ...entry, type: 'command', department }]]])]]);
+  const audit = (content) => ({ id: 'c1', domain: '_command:audit', name: 'Audit', content });
+  const oldRel = path.join('.claude', 'commands', 'hiveku-SEO-audit.md');
+  const newRel = path.join('.claude', 'commands', 'hiveku-seo-audit.md');
+  const readManifestKeys = async (rootDir) =>
+    Object.keys(JSON.parse(await fs.readFile(path.join(rootDir, '.hiveku', 'synced-commands.json'), 'utf8')).files);
+
+  async function caseInsensitive(dir) {
+    const probe = path.join(dir, 'Case-Probe');
+    await fs.writeFile(probe, '', 'utf8');
+    const insensitive = await exists(path.join(dir, 'case-probe'));
+    await fs.unlink(probe);
+    return insensitive;
+  }
+
+  /** A folder synced by an older build that filed the command under "SEO". */
+  async function upgradedFolder(content) {
+    const { rootDir } = await layout();
+    const first = await commandSync.syncAccountCommands(commandIndex('SEO', audit(content)), rootDir);
+    assert.deepEqual(first.written, [oldRel]);
+    return { rootDir, insensitive: await caseInsensitive(rootDir) };
+  }
+
+  test('an unchanged command is still there after the first sync, and the next sync is quiet', async () => {
+    const { rootDir, insensitive } = await upgradedFolder('Run the audit.');
+    const result = await commandSync.syncAccountCommands(commandIndex('seo', audit('Run the audit.')), rootDir);
+    assert.match(await fs.readFile(path.join(rootDir, newRel), 'utf8'), /Run the audit\./);
+    assert.deepEqual(result.skippedLocalEdits, []);
+    if (insensitive) {
+      assert.deepEqual(result.removed, []);
+      assert.equal((await fs.readdir(path.join(rootDir, '.claude', 'commands'))).length, 1);
+    } else {
+      // Two files on this disk: the old spelling is removed, the new one written.
+      assert.deepEqual(result.written, [newRel]);
+      assert.deepEqual(result.removed, [oldRel]);
+    }
+    assert.deepEqual(await readManifestKeys(rootDir), [newRel]);
+
+    const again = await commandSync.syncAccountCommands(commandIndex('seo', audit('Run the audit.')), rootDir);
+    assert.deepEqual([again.written, again.removed, again.skippedLocalEdits], [[], [], []]);
+    await fs.access(path.join(rootDir, newRel));
+  });
+
+  test('a command that also changed upstream is updated, not reported as a local edit', async () => {
+    const { rootDir, insensitive } = await upgradedFolder('Run the audit.');
+    const result = await commandSync.syncAccountCommands(commandIndex('seo', audit('Run the audit, then report.')), rootDir);
+    assert.deepEqual(result.skippedLocalEdits, []);
+    assert.deepEqual(result.written, [newRel]);
+    assert.deepEqual(result.removed, insensitive ? [] : [oldRel]);
+    assert.match(await fs.readFile(path.join(rootDir, newRel), 'utf8'), /then report\./);
+    assert.deepEqual(await readManifestKeys(rootDir), [newRel]);
+  });
+
+  test('a command removed by hand before the upgrade is written again and stays', async () => {
+    const { rootDir } = await upgradedFolder('Run the audit.');
+    await fs.unlink(path.join(rootDir, oldRel));
+    const result = await commandSync.syncAccountCommands(commandIndex('seo', audit('Run the audit.')), rootDir);
+    assert.deepEqual(result.written, [newRel]);
+    assert.deepEqual(result.removed, []);
+    assert.match(await fs.readFile(path.join(rootDir, newRel), 'utf8'), /Run the audit\./);
+    assert.deepEqual(await readManifestKeys(rootDir), [newRel]);
+  });
+
+  test('a command the user edited is left as edited and reported', async () => {
+    const { rootDir } = await upgradedFolder('Run the audit.');
+    const edited = (await fs.readFile(path.join(rootDir, oldRel), 'utf8')) + 'My own note.\n';
+    await fs.writeFile(path.join(rootDir, oldRel), edited, 'utf8');
+    const result = await commandSync.syncAccountCommands(commandIndex('seo', audit('Run the audit, then report.')), rootDir);
+    assert.deepEqual(result.removed, []);
+    assert.equal(result.skippedLocalEdits.length, 1);
+    assert.equal(await fs.readFile(path.join(rootDir, oldRel), 'utf8'), edited);
   });
 });

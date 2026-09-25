@@ -15,7 +15,10 @@
  *   - a locally-edited owned file is SKIPPED and reported (Hiveku is the source
  *     of truth — edit via memory_update, not the file),
  *   - identical-content local files (e.g. authored via /hiveku-new-command) are
- *     adopted into the manifest.
+ *     adopted into the manifest,
+ *   - an owned path that differs from a remote path only in case is, on a
+ *     case-insensitive disk, the same file: it keeps its ownership and is never
+ *     deleted as gone upstream.
  */
 
 import * as crypto from 'crypto';
@@ -38,6 +41,20 @@ export interface CommandSyncResult {
 
 function sha(text: string): string {
   return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+/**
+ * True when both paths exist and name the same file. On a case-insensitive
+ * disk (the macOS and Windows default) two spellings that differ only in case
+ * are one file; on a case-sensitive disk they are two.
+ */
+async function isSameFile(a: string, b: string): Promise<boolean> {
+  try {
+    const [sa, sb] = await Promise.all([fs.lstat(a, { bigint: true }), fs.lstat(b, { bigint: true })]);
+    return sa.dev === sb.dev && sa.ino === sb.ino;
+  } catch {
+    return false;
+  }
 }
 
 function slugFromDomain(entry: KnowledgeEntry, prefix: '_command:' | '_agent:'): string {
@@ -108,6 +125,24 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
     remote.set(rel, { domain: entry.domain || `_agent:${slug}`, body: renderAgent(entry, slug) });
   }
 
+  // Remote paths by lowercase spelling, for the two case checks below.
+  const remoteByFold = new Map<string, string>();
+  for (const rel of remote.keys()) remoteByFold.set(rel.toLowerCase(), rel);
+
+  // 0) Older builds kept a department tag's case, so an owned command can be
+  // listed under a spelling that differs from its remote path only in case. On
+  // a case-insensitive disk that is the same file: move its row to the remote
+  // path, so step 1 updates it (or reports a local edit) as an owned file.
+  for (const rel of Object.keys(manifest.files)) {
+    if (remote.has(rel)) continue;
+    const twin = remoteByFold.get(rel.toLowerCase());
+    if (!twin || manifest.files[twin]) continue;
+    if (await isSameFile(path.join(baseDir, rel), path.join(baseDir, twin))) {
+      manifest.files[twin] = manifest.files[rel];
+      delete manifest.files[rel];
+    }
+  }
+
   // 1) Write/update remote entries. The department in a command's file name is
   // shaped by departmentOf; the containment check is the backstop.
   for (const [rel, { domain, body }] of remote) {
@@ -150,6 +185,14 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
     // The manifest is a file in the folder (cloned, synced, or written by an
     // older build): it never directs a delete outside baseDir. Drop the row.
     if (!isInsideRoot(baseDir, abs)) {
+      delete manifest.files[rel];
+      continue;
+    }
+    // On a case-insensitive disk a spelling that differs from a remote path only
+    // in case IS that remote file, which step 1 just wrote or kept. Deleting it
+    // would remove a live command until the next sync. Drop the row only.
+    const twin = remoteByFold.get(rel.toLowerCase());
+    if (twin && (await isSameFile(abs, path.join(baseDir, twin)))) {
       delete manifest.files[rel];
       continue;
     }

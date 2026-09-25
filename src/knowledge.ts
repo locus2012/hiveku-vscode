@@ -96,8 +96,15 @@ function extractDepartmentTag(content?: string): string | null {
  */
 export const DEPARTMENT_NAME = /^[a-z][a-z0-9_-]{0,49}$/;
 
+/**
+ * Names Windows keeps for devices, with or without an extension. They fit
+ * DEPARTMENT_NAME, but Windows cannot create a directory with one of them, so
+ * the download would fail there. They file under 'general' too.
+ */
+export const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?$/i;
+
 function asDepartment(value: string | null | undefined): string | null {
-  return typeof value === 'string' && DEPARTMENT_NAME.test(value) ? value : null;
+  return typeof value === 'string' && DEPARTMENT_NAME.test(value) && !WINDOWS_DEVICE_NAME.test(value) ? value : null;
 }
 
 export function departmentOf(entry: { domain?: string; content?: string }): string {
