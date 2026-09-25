@@ -84,9 +84,37 @@ function extractDepartmentTag(content?: string): string | null {
   return null;
 }
 
-function departmentOf(entry: { domain?: string; content?: string }): string {
-  if (entry.domain && !entry.domain.startsWith('_')) return entry.domain;
-  return extractDepartmentTag(entry.content) ?? GENERAL;
+/**
+ * A department becomes a DIRECTORY under <type-folder>/ (and part of a
+ * .claude/commands file name), and the domain it comes from is stored account
+ * data that any agent or API caller on the account can write. A domain used
+ * verbatim could name a directory outside the account folder (a
+ * parent-directory walk, an absolute path, a backslash on Windows), and the
+ * download would write the entry there on the user's own machine. So only a
+ * plain lowercase name is ever a department; anything else files under
+ * 'general'.
+ */
+export const DEPARTMENT_NAME = /^[a-z][a-z0-9_-]{0,49}$/;
+
+function asDepartment(value: string | null | undefined): string | null {
+  return typeof value === 'string' && DEPARTMENT_NAME.test(value) ? value : null;
+}
+
+export function departmentOf(entry: { domain?: string; content?: string }): string {
+  if (entry.domain && !entry.domain.startsWith('_')) return asDepartment(entry.domain) ?? GENERAL;
+  // The tag match is case-insensitive; file it lowercased, as the plugin does.
+  return asDepartment(extractDepartmentTag(entry.content)?.toLowerCase()) ?? GENERAL;
+}
+
+/**
+ * True when `target` resolves to a path strictly inside `rootDir`. The last
+ * check before any knowledge or command write (and command delete), so no
+ * change to how a path is built can touch a file outside the account folder.
+ */
+export function isInsideRoot(rootDir: string, target: string): boolean {
+  const root = path.resolve(rootDir);
+  const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+  return path.resolve(target).startsWith(prefix);
 }
 
 function safeSlug(name: string | undefined): string {
@@ -231,6 +259,9 @@ export async function writeEntries(baseDir: string, entries: KnowledgeEntry[]): 
   for (const entry of entries) {
     const folder = TYPE_TO_FOLDER[entry.type] ?? entry.type;
     const rel = path.join(folder, entry.department, `${safeSlug(entry.name)}.md`);
+    // Entries reach here from fetchKnowledge (department already shaped) or
+    // from any other caller; either way nothing is written outside baseDir.
+    if (!isInsideRoot(baseDir, path.join(baseDir, rel))) continue;
     const rendered = renderEntry(entry);
     await writeAtomic(path.join(baseDir, rel), rendered);
     manifest.entries[keyOf(entry)] = {

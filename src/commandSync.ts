@@ -21,7 +21,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { type KnowledgeEntry, type KnowledgeIndex, selectEntries } from './knowledge';
+import { type KnowledgeEntry, type KnowledgeIndex, isInsideRoot, selectEntries } from './knowledge';
 
 const MANIFEST = path.join('.hiveku', 'synced-commands.json');
 
@@ -108,9 +108,11 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
     remote.set(rel, { domain: entry.domain || `_agent:${slug}`, body: renderAgent(entry, slug) });
   }
 
-  // 1) Write/update remote entries.
+  // 1) Write/update remote entries. The department in a command's file name is
+  // shaped by departmentOf; the containment check is the backstop.
   for (const [rel, { domain, body }] of remote) {
     const abs = path.join(baseDir, rel);
+    if (!isInsideRoot(baseDir, abs)) continue;
     const owned = manifest.files[rel];
     let current: string | undefined;
     try {
@@ -145,6 +147,12 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
   for (const rel of Object.keys(manifest.files)) {
     if (remote.has(rel)) continue;
     const abs = path.join(baseDir, rel);
+    // The manifest is a file in the folder (cloned, synced, or written by an
+    // older build): it never directs a delete outside baseDir. Drop the row.
+    if (!isInsideRoot(baseDir, abs)) {
+      delete manifest.files[rel];
+      continue;
+    }
     try {
       const current = await fs.readFile(abs, 'utf8');
       if (sha(current) === manifest.files[rel].content_sha) {
