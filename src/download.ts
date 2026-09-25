@@ -11,14 +11,18 @@ import * as path from 'path';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import * as tar from 'tar';
-import { EDGE_CHALLENGE_MESSAGE, hivekuUserAgent, isEdgeChallenge } from './hivekuUserAgent';
+import { edgeRefusalMessage, hivekuUserAgent } from './hivekuUserAgent';
 
 export async function downloadAndExtract(downloadUrl: string, destRoot: string): Promise<void> {
   const res = await fetch(downloadUrl, { headers: { 'User-Agent': hivekuUserAgent() } });
-  if (isEdgeChallenge(res)) {
-    // A 202 is res.ok, so without this the firewall's empty body would reach
-    // tar as an empty stream and the error would blame the archive.
-    throw new Error(`Download failed: ${EDGE_CHALLENGE_MESSAGE}`);
+  const refusal = edgeRefusalMessage(res);
+  if (refusal) {
+    // A 202 challenge is res.ok, so without this the firewall's empty body
+    // would reach tar as an empty stream and the error would blame the
+    // archive. A 403 carrying x-hiveku-firewall is the firewall's block, named
+    // as such; a 403 without it (an expired signed link) is the server's own
+    // answer and falls through to the body read below.
+    throw new Error(`Download failed: ${refusal}`);
   }
   if (!res.ok) {
     // Read the body before giving up on it. The server sends a JSON error with

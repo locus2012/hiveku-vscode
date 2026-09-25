@@ -174,7 +174,7 @@ export function cronMatches(expr, d = new Date()) {
 
 /** Tiny REST helper for Smartlead / HeyReach and whatever REST API a worker calls.
  *  Identifies as Hiveku unless the worker sets its own User-Agent, and names the edge
- *  firewall's challenge instead of handing back a blank page. */
+ *  firewall's challenge and block instead of handing back a blank page or a bare 403. */
 function _hostOf(url) {
   try { return new URL(url instanceof Request ? url.url : String(url)).host; } catch { return String(url).slice(0, 120); }
 }
@@ -185,6 +185,18 @@ export async function http(url, opts = {}) {
   if (!headers.has('user-agent')) headers.set('user-agent', HIVEKU_USER_AGENT);
   const res = await fetch(url, { ...opts, headers });
   const text = await res.text();
+  // The firewall's block is a 403 carrying x-hiveku-firewall: blocked (an automated client
+  // it cannot identify) or blocked-network (a request from a known bulk-scraper network).
+  // Only that header makes a 403 the firewall's: a 403 without it is the site's or the
+  // API's own answer and is reported below as HTTP 403 with its body. The body text is
+  // never read to decide.
+  const block = res.status === 403 ? String(res.headers.get('x-hiveku-firewall') || '').trim().toLowerCase() : '';
+  if (block === 'blocked') {
+    throw new Error('HTTP 403 from ' + _hostOf(url) + ' (x-hiveku-firewall: blocked): the edge firewall blocked this client as an automated client it cannot identify; send a user agent containing Hiveku, or use a HEAD request. A service that is not Hiveku needs the site owner to allow it in the Firewall section of the site\\'s hosting settings. This is not an empty site and not a failed deploy.');
+  }
+  if (block === 'blocked-network') {
+    throw new Error('HTTP 403 from ' + _hostOf(url) + ' (x-hiveku-firewall: blocked-network): the edge firewall blocked this request because it came from a known bulk-scraper network. A Hiveku user agent and a firewall allowance do not lift this block; send the request from another network. This is not an empty site and not a failed deploy.');
+  }
   // The firewall's header is the authoritative signal: every real challenge carries it,
   // whatever the status or body. Without the header only a 202 with NOTHING in the body
   // counts: a 202 with a small JSON body ({"status":"accepted","id":...}) is the normal
