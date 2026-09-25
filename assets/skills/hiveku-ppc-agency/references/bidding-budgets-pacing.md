@@ -18,10 +18,13 @@ untouchable, no silent bulk apply.
 
 Four gates. A failed gate stops the work there.
 
-1. **Context.** `account_context_get({ domain: "ppc" })`, then `memory_list` for the money facts: monthly
-   ceiling, target CPA/ROAS, approval threshold, protected and brand campaigns, sacred geos, blackout
-   periods. No ceiling and no target in memory means no mandate to optimize: ask, persist with
-   `memory_create`, then start. `get_account_info` names the account in the report.
+1. **Context.** `account_context_get({ domain: "ppc" })`, then `memory_list` for the money facts:
+   approval threshold, protected and brand campaigns, sacred geos, blackout periods. The targets live in
+   `ppc_goals_get`: target cost per lead, target CPA / ROAS, monthly budget target per connection, the
+   stop-loss rules, and (`evaluate: true`) where each connection stands against them. Read it instead of
+   stopping to ask. Its `missing[]` names what is unset: ask the owner once, record it with
+   `ppc_goals_set` (preview, then `confirm: true` + `preview_hash`, top level), then start. Never invent
+   a target. `get_account_info` names the account in the report.
 2. **Local data first.** Read `hiveku-data/ppc/campaigns.json` (budgets, strategies, statuses),
    `metrics_daily.json`, `keywords.json`, `hiveku-data/STATUS.json` before any live call. Check
    `fetched_at`; `truncated: true` means `count` is a floor; an `error` with empty rows means NOT
@@ -66,6 +69,23 @@ impressions-weighted average IS. Same matrix below applies to both. The concept 
 
 Lost-to-rank impressions were never offered to you, so an unspent budget increase changes no auction
 outcome. Bidding up a budget-capped campaign buys fewer, dearer clicks with the same money.
+
+The same split by ad group, keyword (Google) or device comes from `ppc_performance_breakdown` with
+`params.dimension: "impression_share"`, whose `BUDGET_LIMITED` and `RANK_LIMITED` findings name the
+next tool. Google bounds impression share (below 10% reads 0.0999), so a row at a bound is approximate.
+
+**Before any raise, price the NEXT dollar: `ppc_bid_budget_simulate`** (Google or Microsoft, read-only).
+It returns the platform's own simulation curve and `derived.marginal`, the cost per EXTRA conversion
+of each step. Pass `params.extra_daily_spend` ("what does $50 more a day buy") or `params.lever` plus
+`params.target_value` for a new target CPA, ROAS, bid or impression share. Read `calibration` first
+(`off`: the curve does not match what the campaign actually spent, so do not act on it) and
+`unavailable[]` (shared budgets, new entities and experiments get no simulation: a missing curve is
+never zero). Simulations replay the past 7 to 15 days; they are not a forecast. `next_step` is bounded
+by the goals record and the 2x step, and it is NEVER applied: present it as a proposal, then apply it
+with its `apply_with` tool under that tool's own confirm. `apply_gap` means no Hiveku tool writes that
+lever - a Google Maximize Conversions or Maximize Conversion Value campaign's target, portfolio
+targets, ad group default bids, target impression share - so say so and name the UI step; never use
+`ppc_bidding_strategy_update` for a Maximize campaign's target.
 
 ---
 
@@ -156,8 +176,14 @@ before adding a third modifier to the same traffic; keep the stack inside roughl
 `measurement-and-conversions.md`. Minimum to move anything: 30+ clicks in the segment or cost of at least
 1x target CPA. Cap the first move at 20 to 30%, re-read in 14 days, step again if the direction holds.
 
-**Dayparting has no tool here.** `ppc_bid_modifier_update` has no ad-schedule target type, so hour and
-day-of-week adjustments are a dashboard job. Do the analysis, hand over the schedule, record a PM task.
+**Dayparting is `ppc_google_ad_schedule_set`** (Google) and `ppc_bing_ad_schedule_add` (Microsoft), not
+`ppc_bid_modifier_update`. Read the current windows in `ppc_google_campaign_settings_get`
+(`schedule.windows`) and the evidence in `ppc_performance_breakdown` (`hour_of_day`, `day_of_week`,
+`hour_and_day`; Microsoft hours are converted from UTC, so read its `clock` block before quoting an
+hour). The Google write previews the whole resulting schedule with `dark_hours_per_week`: **the FIRST
+window darkens every hour it does not cover**, and clearing the last window widens delivery to all week.
+Under Smart Bidding a schedule `bid_modifier` is accepted and ignored while the windows still apply, so
+stop off-hours spend with windows, not modifiers, and only on strong evidence.
 
 ---
 
@@ -176,8 +202,10 @@ lower conversion rate. Marginal CPA there can be double blended CPA while the bl
 invites conquesting); non-brand search 60 to 70%, higher only with fat margin, CPA headroom, and an explicit
 client choice of share over efficiency. Never blend Shopping or Display share with search.
 
-So decide on marginal, not average: degrade current CPA by 20 to 40% for the incremental slice and compare
-to the Framework D ceiling. If it breaks, the honest answer is "this campaign is done growing efficiently."
+So decide on marginal, not average: take the platform's own marginal cost per extra conversion from
+`ppc_bid_budget_simulate` (`derived.marginal`, Framework B) and compare it to the Framework D ceiling.
+Only where no curve exists (`unavailable[]`) fall back to degrading current CPA by 20 to 40% and say
+which end you used. If it breaks, the honest answer is "this campaign is done growing efficiently."
 
 ---
 
@@ -189,7 +217,9 @@ to the Framework D ceiling. If it breaks, the honest answer is "this campaign is
    off-pace flags. Sum projected_eom_spend against the memory ceiling: that number is the headline.
 2. Classify each off-pace campaign into a Framework E shape. The ratio alone does not name the lever.
 3. For underpacers, `ppc_impression_share({ connection_id, days: 30 })` and apply Framework B. Only the
-   budget-constrained-and-profitable quadrant becomes an increase proposal.
+   budget-constrained-and-profitable quadrant becomes an increase proposal, priced with
+   `ppc_bid_budget_simulate` before it is proposed. The monthly budget target and the CPA / cost-per-lead
+   targets come from `ppc_goals_get`.
 4. Build one table: campaign, current budget, proposed, delta, reason, expected effect. Net delta zero unless
    you are deliberately asking for more. Present it, then take confirmations ONE CAMPAIGN AT A TIME: batch
    the analysis, never the consent.
@@ -218,7 +248,9 @@ to the Framework D ceiling. If it breaks, the honest answer is "this campaign is
    conversions in the account; brand lost-to-rank is unusual enough to check for a too-tight target CPA and
    weak ad relevance before spending anything.
 2. Establish the current money works: 30-day CPA at or under the memory target on a trustworthy action.
-3. Estimate the marginal outcome per Framework G. Give a range and name the degradation assumed.
+3. Estimate the marginal outcome with `ppc_bid_budget_simulate({ connection_id, params: { campaign_id,
+   extra_daily_spend } })` per Framework B and G: quote `answer` (interpolated, never extrapolated -
+   past the last point it is `beyond_curve`) and the marginal CPA, with the window the curve replayed.
 4. Check plumbing: `ppc_billing_summary({ connection_id })` for payment setup, spend to date, account-level
    spend cap. Asking for 3,000 more on an account with a payment problem or a hard cap wastes the week.
 5. Draft the rationale with `talk_to_department({ domain: "ppc", message })`, then edit it. You do not send it
@@ -239,7 +271,9 @@ to the Framework D ceiling. If it breaks, the honest answer is "this campaign is
 5. Record switch date and freeze end date in memory and the PM task. Review day 14, not day 3.
 6. Monthly after that: at or under target with stable volume, tighten 10 to 15% through the same tool with a
    new `target_cpa` / `target_roas`; above target with high lost-to-rank and margin available, consider
-   loosening 10 to 15%. One move per campaign per 14 days, never inside a learning window.
+   loosening 10 to 15%. Before loosening, read the new target off the curve:
+   `ppc_bid_budget_simulate` with `params.lever: "target_cpa"` (or `"target_roas"`) and
+   `params.target_value`. One move per campaign per 14 days, never inside a learning window.
 7. Volume down more than 20% at the new step: step back. That campaign has found its frontier, and the client
    should be told so in plain language.
 
@@ -269,9 +303,14 @@ Confirm the strategy from `campaigns.json` first; on smart bidding, stop (Framew
   `ppc_bid_modifier_update({ connection_id, campaign_id, target_type: "device", target_value: "MOBILE", bid_modifier: 0.8 })`.
   Campaign level only; an ad_group_id fails. A device that is bad because the mobile landing page is bad is
   not a bidding problem: PM task to the web team.
-- **Location.** `target_type: "location"`, `target_value` is the geo target constant id, not a place name. If
-  you cannot resolve the id confidently, use the dashboard rather than guess. Sacred geos in memory are
-  flagged, not bid down on one soft month; a geo unprofitable across two quarters is an exclusion decision.
+- **Location.** Evidence first: `ppc_performance_breakdown` with `params.dimension: "location"` (and
+  `params.service_area` from memory) separates spend from people IN the area from people only interested in
+  it (`INTEREST_ONLY_SPEND`: the fix is the location option PRESENCE via
+  `ppc_google_campaign_settings_set`, Microsoft `ppc_bing_location_intent_set`) and flags
+  `OUTSIDE_SERVICE_AREA` (exclude with `ppc_google_targeting`). A modifier is `target_type: "location"`,
+  `target_value` the geo target constant id from `ppc_google_targeting` 'geo-target-search', never a
+  hand-typed place name. Sacred geos in memory are flagged, not bid down on one soft month; a geo
+  unprofitable across two quarters is an exclusion decision.
 - **Audience.** Attach in observation at 1.0 to collect data without restricting reach; after 30 days promote
   strong to 1.1 to 1.3, demote weak to 0.7 to 0.9. Mechanics: `audiences-and-remarketing.md`.
 
@@ -315,7 +354,10 @@ platform minimums (commonly ~50/day campaign, ~20/day ad group) that are rejecte
 
 Confirm argument names and enums with `hiveku_docs_search` / `hiveku_docs_get` first; Google's `daily_budget`
 semantics do not carry across. `ppc_pacing_summary`, `ppc_impression_share` and `ppc_billing_summary` are
-Google tools, so for other platforms pace from the cached metrics series and read share in the platform UI.
+Google tools, so for other platforms pace from `ppc_digest`'s per-platform `pacing` block and the cached
+metrics series. Microsoft share is `ppc_bing_impression_share_report` or `ppc_performance_breakdown`
+(`impression_share`, campaign or ad group level), and `ppc_bid_budget_simulate` reads Microsoft's
+budget opportunities and bid landscapes. Meta, TikTok and LinkedIn have no impression-share concept.
 
 ### Play 10: Billing triage
 
@@ -345,7 +387,9 @@ credentials. Escalate with the exact change needed and `pm_tasks_create` so the 
   multiplied stack inside +50% / -40%.
 - **Impression share:** brand 90%+; non-brand search 60 to 70% healthy. Lost to budget above 10% at target CPA
   is a growth signal; lost to rank above 25% is a bid or quality signal.
-- **Marginal CPA forecast:** degrade current CPA 20 to 40% and say which end you used.
+- **Marginal CPA:** the simulator's `derived.marginal` where a curve exists; otherwise degrade current CPA
+  20 to 40% and say which end you used. A curve with under 5 conversions at the current point returns
+  `insufficient_data`, not a recommendation.
 - **Keyword bids:** 10 to 20% steps; cut 20 to 30% at zero conversions with cost near 1x target CPA.
 - **Approval:** anything raising total spend, anything above the memory approval threshold, and anything
   touching a protected or brand campaign goes to the client first. Always.
@@ -367,7 +411,8 @@ credentials. Escalate with the exact change needed and `pm_tasks_create` so the 
 - **Bid modifier did nothing.** Almost always smart bidding (Framework F); then wrong level (device and
   location are campaign-only); then another modifier in the stack pulling the other way.
 - **Impression share missing, zero, or absurd.** Not reported for very low-volume campaigns, not comparable
-  across campaign types, unavailable for non-Google platforms here. An empty response is NOT 0% share; an
+  across campaign types, read for Microsoft through its own tools (Play 9) and nonexistent on Meta, TikTok
+  and LinkedIn. An empty response is NOT 0% share; an
   error is an integration problem, so check connection state per `account-structure.md` first.
 - **A dead integration looks like good news.** A connection that stopped syncing shows flat spend at a stable
   CPA, which reads like an efficiency win. When a metric goes quiet, verify freshness before reporting: a
@@ -405,7 +450,9 @@ credentials. Escalate with the exact change needed and `pm_tasks_create` so the 
 change, `memory_create({ type: "memory", name: "ppc", content })` on the first run, then
 `memory_update({ memory_id, content })` after (it takes ONLY `memory_id` and `content`, never
 `type`/`name`, and REPLACES the document, so resend the merged body), covering: the monthly
-ceiling and its approval date; target CPA/ROAS per campaign with the Framework D derivation; current bidding
+ceiling and its approval date; target CPA/ROAS per campaign with the Framework D derivation (the
+targets themselves are recorded with `ppc_goals_set`, which every later session reads; memory keeps
+the why); current bidding
 strategy per campaign and the date set; active freeze end dates; protected campaigns; every temporary budget
 or target change with its revert date; and frontier conclusions ("campaign X cannot grow past ~70% IS at
 target CPA; tested Aug 2026").
@@ -414,8 +461,9 @@ target CPA; tested Aug 2026").
 work proceeds with the proposal table as presented, the pre-change value of every setting, the confirmation
 received (quoted), the post-change value, and the review date. `pm_tasks_complete` only when the review has
 happened, not when the write landed: a budget change with no reviewed outcome is an unfinished task. Anything
-no tool can do (dayparting, seasonality adjustments, shared-budget restructuring, billing fixes) becomes its
-own task with the dashboard steps written out, so the gap stays visible instead of quietly dropped.
+no tool can do (seasonality adjustments, shared-budget restructuring, billing fixes, a simulator
+`apply_gap` such as a Maximize campaign's target) becomes its own task with the dashboard steps written
+out, so the gap stays visible instead of quietly dropped.
 
 **Client reporting.** The money section answers four questions in order: did we spend what we said (pacing
 and ceiling), what did it buy (conversions or revenue against target), what did we change and why (the

@@ -25,11 +25,17 @@ Reading numbers for a report does not need this file; touching the query layer d
    `ppc_search_terms_report`, `ppc_google_shared_negatives`, `ppc_keyword_planner_forecast`) is **Google
    Ads only** and returns a wrong-platform error, not an empty result, on any other connection. Bing
    writes go through `ppc_platform_keyword_add`, `ppc_platform_keyword_bid_update`,
-   `ppc_platform_keyword_match_type_change` and `ppc_platform_negative_keyword_add`.
+   `ppc_platform_keyword_match_type_change` and `ppc_platform_negative_keyword_add`. Five tools take
+   EITHER platform (the connection picks the lane, every number is that platform's own):
+   `ppc_search_terms_mine`, `ppc_negatives_audit`, `ppc_negatives_lint`, `ppc_negatives_remove` and
+   `ppc_keyword_ideas`.
 5. **Consent lane.** Negatives and promotions are structure changes: batch the analysis, present it, take
    ONE confirmation, execute item by item. Bids are spend changes, one confirmation each. Anything
    touching a protected or brand campaign gets a callout even if it is "just a negative". Never
    bulk-apply, never write silently.
+6. **Goals.** `ppc_goals_get` holds the target CPA (`target_cpa_cents`) and target cost per lead the cut
+   rule in section 5 needs. The miner and the breakdown take `target_cpa` in currency UNITS: divide the
+   cents by 100. No target recorded: ask once, record it with `ppc_goals_set`, never invent one.
 
 ## 1. Framework A: the search-term verdict
 
@@ -95,22 +101,34 @@ query containing all those words **in any order**, so use it only for single-wor
 `match_type` explicitly on every call in both tools so a schema default never decides what your client
 stops buying. (`ppc_platform_negative_keyword_add` requires it, so Bing cannot bite you this way.)
 
-**The blast-radius test, before every negative.** Against `ppc_keyword_list` (or local `keywords.json`):
-does this negative, at this match type, block a keyword you are actively paying for? **A negative always
-beats a positive keyword.** If it would block a converter, narrow the match type or move the negative
-down a tier. Do this for every term in a batch, in writing whenever the words appear in a top-10-spend
-keyword.
+**The blast-radius test, before every negative, is `ppc_negatives_lint`.** Does this negative, at this
+match type and reach, block an ENABLED keyword, a search term that converted, a place a campaign
+targets, or a protected term from memory (`params.protected_terms`)? Does it duplicate one already
+there, or would the platform reject it? **A negative always beats a positive keyword.** Add only
+items whose verdict is `clear`; for a `conflicts` item narrow the match type or move it down a tier
+and lint again. Lint is a FLOOR (Hiveku's implementation of each platform's matching), and on
+Microsoft a `pending` search-terms check means lint again in a minute.
 
 ## 4. The plays
 
 ### Play 1: The weekly search-terms mining loop
 
-1. Prefer `hiveku-data/ppc/search_terms.json`. If stale:
-   `ppc_search_terms_report({ connection_id, days: 28, limit: 2000 })`. Use `days: 28` for the weekly loop
+0. **Where the waste sits, first:** `ppc_search_terms_mine({ connection_id, params: { days: 28,
+   protected_terms, target_cpa } })`, Google or Microsoft. It aggregates every visible term into
+   1-3 word n-grams, match sources and triggering keywords. Read `verdict.kind` before anything:
+   `long_tail` (most waste in 1-2-click terms) is a match-type or AI-expansion problem, so fix
+   structure and do not pile on negatives; `concentrated` is a negatives job; `no_conversions_measured`
+   stops the loop until tracking is fixed. `coverage.unseen_cost` is Google spend no visible term
+   carries and no negative reaches: state it before sizing the waste. On Microsoft `status: 'pending'`
+   means call again in about 30 s with `params.resume_token`, re-sending `protected_terms`,
+   `target_cpa` and the other non-scope params. Its `candidates[]` come back as `lint_handoff`; they are
+   never added by the miner.
+1. Row-level evidence: prefer `hiveku-data/ppc/search_terms.json`. If stale:
+   `ppc_search_terms_report({ connection_id, days: 28 })`. Use `days: 28` for the weekly loop
    (whole weeks, no weekday skew), 7 for a launch or anomaly chase, 90 for a quarterly rebuild or a
-   seasonal vertical. `limit: 2000` covers most SMB accounts; over $50k/month raise to 5000-10000, because
-   the report truncates and the tail is where waste hides. There is **no campaign filter**: it returns the
-   whole connection and you filter client-side.
+   seasonal vertical. On a big account call `summary_only: true` first, then pull FILTERED pages of
+   `limit` 200 or less (`campaign_id`, `ad_group_id`, `min_spend`, `zero_conversions_only`), paging with
+   `offset = next_offset`; `truncated` / `output_trimmed` mean more rows follow, never "that is all".
 2. **Read out per row:** query, matched keyword, match type, ad group, campaign, cost, clicks,
    impressions, conversions, CTR, avg CPC. Compute the two things the report omits: CPA on converting
    rows, and cost as a multiple of target CPA on zero-conversion rows. That multiple drives every cut.
@@ -118,9 +136,14 @@ keyword.
    bottom 60% of rows by cost is usually under 5% of spend. Classify each with framework A.
 4. **Group negatives before writing them.** Find the pattern, not the instance: twelve queries containing
    "salary" is one phrase negative, not twelve exacts. A list of 400 one-off exacts is unmaintainable.
-5. **Present the batch, take one confirmation:** negatives grouped by tier and match type with the spend
-   each recovers, promotions with conversion history, the carried watchlist, total spend redirected.
-6. **Execute.** Tier 1 goes through `ppc_google_shared_negatives({ connection_id, operation:
+5. **Lint, then present the batch and take one confirmation.** Pass the miner's `lint_handoff.params`
+   (or your own grouped list, Editor notation `"phrase"` / `[exact]`, with the reach you intend) to
+   `ppc_negatives_lint`; drop or rework everything not `clear`. Then present: negatives grouped by tier
+   and match type with the spend each recovers and the lint verdict, promotions with conversion
+   history, the carried watchlist, total spend redirected.
+6. **Execute.** Account-level junk on Google can go to the one account-level list with
+   `ppc_google_account_negatives_add` (preview-first; it reaches Performance Max and AI Max too, and
+   holds back conflicting terms unless told otherwise). Tier 1 goes through `ppc_google_shared_negatives({ connection_id, operation:
    'shared-set-keywords-add', params: { shared_set_resource_name, keywords: [...], match_type: 'phrase' }
    })`, max 200 keywords per call at 80 chars each, **effective immediately on every attached campaign**.
    Tiers 2-4 go through `ppc_negative_keyword_add({ connection_id, text, match_type, campaign_id })` or
@@ -131,12 +154,22 @@ keyword.
 
 ### Play 2: Building a negative architecture (inherited account)
 
-1. `ppc_google_shared_negatives({ connection_id, operation: 'shared-sets-list', params: { limit: 200 } })`.
-   Read which lists exist, member counts, and **which campaigns each is attached to**. Common inherited
-   findings: a well-built list attached to nothing (blocking zero queries), or a junk list attached to
-   brand campaigns it should never touch. Add `params.shared_set_id` to inspect contents.
-2. `ppc_search_terms_report({ connection_id, days: 90, limit: 10000 })` for the full waste picture.
-3. Build Tier 1: `operation: 'shared-set-create', params: { name }` (255 chars max, creates an **empty**
+1. `ppc_negatives_audit({ connection_id })` (`params.summary_only: true` first on a big account):
+   every negative at every level (campaign, ad group, shared list, Google's account-level list, brand
+   lists), list hygiene (`empty`, `orphaned` - attached to nothing, so it blocks nothing), and the
+   CONFLICTS ranked: `blocks_keyword`, `blocks_converting_term`, `blocks_geo` (a broad or phrase
+   'georgia' blocks every search naming Georgia), `blocks_protected_term` (pass never-negate terms from
+   memory in `params.protected_terms`). Works on Microsoft too (its keyword conflicts come from
+   Microsoft's own conflict report). `coverage` decides whether it is complete: a `pending` report or
+   `conflicts_complete: false` is partial, not clean. `ppc_google_shared_negatives` `shared-sets-list`
+   (`params.shared_set_id`) still reads one Google list's members page by page.
+2. `ppc_search_terms_mine({ connection_id, params: { days: 90 } })` for the full waste picture.
+3. Fix the self-blocking ones first: `ppc_negatives_remove({ connection_id, params: { remove_handles } })`
+   with the `remove_handle`s from the audit. It WIDENS reach immediately (and a list detach reopens
+   every member at once), so the preview's `plan[]` goes to the owner with what reopens, the yes is
+   explicit, and only then the SAME call with `confirm: true` and `params.expected_preview_hash`.
+   Only a complete preview carries a hash: remove fewer handles if it has none.
+4. Build Tier 1 with `ppc_google_shared_negatives`: `operation: 'shared-set-create', params: { name }` (255 chars max, creates an **empty**
    list that blocks nothing), then `shared-set-keywords-add` in batches of 200, then `shared-set-attach`
    with `params: { campaign_id, shared_set_resource_name }` per campaign. Attach is immediate: confirm
    the campaign list first, and exclude brand campaigns unless you have checked the words against brand
@@ -203,8 +236,17 @@ other queries: negate the query, keep the keyword, log it as a ROUTING negative.
 geo_target_ids })`. `bid_micros` is micros, so 2000000 equals $2.00, and getting this wrong by a factor of
 a million is the most common error with this tool. `language_id` defaults to 1000 (English).
 `geo_target_ids` are geo constants: 2840 US, 2826 UK, 2124 Canada. **Always pass the real geo**, because
-a national forecast for a three-county service area gets quoted back at you. Read every output as
-order-of-magnitude only: Planner runs optimistic on clicks and low on CPC for competitive terms.
+a national forecast for a three-county service area gets quoted back at you. **Forecast the match types
+you will launch** (`match_type`, default broad, or `keyword_specs` `[{ text, match_type }]`): a broad
+forecast overstates an exact or phrase plan. Lead-gen: `bidding_strategy: 'maximize_conversions'` with
+`daily_budget` and never `bid_micros`. Read every output as order-of-magnitude only: Planner runs
+optimistic on clicks and low on CPC for competitive terms.
+
+**Microsoft twin:** `ppc_bing_keyword_traffic_estimates({ connection_id, keywords | keyword_specs,
+max_cpc_bids, location_ids })` - one call estimates 1-3 bids (e.g. the idea's `suggested_bid` at 0.7x,
+1x and 1.4x). **Its numbers are PER WEEK:** size a daily budget from `cost_per_day` (weekly cost / 7),
+never from the weekly cost. Without `location_ids` it covers the whole United States: pass the service
+area.
 
 **How a senior operator uses it:** run it three times at roughly 0.7x, 1.0x and 1.4x expected market CPC
 and read the **shape** of the curve, not the point estimate. Where clicks stop rising as bid rises is the
@@ -216,11 +258,18 @@ directional and UI-sourced.
 
 ### Play 7: Net-new keyword discovery
 
-**The curated `ppc_*` surface has no ideas generator** - `ppc_keyword_planner_forecast` scores a list you
-supply; it does not generate one. Two adjacent lanes do exist, each with a catch. The raw read lane
-(`ppc_google_ads_read`, see `google-ads-advanced.md`) exposes `keyword-ideas` and `keyword-metrics`
-actions, but its argument values cannot contain spaces, so multi-word seeds are refused - single tokens
-only. And the DataForSEO lane (visible to marketing keys - profiles.ts grants it to marketing-ads)
+**The ideas generator is `ppc_keyword_ideas`**, on Google or Microsoft (the connection picks, every
+number is that platform's own). `mode: 'ideas'` (default) expands seed `keywords` and/or a `seed_url`
+into ideas with volume, monthly history, competition and bids; multi-word seeds are fine;
+`mode: 'metrics'` measures exactly the keywords you give and lists any the platform did not return in
+`not_returned`. **Location is per platform and never optional in practice:** Google `geo_target_ids`
+(from `ppc_google_targeting` 'geo-target-search') and `language_id`; Microsoft `location_ids` (from
+`ppc_bing_location_search`), `language`, and `exclude_account_keywords`. Without a location both
+default to the whole United States and say so in `warnings` - a national number for a local client.
+Page with `limit` / `offset` (`next_offset`). Google allows about 1 Planner request per second per
+account: on RESOURCE_EXHAUSTED wait and call again. Then size the survivors with the forecast in Play 6.
+It replaces the raw read lane's `keyword-ideas` action (`ppc_google_ads_read`, English only, no
+location, single-token seeds). The DataForSEO lane (visible to marketing keys - profiles.ts grants it to marketing-ads)
 carries `keywords_data_google_ads_search_volume`, `dataforseo_labs_google_keyword_ideas` and
 `dataforseo_labs_google_keyword_suggestions`; these are registry-verified names with no local manual -
 read each tool's own schema before the first call and label output with its source.
@@ -231,7 +280,8 @@ language, via `web_search` on the category then `web_scrape` and `web_extract` o
 pages, which also builds the competitor list for Play 8; (4) organic data if SEO is connected, since the
 `hiveku-seo-agency` keyword tools hold volume and SERP data PPC lacks; (5)
 `talk_to_department({ domain: "ppc", message })` for brand-hydrated expansion of a seed list. Score what
-you gather with `ppc_keyword_planner_forecast` and write only survivors with `ppc_keyword_add`. Never
+you gather with `ppc_keyword_ideas` `mode: 'metrics'` and the Play 6 forecast, and write only survivors
+with `ppc_keyword_add` (Microsoft: `ppc_platform_keyword_add`). Never
 launch a list that came only from step 5: generated lists are fluent and frequently contain terms with no
 commercial intent and no volume.
 
@@ -277,6 +327,10 @@ truncates large accounts silently). Empty on a campaign that clearly spent usual
 Display, Video and Performance Max do not populate search_term_view the way Search does. Local files are
 only as fresh as the last sync, and the tools use complete days while the Google UI includes today.
 
+**A keyword or a state went quiet after a negatives cleanup, or never served.** `ppc_negatives_audit`
+first: a `blocks_keyword` or `blocks_geo` conflict is a negative silently beating your own keyword or
+targeted place (one audited account had seven).
+
 **A negative was added but the query still shows.** In order: wrong scope, so another ad group serves it;
 the match type is narrower than you think, and an exact negative blocks only that exact query; the shared
 list is not attached to that campaign, verify with `shared-sets-list` and read the attached-campaigns
@@ -293,19 +347,20 @@ permanent damage. Verify tracking, then resume.
 
 ## 7. Edge cases and failure modes
 
-**The gap you must be honest about: you cannot list non-shared negatives.** `ppc_keyword_list` excludes
-negatives, and **no tool enumerates campaign-level or ad-group-level negative keywords**. The only
-readable ones sit inside shared sets, via
-`ppc_google_shared_negatives({ operation: 'shared-sets-list', params: { shared_set_id } })`. So an
-inherited account's Tier 2/3/4 negatives cannot be audited from tools: ask for a dashboard export or
-inspect the Google Ads UI, and say so rather than implying the audit was complete. **Keep your own
-ledger** (section 8), or a query mysteriously not serving is undiagnosable six months later.
+**Every level is readable now.** `ppc_keyword_list` excludes negatives, but `ppc_negatives_audit`
+enumerates campaign, ad-group, shared-list, account-level and brand-list negatives on Google, and
+campaign, ad-group and shared-list negatives on Microsoft, each with the `remove_handle` the remove
+tool takes. What stays honest: its conflict matching is a FLOOR on Google (Hiveku's implementation of
+negative matching), the Microsoft geo check is not available yet (`coverage.geo.available: false`),
+and a partial `coverage` is never a clean audit. **Keep your own ledger** (section 8) anyway: the
+reason a negative exists lives nowhere else.
 
 **Never:**
 
 - **Loop `ppc_negative_keyword_add` over a report without confirmation on the batch**, or touch a
-  protected or brand campaign flagged in memory. There is no dry-run and no bulk undo: reversing 200
-  negatives is 200 `ppc_negative_keyword_remove` calls, each needing a `resource_name` you kept.
+  protected or brand campaign flagged in memory, or add a negative `ppc_negatives_lint` did not mark
+  `clear`. Reversing is `ppc_negatives_remove` (up to 100 handles per call, previewed, read back), and
+  it widens reach, so it is its own confirmed change.
 - **Add a broad multi-word negative.** Use phrase. Word-order-free blast radius is the top cause of
   accidental traffic collapse.
 - **Treat `ppc_keyword_bid_update` as effective under smart bidding.** The bid is recorded and ignored

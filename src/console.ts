@@ -1043,7 +1043,7 @@ export function openAccountConsole(
           if (msg.enabled) {
             // Same flow as the Automations panel's Enable: a 422 workflow_invalid
             // lists the problems and offers "Enable anyway" (allow_incomplete).
-            const outcome = await enableWorkflow(client, { id: msg.id }, modalActionUi(msg.name ?? '', account.label));
+            const outcome = await enableWorkflow(client, { id: msg.id }, modalActionUi(msg.name ?? '', account.label, dashBase));
             const note = outcome ? enabledAnywayNote(outcome.result) : null;
             if (note) void vscode.window.showInformationMessage(note);
           } else {

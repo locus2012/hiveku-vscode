@@ -11,8 +11,8 @@ order live there.
 `voice_phone_tracking_config_set`, `voice_phone_tracking_config_delete`, `voice_swap_test`) need a
 communications-scope or full key. On a PPC (marketing-ads) key only the call-tracking set
 resolves - the reads (`voice_pools_list`, `voice_pool_get`, `voice_pool_sessions_list`,
-`voice_phone_tracking_config_get`, `voice_call_tracking_diagnose`, `voice_call_tracking_outbox`)
-plus `voice_call_tracking_setup` and `voice_call_tracking_live_probe`. A name that does not
+`voice_phone_tracking_config_get`, `voice_call_tracking_diagnose`, `voice_call_tracking_trace`,
+`voice_call_tracking_outbox`) plus `voice_call_tracking_setup` and `voice_call_tracking_live_probe`. A name that does not
 resolve is therefore a profile question first (say "not visible to this key" and file the write
 with `pm_tasks_create`, naming the tool) and a plugin-version question second (`/hiveku:update`,
 then retry). Never say Hiveku cannot do it.
@@ -103,10 +103,19 @@ then retry). Never say Hiveku cannot do it.
 
 **test**: `voice_swap_test` once (on a PPC key, `voice_call_tracking_live_probe` with
 `live_probe: true` - one of them, never both; each holds a DID for the sticky window), then
-`voice_call_tracking_diagnose` on whatever it surfaced. `assignment.reason: 'source_excluded'` is
+`voice_call_tracking_diagnose` on whatever it surfaced. That proves the SWAP; where a swapped
+number's call would RING is proven without any test call by `voice_call_tracking_trace` (there is
+no live test-call tool). `assignment.reason: 'source_excluded'` is
 the source gate working, not a failure.
 
-**health**: `voice_call_tracking_diagnose` - read the ORDERED `fix_first` list, not the raw check
+**health**: `voice_call_tracking_trace` first - the read-only routing trace per number (it never
+dials, holds no DID and is safe to repeat): `route.first_stop`, whether anyone `can_ring_now`,
+`recent_calls` (`refused_fast` calls died within 3 s), and fail codes such as
+`pbx_inbound_rule_missing`, `forward_not_dialable`, `ring_group_empty` and `recent_calls_refused`,
+each with its fix. With `connection_id` it traces every number serving on that ad account's call
+assets and extensions and lists `untracked_on_ads` (numbers Hiveku does not own, e.g. a typo).
+"Answered" on a forward means the far end picked up, which can be its voicemail. Unknown is not
+pass. Then `voice_call_tracking_diagnose` - read the ORDERED `fix_first` list, not the raw check
 array; a `number_tracking` check at `fail` with `details.pool_exhausted: true` is the live
 starvation signal, and the fix it names is inventory, not a shorter hold. Then `voice_pool_get`
 per pool for the `occupancy` block - `dids_available` is what a new visitor can still get right
@@ -170,7 +179,8 @@ the next human action.
 
 **What NOT to do.** NEVER run `voice_call_tracking_live_probe` or `voice_swap_test` on a schedule
 or in a loop - each writes a pool session and holds a DID for the sticky window; on a small pool it
-starves real visitors of swap numbers (`voice_pool_sessions_list` is the loop-safe read). Never
+starves real visitors of swap numbers (`voice_pool_sessions_list` and `voice_call_tracking_trace`
+are the loop-safe reads). Never
 `voice_phone_tracking_config_set` without the GET in the same session - it is a FULL REPLACE and
 you just cleared `swap_source_numbers` mid-cutover. Never report a `consent_mode` change, or
 tracking turned ON, as live before the redeploy (turning it OFF is live on the next page load;

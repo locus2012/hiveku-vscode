@@ -5,7 +5,9 @@
 The truth layer of the account. Every other PPC play optimizes toward a conversion number, so this reference
 decides whether that number deserves to be optimized toward. Load it for the onboarding tracking gate,
 conversion-action audits, "conversions dropped to zero," "the platform says 40 leads and the CRM says 12,"
-offline conversion import, value calibration for lead gen, anomaly triage, segment and period analysis,
+offline conversion import and Google's Data Manager upload path (with its reconnect link), conversion
+adjustments, lead quality back to Meta, cost per real lead by campaign, the read-only call and form path
+checks, value calibration for lead gen, anomaly triage, segment and period analysis,
 pre/post validation of a change you made, cross-platform blending, sync and freshness, and the numbers half
 of the monthly report. Structure, keywords, bids and creative live in `account-structure.md`,
 `keywords-search-terms-negatives.md`, `bidding-budgets-pacing.md`, `ads-assets-quality.md`; Microsoft UET
@@ -121,6 +123,27 @@ response's caveats before reporting a discrepancy: this is OUR record, not the p
 conversions have no click and can never appear here, cross-device joins are invisible, and the platform
 dates by CLICK while we date by the event.
 
+**Cost per real lead, per campaign.** `marketing_channel_roi` credits each paid lead to the campaign the
+ad platform named (a click id Hiveku resolved, a landing URL's `gad_campaignid`) before any
+`utm_campaign` tag. Each `channels[].campaigns[]` row sets the platform's own `platform_conversions`
+beside the real leads it touched (`platform_to_lead_ratio`), which is the triangle's second row per
+campaign. The `click_ids` block says how many paid leads carry a click id at all (`capture_rate`,
+overall and per platform: a low rate is a capture problem to fix before any campaign comparison) and
+which still wait for a lookup (`by_platform[].resolution.pending`: above 0, run
+`marketing_click_ids_resolve`, then read the report again). These campaign figures shifted when this
+attribution deployed on 2026-09-24; record that date as a reporting discontinuity and say it before
+comparing months.
+
+**Before blaming the platform, prove the path.** Read-only, no test call and no test lead:
+`voice_call_tracking_trace` (per tracking number: where a call rings right now, what caller and
+answerer hear, recent outcomes; `refused_fast` calls dying within 3 s are a routing failure, not a
+market) and `marketing_form_path_check` (per form: config, whether the live page carries the embed,
+capture gap between browser events and Hiveku's ledger, who would be told, attribution share).
+UNKNOWN is not pass on either. Only if the read cannot settle it, `marketing_form_path_test` runs ONE
+labelled test submission through the real intake code and deletes it (nothing is emailed or written
+to the CRM): preview first, then `confirm: true` + `preview_hash`, at most 5 per project per hour. No
+live test call exists; the trace is the call-side proof.
+
 ---
 
 ## 5. Framework D: is this number real yet?
@@ -173,7 +196,17 @@ Read-only, so no confirmation needed, but the verdict is a mandatory publish.
    not broken tracking; failed reads classify permission / token / api_error, never zeros). Also
    `ppc_meta_pages_pixels` operation list-pixels for pixel ids. TikTok: `ppc_tiktok_pixels` event-stats
    (max 10 pixels, 30-day window). LinkedIn: `ppc_linkedin_conversions` conversion-rules-list. Record
-   verdicts in the PM task.
+   verdicts in the PM task. `ppc_conversion_health_get` is the on-demand read of the weekly
+   conversion-health sweep (per action, goal or pixel, every connection) when you want one call.
+7. **Google's upload path, on every Google connection that uploads anything** (Play 3, call
+   conversions, Customer Match). Uploads go through Google's Data Manager API, so prove the path with
+   `ppc_google_upload_validate({ connection_id })` (`lane: 'call'` default; `lane: 'offline'` needs
+   `conversion_action`): it records nothing. `validated` proves credentials, permission, account
+   access, action type and payload shape, not that a click will match. `needs_reconnect`: mint the link
+   now with `integration_connect_link_create` and `needs_reconnect.next_call.arguments`, give it to the
+   person who manages the ads with `needs_reconnect.tell_the_owner`, and re-validate once
+   `integration_connect_link_status` reports completed with no `missing_scopes`; never send them to the
+   Hiveku dashboard. `needs_setup` is not a reconnect: `needs_setup.who` and `what_to_do` name the fix.
 
 **Closes the loop:** tag repairs are website work, not ads work. Every SILENT action becomes a
 `pm_tasks_create` task naming the action, the page or event expected to fire it, the date it last fired, and
@@ -222,13 +255,17 @@ cannot be un-sent - the doctrine lives in
 `hiveku-conversion-tracking/references/offline-conversions.md` (section 13) and is not repeated here. The steps below are the
 hand-upload path, `ppc_offline_conversion_upload`: rows you assemble yourself, Google Ads only,
 two-step confirm. Use the lane where the account runs it; use the hand-upload for a one-off batch
-from a client export.
+from a client export. Both reach Google through its Data Manager API: run Play 1 step 7 first, and on
+any `needs_reconnect` (a lane run reports `blocked_needs_reconnect`; its rows are HELD, not failed)
+mint the reconnect link rather than retrying.
 
 **Preconditions, all four.** An Upload-source conversion action exists in the Ads account (if missing,
 create it with `ppc_google_conversion_actions` operation conversion-action-create with
 `type_: "UPLOAD_CLICKS"` - note the trailing underscore on `type_` - per `google-ads-advanced.md`
 section 8; confirm it first, since a new action changes what the account reports). The site captures
-`gclid` on submit and carries it into the CRM record. The client
+`gclid` (or `gbraid` / `wbraid`) on submit and carries it into the CRM record; hashed email or phone
+rows (enhanced conversions for leads) also need that setting on and Google's customer data terms
+accepted, or the answer is `google_ads_needs_setup`. The client
 has a definition of the outcome (closed-won, booked job, qualified lead) and a value for it. Memory records
 the conversion action id you upload against: the wrong id silently trains the wrong thing.
 
@@ -246,16 +283,27 @@ the conversion action id you upload against: the wrong id silently trains the wr
      sales cycle against a 30-day window means most closed deals are unuploadable: lengthen the window in
      the dashboard before the first batch.
  - `conversion_value` numeric; `currency_code` a valid ISO code matching the account currency; a stable
-     `order_id` where available so re-uploads deduplicate instead of double-counting.
+     `order_id` where available so re-uploads deduplicate instead of double-counting. `order_id` is not
+     an identifier on its own: a row with only an order_id is rejected (`NO_IDENTIFIERS_PROVIDED`).
+     Always send `conversion_date_time`, or two real conversions from one person with no order_id
+     merge into one.
  - Deduplicate against your own upload log. The tool does not know you sent this deal last week; the PM
      task record is the only guard.
 3. **Confirm the batch.** Row count, total value, date range, target conversion action, one sample row. One
    explicit confirmation. This write changes what the bidding algorithm optimizes toward, so it is never
    silent and never automatic.
-4. **Upload.** `ppc_offline_conversion_upload({ connection_id, conversion_action_id, conversions: [{ gclid | order_id, conversion_date_time, conversion_value, currency_code }] })`.
-   Partial failure is on: the call can return 200 with individual rows rejected.
+4. **Upload.** First batch on a connection: the same call with `validate_only: true` (records nothing,
+   needs no confirm). Then `ppc_offline_conversion_upload({ connection_id, conversion_action_id, conversions: [{ gclid | gbraid | wbraid | hashed_email | hashed_phone_number, order_id, conversion_date_time, conversion_value, currency_code }] })`:
+   the first call is the dry-run preview, the identical call with `confirm: true` sends. Data Manager
+   is fast-fail, so Hiveku removes the rows Google names and re-sends the rest: the call can return 200
+   with individual rows rejected. Sent once: after a 502 or 504 re-send only the SAME rows with
+   unchanged `order_id` and `conversion_date_time`.
 5. **Read `results[]`, not the HTTP status.** Count `ok: false` rows with reasons and classify: unrecognized
-   gclid (capture problem or click out of window), invalid timestamp, duplicate, action mismatch.
+   gclid (capture problem or click out of window), invalid timestamp, duplicate, action mismatch. Keep
+   the returned request ids: `ppc_google_upload_diagnostics({ connection_id, request_id })` reads
+   Google's matching verdict 30 minutes to 24 hours later (accepted is not matched). Re-sending an
+   order_id Google already recorded with a new value OVERWRITES that value; it never removes a junk
+   lead. Retractions and CRM-driven restatements are Play 3a.
 6. **Score the match rate** (successful over attempted). 70 percent or above is healthy. 50 to 70 means
    gclid capture is leaking somewhere (one form, one landing-page variant, a redirect stripping the
    parameter) and becomes a task. Below 50 means capture is broken and the uploads teach a biased subset of
@@ -275,6 +323,41 @@ declared `marketing_offline_conversions_*` lane** (Meta on the `fbc` click param
 matching is refused there - and its click window is 7 days, so batch daily); **TikTok and LinkedIn** have
 their own conversion-ingest operations in `paid-social-and-bing.md`, or it is dashboard and CAPI
 engineering. Say which, rather than implying the Google loop covers everything.
+
+**Meta lead quality** (qualified leads and won deals back to Meta) is off by default and turned ON only
+by an owner or admin in the Hiveku dashboard; no agent tool can. `ppc_meta_lead_quality_status` reads
+every gate in order with the tool that opens it (`check_dataset: true` adds one Meta read per
+connection). `ppc_meta_lead_quality_test` proves the token can write to the dataset with ONE synthetic
+event carrying no CRM data: ask the owner for the code from Events Manager > Test events, preview,
+then repeat with `confirm: true`. Then the owner switches it on, and the lane's own designate,
+preview, run and queue steps follow. Only the fbc click id, event name, time and value are sent;
+Meta has no retraction, so send positive quality events only. `ppc_meta_lead_quality_disable` turns it
+off and cancels queued Meta rows (safe direction, no preview).
+
+---
+
+## 8a. Play 3a: conversion adjustments (retract junk, restate won-deal value)
+
+Once Hiveku uploads conversions, the CRM keeps learning: a lead turns out to be spam or a duplicate, a
+deal is lost, a won deal's value changes. `ppc_conversion_adjustments_*` corrects the uploaded
+conversion from that CRM disposition, on Google and Microsoft, and ONLY for conversions Hiveku itself
+uploaded: never a website-tag conversion, never Meta, never a free-form edit. To retract junk, mark it
+in the CRM first (the submission as spam, or the contact's lead status).
+
+1. `ppc_conversion_adjustments_get` - mode (off | validate_only | live), triggers, per-platform
+   availability, originals still inside the window (Google 54 days, Microsoft 90) and the ledger. A
+   ledger row with `error_code` needs_reconnect is WAITING on a Google reconnect: mint the link.
+2. `ppc_conversion_adjustments_set` - opt in and choose the triggers (`retract`, `restate`), on the
+   owner's yes. OFF by default, previews first, top-level `confirm` + `preview_hash`. Enabling
+   lands in VALIDATE-ONLY; going live is a human step in the dashboard's conversion uploads page
+   (`validate_only: false` answers 403 go_live_is_human), so tell the owner and wait.
+3. `ppc_conversion_adjustments_run` without confirm is the dry run (`would_enqueue`). Show the owner
+   those rows; on a LIVE lane every confirm sends real corrections (a retraction is permanent), so
+   each one needs the owner's yes on the rows it covers. Confirm a small first batch by `original_ids`, read the ledger, then widen.
+   `platform_refused` means the platform does not allow it for this account: report it, never retry.
+4. Say before the first live run: a retraction CANNOT be undone, live corrections wait out a 24-hour
+   settle window, and platform conversion counts GO DOWN afterwards by design - unannounced, it reads
+   as tracking breaking. Restated values do not move Maximize Conversions; only retractions do.
 
 ---
 
@@ -312,10 +395,15 @@ engineering. Say which, rather than implying the Google loop covers everything.
 - `["device"]` for the mobile CPA gap. Mobile CPA 30 percent or more above desktop with real volume is a
   bid-modifier or landing-page finding; send it to `bidding-budgets-pacing.md` with the evidence.
 - `["hour"]`, `["day_of_week"]` for dayparting, actionable only at 30-plus clicks per bucket.
-- `["geo_target_constant"]` for geographies spending without converting.
+- `["geo"]` for geographies spending without converting (`geo_basis: "targeted"` splits people IN the
+  area from people only interested in it; `"physical"` is where they were).
 - `["ad_network_type"]` at least quarterly. Search Partners and Display leak spend silently on campaigns
   nobody thought were running Display. Pays for itself more often than any other single call.
 - `["conversion_action"]` weekly, as the ongoing integrity check from Play 1.
+
+For the same slices with findings, evidence levels and the fix tool named - and for Microsoft, landing
+pages and impression share by device or ad group - use `ppc_performance_breakdown` (one platform, one
+`params.dimension` per call).
 
 Never act on a segment with fewer than 30 clicks or less than one target CPA in cost: below that you are
 reading variance and calling it insight. For per-entity daily series on any platform,
@@ -410,9 +498,19 @@ actions from two sources both primary, tag on page load instead of submit, inter
 leads with no call tracking, click id stripped by a redirect, leads from a channel the platform never saw.
 Bleeds money continuously, because bidding is being starved.
 
-**Upload returns ok but nothing appears.** Confirm you read `results[]` and not the HTTP status. Then: the
+**Upload returns ok but nothing appears.** Confirm you read `results[]` and not the HTTP status. Then
+`ppc_google_upload_diagnostics` with the request id (CLICK_NOT_FOUND, TOO_RECENT_CLICK, consent codes;
+UNKNOWN_CONSENT is a question for the owner, never a reason to start sending GRANTED). Then: the
 action id points at an Upload-source action, timestamps carry a UTC offset, clicks are in window, 24 to 48h
 have passed.
+
+**Uploads refused or held.** `needs_reconnect` anywhere (validate, upload, lane run, call outbox) is one
+reconnect link per connection (Play 1 step 7), never a dashboard errand; `needs_setup` names who fixes
+what; `CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE` is Google closing the old API, not a connection problem.
+
+**Calls or form leads vanished.** `voice_call_tracking_trace` and `marketing_form_path_check` before any
+tag theory (Framework C): a tracking number that routes nowhere and a form the live page stopped
+carrying both look like a demand drop.
 
 **Match rate collapsed between batches.** A site change stopped storing gclid, a new landing page or form
 lacks capture, or the sales cycle lengthened past the click-through window.

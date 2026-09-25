@@ -21,11 +21,24 @@ the report doctrine live there.
    report the state, not "no transcript".
 3. `voice_call_tracking_outbox` - `status: 'failed'` first. Failed uploads mean the platform is
    MISSING conversions Hiveku recorded; that gap is a finding in its own right, and it explains
-   "Google shows fewer calls than we got" without anyone's math being wrong.
-4. A period of ZERO recorded calls is a pipe question before it is a market answer: run
-   `/hiveku:call-tracking` health (`voice_call_tracking_diagnose`, reading its ordered `fix_first`
-   list) before writing "the ads drove no calls" into anything a client will see. A dead pool and
-   a dead campaign produce the same zero.
+   "Google shows fewer calls than we got" without anyone's math being wrong. Google call uploads go
+   through Google's Data Manager API: a row with `error_code` `needs_reconnect` is HELD, not failed -
+   mint the link with `integration_connect_link_create({ connector: 'google_ads',
+   target_connection_id: <the row's connection_id>, source: 'agent' })` and hand it to whoever
+   manages the ads (never the dashboard; held rows restart after the reconnect; on a marketing-ads key
+   that tool is not visible, so a full-key session runs `/hiveku:connect-integration`), then prove the path
+   with `ppc_google_upload_validate` (`lane: 'call'`). `needs_setup` is not a reconnect.
+   Google's OWN call count is a different lane: `ppc_google_call_performance_report` counts only
+   calls Google routed itself (call assets, Google forwarding numbers), so zero there beside real
+   calls in Hiveku usually means the calls came through the site's or a Hiveku number. Report the
+   two side by side, labeled.
+4. A period of ZERO recorded calls is a pipe question before it is a market answer:
+   `voice_call_tracking_trace({ connection_id })` first (read-only, never dials: every number
+   serving on the ads, where each rings right now, and recent outcomes - `recent_calls_refused`
+   means calls are dying before anyone can answer), then `/hiveku:call-tracking` health
+   (`voice_call_tracking_diagnose`, reading its ordered `fix_first` list) before writing "the ads
+   drove no calls" into anything a client will see. A dead pool, a number routed nowhere and a dead
+   campaign produce the same zero.
 5. CPL - and STATE the definition of a qualified call in the same sentence as the number (minimum
    duration, disposition, first-time caller, whatever this account's config actually says). A CPL
    without its definition is unfalsifiable and will be quoted out of context.

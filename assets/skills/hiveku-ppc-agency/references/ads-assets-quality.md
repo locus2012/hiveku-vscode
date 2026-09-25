@@ -54,7 +54,15 @@ cross-platform read.
    asset resource_names created before (section 8: your only registry).
 3. `get_account_info` for legal business name, live phone and canonical domain before writing callouts or
    call assets. Never invent a phone number for an ad.
-4. If `hiveku-data/ppc/` is over roughly 24 hours old, sync per SKILL.md 0.3 before quoting an ad-level
+4. **The claims record, before any copy.** `ppc_claims_check({ record_only: true })` returns the client's
+   record and `usable_now` (approved claims valid today with their `limited_to` and expiry, banned claims
+   with variants and replacement wording, expired ones). Write only from it. Empty: ask the owner and
+   store their words with `ppc_claims_set` (`upsert` claims of `kind` approved or banned; preview, then
+   `confirm: true` + `preview_hash` at the top level). An approved claim with an `anchor` flags every
+   other wording of that topic as `unapproved_variant`, which is how a stale contract number gets caught
+   (for example a contract number that has since been replaced). Never invent a claim, a replacement
+   wording, a contract number or an expiry.
+5. If `hiveku-data/ppc/` is over roughly 24 hours old, sync per SKILL.md 0.3 before quoting an ad-level
    number.
 
 ---
@@ -177,6 +185,10 @@ Auction insights is context, not a trigger: nothing in it moves a bid.
    path1?, path2?, pinned_headlines? })`. Limits are API-enforced (30 / 90 / 15) and one over-length string
    fails the whole call, so count before sending. **The ad is created PAUSED**, deliberately.
 3. Record the returned ad `resource_name` and any ad strength; you need it to pause the ad later.
+   Then `ppc_claims_check({ connection_id, campaign_id, include_paused: true })` - the new copy (paused,
+   so the default serving-only read would skip it), the assets around it, the auto-generated text and
+   the landing page, against the claims record. `clean` needs complete coverage; `incomplete` is not
+   clean.
 4. Review the paused ad in the dashboard (no preview tool exists), confirm with the approving stakeholder
    in one explicit exchange, then `ppc_enable_resource({ connection_id, resource_type: "ad", resource_id,
    ad_group_id })`; the parent `ad_group_id` is required, as it is for `ppc_pause_resource`.
@@ -184,9 +196,10 @@ Auction insights is context, not a trigger: nothing in it moves a bid.
    run Play 3.
 
 Microsoft parity: `ppc_platform_responsive_search_ad_create` takes the same shape. Bing imports from Google
-then drifts (imported ads stop updating, assets often do not come across), and since the asset and
-disapproval tools are Google-only, Microsoft policy states are read in that UI or inferred from enabled ads
-showing zero impressions.
+then drifts (imported ads stop updating, assets often do not come across). Microsoft policy states come
+from `ppc_bing_disapprovals_list`; Microsoft ads cannot be edited in place yet, so a fix is a new RSA plus
+`ppc_platform_pause_resource` on the old one. Microsoft extensions (where each serves, fixing a typo phone
+number in place, detaching or deleting) are `paid-social-and-bing.md` section 10.
 
 ### Play 3: The RSA test protocol
 
@@ -215,7 +228,10 @@ Sequence: callouts (no destinations), sitelinks (need real URLs), structured sni
      row often will not render.
  - **structured_snippet**: a header from Google's fixed list (Services, Brands, Types, Models,
      Amenities, Insurance Coverage) plus 3 values minimum of up to 25 chars; supply 5 to 8.
- - **call**: the verified number from `get_account_info`, never an unconfirmed tracking number.
+ - **call**: the verified number from `get_account_info`, never an unconfirmed tracking number. Before
+     launch, `voice_call_tracking_trace({ connection_id })` lists every number serving on the ad
+     account's call assets, traces the Hiveku ones (where each rings right now) and flags numbers
+     Hiveku does not own (`untracked_on_ads`, e.g. a typo).
  - **promotion / price**: strong, date-bound, a compliance liability the day they expire. Build only
      with an owner and an end date in a PM task.
 2. Record every returned `resource_name` in the PM task and the `ppc` memory. To re-enumerate what the
@@ -252,7 +268,16 @@ Sequence: callouts (no destinations), sitelinks (need real URLs), structured sni
  - **Destination mismatch or page not working**: the URL, not the ad. `web_scrape` the exact final URL,
      then fix the site or repoint the ad.
  - **Misrepresentation or unreliable claims**: superlatives, guarantees, results claims. Soften or
-     substantiate on the page; this tier escalates toward suspension if you resubmit unchanged.
+     substantiate on the page; this tier escalates toward suspension if you resubmit unchanged. Once
+     the owner agrees the wording is retired, record it as a banned claim (`ppc_claims_set`, with the
+     `replacement` wording the owner approved; never one you wrote) and run
+     `ppc_claims_check`: it finds every place the claim still serves - RSA text, Google's
+     auto-created text, sitelinks, callouts, Microsoft location extensions, landing pages, the brand
+     guide - with `fix[]` in preference order. Work `fix[]` in order; every fix tool previews first,
+     and `tool: null` is a manual step for the owner or webmaster. If the claim comes back through
+     auto-generated text, switch that off: `ppc_google_campaign_ai_settings_set` with
+     `params.auto_generated_text: false` (Microsoft: `ppc_bing_campaign_ai_settings_set`, which has no
+     preview and writes on the first call, so the owner's yes comes before it).
  - **Regulated vertical** (healthcare, finance, gambling, alcohol): certification, an account-level UI
      process, no tool. Raise as a client action naming it.
 3. Remediate. **A responsive search ad is edited in place**: `ppc_google_ad_text_update` changes its

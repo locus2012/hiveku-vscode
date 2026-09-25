@@ -107,10 +107,10 @@ Baseline from `metrics_daily.json`, or campaign-level rows in `ppc_audience_perf
 index clears the section 8 band AND the segment clears the volume minimum: an index of 0.95 on 40 clicks is
 noise. **Incrementality caveat, stated to the client every time:** none of these tools measure whether the
 audience CAUSED the conversion. A holdout or geo-split is the only honest answer. A campaign experiment
-(`google-ads-advanced.md` section 11: `ppc_experiment_create` then `ppc_experiment_schedule`, new as of
-2026-08-29 and not yet live-validated) splits traffic between a control and a treatment; a geo holdout is
-an Ads UI setup. There is no raw-API drafts path on this surface. Label the reported figures correlational
-until one of those has run.
+(`google-ads-advanced.md` section 11, Google and Microsoft, not yet live-validated) splits traffic between
+a control and a treatment and reads out through `ppc_experiment_readout`; a geo holdout is an Ads UI
+setup. There is no raw-API drafts path on this surface. Label the reported figures correlational until
+one of those has run.
 
 ---
 
@@ -136,18 +136,22 @@ until one of those has run.
 
 ## 7. The plays
 
-`ppc_audience_ops` is the umbrella CRUD tool for audiences and user lists, and which operations it exposes
-(list, create, update, remove, exclude) lives in its schema, not here. Before the first call in a session
-run `hiveku_docs_search({ query: "ppc_audience_ops" })` and `hiveku_docs_get`. Never guess an operation
-string. Where one is absent the fallback is the Ads UI Audience Manager or the raw API path in
-`google-ads-advanced.md`, and you name which you used in the report.
+`ppc_audience_ops` is the CRM-audience sync tool across platforms: operations `list`, `create`
+(`params.name`: on a Google connection it creates the Customer Match list), `process-pending` (drains the
+audience sync ledger; on Google through the Data Manager API), `stats`, `delete` (platform-side and
+irreversible) and `update`. It has NO exclusion operation: a Google exclusion is
+`ppc_google_audience_exclusions_set` (Play 2), and targeted attachment is `ppc_audience_attach` /
+`ppc_audience_detach`. Read the tool's own schema before the first call in a session; never guess an
+operation string.
 
 ### Play 1: Inventory and collection health (first, always)
 
 1. `ppc_google_user_lists({ connection_id })`. Read per list: name, type (remarketing rule, customer match,
    custom), Search size, Display size, membership duration, eligibility or status flags.
-2. `ppc_audience_ops` in its list operation for the criteria actually attached, so you know what is in use
-   and not merely what exists. Cross-reference `campaigns.json` and `ad_groups.json`.
+2. What is actually in use, not merely what exists: `ppc_audience_performance({ connection_id, days: 30 })`
+   for every attached audience with its campaign, ad group and criterion status, and
+   `ppc_google_campaign_settings_get` (`params.sections: ["audience_exclusions"]`) for the campaign-level
+   exclusions. Cross-reference `campaigns.json` and `ad_groups.json`.
 3. Classify. **Useful:** above the surface minimum, growing, attached. **Orphaned:** healthy size, attached
    nowhere, the highest-value finding in the inventory. **Dead:** flat or falling, section 9. **Junk:**
    duplicates and undefinable old tests, Play 8.
@@ -172,8 +176,16 @@ The only audience action that reliably cuts waste in week one. Before any prospe
    and reason it out yourself, or ask the operator. (Profile note: `agent_identity_get` is invisible on
    a marketing-ads-scoped key - the `agent_` prefix is not granted in profiles.ts - so on that key the
    operator is the fallback.)
-3. Apply with `ppc_audience_ops` in its exclusion operation, campaign level for "never on this offer," ad
-   group level for surgical cases. Confirm each individually, naming the campaign and the traffic effect.
+3. Apply with `ppc_google_audience_exclusions_set({ connection_id, params: { campaign_id | ad_group_id,
+   add_audience_resource_names } })`, campaign level for "never on this offer," ad group level for
+   surgical cases (resource names from `ppc_google_user_lists` `user-lists-list`). It previews first:
+   show `before` / `after`, confirm each individually naming the campaign and the traffic effect, then
+   repeat with `confirm: true` and `params.expected_preview_hash`. An audience currently TARGETED on
+   the same entity is refused (detach it first). Removing an exclusion
+   (`remove_criterion_resource_names`) WIDENS reach and is its own confirmed spend change. Campaign
+   exclusions read back in `ppc_google_campaign_settings_get` (`audience_exclusions`); for one ad group
+   re-run this tool without confirm. Microsoft exclusions: `ppc_bing_audience_criterion_add` with
+   `exclude: true`, per `paid-social-and-bing.md` section 10.
 4. Verify next day with `ppc_audience_performance({ connection_id, days: 7 })` plus impressions in
    `metrics_daily.json`. Expect impressions down, CPA down. If impressions fell and CPA ROSE you excluded a
    converting segment: reverse immediately.
@@ -205,9 +217,17 @@ destroys the best repeat revenue in the account. Get the cycle from the client o
    `CM - Leads not closed` where the sales cycle justifies it. One undifferentiated list is worth a
    fraction of the same records split three ways.
 2. **The container list must already exist.** `ppc_customer_match_upload` uploads members INTO a list, it
-   does not create one. Get the id from `ppc_google_user_lists`; if the tier does not exist, create it via
-   the matching `ppc_audience_ops` operation where the schema supports it, else in the Ads UI Audience
-   Manager, and say which path you used.
+   does not create one. Get the id from `ppc_google_user_lists`; if the tier does not exist, create it with
+   `ppc_audience_ops({ connection_id, operation: 'create', params: { name } })` on the Google connection.
+   `google_customer_match_not_eligible` is a genuine eligibility refusal for the owner or Google, never a
+   reason to reconnect.
+   **The upload path is Google's Data Manager API.** Prove it before the first real upload with the same
+   call and `validate_only: true` (adds nobody, needs no confirm). A `google_ads_needs_reconnect` answer
+   (HTTP 412, `details.needs_reconnect`) is the prompt: mint the link right away with
+   `integration_connect_link_create` and `needs_reconnect.next_call.arguments`, give it to whoever manages
+   the ads with `needs_reconnect.tell_the_owner`, poll `integration_connect_link_status`, then re-run.
+   Never send them to the Hiveku dashboard. `google_ads_needs_setup` (HTTP 409) is not a reconnect: it
+   names who fixes what (Customer Match policy acceptance is the owner's, in Google Ads).
 3. **Extract the segment** through CRM tooling (Play 2 step 2), with the filter written down verbatim.
 4. **Normalize, THEN hash. This is the step people get wrong.**
  - Email: strip leading and trailing whitespace, lowercase, then SHA-256, hex, lowercase.
@@ -222,10 +242,14 @@ destroys the best repeat revenue in the account. Get the cycle from the client o
    fields and their fill rates, the consent basis, and that upload is not trivially reversible. One
    confirmation per list, never multiple tiers on one approval.
 6. `ppc_customer_match_upload({ connection_id, user_list_id, members })` with hashed members and the
-   consent fields from Framework E.6. Read the response for partial failures: the API accepts a batch and
-   rejects rows, so a 200 is not success. Report accepted versus submitted.
-7. **Verify at 24 to 48 hours**, not immediately: a zero right after upload means nothing. Re-run
-   `ppc_google_user_lists({ connection_id })`, read the sizes, compute the implied match rate.
+   consent fields from Framework E.6 (`consent_ad_user_data` and `consent_ad_personalization` default
+   to GRANTED: pass DENIED or UNSPECIFIED when consent was not collected). Every identifier you have for
+   one person goes into ONE member. The first call is the dry run; the identical call with
+   `confirm: true` uploads. Read the response for partial failures: a 200 is not success. Report accepted
+   versus submitted, and keep the `request_ids`.
+7. **Verify at 24 to 48 hours**, not immediately: a zero right after upload means nothing.
+   `ppc_google_upload_diagnostics({ connection_id, request_id })` gives Google's processing verdict and
+   the match-rate range; re-run `ppc_google_user_lists({ connection_id })` for the sizes.
 8. **Refresh** weekly for lapsed and lead tiers, monthly minimum for customers: a six-month-old list
    suppresses people who churned and misses people who bought.
 9. Close with `memory_update`: tier names, list ids, record counts, match rates, upload dates. No PII.
@@ -276,7 +300,8 @@ destroys the best repeat revenue in the account. Get the cycle from the client o
 
 From the Play 1 inventory propose a set: duplicates, expired tests, sub-minimum lists with no growth path,
 superseded tiers. `ppc_audience_detach` everywhere they are attached, verify nothing broke for a week, then
-remove via `ppc_audience_ops`. One confirmation per list, never as a batch.
+remove with `ppc_audience_ops` operation `delete` (platform-side and irreversible; it refuses while a CRM
+sync feeds the list or live criteria target it). One confirmation per list, never as a batch.
 
 ---
 
@@ -339,7 +364,7 @@ own, a policy problem as well as a match problem. To isolate 1 to 3, upload a co
 you know are Google account holders and read that rate alone.
 
 **No rows in `ppc_audience_performance` for an audience you attached.** The attach did not take (re-read
-the response and the criteria via `ppc_audience_ops`), the campaign had no impressions, or the window is
+the response, then `ppc_audience_performance` for its criterion status), the campaign had no impressions, or the window is
 too short: try 90 days before concluding it is broken.
 
 **Impressions collapsed after an audience change.** First hypothesis, always: an attach landed in targeting
