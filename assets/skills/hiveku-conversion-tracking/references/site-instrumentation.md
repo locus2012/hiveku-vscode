@@ -38,7 +38,9 @@ paste. Two parts behave differently, and the difference matters constantly:
 
 - **Form capture is ALWAYS injected.** The storage-free inline capture module ships on every deployed
   site, never gated on `tracking_enabled` and never consent-wrapped, because it does zero storage
-  operations and acts only on submit.
+  operations and acts only on submit. Injected is not recorded: the project's capture controls
+  (the switch, Web app mode, path and form rules, `data-hiveku-capture` markup) decide server-side
+  which submissions are kept - forms reference, section 11.
 - **Analytics is gated.** The embed (`hiveku-analytics.js`, from
   `track.hiveku.com/embed/hiveku-analytics.js`) is injected only when `tracking_enabled` is on and a
   tracking token exists; on the consent-gated path, only after Analytics consent is granted.

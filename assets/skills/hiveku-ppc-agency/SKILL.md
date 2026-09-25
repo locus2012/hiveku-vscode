@@ -9,9 +9,12 @@ You are operating this account's paid media the way a retainer agency charging t
 audited before touched, measured before optimized, every spend change confirmed, every action logged.
 
 **Key profile assumption.** This manual assumes a full-profile MCP key. On a `marketing-ads`-scoped key
-(verified against profiles.ts) three calls named below are INVISIBLE:
-`job_status_get`, `crm_list_deals`, `agent_identity_get`. (`account_context_get` is NOT among
-them - profiles.ts grants it to every profile, so run it first as usual.) Fallbacks: `memory_list` still works,
+(verified against profiles.ts) five calls named below are INVISIBLE:
+`job_status_get`, `crm_list_deals`, `agent_identity_get`, `integration_connect_link_create` and
+`integration_connect_link_status`.
+(`account_context_get` is NOT among them - profiles.ts grants it to every profile, so run it first as
+usual.) Fallbacks: a Google reconnect link (6.1) is minted from a full-key session with
+`/hiveku:connect-integration` and the connection id, never swapped for "go to the dashboard"; `memory_list` still works,
 `talk_to_department` and `audit_query` are always-available, avoid `ppc_sync_async` on that key (its
 `job_status_get` poll is unreachable - use blocking `ppc_sync`), and the CRM won-deals pull for a hand
 `ppc_offline_conversion_upload` batch needs the operator, a full key, or a client export (the declared
@@ -32,7 +35,12 @@ response ladder: `hiveku-orient/references/foundation-first.md`.
    protected brand campaigns, approval thresholds, target CPA/ROAS, sacred geos or keywords. If memory
    says a campaign is protected, you do not touch it - you flag it. There is ONE `ppc` memory document
    and `memory_update` REPLACES it, so every memory write is read-merge-write (`memory_create` only on a
-   first run). Load `references/memory-protocol.md` before any memory write.
+   first run). Load `references/memory-protocol.md` before any memory write. **Goals come from
+   `ppc_goals_get`** (target cost per lead, target CPA/ROAS, monthly budget target, stop-loss rules;
+   `evaluate: true` adds each rule's state): read it before optimizing, shifting budget or launching,
+   and work toward it instead of stopping to ask. Its `missing[]` names what is unset: ask the owner
+   ONCE and record the answer with `ppc_goals_set` (preview, then `confirm: true` + `preview_hash`,
+   both top level). Record only what the client said; never invent a target.
 2. **NEVER apply a spend-affecting change without explicit per-change confirmation.** Budgets, bids,
    bidding strategies, enabling campaigns/ads/keywords, applying Google recommendations, pausing anything
    with meaningful volume - each gets its own "here is the change, here is why, confirm?" exchange.
@@ -71,7 +79,15 @@ response ladder: `hiveku-orient/references/foundation-first.md`.
    plus platform-specific `ppc_meta_*` / `ppc_tiktok_*` / `ppc_linkedin_*` / `ppc_bing_*`. Cached reads
    (`ppc_campaign_list`, `ppc_ad_group_list`, `ppc_ad_list`, `ppc_metrics`, `ppc_campaign_get`) cover all platforms.
 6. **Generative ad copy goes through the department:** `talk_to_department({ domain: "ppc", message })`
-   so output is brand-hydrated, then persist via the ppc tools.
+   so output is brand-hydrated, then persist via the ppc tools. **Claims first:** before any copy work,
+   `ppc_claims_check({ record_only: true })` returns `usable_now` (approved, banned, expired) - write
+   only from it. An empty record means ask the owner and store their words with `ppc_claims_set`
+   (preview, then `confirm: true` + `preview_hash`); never invent a claim, a wording or a contract
+   number. A contract number is an approved claim with an `anchor`, so a stale number is flagged
+   `unapproved_variant` (for example a contract number that has since been replaced). Run
+   `ppc_claims_check` again before new copy ships (with `include_paused: true`: new ads are created
+   PAUSED and the default reads serving text only) and weekly: verdict `incomplete` is not `clean`,
+   and each violation names its fix tools in `fix[]` order.
 7. **Emergency stop (runaway spend, client unreachable).** First rule out a measurement artifact (1.3) -
    a reporting spike is not a spend spike. If spend is genuinely running away, the ONE unilateral move
    permitted is the smallest reversible containment: PAUSE the bleeding entity - ad group before
@@ -80,6 +96,8 @@ response ladder: `hiveku-orient/references/foundation-first.md`.
    Better: arm the code rail in advance - at onboarding, with client consent, `ppc_connection_update`
    (`settings.monthly_budget_target_cents` arms daily monitoring; `guardrail.alert_at_pct` default 85
    files inbox alerts; `guardrail.pause_at_pct` opt-in auto-pauses live campaigns at that % of target).
+   Stop-loss rules recorded with `ppc_goals_set` (e.g. "$750 spent, 0 conversions") are
+   evaluated by the daily sweep on every connection and only file inbox items; they never pause.
 
 ## 1. Engagement lifecycle
 
@@ -92,11 +110,19 @@ Run in order; write up findings before proposing a single change:
    (per-platform requirements; a 400 returns the setup guide; idempotent on account+platform+customer_id).
    Then `ppc_connection_test`, then `ppc_sync`. Repairs (rotate credentials, fix customer_id /
    manager_id, deactivate) go through `ppc_connection_update` - credential changes reset status to
-   pending, so test again. Never delete-and-recreate a connection.
+   pending, so test again. Never delete-and-recreate a connection. A dead OAuth sign-in or a missing
+   permission is a reconnect link from `integration_connect_link_create` with `target_connection_id`
+   (6.1), handed to whoever manages the ads.
 2. **Structure review:** `ppc_campaign_list({ limit: 200 })`, then `ppc_ad_group_list` / `ppc_ad_list`
    per campaign of interest, or `ppc_campaign_get({ id, include: "ad_groups,ads,metrics" })`. Map:
-   campaign types, naming, brand vs non-brand separation, geo/network settings
-   (`ppc_account_settings_get`), MCC linkage (`ppc_linked_accounts_list`), SKAG vs themed ad groups, RSA coverage.
+   campaign types, naming, brand vs non-brand separation, MCC linkage (`ppc_linked_accounts_list`),
+   SKAG vs themed ad groups, RSA coverage. **Settings: read before you claim anything about one.**
+   Google: `ppc_google_campaign_settings_get` (`params.summary_only: true` first on a big account) -
+   networks, location option, schedule, URL options, auto-generated text, bidding, audience
+   exclusions, account auto-tagging, call reporting and auto-apply, with `flags[]` that are facts, not
+   verdicts (check memory and the goals before changing one). Microsoft: `ppc_bing_url_tracking_get`
+   (templates, UTM auto-tagging, Google parameters on Bing clicks) and `ppc_bing_campaign_ai_settings_get`.
+   A value listed in `unavailable[]` is UNKNOWN, never off.
 3. **Conversion tracking - the gate, on EVERY connected platform.** Google:
    `ppc_conversion_tracking_status({ days: 30 })` + `ppc_conversion_actions_list` - silent_count > 0
    (enabled actions, zero recent fires = broken tags), wrong primary_for_goal, MANY_PER_CLICK on
@@ -107,16 +133,21 @@ Run in order; write up findings before proposing a single change:
    **NO bid, budget, or bidding-strategy optimization on a platform until ITS tracking is verified** -
    optimizing to a broken signal is agency malpractice. Record the verdict per platform as
    pass / fail / unknown / not_applicable - unknown is a valid verdict and never becomes a pass.
-4. **Money:** `ppc_billing_summary` - billing setup, spend to date. Confirm the client's monthly ceiling
-   and target CPA/ROAS; persist via `references/memory-protocol.md`. Offer to arm the connection budget
-   guardrail (0.7) now, while the client is in the room.
+   Google uploads (6.1) get their own proof: `ppc_google_upload_validate` (records nothing).
+   Before trusting a call or form count, trace the path read-only: `voice_call_tracking_trace` (where
+   each tracking number rings now; never dials) and `marketing_form_path_check` (one verdict per form).
+4. **Money:** `ppc_billing_summary` - billing setup, spend to date. `ppc_goals_get` for the recorded
+   ceiling and targets; what is missing, ask once and record with `ppc_goals_set`. Offer to arm the
+   connection budget guardrail (0.7) now, while the client is in the room.
 5. **History:** `ppc_change_history` (max 30 days back - Google API limit). Never blame "the algorithm"
    for something a human changed Tuesday. For writes made through Hiveku itself, `audit_query` reads the
    account's MCP audit log (every tool call: key preview, args summary, status) - "which key changed
    this", on ANY platform.
 6. **Baseline snapshot:** `ppc_digest({ days: 30 })` + `ppc_impression_share` (Google) /
-   `ppc_bing_impression_share_report` (Microsoft) + `ppc_keyword_list({ days: 30 })` for QS distribution.
-   Save the baseline in a PM task - what month 1 gets compared against.
+   `ppc_bing_impression_share_report` (Microsoft) + `ppc_keyword_list({ days: 30 })` for QS distribution,
+   plus `ppc_negatives_audit` (`params.summary_only: true`) for negatives that block the account's own
+   keywords, converting terms or targeted places. Save the baseline in a PM task - what month 1 gets
+   compared against.
 
 ### 1.2 Restructure recommendations
 
@@ -139,17 +170,30 @@ exists), executed only after per-item confirmation.
 
 ## 2. Play: Search-term mining (weekly)
 
-`ppc_search_terms_report({ days: 28, limit: 2000 })` (Google); `ppc_bing_search_terms_report` (Microsoft -
+**Start with `ppc_search_terms_mine`** (Google or Microsoft; the connection picks the lane). Read
+`verdict.kind` first: `long_tail` means fix structure (match type, AI expansion) before piling on
+negatives, `concentrated` means negatives fix it, `no_conversions_measured` means fix tracking first.
+`coverage.unseen_cost` is Google spend no visible term carries and no negative reaches: say so before
+sizing waste. A Microsoft `status: 'pending'` is not empty: call again with `params.resume_token` and
+re-send `protected_terms` and `target_cpa` (goals `target_cpa_cents` / 100). Row-level evidence stays
+`ppc_search_terms_report({ days: 28, limit: 2000 })` (Google) and `ppc_bing_search_terms_report` (Microsoft -
 async, per-query metrics plus a `wasted_spend` summary of zero-conversion queries). Classify every term
 with spend: **CONVERTERS** (promote via `ppc_keyword_add` - exact for proven high-volume terms, phrase
 for patterns); **BLEEDERS** (cost >= 1x target CPA, 0 conversions -> negative; 0.5x-1x -> watchlist;
 never cut on clicks alone when cost is under ~10% of target CPA - noise); **IRRELEVANT** (wrong intent -
-negative immediately). Add negatives via `ppc_negative_keyword_add`, scoped to exactly ONE of
-ad_group_id / campaign_id: exact for one-offs, phrase for recurring patterns. DEFAULT IS BROAD - always
-pass match_type explicitly, a broad negative can nuke good traffic. Keep the returned resource_name
-(`ppc_negative_keyword_remove` is the undo). Negatives and promotions are structure changes: ONE
-confirmation for the batch (bids/budgets stay per-change). Recurring theme -> campaign level; isolated ->
-ad group. Depth: `references/keywords-search-terms-negatives.md`.
+negative immediately). **Lint before any negative add:** pass the miner's `lint_handoff.params` (or
+your own list) to `ppc_negatives_lint` and add only the items it marks `clear` - it catches a
+negative that would block an enabled keyword, a converting term, a targeted place or a protected
+term. Add via `ppc_negative_keyword_add`, scoped to exactly ONE of ad_group_id / campaign_id: exact
+for one-offs, phrase for recurring patterns. DEFAULT IS BROAD - always pass match_type explicitly, a
+broad negative can nuke good traffic. Account-wide junk on Google: `ppc_google_account_negatives_add`
+(it holds back conflicting terms by default). Keep the returned resource_name. Negatives and
+promotions are structure changes: ONE confirmation for the batch (bids/budgets stay per-change).
+Recurring theme -> campaign level; isolated -> ad group. **Existing negatives:** `ppc_negatives_audit`
+lists every level (shared and account lists included) with the conflicts that block the account's own
+keywords. Removing one is `ppc_negatives_remove` and it WIDENS reach at once: preview, say what
+reopens (a list detach reopens every member), get the owner's yes, then confirm with
+`params.expected_preview_hash`. Depth: `references/keywords-search-terms-negatives.md`.
 
 ## 3. Play: Budget + bid management
 
@@ -158,6 +202,16 @@ propose increase. Overpacing losers: decrease or pause. Reallocate, don't just a
 losers so the total holds the client ceiling. Apply per campaign WITH CONFIRMATION: `ppc_budget_update`
 (Google) - an `explicitly_shared` budget change hits every campaign using it; re-confirm. Other
 platforms: `ppc_platform_budget_update`.
+
+**Before raising a budget or loosening a target: `ppc_bid_budget_simulate`** (Google or Microsoft,
+read-only). It returns the platform's own curve plus `derived.marginal`, the cost per EXTRA
+conversion - the number to decide with, not the average CPA. Read `calibration` first (`off` = the
+curve does not match real spend: do not act on it) and `unavailable[]` (a missing curve is never
+zero). `next_step` is bounded by the goals and is NEVER applied: propose it, then apply it with its
+`apply_with` tool under that tool's own preview and confirm - never present it as done. `apply_gap`
+means no Hiveku tool writes that lever (a Google Maximize campaign's target, portfolio targets): say
+so and name the platform UI step. A new campaign has no history to replay: forecast instead (Play 6
+of the keywords reference).
 
 **Bidding strategy** (`ppc_bidding_strategy_update`): climb the ladder on the section-9 volume gates -
 `manual_cpc`/`max_clicks` under 15 conv/30d, `max_conversions` 15-30, `target_cpa` at the trailing-30d
@@ -169,7 +223,12 @@ per 2 weeks.
 **Keyword bids:** `ppc_keyword_bid_update` only works under Manual/Enhanced CPC - verify via
 `ppc_campaign_get` first. **Bid modifiers:** `ppc_bid_modifier_update` - evidence from
 `ppc_segment_report` first; only segments with >= 30 clicks or >= 1x target CPA in cost; cap first moves
-at +-20-30%. **Headroom:** `ppc_impression_share` (Google) / `ppc_bing_impression_share_report`
+at +-20-30%. **Dayparting:** `ppc_google_ad_schedule_set` (preview-first; the FIRST window darkens every
+hour it does not cover; Smart Bidding ignores schedule bid modifiers but respects the windows) and
+`ppc_bing_ad_schedule_add`. **Where the money goes:** `ppc_performance_breakdown` - one platform, one
+dimension per call (location, device, hour, day, landing page, impression share); read `verdict` and
+`findings[]` first, each naming its fix tools; a zero-conversion slice that spent less than 3x the
+account CPA is noise, not waste - never cut it on that alone. **Headroom:** `ppc_impression_share` (Google) / `ppc_bing_impression_share_report`
 (Microsoft - async, IS / lost_to_budget / lost_to_rank + `scaling_headroom` summary): high lost_to_budget
 = raise budget (cheapest growth); high lost_to_rank = raise bids or fix QS, NOT budget.
 Who you're losing to is NOT available: Auction Insights is a Google Ads UI-only report, `ppc_auction_insights`
@@ -186,7 +245,12 @@ group or mirror it in a new RSA via `ppc_responsive_search_ad_create` (RSAs crea
 + `ppc_asset_create` -> `ppc_asset_attach` (sitelinks/callouts/snippets lift CTR ~10-15% at zero CPC
 cost). **Landing page low** - a PM task for the web team, not an Ads-side fix. Disapprovals weekly, ALL
 platforms - a disapproved ad is a zero-traffic ad silently starving its parent: `ppc_disapprovals_list`
-(Google), `ppc_meta_disapprovals_list`, `ppc_tiktok_disapprovals`, `ppc_linkedin_creative_disapprovals`.
+(Google), `ppc_bing_disapprovals_list`, `ppc_meta_disapprovals_list`, `ppc_tiktok_disapprovals`,
+`ppc_linkedin_creative_disapprovals`. **Text nobody approved:** with text customization on, Google and
+Microsoft write headlines from the landing page, so a retired claim can serve without anyone editing
+an ad. Read it in the settings snapshot (1.1.2); switch it off per campaign with
+`ppc_google_campaign_ai_settings_set` (`params.auto_generated_text: false`, preview-first) or
+`ppc_bing_campaign_ai_settings_set`, each with the owner's yes.
 Match-type migration: `ppc_keyword_match_type_change` removes + recreates the criterion (new
 resource_name, QS history resets) - do it on proven bleeders, not preemptively. Depth and per-platform
 disapproval semantics: `references/ads-assets-quality.md`.
@@ -195,13 +259,40 @@ disapproval semantics: `references/ads-assets-quality.md`.
 
 **Structure:** STAG default (1.2). New builds: `ppc_campaign_create` (always starts PAUSED) ->
 `ppc_ad_group_create` -> `ppc_responsive_search_ad_create` -> `ppc_keyword_add` -> review ->
-`ppc_enable_resource` with confirmation. `ppc_bulk_edit` for state hygiene, never as a consent shortcut (0.2).
+`ppc_launch_qa` -> `ppc_enable_resource` with confirmation. `ppc_bulk_edit` for state hygiene, never as a
+consent shortcut (0.2).
+
+**Before enabling ANY Search campaign** (new or paused, Google or Microsoft):
+`ppc_launch_qa({ connection_id, campaign_id })`, read-only. `no_go` = do not enable: work `fix_first[]`
+in order, each with the tool it names, then re-run. `incomplete` = a check could not be read, and
+unknown is NOT a pass. Only `go` or `go_with_warnings` (warnings said to the owner) reaches the
+enable, which stays its own confirmed write.
+
+**Settings writes, preview-first.** Google: `ppc_google_campaign_settings_set` (search partners,
+Display expansion, location option, tracking template, final URL suffix, custom parameters),
+`ppc_google_campaign_ai_settings_set`, `ppc_google_ad_schedule_set`, `ppc_google_call_settings_set`
+(account call reporting and the default call conversion action), `ppc_google_audience_exclusions_set`,
+`ppc_google_auto_apply_set`. The first call writes nothing and returns before/after plus a
+`preview_hash`; show it, get the yes, repeat the SAME call with `confirm: true` at the top level and
+`params.expected_preview_hash`. Trust `after` (the read-back), not what you asked for. Sent once:
+after a slow or failed confirm, re-read with `ppc_google_campaign_settings_get` before anything else.
+A network turned ON, PRESENCE_OR_INTEREST, a removed exclusion or a cleared schedule WIDENS reach: a
+spend change. Microsoft: `ppc_bing_url_tracking_set` (scope `campaign` first; tracking changes skip
+editorial review and go live at once) and `ppc_bing_ad_extension_update` /
+`ppc_bing_ad_extension_remove` on handles from `ppc_bing_ad_extension_associations_list` (a DELETE is
+irreversible: prefer detach, owner yes first) follow the same preview-hash contract.
+`ppc_bing_campaign_ai_settings_set` does NOT: it has no preview and writes on the first call, so get
+the owner's yes on the exact booleans first, then trust its `after` and re-read with
+`ppc_bing_campaign_ai_settings_get`.
 
 **Audiences (Google):** observation first - attach data-only via `ppc_bid_modifier_update` target_type
 "audience" at 1.0; read `ppc_audience_performance({ days: 30 })` and adjust (raise 1.1-1.3 on winners,
 demote 0.7-0.9 or drop losers). `ppc_audience_attach` RESTRICTS serving - confirm the reach tradeoff
-first. Customer Match: `ppc_customer_match_upload` - members PRE-HASHED SHA256, NEVER raw PII; the
-user_list must already exist (`ppc_google_user_lists` user-lists-list is the source of user_list_id);
+first. Exclusions (keep customers out of prospecting): `ppc_google_audience_exclusions_set`, preview-first.
+Customer Match: `ppc_customer_match_upload` - members PRE-HASHED SHA256, NEVER raw PII; it uploads
+through Google's Data Manager API (reconnect rule in 6.1), `validate_only: true` proves the path and
+adds nobody; the user_list must already exist (`ppc_google_user_lists` user-lists-list is the source of
+user_list_id; a missing list is created with `ppc_audience_ops` operation `create`);
 consent fields per GDPR/CCPA; sizes update in 24-48h. Equivalents: `ppc_meta_custom_audience_upload`,
 `ppc_tiktok_custom_audience_upload`, `ppc_linkedin_matched_audience_upload` (needs an existing USER-type
 DMP segment). Tiering and normalize-then-hash rules: `references/audiences-and-remarketing.md`.
@@ -227,12 +318,37 @@ ICP; wrong seniority = targeting fix, not creative fix). Pause/enable anywhere:
    `type_: "UPLOAD_CLICKS"` (trailing underscore). Partial-failure is on - read `results[]` for
    ok:false rows, never the HTTP status. This lets smart bidding optimize to REVENUE, not form
    fills. Payload validation, match-rate scoring: `references/measurement-and-conversions.md`.
+   **Google uploads go through Google's Data Manager API** (the lane, the hand path, call uploads and
+   Customer Match). `ppc_google_upload_validate` first: it records nothing. On `needs_reconnect` -
+   from that tool, an upload, a lane run, the call outbox, or `ppc_connection_test` reporting
+   `data_manager_scope: missing` - mint the link at once with `integration_connect_link_create` and
+   `needs_reconnect.next_call.arguments`, hand it to the person who manages the ads with
+   `needs_reconnect.tell_the_owner`, poll `integration_connect_link_status`, then re-run. One link per
+   connection. Never send the owner to the Hiveku dashboard for it. `needs_setup` is NOT a reconnect
+   (`needs_setup.who` and `what_to_do` name the fix). Accepted is not matched:
+   `ppc_google_upload_diagnostics` reads Google's verdict 30 minutes to 24 hours later.
+   **Correcting what was uploaded:** `ppc_conversion_adjustments_get` / `_set` / `_run` (Google and
+   Microsoft, only conversions Hiveku itself uploaded; opt-in, lands in validate-only, and going live
+   is a human dashboard step; a retraction cannot be undone and platform counts go DOWN by design -
+   say so first). **Lead quality to Meta:** `ppc_meta_lead_quality_status`, `ppc_meta_lead_quality_test`,
+   `ppc_meta_lead_quality_disable`; turning it ON is dashboard-only and off by default. Both:
+   `references/measurement-and-conversions.md` Plays 3 and 3a.
 2. **Hiveku-side reconciliation (lead-gen):** `marketing_form_conversion_audit` answers "the platform
    says 40, the CRM shows 22" for form fills - submissions with attribution plus discrepancy buckets
    (spam, duplicate, deleted, no_attribution...) that sum to the total. Phone-heavy clients:
    `marketing_call_attribution_breakdown` groups calls by source/medium/campaign AND reports call
    quality the platform cannot (duration distribution vs the account's own threshold, dispositions,
    missed/voicemail). Read each response's caveats - our record and the platform's legitimately differ.
+   **Cost per REAL lead, per campaign:** `marketing_channel_roi` credits a paid lead to the campaign the
+   platform named through its click id; each `channels[].campaigns[]` row sets `platform_conversions`
+   beside the real leads (`platform_to_lead_ratio`), and the `click_ids` block gives `capture_rate`
+   (the share of paid leads carrying a click id at all) and `by_platform[].resolution.pending` (above 0:
+   run `marketing_click_ids_resolve`, then read again). These campaign figures moved when that
+   attribution change deployed on 2026-09-24: tell the owner before comparing with an earlier month.
+   **Is the path itself working?** Read-only first: `voice_call_tracking_trace` (where each tracking
+   number rings right now; never dials) and `marketing_form_path_check` (a verdict per form; unknown
+   is not a pass). `marketing_form_path_test` runs one labelled test submission and deletes it; it writes,
+   so only after its preview and `confirm: true` + `preview_hash`.
 3. **Analysis toolkit:** `ppc_period_comparison` for WoW/MoM movement and pre/post validation
    (non-Google: `ppc_platform_period_comparison`; Bing is async-only, the response notes when to diff
    cached `ppc_metrics` instead). `ppc_metrics` - daily series, any platform. `ppc_segment_report` -
@@ -242,18 +358,25 @@ ICP; wrong seniority = targeting fix, not creative fix). Pause/enable anywhere:
    via `ppc_recommendation_apply` (some types are UI-only, structured 400); budget raises and
    TARGET_CPA_OPT_IN / BIDDING_STRATEGY always go to the client. NEVER blanket-apply to chase
    Optimization Score. Full safe / review-hard / client-always triage table: `references/account-structure.md`.
+   **Auto-apply** lets Google apply them without asking: read `account.auto_apply` in the settings
+   snapshot and pause with `ppc_google_auto_apply_set` (`params.pause_types` or `params.pause_all`, preview-first).
+   Types outside its 15 stay an owner step in Google Ads (Recommendations > Auto-apply), and an empty
+   `enabled_types` is not proof that auto-apply is off.
 
 ## 7. Weekly cadence checklist (run as one session, in order)
 
-1. `ppc_digest({ days: 7 })` - cross-platform snapshot; `ppc_sync` anything stale.
+1. `ppc_digest({ days: 7 })` - cross-platform snapshot; `ppc_sync` anything stale. Then
+   `ppc_goals_get({ evaluate: true })` - every stop-loss rule reads ok | breached | unknown (unknown is
+   never ok).
 2. `ppc_anomaly_check` per Google connection; investigate flags (disapprovals -> change history -> tracking).
 3. Tracking gate per platform: `ppc_conversion_tracking_status({ days: 7 })`,
    `ppc_bing_conversion_tracking_status`, `ppc_meta_conversion_volume`, `ppc_tiktok_pixels` event-stats.
    Verdict per platform: pass / fail / unknown / not_applicable. A platform whose read FAILED is
    "unknown" and blocks its own optimization steps - never a pass by omission.
 4. `ppc_pacing_summary` - budget reallocation proposals (section 3), confirm, apply.
-5. Search-term mining (section 2) - negatives + promotions, Google and Bing.
-6. Disapprovals on every connected platform (section 4 names the four tools) + QS spot-check on top spenders.
+5. Search-term mining (section 2) - `ppc_search_terms_mine`, then `ppc_negatives_lint` before any add;
+   negatives + promotions, Google and Bing.
+6. Disapprovals on every connected platform (section 4 names the five tools) + QS spot-check on top spenders.
 7. Platform reads where connected: Meta breakdown, TikTok creative report, LinkedIn demographics (section 5).
 8. `ppc_recommendations_list` triage (6.4).
 9. Offline-conversion run or upload if the CRM loop is wired (6.1) - read the lane's mode from
@@ -272,13 +395,18 @@ Write as markdown to reports/ppc-YYYY-MM.md:
    Never hide partial status here: a channel whose data could not be retrieved makes the report PARTIAL,
    stated in the summary, not silently dropped - a failed source is not a zero.
 2. **Performance detail:** `ppc_digest({ days: 30 })` totals; `ppc_period_comparison` (this month vs
-   last, scope campaign) for movement; per-platform tables. **The comparability gate:** do not aggregate
+   last, scope campaign) for movement; per-platform tables; `ppc_performance_breakdown` for the
+   location / hour / device / landing-page / impression-share story (one platform per call, never
+   summed); `marketing_channel_roi` for cost per REAL lead by campaign beside each platform's own count
+   (6.2), with the 2026-09-24 attribution change named when comparing months. **The comparability gate:** do not aggregate
    across platforms unless they share the same conversion event definition, attribution window, timezone
    and currency - until then report side by side with definitions stated, and blend only spend after
    explicit currency normalization. A Meta "conversion" is not a Google "conversion".
 3. **What we changed and why:** the PM task log + `ppc_change_history` as the authoritative record (also
    catches changes made OUTSIDE the engagement - flag those; `audit_query` attributes Hiveku-side writes to a key).
-4. **Tests concluded:** hypothesis, variant, result, significance (section 9 minimums), decision.
+4. **Tests concluded:** hypothesis, variant, result, significance (section 9 minimums), decision. A
+   campaign experiment's result is `ppc_experiment_readout`'s verdict quoted as returned: `interim_*`
+   until the planned end, never a winner on thin data.
 5. **Losses and risks:** impression share lost to budget/rank (Google + `ppc_bing_impression_share_report`),
    tracking gaps, creative fatigue, open disapprovals, calls/forms reconciliation gaps (6.2).
 6. **Next month plan:** ranked proposals, each with expected impact and the spend change requiring approval.
@@ -296,7 +424,10 @@ NOT a bare `memory_create`. Link the report file in the PM task.
 - Budget pacing tolerance: +-10% MTD before intervening (the tool flags at +-20% - act earlier).
 - Search-term cut threshold: cost >= 1x target CPA with 0 conversions; watchlist at 0.5x.
 - Test significance minimums: ~100 clicks AND ~10 conversions per variant, or 2 full weeks, whichever is later;
-  never call an RSA/creative test in week 1.
+  never call an RSA/creative test in week 1. Campaign experiments (Google and Microsoft) read through
+  `ppc_experiment_readout`, which never names a winner below 100 clicks AND 10 conversions per arm and
+  14 days, and says `interim_better` / `interim_worse` until the planned end. The first live
+  experiment through these tools needs the account owner's explicit yes: experiments split real traffic.
 - Impression share: brand campaigns should hold >= 90% IS; non-brand lost_to_budget > 20% with CPA at target = growth headroom.
 - Change velocity: one bidding-strategy change per campaign per 2 weeks; respect the 7-day learning phase.
 - Anomaly threshold: 50% day-over-baseline default; drop to 30% on accounts spending > $500/day.
@@ -319,6 +450,14 @@ NOT a bare `memory_create`. Link the report file in the PM task.
 - New campaigns and RSAs create PAUSED by design - the deliberate last step is `ppc_enable_resource`, with confirmation.
 - `ppc_connection_update` PATCHes the WHOLE `settings` object - read the connection first and merge, or the
   budget-guardrail keys (and anything else in settings) are silently lost.
+- **The preview-hash writes** (the Google settings writes, `ppc_negatives_remove`, Microsoft URL
+  tracking and extensions, and the experiment treatment / promote / discard / Microsoft create and
+  update): the first call writes nothing and returns a `preview_hash`; the confirm is the SAME call
+  plus `confirm: true` at the top level and `params.expected_preview_hash`. `ppc_goals_set`,
+  `ppc_claims_set`, `ppc_conversion_adjustments_set` / `_run` and `marketing_form_path_test` take
+  `confirm` and `preview_hash` both at the top level. A stale hash writes nothing: preview again and show it. Every one is sent ONCE - after a slow
+  or failed confirm, re-read before calling again, and never report a failure the read-back does not show.
+- A read's `next_step`, `fix[]` or `apply_with` names a tool; it does not mean anything was done.
 - Also live in their plays: shared-budget `explicitly_shared` re-confirm (3), `ppc_keyword_bid_update`
   no-op under smart bidding (3), match-type change recreates the criterion (4), never loop
   `ppc_recommendation_apply` (6.4), Customer Match pre-hash + list-must-exist + 24-48h sizes (5).
@@ -334,10 +473,10 @@ covers" section. Load ONE when the work actually goes there, not preemptively (t
 | `references/memory-protocol.md` | Before ANY `memory_create` / `memory_update` - read-merge-write, recovery, what belongs in the record. |
 | `references/workflow-templates.md` | Putting a retainer account on the recurring cadence / "automate this play" - template roster, install mechanics, the `is_enabled: true` default trap. |
 | `references/account-structure.md` | Auditing or rebuilding account wiring: campaigns, ad groups, naming, bulk ops, change history, recommendations triage. |
-| `references/keywords-search-terms-negatives.md` | Search-term mining, negative lists, match-type strategy or migration, keyword discovery and forecasting. |
-| `references/bidding-budgets-pacing.md` | Anything about money: bid strategies, modifiers, budget caps, pacing, spend control, impression-share economics. |
+| `references/keywords-search-terms-negatives.md` | Search-term mining (`ppc_search_terms_mine`), the negatives manager (audit, lint, remove), match-type strategy or migration, keyword research (`ppc_keyword_ideas`) and forecasting on Google and Microsoft. |
+| `references/bidding-budgets-pacing.md` | Anything about money: the goals record, bid strategies, the bid and budget simulator, modifiers and dayparting, budget caps, pacing, spend control, impression-share economics. |
 | `references/ads-assets-quality.md` | The query-to-click gap: RSAs, extensions and assets, ad strength, disapprovals (all platforms), auction insights. |
 | `references/audiences-and-remarketing.md` | Who sees the ads: remarketing, RLSA, Customer Match, list architecture, first-party data, activation. |
-| `references/measurement-and-conversions.md` | Whether the numbers can be trusted: tracking integrity, offline conversion import, metric definitions, anomalies. Load BEFORE optimising toward an unverified conversion number. |
-| `references/google-ads-advanced.md` | Google-only depth: the raw read lane, Performance Max, Shopping, advanced targeting, conversion-action surgery, forecasting, campaign experiments (create / schedule / end / graduate - new as of 2026-08-29, section 11). |
+| `references/measurement-and-conversions.md` | Whether the numbers can be trusted: tracking integrity, the call and form path checks, offline conversion import through Google's Data Manager (and its reconnect link), conversion adjustments, Meta lead quality, cost per real lead by campaign, anomalies. Load BEFORE optimising toward an unverified conversion number. |
+| `references/google-ads-advanced.md` | Google-only depth: the raw read lane, Performance Max, Shopping, advanced targeting, conversion-action surgery, forecasting; plus campaign experiments on Google AND Microsoft (section 11: readout, treatment, schedule, end, promote vs graduate, discard). |
 | `references/paid-social-and-bing.md` | Anything that is not Google Ads: Microsoft/Bing, Meta, TikTok, LinkedIn, with per-platform quirks and metric definitions. |

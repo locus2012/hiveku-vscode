@@ -31,7 +31,7 @@ Every item is enforced by real platform behavior and has an incident behind it.
 **Honeypot and opt-out**
 
 - **F14. Include a honeypot, and it must NOT be `type="hidden"`.** A real `type="text"` input named `hvk_contact_pref`, hidden with CSS, `tabIndex={-1}`, `autoComplete="off"`, in an `aria-hidden` wrapper, `absolute h-px w-px overflow-hidden` at `left:-9999px`; parent `<form>` needs `relative`. Canonical component: `components/ui/form-honeypot.tsx`. Absence is never treated as suspicion, so a legacy form without one is not broken.
-- **F15. `data-hiveku-capture="off"` on every `<form>` that is not a lead form.** Search boxes, filters, newsletters the owner does not want recorded.
+- **F15. `data-hiveku-capture="off"` on every `<form>` that is not a lead form.** Search boxes, filters, newsletters the owner does not want recorded. On a web app (sign-in, a portal, admin screens, end-user data entry) the reverse also holds: set the site to Web app at provisioning, on the owner's yes (`marketing_form_capture_settings_update({ project_id, mode: "allowlist" })`), and put `data-hiveku-capture="on"` on every real lead form, or nothing captures it.
 
 **Workflows behind the form**
 
@@ -66,7 +66,7 @@ That last one is F3. `form.name` is a real property of `HTMLFormElement`, and th
 
 ### Why never wire an endpoint (F5)
 
-Every `<form>` on a deployed Hiveku site is captured automatically by an inline module injected at build time. Submissions land in the Forms tab, upsert a CRM contact, notify the owner, and fire any automation the owner built. Capture is ALWAYS on, ungated by consent or analytics settings.
+Every `<form>` on a deployed Hiveku site is captured automatically by an inline module injected at build time. Submissions land in the Forms tab, upsert a CRM contact, notify the owner, and fire any automation the owner built. Capture is on for every form by default, ungated by consent or analytics settings; only the project's capture controls narrow it (see "Opting out and in" below).
 
 So a second writer does not add a second path. It creates a SECOND RECORD of the same submission, and the customer gets two of everything. If the user asks for "a working contact form," say plainly that a plain `<form>` with real fields IS one.
 
@@ -127,11 +127,19 @@ Transport and behavior:
 - Automatic redaction when a field name contains `password`, `passwd`, `ssn`, `social`, `credit`, `cardnumber`, `cvv`, `cvc`, `pin`, `iban`, `routing`, `account_number`, `passport`, `taxid`, `dob`, `otp`, `secret`, `token`, or autocomplete is `cc-number`, `cc-csc`, `cc-exp*`, `current-password`, `new-password`, `one-time-code`.
 - The owner sees every submission even if a workflow fails. Capture and automation are independent.
 
-Escape hatch for a genuinely formless interaction: `window.hivekuCaptureForm(fields, name)`. Only when there is no form element to annotate, never to add a second writer to a form that has one.
+Escape hatch for a genuinely formless interaction: `window.hivekuCaptureForm(fields, name)`. Only when there is no form element to annotate, never to add a second writer to a form that has one. It counts as `data-hiveku-capture="on"`, so it is captured even on a Web app site.
 
-### Opting out (F15)
+### Opting out and in (F15)
 
 "Without it, every site search creates a submission record." A search box, a filter bar, a sort control and a currency switcher are all forms to the DOM, and each produces lead records and owner notifications if left capturing.
+
+The markup is one of the capture controls; the others are project settings an agent changes by tool, with no redeploy. The play is `/hiveku:form-capture`.
+
+- **Markup.** `data-hiveku-capture="off"` on a `<form>`: never captured, by any Hiveku script (the built-in capture and the analytics embed alike). `data-hiveku-capture="on"`: captured even on a Web app site and even when it looks like a sign-in form. Markup is the most specific signal, so it beats per-form and path rules; only the capture switch beats it. It reaches the built-in script on the site's next deploy and the analytics embed within about a day.
+- **Project settings.** The capture switch (off: nothing captured automatically); the site type (Marketing site captures every form except exclusions, Web app captures only what something includes); the sign-in default (skips credential-shaped submissions on sign-in and password pages, and never a form that asks for a name); path rules (`/portal/*` is the page and everything below it, `*` is one segment); per-form rules (Always or Never). Read them with `marketing_form_capture_settings_get` and `marketing_form_capture_list`, preview a change with `marketing_form_capture_preview`, save with `marketing_form_capture_settings_update` on the owner's yes. A change applies to the next submission.
+- **Building a web app:** set Web app mode at provisioning and mark the real lead forms `data-hiveku-capture="on"` (F15). A marketing site stays on the default and excludes app-like paths.
+- **What a rule does not do.** It stops NEW captures only: what was recorded before stays until erased with `marketing_form_capture_purge` (permanent, dry run first; the owner erases from Analytics > Forms > Capture until agent execution is switched on). And it governs automatic capture only: a hosted Hiveku form and a form posting to a wired workflow webhook are never affected.
+- **Muting is not opting out.** Muting a form in Notifications stops the email and nothing else: a muted form still creates contacts, runs workflows and sends conversions.
 
 ### Things that POST but are not leads (F8)
 
@@ -260,7 +268,9 @@ A file input inside a captured form is handled by the platform. The visitor pick
 | Dozens of records named "Space Y 4 Form", "Flex Form". | No form key, identity fell to the first CSS class, junk identity kept path-scoping. | Add F1 and F2, then check the Forms tab to see how existing records behave before promising the customer a cleanup. |
 | A record named `[object HTMLInputElement]`. | A field named `name` clobbered `form.name`. | Rename to `full_name`, but per F10 flag the rename to the owner rather than doing it quietly. |
 | One form appears twice, split on a trailing slash. | Path-scoped junk identity, `@/contact` vs `@/contact/`. | F1. The key discards path entirely. |
-| Records from the search box, filter bar, or newsletter. | Those are `<form>` elements and capture is ungated. | Add `data-hiveku-capture="off"`. |
+| Records from the search box, filter bar, or newsletter. | Those are `<form>` elements, and capture takes every form by default. | Add `data-hiveku-capture="off"` (next deploy), or an exclude rule through `/hiveku:form-capture` (immediate). |
+| Sign-ins, password resets or an app's own screens show up as leads. | A web app on the Marketing site default. | `/hiveku:form-capture`: Web app mode with the real lead forms included (preview first), then erase what was recorded. |
+| A lead form went quiet after a capture change. | A rule, Web app mode or the switch now skips it. | `marketing_form_capture_list`: the form's `status`, `reason_text` and `skipped_30d`. |
 | Records with `chatWidgetId` / `conversationId`, or a beacon flood. | A chat widget or Meta pixel POSTing through `HTMLFormElement.prototype.submit`. | Both discarded platform-side now. If you still see them, check custom code for a hand-rolled pixel. |
 | A CRM contact with a blank email (or, from a malformed token, literally `{{body.email}}`). | A workflow expression naming a field the form does not send, or a single-pipe fallback. | `unresolved_templates` on that run's step names the token. Read the form's real field names, fix the expression (add a `\|\|` fallback where blank is acceptable), clean the junk contacts. |
 | "Forms stopped working days ago" and nothing changed. | Either the workflow is failing on every submission (a webhook form never pauses; its failures show in `workflow_runs_recent({ status: 'failed', since })`), or it is paused (`workflow_get` `is_paused` and `paused_reason`): the webhook still accepts and stores deliveries, nothing runs them. | Failing: `workflow_run_get` the failing run, fix, `workflow_validate`, a dry run, and turn on failure alerts. Paused: the same fix, then `workflow_stranded_list`, get approval, `workflow_resume`, `workflow_stranded_replay({ confirm: true })`. In that order, and the replay is capped at 25. |

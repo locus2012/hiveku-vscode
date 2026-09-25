@@ -151,7 +151,9 @@ email is still recorded; then contact upsert; then patch `website_form_submissio
 deduped `crm_activities` note; then the notification. A submission visible in Forms with no linked
 contact is therefore a partial failure at step two, not a lost lead, and the form-submission sweeper
 retries the CRM half for rows marked `needs_attention`. Losing a lead outright requires inline capture,
-webhook, worker post, and reconcile to all fail.
+webhook, worker post, and reconcile to all fail - unless a capture rule skipped it on purpose (a
+switched-off capture, an excluded path or form, Web app mode), which happens before any row exists:
+forms reference, section 11.
 
 ---
 

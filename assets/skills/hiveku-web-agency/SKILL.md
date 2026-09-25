@@ -512,7 +512,7 @@ incidents behind every rule. Read the relevant one BEFORE writing code, not afte
 
 | Reference | Load it when |
 |---|---|
-| `references/forms.md` | Any form work; a lead that never arrived; duplicate/junk form records; the workflow behind a form; the platform-vs-CRM conversion gap. |
+| `references/forms.md` | Any form work; a lead that never arrived; duplicate/junk form records; which forms Hiveku captures (markup on/off, Web app mode, path and form rules); the workflow behind a form; the platform-vs-CRM conversion gap. |
 | `references/routes-and-collisions.md` | Adding/moving/renaming a route; a page 404s or serves wrong content; reserved paths; dynamic segments. |
 | `references/build-and-deploy.md` | A failing build or red deploy; size/serverless limits; binary assets and bulk deletion; deploy preflight/diff semantics; reading the verification oracles. |
 | `references/cms-and-database.md` | Any CMS collection or entry; publish scheduling; deletion preflights and bulk purge; the project database, RLS, Supabase extras. |

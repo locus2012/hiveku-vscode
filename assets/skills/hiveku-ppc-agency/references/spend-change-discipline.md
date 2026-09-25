@@ -17,13 +17,13 @@ after a write to know it actually happened.
 Every tool named in this file was verified against
 `hiveku-mcp-api-server/src/tools/marketing-tools.ts` and `olympus-tools.ts`, and every enforcement
 claim against the builder routes that back them. Where a capability does not exist, this file says
-so rather than inventing a tool name. The one exception is the campaign-experiment lane
-(`ppc_experiments_list`, `ppc_experiment_create`, `ppc_experiment_schedule`, `ppc_experiment_end`,
-`ppc_experiment_graduate`), new as of 2026-08-29: those five are described from the builder route
-contract (`/api/olympus/ppc/google-ops`, module `experiments`) because their tool declarations ship
-after the route deploys, and none has been live-validated. Every claim about them below is contract,
-not observation, until a session has driven one end to end. Their lifecycle and verdict rules live in
-`references/google-ads-advanced.md` section 11.
+so rather than inventing a tool name. The campaign-experiment lane (Google `ppc_experiments_list`,
+`ppc_experiment_create`, `ppc_experiment_schedule`, `ppc_experiment_end`, `ppc_experiment_graduate`;
+Google and Microsoft `ppc_experiment_readout`, `ppc_experiment_treatment_set`, `ppc_experiment_promote`,
+`ppc_experiment_discard`; Microsoft `ppc_bing_experiment_create`, `ppc_bing_experiment_update`) is
+declared, but none of it has been driven end to end against a live account: every claim about it below
+is the declared contract, not observation, and the first live experiment needs the account
+owner's explicit yes. Its lifecycle and verdict rules live in `references/google-ads-advanced.md` section 11.
 
 ## The governing rule
 
@@ -39,8 +39,8 @@ Three separate refusals, and they fail in that order.
   words "Write path not yet live-validated" in their own tool descriptions
   (`ppc_meta_campaign_update`, `ppc_meta_ad_set_update`, `ppc_meta_campaign_push`) or
   "UNVALIDATED-LIVE" (`ppc_linkedin_conversions`, `ppc_linkedin_audience_segments`,
-  `ppc_linkedin_abm_segment`), and as of 2026-08-29 the whole experiment lane is in the same state
-  without a tool description to carry the words yet. Do not promise a client an outcome through a
+  `ppc_linkedin_abm_segment`), and the experiment lane is in the same state until its first live
+  run. Do not promise a client an outcome through a
   lane nobody has driven end to end. Say what is validated, say what is not, and let the operator
   choose.
 - **No approval means no mutations.** Every spend-affecting change gets its own approval exchange.
@@ -63,9 +63,10 @@ one true:
    `campaign_id` / `ad_group_id` / `criterion_id` / `resource_name` from a read you ran this
    session. Never an id you carried over from a conversation about a different account.
 3. **A human-readable before and after, with blast radius.** Section 2.
-4. **Owner approval, inside the account's own ceiling.** The client's monthly budget cap and target
-   CPA/ROAS live in `memory_list({ domain: "ppc" })`. If they are not there, you do not have a
-   ceiling, and getting one is the change you propose first.
+4. **Owner approval, inside the account's own ceiling.** The client's monthly budget target and target
+   CPA / ROAS / cost per lead live in `ppc_goals_get` (approval thresholds and protected campaigns in
+   `memory_list({ domain: "ppc" })`). If they are not there, you do not have a ceiling, and recording
+   one the owner states, with `ppc_goals_set`, is the change you propose first.
 5. **An audit trail.** The PM task comment (`pm_tasks_comment`) carries the diff you showed, the
    approval you got, and every `resource_name` the write returned. Undo tools need those strings;
    `ppc_negative_keyword_remove` takes nothing else.
@@ -100,21 +101,26 @@ Never propose a change class without the read that justifies it in hand.
 
 | Change you want to make | The read that earns it |
 | --- | --- |
-| Raise or lower a daily budget | `ppc_pacing_summary` (target_mtd vs actual_mtd, pace_ratio, projected_eom_spend) plus `ppc_impression_share` (high lost-to-budget is the only honest reason to raise) |
+| Raise or lower a daily budget | `ppc_pacing_summary` (target_mtd vs actual_mtd, pace_ratio, projected_eom_spend) plus `ppc_impression_share` (high lost-to-budget is the only honest reason to raise), then `ppc_bid_budget_simulate` for what the extra money buys at the margin (its `next_step` is a proposal, never applied) and `ppc_goals_get` for the monthly budget target |
+| Raise or loosen a target CPA / ROAS | `ppc_bid_budget_simulate` with `params.lever` + `params.target_value`; an `apply_gap` answer means no Hiveku tool writes that target (a Google Maximize campaign's): a UI step, said plainly |
+| Change a campaign setting (networks, location option, URL options, auto-generated text, schedule, call reporting, audience exclusions, auto-apply) | `ppc_google_campaign_settings_get` for the live value (Microsoft: `ppc_bing_url_tracking_get`, `ppc_bing_campaign_ai_settings_get`). Never state a setting's value you did not read this session |
 | Move budget between platforms | `ppc_reallocation_plan` - a plan generator that NEVER applies anything; it names the guardrailed tool per move in `apply_with` and lists `data_gaps[]` |
 | Change a bidding strategy | `ppc_campaign_get` for the current strategy, plus 30-day conversion volume from `ppc_metrics` or `ppc_segment_report({ dimensions: ["date"] })` |
 | Change a keyword bid | `ppc_campaign_get` FIRST - under target CPA/ROAS/Max Conversions the bid is recorded and ignored for ranking; `ppc_keyword_list` for the keyword's current bid and quality components |
-| Add a negative keyword | `ppc_search_terms_report` (Google) or `ppc_bing_search_terms_report` (Microsoft, which returns a `wasted_spend` summary of zero-conversion queries) |
+| Add a negative keyword | `ppc_search_terms_mine` for where the waste sits (its `verdict` says whether negatives are even the fix), row evidence from `ppc_search_terms_report` / `ppc_bing_search_terms_report`, and `ppc_negatives_lint` on the exact list and reach: add only `clear` items |
+| Remove a negative, or detach a negative list | `ppc_negatives_audit` for the conflict that justifies it and the `remove_handle`; the `ppc_negatives_remove` preview's `plan[]` for what reopens (a detach reopens every member) |
 | Pause a campaign, ad group, ad or keyword | `ppc_metrics` or `ppc_period_comparison` for the trend, `ppc_disapprovals_list` to check it is not already dead for a policy reason |
-| Enable anything | `ppc_campaign_get({ include: "ad_groups,ads,metrics" })` - proof it has an ad group, an ad and a keyword or audience, so it does not enable into an empty shell |
-| Change a bid modifier | `ppc_segment_report` with `["device"]`, `["hour"]`, `["day_of_week"]` or `["geo_target_constant"]`, or `ppc_audience_performance` for audience modifiers |
+| Enable anything | `ppc_campaign_get({ include: "ad_groups,ads,metrics" })` - proof it has an ad group, an ad and a keyword or audience, so it does not enable into an empty shell. Enabling a Search campaign (Google or Microsoft) also needs `ppc_launch_qa`: `no_go` blocks the enable until every fail is fixed with the tool it names; `incomplete` is not a pass |
+| Change a bid modifier | `ppc_segment_report` with `["device"]`, `["hour"]`, `["day_of_week"]` or `["geo"]`, or `ppc_performance_breakdown` for the same slices with evidence levels, or `ppc_audience_performance` for audience modifiers |
+| Write new ad copy or change ad text | `ppc_claims_check({ record_only: true })` for the approved and banned claims to write from, and `ppc_claims_check` again before it ships (`include_paused: true`: new ads sit PAUSED until the enable, and the default reads serving text only) |
 | Apply a Google recommendation | `ppc_recommendations_list` with its per-rec impact estimate, plus the read that would justify the same change if you had proposed it yourself |
 | Touch quality-score keywords | `ppc_keyword_list` (Google, includes the three components) or `ppc_bing_quality_score_report` (Microsoft, returns a `low_quality` summary with spend at risk) |
-| Upload offline conversions | `ppc_conversion_actions_list` to confirm an Upload-source action exists |
+| Upload offline conversions | `ppc_conversion_actions_list` to confirm an Upload-source action exists, and `ppc_google_upload_validate` (`lane: 'offline'`, records nothing) to prove the Data Manager path; its `needs_reconnect` is a link to mint with `integration_connect_link_create`, never a dashboard errand |
+| Retract or restate uploaded conversions | `ppc_conversion_adjustments_get` (mode, availability, ledger) and the `ppc_conversion_adjustments_run` dry run - a retraction cannot be undone |
 | Upload customer-match members | `ppc_google_user_lists` operation `user-lists-list` - the ONLY tool that surfaces the `user_list_id` that `ppc_customer_match_upload` requires |
 | Change Meta ad set targeting | `ppc_sync` then `ppc_ad_group_list` for the ad set row's `targeting` JSON - the only whole-spec read in this surface. `ppc_meta_audiences_list` operation `ad-set-audiences` is NOT that read: it returns the audience lists plus the NAMES of the other targeting keys, never their values. See 2.4 |
 | Change a PMax asset group | `ppc_google_pmax` operation `asset-group-list` - read-only, returns `missing_requirements` naming exactly why an idle group cannot serve |
-| Schedule, end or graduate a campaign experiment | `ppc_experiments_list` for the experiment's `status` and `arms` (SETUP means nothing is serving), the per-arm clicks and conversions against the SKILL.md section-9 minimums for any verdict, and for graduate the reads a budget raise needs: `ppc_pacing_summary` plus the base campaign's current `daily_budget` from `ppc_campaign_get` after a fresh `ppc_sync` |
+| Schedule, end, promote or graduate a campaign experiment | `ppc_experiment_readout` (the design view before a schedule; the per-arm results, `verdict` and `earliest_callable_date` before an end, promote or graduate - act only on a final `treatment_better`), `ppc_experiments_list` for Google `status` (SETUP means nothing is serving), and for graduate the reads a budget raise needs: `ppc_pacing_summary` plus the base campaign's current `daily_budget` from `ppc_campaign_get` after a fresh `ppc_sync` |
 
 ### 1.3 Freshness is a precondition, not a nicety
 
@@ -247,8 +253,9 @@ Why it is quiet, and why it deserves more ceremony than a budget change:
 Treat a strategy change as a scheduled event: announce it, freeze other changes on that campaign for
 the learning window, and put the end date in the PM task so the next session does not read the
 learning phase as a performance collapse. A running campaign experiment is the same kind of event: from
-a confirmed `ppc_experiment_schedule` until `ppc_experiment_end` or `ppc_experiment_graduate`, it IS
-the base campaign's one change for its window, so nothing else lands on that campaign meanwhile.
+a confirmed `ppc_experiment_schedule` (Microsoft: its `start_date`) until it ends, is promoted or
+graduated, it IS the base campaign's one change for its window, so nothing else lands on that campaign
+meanwhile.
 
 ### 2.4 The diffs that do not look like diffs
 
@@ -284,17 +291,25 @@ because the operator diffed the field they were changing rather than the object 
   operation `shared-set-keywords-add` starts blocking on every campaign the list is attached to the
   moment it lands, and a broad negative blocks any query containing all the words in any order. The
   Microsoft twin, `ppc_bing_shared_negative_list_items_add`, says the same thing. Their `SCOPE` line
-  is a list of campaigns, and the two lanes are not equally able to give it to you. On Google,
-  `shared-sets-list` returns member counts AND attached campaigns, so build the line from it before
-  you write. On Microsoft there is no equivalent read: `ppc_bing_shared_negative_list_list` returns
-  only id, name and item count, and nothing in this surface reads associations back
-  (`ppc_bing_shared_negative_list_associate` creates them one campaign at a time and returns no
-  roster). Real next step on the Bing lane: log every association in the PM task at the moment you
-  create it, and for a list you did not attach yourself, read the attached campaigns out of the
-  Microsoft Ads UI before adding items. Do not write to an existing Bing shared list whose blast
-  radius you cannot name.
+  is a list of campaigns. On both platforms `ppc_negatives_audit` returns `lists[]` with the attached
+  campaigns (and each attachment's `detach_handle`), so build the line from it before you write; on
+  Google `shared-sets-list` also returns member counts and attached campaigns.
+  `ppc_bing_shared_negative_list_list` alone returns only id, name and item count. Log every
+  association you create in the PM task anyway. Do not write to a shared list whose blast radius you
+  cannot name, and lint the items first (`ppc_negatives_lint` with `params.shared_list_id`).
 - **`ppc_google_shared_negatives` operation `shared-set-detach` WIDENS reach.** Blocked queries start
-  serving again. A detach is a spend-increasing change and gets a spend change's approval.
+  serving again. A detach is a spend-increasing change and gets a spend change's approval. The same
+  holds for every `ppc_negatives_remove` (a detach handle reopens the whole list at once), for
+  removing an audience exclusion with `ppc_google_audience_exclusions_set`, for clearing the last
+  window with `ppc_google_ad_schedule_set`, and for turning a network on or setting
+  PRESENCE_OR_INTEREST with `ppc_google_campaign_settings_set`. Their previews say so; your SCOPE line
+  says it first.
+- **`ppc_google_ad_schedule_set`'s first window is a NARROWING you might not intend:** a campaign with
+  no schedule serves all week, and once it has one window it serves only inside its windows. Read
+  `dark_hours_per_week` in the preview aloud.
+- **`ppc_bing_url_tracking_set` at scope `account` reaches every campaign without its own template**,
+  and tracking changes skip editorial review, so they are live at once. Change the campaigns you are
+  launching first (`scope: 'campaign'`) and the account last.
 - **`ppc_keyword_match_type_change` deletes and recreates.** Google cannot mutate match type in place
   because it is part of the criterion's identity, so the tool removes the existing keyword and creates
   a new one, preserving the bid unless `preserve_bid: false`. The old `resource_name` is gone, a new
@@ -377,10 +392,11 @@ steps or use the dashboard.
 Where it fires: the Google ops budget update and campaign create, the cross-platform budget update,
 `ppc_bing_push_campaign`, `ppc_meta_ad_set_create`, `ppc_meta_advantage_create`,
 `ppc_linkedin_campaign_group_create` and `ppc_linkedin_campaign_group_update`. In other words, every
-budget-bearing create as well as every budget update. As of 2026-08-29 that list gains
-`ppc_experiment_graduate` (contract, not yet live-validated): its `daily_budget` becomes the promoted
-campaign's budget, so the guardrail runs on it BEFORE the confirm preview in 4.2 is even built, and a
-refusal is `code: budget_guardrail` with no preview attached.
+budget-bearing create as well as every budget update. `ppc_experiment_graduate` (declared, not yet
+live-validated) belongs on it too: its `daily_budget` is the budget of the NEW, separate campaign the
+treatment becomes (the base keeps running), and anything above the 10,000 ceiling is refused before a
+preview exists. Microsoft's graduate (`ppc_bing_experiment_update` status `graduated`) checks the spend
+guardrail before it issues a hash (`code: budget_guardrail`, nothing to confirm).
 
 Two things you need to know about it:
 
@@ -443,13 +459,18 @@ commit. Show those numbers to the operator. Never auto-confirm by immediately re
 | `ppc_linkedin_conversions` | `conversion-event-send` ALWAYS previews, and `conversion-rule-create` previews whenever `default_value` is set. The stated reason: conversion data trains LinkedIn's bidding and uploaded conversions cannot be recalled. |
 | `ppc_linkedin_audience_segments` | Gate on `campaign-audiences-update`: it changes delivery on a possibly-live campaign immediately. |
 | `ppc_linkedin_abm_segment` | Gate on `company-segment-add`: campaigns targeting the segment start reaching the added companies. Person-level identifiers are REFUSED by policy on this lane. |
-| `ppc_experiment_schedule` | STARTS SPENDING on the treatment copy of the base campaign at the experiment's traffic split. The first call (no `confirm`) executes nothing and returns `requires_confirm: true` with the preview (arms, split, dates); the identical call with `confirm: true` executes. Until then the experiment stays in SETUP, serving nothing. New as of 2026-08-29, contract-described, not yet live-validated. |
-| `ppc_experiment_graduate` | ADOPTS the treatment into the base campaign as a promoted campaign with a NEW `daily_budget`: a budget raise with a test result attached. The budget guardrail (4.1) runs on `daily_budget` FIRST, then the same two-step confirm as schedule. Its diff's CURRENT line is the base campaign's daily budget today; IF WRONG is the delta times 30. New as of 2026-08-29, contract-described, not yet live-validated. |
+| `ppc_experiment_schedule` | STARTS SPENDING on the treatment copy of the base campaign at the experiment's traffic split. The first call (no `confirm`) executes nothing and returns `requires_confirm: true` with the preview; the identical call with `confirm: true` executes. Until then the experiment stays in SETUP, serving nothing. Trust `verified` and `status_after`, not `scheduled: true`. Not yet live-validated. |
+| `ppc_experiment_graduate` | Turns the treatment into a SEPARATE, permanent campaign on its own NEW `daily_budget`; the base keeps running, so account spend goes UP by `daily_budget` until one of them is paused. Two-step confirm as schedule. Its diff's IF WRONG line is `daily_budget` times 30. Adopting the treatment INTO the base with no new budget is `ppc_experiment_promote` instead. Not yet live-validated. |
+| The preview-hash writes | `ppc_google_campaign_settings_set`, `ppc_google_campaign_ai_settings_set`, `ppc_google_ad_schedule_set`, `ppc_google_call_settings_set`, `ppc_google_audience_exclusions_set`, `ppc_google_auto_apply_set`, `ppc_negatives_remove`, `ppc_google_account_negatives_add`, `ppc_bing_url_tracking_set`, `ppc_bing_ad_extension_update`, `ppc_bing_ad_extension_remove`, `ppc_experiment_treatment_set`, `ppc_experiment_promote`, `ppc_experiment_discard`, `ppc_bing_experiment_create`, `ppc_bing_experiment_update`: the first call writes nothing and returns a `preview_hash` bound to the LIVE state; the confirm is the SAME call with `confirm: true` at the top level and `params.expected_preview_hash`. Anything that moved since the preview makes the hash stale and nothing is written. `ppc_goals_set`, `ppc_claims_set`, `ppc_conversion_adjustments_set` / `_run` and `marketing_form_path_test` take `confirm` and `preview_hash` both at the top level (a stale one answers 409 `stale_preview`). All are sent ONCE: re-read before any retry. |
+| `ppc_bing_ad_extension_remove` | Detach is reversible below account level; a DELETE is IRREVERSIBLE (Microsoft has no restore), at most 20 per call, and the preview lists every association it ends. Prefer detach; a delete needs the owner's explicit yes. |
 
 Note the pattern across LinkedIn and Meta: the gate is on the direction that starts or expands
 delivery, and on anything terminal. Pausing is ungated everywhere. That is a deliberate asymmetry and
-a good model for your own judgment where no gate exists. The experiment lane follows it exactly:
-schedule and graduate gated, end ungated, create needing no gate because it lands in SETUP.
+a good model for your own judgment where no gate exists. The experiment lane follows it:
+schedule, graduate and promote gated, end ungated, Google create needing no gate because it lands in
+SETUP - except that `ppc_bing_experiment_create` IS the money step (the copy serves on `start_date`
+with whatever it contains), and a Google `params.experiment_type: 'broad_match'` create has no preview and
+is treated as a live change to the base campaign, so either needs the owner's yes first.
 
 ### 4.3 Warnings that are prose only (they will NOT stop you)
 
@@ -467,7 +488,7 @@ These are documented dangers with no code gate behind them. You are the gate.
 | `ppc_bing_shared_negative_list_items_add` | Every campaign already associated with the list starts blocking immediately. |
 | `ppc_google_shared_negatives` | `shared-set-keywords-add` takes effect immediately on every attached campaign; `shared-set-attach` starts blocking immediately on that campaign; `shared-set-detach` widens reach. |
 | `ppc_negative_keyword_add` | Defaults to BROAD match if you omit `match_type`. A broad negative blocks any query containing the words in any order. Always pass `match_type` explicitly. |
-| `ppc_experiment_end` | No confirm flag: a single call, like a pause. The treatment stops serving, the base campaign continues unchanged, and the test cannot be resumed. Ungated because it is the safe direction, but ending early discards every click the treatment has bought, so it still gets a diff and an approval, with each arm's clicks and conversions against the section-9 minimums in the CURRENT line. New as of 2026-08-29, contract-described, not yet live-validated. |
+| `ppc_experiment_end` | No confirm flag: a single call, like a pause. The treatment stops serving, the base campaign continues unchanged, and the test cannot be resumed. Ungated because it is the safe direction, but ending early discards every click the treatment has bought, so it still gets a diff and an approval, with each arm's clicks and conversions against the section-9 minimums in the CURRENT line. `ended: true` comes only after the status is read back; a SETUP experiment is refused (`experiment_not_running`) and is removed with `ppc_experiment_discard` instead. Not yet live-validated. |
 
 ### 4.4 The rails that do not exist
 
@@ -478,7 +499,11 @@ Say these out loud in your own head before you assume you are protected.
   paused" is NOT a rail, because `ppc_enable_resource` has no confirm and no budget check, and
   `ppc_bulk_edit` will flip `campaign_status` to `ENABLED`. Everything that creates paused
   (`ppc_campaign_create`, `ppc_responsive_search_ad_create`, `ppc_bing_push_campaign`,
-  `ppc_meta_campaign_push`, `ppc_google_pmax` asset groups) is relying on YOU as the last gate.
+  `ppc_meta_campaign_push`, `ppc_google_pmax` asset groups) is relying on YOU as the last gate. The
+  read that makes you a good one on a Search campaign is `ppc_launch_qa`: ten checks (ads policy,
+  conversion tracking, phone numbers, tracking, landing pages, self-blocking negatives, risky defaults,
+  budget vs goals, and more), `no_go` until every fail is fixed with the tool it names. It never
+  enables anything itself.
 - **Bid modifiers have no ceiling.** `ppc_bid_modifier_update` will take any multiplier you send.
 - **Bids have no step cap.** `ppc_keyword_bid_update` and `ppc_platform_keyword_bid_update` have
   nothing analogous to the budget guardrail.
@@ -503,13 +528,16 @@ and a local mirror that will happily keep showing you the old value.
 | Negative keyword (Google) | The returned `resource_name` - capture it, it is the only handle `ppc_negative_keyword_remove` accepts | `ppc_search_terms_report` over the following week: the blocked term should stop appearing |
 | Negative keyword (Microsoft) | Response payload | `ppc_bing_search_terms_report` |
 | Shared negative list (Google) | Response payload | `ppc_google_shared_negatives` operation `shared-sets-list` - member counts AND attached campaigns |
-| Shared negative list (Microsoft) | Response payload | `ppc_bing_shared_negative_list_list` confirms the item count moved. WHICH campaigns the list blocks on is not readable in this surface - Microsoft Ads UI, or your own association log |
+| Shared negative list (Microsoft) | Response payload | `ppc_bing_shared_negative_list_list` confirms the item count moved; `ppc_negatives_audit` (`params.level: 'shared_list'`) shows which campaigns the list is attached to and any conflict it now causes |
 | Keyword add or match-type change | The returned `criterion_id` and new `resource_name`, plus the OLD `resource_name` that is now removed | `ppc_keyword_list` - the new criterion present, the old absent |
 | Pause or enable (any platform) | Response payload | `ppc_sync` then `ppc_campaign_list` / `ppc_ad_group_list` / `ppc_ad_list` filtered by status |
 | Bulk status flip | `applied` and `skipped_unknown` counts in the response - read BOTH | Same status reads as above |
 | New RSA | Response payload | `ppc_ad_list`, then `ppc_disapprovals_list` a day later; a new ad can be disapproved after it is created |
 | PMax asset group | Response servability note | `ppc_google_pmax` operation `asset-group-list` - `missing_requirements` and `primary_status` |
-| Campaign experiment (schedule, end, graduate) | The `confirm: true` response (schedule, graduate) or the single-call response (end) | `ppc_experiments_list` - `status` off SETUP after a schedule, ended after an end; after a graduate, `ppc_sync` then `ppc_campaign_get` on the base campaign for the new `daily_budget`, plus `ppc_change_history` for the API-client write. Per-arm metrics have no confirmed read on this surface yet (`google-ads-advanced.md` 11.2). Contract-described as of 2026-08-29, not yet live-validated |
+| Campaign experiment (schedule, end, promote, graduate, discard) | `verified` and `status_after` in the confirmed response (`pending: true` means not finished yet), `budget_read_back` after a graduate | `ppc_experiment_readout` (roster state and per-arm results) and, on Google, `ppc_experiments_list` (`status`, `promote_status`); after a graduate `ppc_sync` then `ppc_campaign_list` for the new campaign, plus `ppc_change_history` for the API-client write. Not yet live-validated |
+| Google campaign setting (any `ppc_google_*_set`) | `after` (the read-back), `verified`, `mismatches`, `collateral_changes` | `ppc_google_campaign_settings_get` for the same section; `verified: false` or any `collateral_changes` is a problem to raise, not a success |
+| Microsoft URL tracking or extension | `after` / `verified` (tracking), `results[]` with `verified` (extension remove) | `ppc_bing_url_tracking_get` / `ppc_bing_ad_extension_associations_list` |
+| Negatives removed | `results[]` with `verified` per handle | `ppc_negatives_audit` - the conflict gone, the negative absent |
 | Offline conversion upload | `results[]` per row, checking every `ok: false` | `ppc_conversion_tracking_status` and `ppc_segment_report({ dimensions: ["conversion_action"] })` a few hours later; conversions are not instant |
 | Customer match upload | The confirm-call response | `ppc_google_user_lists` operation `user-lists-list` for sizes and eligibility. The job runs async on Google's side and audience sizes take 24 to 48 hours |
 | Audience sync (any platform) | `processed_adds` / `processed_removes` / `remaining` from `ppc_audience_ops` `process-pending` | `ppc_audience_ops` operation `stats`, which returns `matched_count` where the platform reports one, else null |
@@ -545,8 +573,8 @@ Say this plainly rather than implying a check you cannot run.
   Cloud Billing API. Do not reconcile a client invoice from `ppc_metrics` and call it billing.
 - **Whether a not-yet-live-validated write path did what the client thinks.** For
   `ppc_meta_campaign_update`, `ppc_meta_ad_set_update`, `ppc_meta_campaign_push`,
-  `ppc_linkedin_conversions`, `ppc_linkedin_audience_segments`, `ppc_linkedin_abm_segment` and, as of
-  2026-08-29, the five `ppc_experiment*` tools, verify by reading the object back through its platform
+  `ppc_linkedin_conversions`, `ppc_linkedin_audience_segments`, `ppc_linkedin_abm_segment` and the
+  experiment lane, verify by reading the object back through its platform
   read tool and, on the first use per account, in the platform's own UI. Then record in account memory
   that the lane is now validated for this account.
 
@@ -563,8 +591,9 @@ strongly the data supports them. Propose, diff, wait.
    `ppc_change_history` for who paused it, then ask.
 2. **Raising a budget.** Even a well-evidenced raise, even a small one, even inside the guardrail. The
    guardrail's 10,000 ceiling and 2x step cap are the limits of catastrophe, not a mandate. The client's
-   monthly ceiling is the real number and it lives in account memory. `ppc_experiment_graduate` is a
-   budget raise: its `daily_budget` is exactly this, however good the test result looks.
+   monthly ceiling is the real number and it lives in `ppc_goals_get`. `ppc_experiment_graduate` (and a
+   Microsoft `graduated` status) is a budget raise: its added daily budget is exactly this, however good
+   the test result looks. `ppc_bid_budget_simulate` prices a raise; its `next_step` never applies one.
 3. **Applying negatives in bulk.** One at a time against reviewed evidence, or one approval for a list
    the operator actually read. Never a loop over a report. And never on a shared negative list without
    first listing the campaigns that list is attached to.

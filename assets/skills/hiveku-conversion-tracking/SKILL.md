@@ -56,7 +56,7 @@ carries the number that makes the problem undeniable), `hiveku_recorded` vs
 | Google numbers wrong, actions look dead | `ppc_conversion_tracking_status` (judge silence on `all_conversions`, never `conversions`), then `ppc_conversion_actions_list`. Both GOOGLE ONLY: elsewhere they error, they do not return empty | diagnosis |
 | Bing reports zero | `ppc_bing_conversion_tracking_status`, then `ppc_bing_uet_tag_list` | diagnosis |
 | Meta looks quiet | `ppc_meta_custom_conversions` + `ppc_meta_conversion_volume` | diagnosis |
-| Forms missing, duplicated, or spammy; leads the platform never got | `marketing_form_conversion_audit` | forms |
+| Forms missing, duplicated, or spammy; leads the platform never got | `marketing_form_conversion_audit`; for a form that went quiet, `marketing_form_capture_list` first (a capture rule skips on purpose and leaves no row) | forms |
 | Calls unattributed, or "stopped after a redeploy" | `voice_call_tracking_diagnose` (the call doctor - read its ordered `fix_first`), then `marketing_call_attribution_breakdown`, `marketing_call_attribution_list`, `voice_diagnose_setup` | calls |
 | Real leads the platform cannot optimise on; "push CRM sales back to Google / Meta", "close the loop on click to sale" | `marketing_offline_conversions_status` FIRST, then the declared lane (google / microsoft / meta; opt-in lands in validate-only, go-live is a human dashboard flip); rows you assembled yourself go by the two-step `ppc_offline_conversion_upload` (Google only) | offline-conversions |
 | GTM or a pasted tag involved | `seo_gtm_install_status` / `seo_gtm_status`, `project_custom_code_get` | site-instrumentation |
@@ -214,7 +214,7 @@ invisible to every marketing profile.
 |---|---|
 | `references/the-chain.md` | Storage keys, ingest payloads, click-id fields, `first_touch_at`. |
 | `references/diagnosis.md` | Any live investigation: finding codes, per-platform status tools. |
-| `references/forms.md` | Missing, duplicate, or spam leads: `form_key`, sources, reCAPTCHA. |
+| `references/forms.md` | Missing, duplicate, or spam leads: `form_key`, sources, reCAPTCHA; which forms are captured at all (section 11, the capture controls). |
 | `references/calls.md` | Call tracking and DNI: pools, matchers, the call doctor, transcripts. §13 is voice operations: phone system health, routing, queues, voicemail, toll fraud, E911 - reads plus a live-PBX write surface with its refusal rules. |
 | `references/offline-conversions.md` | "Push CRM sales back to Google / Meta", "offline conversions", "close the loop on click to sale": the declared `marketing_offline_conversions_*` lane and its validate-only doctrine, the hand-upload tool, gates, dating, consent, refusals. |
 | `references/site-instrumentation.md` | Getting tags onto the page: code tiers, consent, GTM CRUD. |

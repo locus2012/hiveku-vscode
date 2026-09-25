@@ -31,6 +31,7 @@ invent a name.
 | `voice_call_tracking_setup` | LIVE | - |
 | `voice_call_tracking_diagnose` | LIVE | - |
 | `voice_call_tracking_live_probe` | LIVE | - |
+| `voice_call_tracking_trace` | LIVE | Read-only routing trace per tracking number (or every number on an ad account with `connection_id`): where a call rings now, recent outcomes; never dials, holds no DID, safe to repeat |
 | `voice_call_tracking_outbox` | LIVE | - |
 | `voice_numbers_list` | LIVE | - |
 | `voice_settings_get` | LIVE | - |
@@ -49,8 +50,8 @@ invent a name.
 | `voice_swap_test` | LIVE | Holds a DID for the sticky window; run once |
 
 Profile visibility: the **marketing-ads (PPC) profile sees the call-tracking family BY NAME** -
-`voice_call_tracking_diagnose`, `voice_call_tracking_live_probe`, `voice_call_tracking_outbox`,
-`voice_call_tracking_setup`, `voice_pools_list`, `voice_pool_get`, `voice_pool_sessions_list`,
+`voice_call_tracking_diagnose`, `voice_call_tracking_trace`, `voice_call_tracking_live_probe`,
+`voice_call_tracking_outbox`, `voice_call_tracking_setup`, `voice_pools_list`, `voice_pool_get`, `voice_pool_sessions_list`,
 `voice_phone_tracking_config_get`, `voice_numbers_list`, `voice_e911_addresses_list`,
 `voice_settings_get`, `voice_calls_list`, `voice_call_get` - because "are the ads' calls counted?"
 is ads work, and "is the pool exhausted?" needs the occupancy reads. The rest of the `voice_`

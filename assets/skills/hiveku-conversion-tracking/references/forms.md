@@ -1,6 +1,6 @@
 # Reference: Form fills - capture, identity, spam, and the audit
 
-**What this covers.** Everything on the form side of the conversion chain: the five writers that can create a `website_form_submissions` row, how `form_key` is composed and when it is path-scoped, what makes an identity junk, the one instruction that matters for anyone building a form on a Hiveku site, the three-copy spam classification and its value-beats-name rule, the reCAPTCHA hostname trap that files real leads to spam silently, the storage-free inline capture module and its one permanent limitation, the reconcile and sweeper backstops, and `marketing_form_conversion_audit` bucket by bucket including the `click_dated` trap. **Load this when** a client says leads are missing or wrong, when a form count does not reconcile against an inbox or an ad platform, when the Forms tab is full of junk, when notifications fire twice or not at all, or before you build or edit any form on a site you operate. If the question is "why does Google Ads show fewer conversions than Hiveku", start at `analytics_channel_scorecard` instead and come back here for the form half. Every tool named below is a real Hiveku MCP tool; where a capability has no tool, this file says so and names the dashboard fallback.
+**What this covers.** Everything on the form side of the conversion chain: the five writers that can create a `website_form_submissions` row, how `form_key` is composed and when it is path-scoped, what makes an identity junk, the one instruction that matters for anyone building a form on a Hiveku site, the three-copy spam classification and its value-beats-name rule, the reCAPTCHA hostname trap that files real leads to spam silently, the storage-free inline capture module and its one permanent limitation, the reconcile and sweeper backstops, `marketing_form_conversion_audit` bucket by bucket including the `click_dated` trap, and the capture controls that decide which forms are recorded at all (section 11). **Load this when** a client says leads are missing or wrong, when a form count does not reconcile against an inbox or an ad platform, when the Forms tab is full of junk, when notifications fire twice or not at all, when an app's sign-ins or data entry show up as leads, or before you build or edit any form on a site you operate. If the question is "why does Google Ads show fewer conversions than Hiveku", start at `analytics_channel_scorecard` instead and come back here for the form half. Every tool named below is a real Hiveku MCP tool; where a capability has no tool, this file says so and names the dashboard fallback.
 
 ---
 
@@ -9,6 +9,7 @@
 1. `account_context_get({ domain })` first, as always. Rules and memory here often already record which forms are the money forms and which are internal test forms.
 2. Identify the project. Form and site tools need a **website_projects** `project_id` from `sites_list` (details for one from `project_get({ project_id })`). Do NOT use `list_projects` / `get_project` here: those return pm_projects rows, a different id space, and a website UUID 404s against them. If the account has one project, still read the id back rather than guessing.
 3. `ppc_digest` before you trust any ad-platform number you plan to reconcile against; it warns on stale connections (more than 25h since sync). Reconciling Hiveku against a platform that has not synced since Tuesday produces a fake discrepancy and a wasted hour.
+4. When leads are missing, read the capture state before anything else: `marketing_form_capture_settings_get({ project_id })` and `marketing_form_capture_list({ project_id })` (section 11). A switched-off capture, a path rule or Web app mode skips submissions on purpose, a skipped submission never becomes a row, and so no bucket in the audit below will show it.
 
 Confirm every write. Nothing in this file justifies a bulk edit, a bulk delete, or an upload without the operator saying yes to a named list.
 
@@ -66,7 +67,7 @@ What breaks without it, in order of how often it bites:
 
 If you are shipping the fix yourself: `project_files_bulk_get` to load, edit the form component so the `<form>` carries a stable id or `data-hiveku-form-key`, `project_files_bulk_save` in **one** call, `project_vcs_commit`, then `deploy_site` **only after the operator confirms**. Commit is not live. After the deploy, submit one test fill and read it back with `marketing_form_conversion_audit` filtered to the new `form_key` before telling anyone it is fixed. Log the decision with `memory_create` so next month nobody re-derives which key is canonical.
 
-There is **no MCP tool** to rename, merge, or mute a form record. Renaming happens by changing the markup and redeploying; mute and per-form notification settings live in the Forms tab of the dashboard.
+There is **no MCP tool** to rename or merge a form record, or to mute its notifications. Renaming happens by changing the markup and redeploying; mute and per-form notification recipients live in the Forms tab of the dashboard. Muting is not the same as not capturing: a muted form still creates contacts, runs workflows and sends conversions. Whether a form is captured at all IS a tool call (`marketing_form_capture_settings_update`, section 11, and the `/hiveku:form-capture` play).
 
 ---
 
@@ -128,14 +129,15 @@ Three server-side backstops run behind the writers:
 
 The ordering contract on the `form-lead` path exists for the same reason: **ledger row FIRST** (so a submission with no email address is still recorded), then contact upsert, then patch `website_form_submissions.contact_id`, then a deduped `crm_activities` note, then the notification. The lead is recorded before anything that can fail.
 
-**Therefore: losing a lead outright requires ALL of inline capture + webhook + worker post + reconcile to fail.** That is rare. So when a client says "we lost a lead", the prior should be, in order:
+**Therefore: losing a lead outright requires ALL of inline capture + webhook + worker post + reconcile to fail.** That is rare. The one deliberate exception is a capture rule (section 11): a switched-off capture, an excluded path or form, the sign-in default or Web app mode skips a submission on purpose, before any row exists. So when a client says "we lost a lead", the prior should be, in order:
 
 1. It is in the database in a bucket they are not looking at (`spam`, `duplicate`, `archived`, `deleted`).
 2. It is in the database and the **notification** failed, so nobody was told (`workflow_failed`, or a form record with no notification configured because the form_key split).
 3. It arrived late via `reconcile` and they checked too early.
-4. It genuinely never reached any writer, which means the form is not instrumented at all on that page or that host.
+4. A capture rule skipped it. `marketing_form_capture_list` shows the form's `status`, `reason_text` and `skipped_30d`; a lead form skipped by a rule is a misconfiguration to fix with the owner (`/hiveku:form-capture`), not a tracking fault to chase.
+5. It genuinely never reached any writer, which means the form is not instrumented at all on that page or that host.
 
-Only case 4 is a loss. Cases 1 and 2 are the overwhelming majority, and both are answered by the audit.
+Only cases 4 and 5 lose the submission: case 4 by a setting someone chose (fix the rule so the next ones are kept), case 5 by missing instrumentation. Cases 1 and 2 are the overwhelming majority, and both are answered by the audit.
 
 None of the three backstops has an MCP tool to trigger it on demand. Reconcile runs on its 15-minute schedule; wait for it rather than promising the client an immediate fix.
 
@@ -240,6 +242,7 @@ Report the arithmetic, not the adjectives: 22 counted + 4 filed to spam by an un
 ## 9. What NOT to conclude
 
 - **Not in the Forms tab does not mean lost.** Reconcile runs every 15 minutes and files late rows with source `reconcile`.
+- **A quiet form is not necessarily broken tracking.** A capture rule may be skipping it on purpose: read `marketing_form_capture_list` (`status`, `reason_text`, `skipped_30d`) before opening a tracking investigation.
 - **`spam` does not mean no row.** Only `drop` means no row. Quote the client rows, never a spam count.
 - **Duplicate leads are not always a bug.** Dedupe deliberately refuses to link two rows of the same source, because a same-source repeat is a real second fill.
 - **A `capture`-sourced row missing `attribution_captured_at` is not a defect.** The module is storage-free by design and can never send it.
@@ -252,6 +255,21 @@ Report the arithmetic, not the adjectives: 22 counted + 4 filed to spam by an un
 
 - Registering a hostname on a project (the reCAPTCHA fix): `project_domains_add`, per Section 4 - a confirmed write whose DNS records you surface to the client. Dashboard only as the fallback on a key that cannot see `project_` tools.
 - Restoring a submission out of `spam`, un-archiving, or undeleting: no MCP tool - the Forms tab in the dashboard.
-- Muting a form record, or configuring per-form notification recipients: no MCP tool - the Forms tab in the dashboard. Wiring a form to a workflow, though, is `workflow_bind_form` (dry_run first).
+- Muting a form record, or configuring per-form notification recipients: no MCP tool - the Forms tab in the dashboard. Muting stops the email only; the form is still captured. Wiring a form to a workflow, though, is `workflow_bind_form` (dry_run first).
+- Stopping capture of a form, a path or the whole site, or setting Web app mode: `marketing_form_capture_settings_update`, previewed first with `marketing_form_capture_preview` and saved on the owner's yes (section 11, `/hiveku:form-capture`).
+- Erasing submissions a capture rule now excludes: `marketing_form_capture_purge`, dry run first. Until agent execution is switched on the execute answers 403 `agent_execute_disabled`, and the owner erases in the dashboard (Analytics > Forms > Capture > Erase).
 - Renaming or merging a form record: change the markup (`project_files_bulk_get` -> `project_files_bulk_save` -> `project_vcs_commit` -> `deploy_site` on approval), then verify with `marketing_form_conversion_audit({ form_key })`.
 - Triggering reconcile, the sweeper, or the attribution backfill on demand: no MCP tool. They run on schedule; wait rather than promising.
+
+## 11. Capture controls: which forms are recorded at all
+
+Every form on a Hiveku-hosted site is captured by default. Since 2026-09-24 a project can narrow that, and every setting is a tool. The play, with the owner conversations, is `/hiveku:form-capture`.
+
+- **What a project can set.** The capture switch (`enabled`: off means nothing is captured automatically); the site type (`mode: "all"`, Marketing site, the default: every form except exclusions; `mode: "allowlist"`, Web app: only forms something includes); the sign-in default (`skip_sign_in_forms`, on by default); up to 50 path rules and 200 form rules, each `exclude` or `include`. Only the automatic writers (`capture`, `form_lead`, `form_lead_xhr`, `reconcile`, section 1) are governed: `webhook` and `public_form` rows never are.
+- **Precedence, most specific wins.** Switch off (beats everything) -> markup on the form -> a rule for that exact form -> the sign-in default -> the most specific path rule (exclude wins a tie) -> Web app mode -> captured. The sign-in default skips only credential-shaped submissions (no field that reads as a name other than a username, a phone, a company or a message) on a sign-in or password page, posted to an auth endpoint, or carrying a password field; it never skips a signup that asks for a name. Path rules match the page the form was on, never the form key: `/login` is one page, `*` is one segment, a trailing `/*` is the page and everything below it.
+- **Markup.** `data-hiveku-capture="off"` on a `<form>` is never captured by any Hiveku script (the analytics embed honours it too). `data-hiveku-capture="on"` is captured even on a Web app site or when it looks like a sign-in, and beats form and path rules; only the switch beats it. `window.hivekuCaptureForm(fields, name)` counts as on. Markup reaches the site's built-in script on its next deploy and the analytics embed within about a day.
+- **Timing.** A settings change applies to the next submission, enforced server-side with no redeploy; the analytics pipeline follows within about a minute. Queued ad conversions of newly excluded forms are held automatically (`conversions_held` on the update); conversions already uploaded cannot be taken back.
+- **Reads.** `marketing_form_capture_settings_get`; `marketing_form_capture_list` (per form: `status` captured / not_captured / mixed, `reason_text`, `rule`, `recorded_now_excluded`, and `skipped_30d`, where null is unknown, never zero); `marketing_form_capture_preview` (a candidate policy, never saved: read `impact.by_form` before any exclusion, so no real lead form is caught).
+- **The write.** `marketing_form_capture_settings_update` takes MERGE maps: `"remove"` deletes a rule and rules not named are kept. On the owner's explicit yes only; never exclude a form that produces real enquiries without that yes.
+- **The erase.** Submissions recorded before a rule stay until erased. `marketing_form_capture_purge` PERMANENTLY erases the automatically captured submissions the CURRENT rules exclude, their files, their CRM form notes and outbox rows, the workflow-run payloads that carried them, and the contacts that exist only because of them (any other history keeps a contact). Dry run first (the default), the owner sees the per-form counts, contacts erasable and kept, and `cannot_undo`, then the `confirm_token` executes. Until agent execution is switched on, that execute answers 403 `agent_execute_disabled` and the owner erases in the dashboard.
+- **In diagnosis.** A missing lead can be a rule doing its job. A form that reads as a lead form with a high `skipped_30d`, or a Web app site with no forms included, is a misconfiguration.

@@ -10,8 +10,9 @@ rather than merely diagnosed (`ppc_google_conversion_actions`), remarketing list
 (`ppc_google_asset_upload`), competitive pressure (`ppc_impression_share` — Auction Insights is UI-only and
 `ppc_auction_insights` always refuses), pre-launch volume math
 (`ppc_keyword_planner_forecast`), Google's own recommendations (`ppc_recommendations_list` /
-`ppc_recommendation_apply`), campaign experiments (`ppc_experiments_list` and its four lifecycle writes, new as
-of 2026-08-29, section 11), and account binding (`ppc_ads_discover_customers`). SKILL.md section 0 is in force
+`ppc_recommendation_apply`), campaign settings with before/after (`ppc_google_campaign_settings_get` and
+its preview-first writes, section 2.3), campaign experiments on Google and Microsoft (section 11), and
+account binding (`ppc_ads_discover_customers`). SKILL.md section 0 is in force
 without restatement: context first, fresh data or no data, confirm every spend-affecting write, protected
 campaigns untouchable. Structure, keyword strategy, bids and budgets, ad copy and measurement have their own
 references; this one assumes them.
@@ -34,12 +35,12 @@ groups - see section 5), plus the read-only `ppc_google_pmax_performance`: funct
 entry point, one tool per capability with an `operation` enum and a free-form `params` object. Their `*-list`
 operations are the only way to see geo criteria, language criteria, shared sets, user lists, stored assets
 and PMax asset groups at all. **None of those sets a budget or a bid**, and the one create among them that
-touches a serving surface (`ppc_google_pmax` asset-group-create) lands PAUSED by design. The same route's
-`experiments` module adds five flat tools as of 2026-08-29 (`ppc_experiments_list`, `ppc_experiment_create`,
-`ppc_experiment_schedule`, `ppc_experiment_end`, `ppc_experiment_graduate`, section 11), and they are the
-exception that proves the pattern: create lands in SETUP where nothing serves, and the two operations that
-start or raise spend, schedule and graduate, are the only two-step confirm gates in this lane, graduate
-additionally behind the budget guardrail.
+touches a serving surface (`ppc_google_pmax` asset-group-create) lands PAUSED by design. The same route
+carries the `settings` module (one read, six preview-first writes, section 2.3) and the `experiments`
+module (`ppc_experiments_list`, `ppc_experiment_create`, `ppc_experiment_schedule`, `ppc_experiment_end`,
+`ppc_experiment_graduate`, section 11): a custom experiment's create lands in SETUP where nothing
+serves, and schedule and graduate, the two operations that start or add spend, are two-step confirm
+gates, graduate additionally capped by the agent daily-budget ceiling.
 
 **There is no write door, on purpose.** `ppc_google_ads_read` refuses non-reads with
 `code: "action_not_allowed"` plus the supported list. Campaign, budget, bid and audience writes stay behind Lane
@@ -90,6 +91,22 @@ states away researching your city clicks the ad. On service-area accounts `PRESE
 and switching it is the highest-yield change that risks nothing structural. It narrows who sees ads, so it is a
 serving change and gets a confirmation.
 
+**Read the setting before you say anything about it, then write it with proof.**
+`ppc_google_campaign_settings_get` returns, per campaign, `location.positive_geo_target_type` (flag
+`LOCATION_PRESENCE_OR_INTEREST`), the networks (`SEARCH_PARTNERS_ON`, `DISPLAY_EXPANSION_ON`), the URL
+options, text automation (`TEXT_AUTOMATION_ON`, `FINAL_URL_EXPANSION_ON`, `AI_MAX_ON`), the schedule
+(`SCHEDULE_MODIFIERS_IGNORED` under Smart Bidding), bidding, audience exclusions and the biddable
+conversion goals, plus the account's auto-tagging, call reporting and auto-apply. The flags are facts,
+not verdicts. The writes, each on ONE campaign (or the account), preview-first with before/after and a
+read-back: `ppc_google_campaign_settings_set` (networks, location option, tracking template, final URL
+suffix, custom parameters in one atomic update), `ppc_google_campaign_ai_settings_set` (stop Google
+writing ad text: `params.auto_generated_text: false`), `ppc_google_ad_schedule_set`, `ppc_google_call_settings_set`,
+`ppc_google_audience_exclusions_set` and `ppc_google_auto_apply_set`. The confirm is the SAME call with
+`confirm: true` at the top level and `params.expected_preview_hash`; trust `after`, not `requested`.
+Setting `negative_geo_target_type` from PRESENCE_OR_INTEREST to PRESENCE also widens reach and the
+preview does not warn about that one: say it yourself. Still UI-only: the account-level automated-assets
+switch, and auto-apply types outside the 15 the API exposes.
+
 ---
 
 ## 3. Play: bind the connection to the right customer
@@ -126,8 +143,8 @@ dashes: `{ "days": 30, "campaign-id": "123", "limit": 500 }`.
   `_ , . : / -`, up to 120 characters, no spaces**, and a value containing `..` is rejected outright.
 - Consequence you hit first: **multi-word keywords cannot be passed on this lane.**
   `{"seed-keywords": "emergency plumber"}` is refused; comma-joined single tokens work, phrases do not. For
-  phrase-shaped input use `ppc_keyword_planner_forecast`, whose `keywords` is a real array, or the keyword tools
-  in `keywords-search-terms-negatives.md`.
+  keyword research use `ppc_keyword_ideas` (multi-word seeds, location, language, paging) and for volume
+  `ppc_keyword_planner_forecast`, whose `keywords` is a real array; see `keywords-search-terms-negatives.md`.
 - Unknown flags are a hard error, not a silent ignore. The date window flag is **`days`**; there is no
   date-range flag on this module and passing one fails the whole call.
 
@@ -177,9 +194,9 @@ own: it needs all four of `period-a-start`, `period-a-end`, `period-b-start`, `p
    `shared-set-attach({ params: { campaign_id, shared_set_resource_name } })`. Brand exclusion on PMax is a
    Google-side setting with its own eligibility rules, so verify in the UI that it took effect there.
    **Serving change, immediate on every attached campaign. Confirm first.**
-5. **Read what PMax will tell you.** `segment-report` on `date`, `device`, `ad_network_type` and
-   `geo_target_constant` works; `search-terms` does **not**, because it reads `search_term_view`, which has no
-   PMax rows. Say "not available on this surface," never "PMax had no search terms."
+5. **Read what PMax will tell you.** `segment-report` on `date`, `device` and `ad_network_type` works;
+   `search-terms` does **not**, because it reads `search_term_view`, which has no PMax rows. Say "not
+   available on this surface," never "PMax had no search terms."
 6. **Judge on time, not impatience:** two conversion cycles or six weeks, whichever is longer. And **signals are
    hints, not fences** - they bias exploration, never restrict delivery, and the client should hear that before
    launch rather than at the first invoice.
@@ -189,8 +206,8 @@ own: it needs all four of `period-a-start`, `period-a-end`, `period-b-start`, `p
 ## 6. Play: Shopping, and where the tooling stops
 
 **What works.** `pull-campaigns` shows `campaign_type: "shopping"`; `search-terms` works for Shopping (unlike
-PMax), so mining and negatives apply as in `keywords-search-terms-negatives.md`; `segment-report` on `device`,
-`geo_target_constant` and `ad_network_type` works; `ppc_google_shared_negatives` attaches blocklists,
+PMax), so mining and negatives apply as in `keywords-search-terms-negatives.md`; `segment-report` on `device`
+and `ad_network_type` works; `ppc_google_shared_negatives` attaches blocklists,
 `ppc_google_targeting` sets geo and language. Shopping competitor domains are NOT retrievable —
 `ppc_auction_insights` refuses on every campaign type, Shopping included.
 
@@ -208,7 +225,10 @@ you can see: geo criteria, a newly attached shared negative, `change-history`, `
 ## 7. Play: geo, proximity and language audit
 
 Run at onboarding on every account, and whenever spend appears from places the client does not serve. Evidence
-first: `segment-report` with `dimensions: "geo_target_constant"` over 30 days shows where the money went.
+first: `ppc_performance_breakdown({ connection_id, params: { dimension: "location", service_area } })`
+over 30 days - spend from people IN the area versus only interested in it (`INTEREST_ONLY_SPEND`),
+outside the targeted area, and outside the client's service area from memory, each finding naming its
+fix tool - or `ppc_segment_report` with `dimensions: ["geo"]` for the raw table.
 
 1. **Resolve names to ids.** `ppc_google_targeting({ connection_id, operation: "geo-target-search",
    params: { query: "Dallas, Texas", country_code: "US", limit: 20 } })` takes place names or postal codes and
@@ -225,8 +245,9 @@ first: `segment-report` with `dimensions: "geo_target_constant"` over 30 days sh
  - `campaign-geo-target-remove({ params: { resource_names: [...] } })`, max 100; removing an exclusion WIDENS
      reach. `campaign-proximity-add({ params: { campaign_id, latitude, longitude, radius, radius_units:
      "MILES" } })`, max 500 miles or 800 kilometers, is the instrument for service areas that ignore city lines.
- - `campaign-location-settings-update({ params: { campaign_id, positive_geo_target_type: "PRESENCE" } })`, per
-     2.3. `campaign-language-target-add({ params: { campaign_id, language_ids: ["en"] } })`, max 50, matches the
+ - The location option: prefer `ppc_google_campaign_settings_set` with `params.positive_geo_target_type:
+     "PRESENCE"` (same change with before/after and a read-back, per 2.3); `campaign-location-settings-update`
+     makes it without either. `campaign-language-target-add({ params: { campaign_id, language_ids: ["en"] } })`, max 50, matches the
      user's Google interface language, not the language of their query.
 
 ---
@@ -321,7 +342,11 @@ anything smaller than a country, resolve ids first with `ppc_google_targeting({ 
 params: { query: "Fort Worth, Texas", country_code: "US" } })` and pass those in. Skipping it is how a
 three-county service business gets quoted national volume, the most common forecasting error in this account
 type. Some MCCs have Keyword Planner API access disabled and the response says so; fall back to `web_search`
-with third-party estimates labeled as such. Seed selection lives in `keywords-search-terms-negatives.md` Play 6.
+with third-party estimates labeled as such. Seeds come from `ppc_keyword_ideas`; forecast the match types
+you will launch (`match_type` or `keyword_specs`), and for lead gen `bidding_strategy:
+'maximize_conversions'` with `daily_budget`, never `bid_micros`. Seed selection lives in
+`keywords-search-terms-negatives.md` Play 6. For a campaign that already has history, the simulator
+(`ppc_bid_budget_simulate`, `bidding-budgets-pacing.md` Framework B) replays real auctions instead.
 **Credibility:** discount forecast clicks **20 to 40%** on an account with no history, compare forecast CPC
 against the account's actual CPC on similar terms, and quote ranges as "Google's planner projects," never point
 estimates and never "we expect." A forecast CPC under half the observed CPC is geo-wrong or match-optimistic.
@@ -338,82 +363,111 @@ Some types are UI-gated and return a structured 400; surface it verbatim.
 
 ---
 
-## 11. Play: campaign experiments (new as of 2026-08-29)
+## 11. Play: campaign experiments (Google and Microsoft)
 
-Google's custom experiments: a treatment copy of one campaign, a traffic split against the original, a
-verdict, then adopt or discard. Five flat tools on the google-ops route, module `experiments`, landed on
-2026-08-29. **They are described here from the route contract. The tool declarations ship after the route
-deploys, and as of 2026-08-29 nothing in this section has been driven end to end against a live account.** On
-a session where `ppc_experiments_list` is not offered, the lane is not live for you yet: do not hunt for it
-under another name, do not fall back to the raw read lane (it has no experiment action), and do not promise a
-client a test through it. `spend-change-discipline.md`'s governing rule applies in full: no testing means no
-capability claim.
+A treatment copy of one campaign, a traffic split against the original, an honest readout, then adopt or
+drop. The lane is declared on both platforms and has never been driven end to end against a live account:
+every claim below is the declared contract. **The first live experiment through it needs the account owner's
+explicit yes** (experiments split real traffic). On first use per account, read everything back through
+`ppc_experiment_readout` and in the platform UI, then record in memory that the lane is validated there.
+`spend-change-discipline.md`'s governing rule applies in full: no testing means no capability claim.
 
-**What an experiment can and cannot be on this lane.**
+**What an experiment can be here.**
 
-- **SEARCH and DISPLAY campaigns only.** PMax, Shopping, Video and Demand Gen have no custom-experiment path
-  here. For those, the honest answer is the Ads UI or `talk_to_department({ domain: "ppc" })`.
-- **The split is a whole percent, 1 to 99**, the treatment's share. No 33.3, no 50.5; a client who wants
-  thirds gets 33 or 34 and hears why.
-- **Google builds the treatment.** The base campaign keeps serving throughout; the copy appears on the
-  treatment arm as `in_design_campaigns`, named base plus `suffix`. You edit the copy so it carries exactly
-  one hypothesis, then schedule.
-- **Nothing serves or spends until schedule**, and the only ways out are end or graduate. There is no pause
-  and no split change after schedule; to change the split, end and create again.
+- **Google:** SEARCH and DISPLAY campaigns; PMax, Shopping, Video and Demand Gen are refused. The default
+  `params.experiment_type: 'custom'` builds a treatment COPY you edit. `'broad_match'` is Google's intra-campaign
+  broad-match test on a SEARCH campaign: no copy to edit, cannot be graduated, 50/50, and Google turns the
+  campaign's broad match setting on AT CREATION with no preview or confirm - treat that create as a live
+  change to the base campaign: owner's yes, a low-risk campaign, keywords and search terms checked right after.
+- **Microsoft:** Search campaigns. `ppc_bing_experiment_create` copies the base and the copy SERVES ON
+  `start_date` with whatever it contains, so the create IS the money step (no new spend: the base budget
+  is split). An unedited copy tests nothing.
+- **The split is a whole percent, 1 to 99**, the treatment's share, fixed after create.
+- **ONE hypothesis per experiment.** `ppc_experiment_treatment_set` puts exactly one change into the copy,
+  a bidding switch OR a landing-page swap (keyword-level final URL), never both. The base campaign is never
+  written.
 
-### 11.1 The lifecycle: create SETUP, schedule spends, end or graduate
+### 11.1 The lifecycle
 
-1. **Read first.** `ppc_experiments_list({ connection_id, limit })`, `limit` 1 to 200, default 50, returns
-   `{ count, experiments, note }`. Every experiment carries `resource_name`, `experiment_id`, `name`,
-   `description`, `suffix`, `type`, `status`, `start_date`, `end_date` and `arms`, each arm being
-   `{ name, control, traffic_split, campaigns, in_design_campaigns }`. **`status: SETUP` means nothing is
-   serving and nothing is spending.** Read `note` every time; it is where the route explains a partial
-   result. Run this before create (a second experiment on the same base campaign is a design error) and
-   before every verdict.
-2. **Create lands in SETUP.** `ppc_experiment_create({ connection_id, name, campaign_id,
-   traffic_split_percent, suffix, description, start_date, end_date })`. `name` and `campaign_id` are
-   required, `campaign_id` being the numeric Google id from `pull-campaigns` or `ppc_campaign_get`, never the
-   Hiveku uuid. `traffic_split_percent` is a whole number 1 to 99, default 50; dates are `YYYY-MM-DD`. The
-   route FORCES status to SETUP, so create is not a spend change and carries no confirm, but it is not a test
-   either: it is a draft, and it stays one until a confirmed schedule.
-3. **Schedule starts spending.** `ppc_experiment_schedule({ connection_id, experiment_id })` is TWO-STEP.
-   The first call, without `confirm`, executes nothing and returns `requires_confirm: true` with the preview
-   (arms, split, dates); the identical call with `confirm: true` executes. From that moment the treatment copy
-   serves and spends its share of the base campaign's traffic. Put the preview in front of the operator and
-   get the yes on THOSE numbers; never chain the two calls.
-4. **End stops it.** `ppc_experiment_end({ connection_id, experiment_id })`: single call, no confirm, like a
-   pause. The treatment stops serving, the base campaign continues unchanged, and the test cannot be resumed.
-   Ungated because it is the safe direction, still a diff and an approval, because ending early throws away
-   every click the treatment bought.
-5. **Graduate adopts it.** `ppc_experiment_graduate({ connection_id, experiment_id, daily_budget })` promotes
-   the treatment into the base campaign as a promoted campaign with a NEW daily budget, which raises account
-   spend. The builder runs the account's budget guardrail on `daily_budget` FIRST (the 10,000 per day ceiling
-   in the account currency, and the 2x step cap when the mirror knows the base campaign's current budget, so
-   `ppc_sync` before you call), then the same TWO-STEP confirm as schedule. A refusal comes back as
-   `code: budget_guardrail` before any preview exists. Graduation is a budget raise wearing a test result:
-   its diff's CURRENT line is the base campaign's daily budget today, its IF WRONG line is the delta times 30.
+1. **Read first.** `ppc_experiment_readout({ connection_id })` with no `params.experiment_id` is the roster
+   on both platforms (state not_started | running | finished | failed). On Google,
+   `ppc_experiments_list({ connection_id, params: { limit } })` adds Google's own `status` (**SETUP means
+   nothing is serving or spending**; INITIATED / ENABLED means the copy is SPENDING), `arms[]` with
+   `in_design_campaigns` (the copy) and `promote_status`. A second experiment on the same base campaign is a
+   design error.
+2. **Create.** Google: `ppc_experiment_create({ connection_id, params: { name, campaign_id,
+   traffic_split_percent, suffix, description, start_date, end_date, experiment_type } })` (`name` and the
+   numeric `campaign_id` required) - one write, lands in SETUP, no confirm; Google builds the copy
+   asynchronously. Microsoft: `ppc_bing_experiment_create({ connection_id, params: { name, campaign_id,
+   start_date, end_date, traffic_split_percent, split_method } })` - preview-first (Hiveku's own check;
+   Microsoft has no validate-only mode), `start_date` tomorrow UTC at the earliest, `end_date` required.
+   It is the Microsoft money step, so the confirm waits for the owner's yes on the preview.
+3. **Put the one change in.** `ppc_experiment_treatment_set({ connection_id, params: { experiment_id,
+   bidding | landing_page } })`, preview-first. Google refuses while the copy is still being built
+   (`treatment_not_built`: retry in a minute); Microsoft accepts it only while the experiment is Scheduled.
+4. **Design check.** `ppc_experiment_readout` with `params.experiment_id` on a not-started experiment
+   returns the design view: what the copy changes, Google's own schedule check (validate-only), a
+   shared-budget warning, and the days needed to reach the floors from the base campaign's last 30 days.
+   Set `end_date` from that projection, not from the client's patience, and write `earliest_callable_date`
+   into the PM task.
+5. **Start.** Google: `ppc_experiment_schedule({ connection_id, params: { experiment_id } })` - TWO-STEP:
+   the first call returns `requires_confirm: true` with the preview; put it in front of the owner and
+   only on their yes does the identical call with `confirm: true` start the split (never chain the
+   two). `scheduled: true` means accepted; trust `verified` and `status_after`.
+   Microsoft starts on `start_date` by itself. Running an experiment switches Google's bid and budget
+   simulator off for that campaign until 8 days after it ends.
+6. **Read.** `ppc_experiment_readout` with `params.experiment_id` (`primary_metric` cpa | conversions |
+   roas). Section 11.2 decides what you may say.
+7. **Finish, one of four.**
+   - **End** (the copy stops; nothing applied to the base): Google `ppc_experiment_end({ connection_id,
+     params: { experiment_id } })`, a single call with no confirm, `ended: true` only after the status is
+     read back, a SETUP experiment refused; Microsoft `ppc_bing_experiment_update` with `params.status:
+     'ended'` (if Microsoft refuses that write, the answer names the alternative: `end_date` set to today). Ending early discards every click bought: diff and approval.
+   - **Promote** (ADOPT the treatment INTO the base campaign, NO new budget): `ppc_experiment_promote`,
+     both platforms. On Microsoft the base adopts every setting of the copy and any change made to the base
+     during the test is DELETED.
+   - **Graduate** (the copy becomes a SEPARATE campaign on its own budget, the base keeps running, account
+     spend goes UP): Google `ppc_experiment_graduate({ connection_id, params: { experiment_id,
+     daily_budget } })`, two-step confirm; Microsoft `ppc_bing_experiment_update` with `params.status:
+     'graduated'` (the same daily budget as the base; the spend guardrail is checked first). Graduate is
+     NOT promote. A broad-match experiment cannot be graduated.
+   - **Discard** (never started, nothing served): `ppc_experiment_discard`, Google SETUP only, Microsoft
+     Creating / Scheduled / CreationFailed. This is how a stuck SETUP experiment is cleared.
+
+   Microsoft's own docs contradict each other on writing an experiment's status and that write is untested
+   live: `microsoft_rejected` carries the alternative, `microsoft_status_update_unconfirmed` means it did
+   not move, and Hiveku never switches to a different write on its own.
+
+**The write contract** for `ppc_experiment_treatment_set`, `_promote`, `_discard` and both
+`ppc_bing_experiment_*` writes: preview first, then the SAME call with `confirm: true` at the top level and
+`params.expected_preview_hash`. A stale hash (the experiment moved, or the write already landed) writes
+nothing: preview again. Sent once: after a slow or failed confirm, read `ppc_experiment_readout` before
+calling again. `pending: true` means the platform accepted a long-running change that has not finished:
+re-read before reporting it done.
 
 ### 11.2 Calling the test
 
-SKILL.md section 9 applies per ARM, not per experiment: **roughly 100 clicks AND roughly 10 conversions in
-each arm, or 2 full weeks, whichever is later, and never a verdict in week 1.** Do the arithmetic before you
-schedule: at 50/50 each arm sees half the campaign's traffic, so a campaign doing 60 clicks a week needs about
-four weeks before both arms clear 100 clicks; at 20/80 the treatment arm needs five times the campaign-weeks
-the base would. Set `end_date` from that number, not from the client's patience, and write the earliest
-callable date into the PM task so the next session does not read week 1 as a result.
+**The readout never says "winner", and neither do you.** `treatment_better` / `treatment_worse` only when
+every arm has at least 100 clicks, 10 conversions and 14 days, p < 0.05 with an interval that excludes zero,
+AND the experiment is final (ended, promoted or graduated, or past its end date). Before that a significant
+result is `interim_better` / `interim_worse`: INTERIM IS NOT FINAL, never act on it as a result. Below the
+floors the verdict is `insufficient_data` or `too_early` however large the difference looks: say how far
+off the floors are and quote `earliest_callable_date`. `min_clicks_per_arm`, `min_conversions_per_arm` and
+`min_days` can raise the floors, never lower them. ROAS without Google's own statistics is
+`not_computable`. Real Hiveku leads per arm (`lead_truth`) are a separate verdict needing 10 leads per arm,
+never merged into the platform one. Microsoft's split lets one searcher see both arms, so its comparison is
+approximate: say so.
 
-**How the arms report is not yet confirmed on this surface.** Each arm carries its `campaigns` resource
-names, so the first thing to check on a live account is whether `pull-campaigns` lists the treatment campaign
-(base name plus `suffix`); if it does, `pull-metrics` and `period-comparison` scoped by that campaign id are
-the per-arm read; if it does not, the Ads UI experiment report is the read, and you say "arm metrics not
-exposed on this surface" rather than inferring the treatment's numbers from the base campaign's movement.
+**Do the arithmetic before you start:** at 50/50 each arm sees half the campaign's traffic, so a campaign
+doing 60 clicks a week needs about four weeks before both arms clear 100 clicks; at 20/80 the treatment arm
+needs five times the campaign-weeks the base would.
 
-**Verdict rules.** Graduate only when the treatment beats control on the primary metric (CPA or ROAS, per
-account memory) with BOTH arms past the minimums. End when control wins, or when `end_date` will arrive
-before the minimums can. A flat result is an end, not a graduate: graduating a tie buys a budget raise for
+**Verdict rules.** Promote or graduate only on a final `treatment_better` on the primary metric (CPA or
+ROAS, per account memory), with the owner's yes. End when control wins, or when `end_date` will arrive
+before the floors can. A flat result is an end, not a graduate: graduating a tie buys a budget raise for
 nothing. **One experiment is the base campaign's one change for its window:** no bidding-strategy, budget,
-geo or shared-negative change on that campaign between schedule and end or graduate, and no scheduling on a
-campaign still inside a learning phase, or the two arms stop measuring the same thing.
+geo or shared-negative change on that campaign while it runs, and no experiment on a campaign still inside
+a learning phase, or the two arms stop measuring the same thing.
 
 ---
 
@@ -435,9 +489,10 @@ Account memory overrides these. They are the defaults you argue from.
 | count_type on lead gen | MANY_PER_CLICK | double counting; every CPA is wrong |
 | User list size | under 100 Search / 1,000 Display | cannot serve yet; expected on new lists |
 | Forecast CPC vs account CPC | under half | geo or match type wrong; re-resolve geo ids |
-| Experiment status | SETUP | nothing serving or spending; a confirmed schedule is the only way it runs |
-| Experiment arm at verdict | under ~100 clicks or ~10 conversions in either arm, or under 2 full weeks | not callable yet; never in week 1 |
-| Experiment result | treatment not beating control on the primary metric past the minimums | end it; a tie is never a graduate |
+| Experiment status (Google) | SETUP | nothing serving or spending; a confirmed schedule is the only way it runs (discard it if unwanted) |
+| Experiment arm at verdict | under 100 clicks or 10 conversions in either arm, or under 14 days | `insufficient_data` / `too_early`: not callable; quote `earliest_callable_date` |
+| Experiment verdict | `interim_better` / `interim_worse` | interim, not final: act on nothing until the planned end |
+| Experiment result | not a final `treatment_better` on the primary metric | end it; a tie is never a promote or a graduate |
 
 ---
 
@@ -458,8 +513,9 @@ Account memory overrides these. They are the defaults you argue from.
 - **Conversions went to zero overnight.** In order: `list-disapprovals`, `change-history` (30 days is all Google
   keeps), `conversion-tracking-status`, then whether an action was set HIDDEN or
   `include_in_conversions_optimization` was flipped.
-- **Spend from places the client does not serve.** `campaign-geo-targets-list` for criteria, `segment-report` on
-  `geo_target_constant` for evidence, then 2.3.
+- **Spend from places the client does not serve.** `campaign-geo-targets-list` for criteria,
+  `ppc_performance_breakdown` (`params.dimension: "location"`) for evidence, `ppc_google_campaign_settings_get`
+  for the location option, then 2.3.
 - **An audience will not serve:** `user-lists-list` for size and eligibility, since under the floor it cannot,
   and 24 to 48 hours after an upload is normal. **A creative slot stays empty:** `assets-list`, compare
   `suggested_field_types` to the slot. **The forecast errors:** Keyword Planner disabled on that MCC.
@@ -467,8 +523,9 @@ Account memory overrides these. They are the defaults you argue from.
 - **An experiment has sat in SETUP for weeks.** Expected: create lands there by design and nothing serves
   until a confirmed `ppc_experiment_schedule`. A `requires_confirm: true` response is the preview, not a
   failure and not a success; the experiment is still in SETUP until the `confirm: true` call returns.
-  **The experiment tools are not in the session at all.** As of 2026-08-29 the declarations ship after the
-  route deploys; the lane is not live for you, not misnamed.
+  A SETUP experiment nobody wants is removed with `ppc_experiment_discard`, never ended (end refuses it).
+- **The readout says `interim_better`.** It is not a result until the planned end: report it as interim.
+  **The experiment tools are not in the session at all:** a profile question first, then `/hiveku:update`.
 
 ---
 
@@ -480,10 +537,11 @@ Account memory overrides these. They are the defaults you argue from.
 - **Do not report NOT RETRIEVED as zero.** An error row, an empty auction-insights report, a blank PMax
   search-term result and an unreadable feed are four kinds of "I do not know," each labeled as such. And **do
   not fabricate a tool for a gap**: Merchant Center, product partitions and campaign drafts have no tool here
-  (PMax asset groups have `ppc_google_pmax`; experiments have section 11 once the declarations ship, and
-  nothing before), so the honest moves are `talk_to_department`, the dashboard, or `web_*` research.
+  (PMax asset groups have `ppc_google_pmax`; experiments have section 11), so the honest moves are
+  `talk_to_department`, the dashboard, or `web_*` research.
 - **Do not chain an experiment's preview and confirm calls**, and **do not graduate a tie**: graduation is a
-  budget raise with a test result stapled to it, and a flat result justifies neither. Do not schedule an
+  budget raise with a test result stapled to it (a SEPARATE campaign on new money; adopting the treatment
+  into the base is promote), and a flat result justifies neither. Do not schedule an
   experiment on a campaign inside a learning phase, and do not touch the base campaign's strategy, budget or
   geo while one runs.
 - **Do not attach a shared negative list without reading it first:** attachment blocks every keyword in it on

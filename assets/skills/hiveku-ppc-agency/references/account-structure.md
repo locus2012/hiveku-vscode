@@ -125,7 +125,11 @@ re-sync and re-read -> persist to PM task and memory.
    auto-tagging, conversion-tracking status and id, customer name, manager/test-account flags,
    tracking_url_template, final_url_suffix. Auto-tagging off means no gclid, breaking offline conversion
    import and most attribution (P1); test-account true means none of this is real spend; time_zone defines
-   "yesterday"; currency never blends.
+   "yesterday"; currency never blends. Per campaign, `ppc_google_campaign_settings_get`
+   (`params.summary_only: true` first) reads what used to need the Google Ads UI: networks, location
+   option, schedule, URL options, auto-generated text, bidding, audience exclusions, plus the account's
+   call reporting and auto-apply, with `flags[]` (facts, not verdicts). Microsoft:
+   `ppc_bing_url_tracking_get` (templates and UTM auto-tagging) and `ppc_bing_campaign_ai_settings_get`.
 4. `ppc_linked_accounts_list({ connection_id })`: GA4 and Merchant Center. A dropped GA4 link is the usual
    cause of "imported conversions stopped"; a dropped Merchant Center link kills Shopping and Pmax feeds.
 5. `ppc_campaign_list({ limit: 200, connection_id?, status?, platform?, page? })` into a table, then
@@ -156,14 +160,22 @@ Confirm the plan as a batch (tier 1), then:
    target_roas | target_impression_share, default manual_cpc, with `target_cpa` / `target_roas` required
    for their own strategies (roas is a ratio: 1.5 = 150 percent). **Always starts PAUSED**, with an inline
    non-shared budget, so a new campaign never joins someone else's pool. Greenfield means manual_cpc or
-   max_clicks. Geo and language default to all targeted countries and this tool cannot refine them
-   (section 6). Record the returned campaign id.
+   max_clicks. Geo and language default to all targeted countries and this tool cannot refine them:
+   `ppc_google_targeting` does (section 6). Then the settings the defaults get wrong for a local
+   business, each preview-first: `ppc_google_campaign_settings_set` (location option PRESENCE, search
+   partners and Display expansion off, tracking template or final URL suffix) and
+   `ppc_google_campaign_ai_settings_set` (`params.auto_generated_text: false` unless the client wants Google
+   writing their ads). Record the returned campaign id.
 2. `ppc_ad_group_create({ connection_id, campaign_id, name, default_bid? })` per theme. **Ad groups start
    ENABLED**, safe only because the parent campaign is paused. `default_bid` is the CPC fallback for
    keywords without their own, ignored under smart bidding.
 3. Ads and keywords: see the ads-assets-quality and keywords references. RSAs also create paused.
 4. **Verify before enabling.** `ppc_campaign_get({ id, include: "ad_groups,ads" })` and read the whole tree
-   back to the user.
+   back to the user. Then **`ppc_launch_qa({ connection_id, campaign_id })`**, the go/no-go (Google or
+   Microsoft Search): ads policy, ad groups, conversion tracking, phone numbers, tracking, landing pages,
+   self-blocking negatives, risky defaults and budget vs goals. `no_go`: fix every fail with the tool
+   `fix_first[]` names, in order, and re-run; `incomplete`: a check could not be read, which is not a
+   pass. Never enable on anything but `go` or `go_with_warnings` with the warnings said to the owner.
 5. Enable at tier 3, one confirmation each, **ads, then ad groups, then the campaign last**:
    `ppc_enable_resource({ connection_id, resource_type: "ad", resource_id, ad_group_id })`, then
    `resource_type: "ad_group"`, then `"campaign"`, which is the one switch that starts spend.
@@ -221,7 +233,10 @@ Run this BEFORE any diagnostic theory; it resolves a large share of mysteries ou
    changes you did not make mean another automation is still running here.
 3. Correlate timestamps against the daily metric series. A cost spike starting the same day as a bidding or
    budget row is explained; one that does not line up sends you to disapprovals and conversion tracking.
-4. Google's auto-applied recommendations appear here too. If auto-apply is on, recommend turning it off.
+4. Google's auto-applied recommendations appear here too (`client_type` GOOGLE_ADS_RECOMMENDATIONS_SUBSCRIPTION).
+   If auto-apply is on, recommend turning it off and, on the owner's yes, do it:
+   `ppc_google_auto_apply_set` (`params.pause_types` or `params.pause_all: true`, preview-first). It covers the 15
+   types the API exposes; the rest stay an owner step in Google Ads (Recommendations > Auto-apply).
 
 Paste material rows into the PM task comment and **snapshot change history into the monthly report**,
 because the API reaches only 30 days.
@@ -301,7 +316,10 @@ in one call), then zero enabled ads, then disapprovals, then budget exhausted, t
 targeting too narrow for inventory.
 
 **"An integration went dead."** `ppc_connection_list` status and campaign_count first: a working connection
-now at status pending means the refresh token died, so re-auth per `hiveku-data/ppc/SETUP.md`. Then
+now at status pending means the refresh token died, so hand the owner a reconnect link from
+`integration_connect_link_create` with `target_connection_id` (credentials replaced in place, bindings
+kept; never delete and recreate). A Google connection whose `ppc_connection_test` reports
+`data_manager_scope: missing` needs the same one reconnect before uploads work. Then
 `ppc_linked_accounts_list`, since a dropped GA4 or Merchant Center link explains vanished imported
 conversions and dead Shopping feeds with nothing wrong in Ads. Then `ppc_account_settings_get` for
 conversion-tracking status and auto-tagging.
@@ -319,11 +337,16 @@ judging an ad-group change on account-level metrics.
   inheriting the campaign's paused state. On Microsoft, `ppc_platform_ad_group_create` starts PAUSED, so
   enabling is two calls, and its ownership check reads the LOCAL mirror, so sync before any Bing
   ad-group-scoped write. Backwards, you ship a dead build or an unintentionally live one.
-- **No rename tool** for campaigns or ad groups. **No ad-schedule or network criteria tool.**
-  **No keyword-move operation.** **No campaign-settings update** beyond budget and bidding strategy here.
-  Geo, proximity, language and location-settings targeting DO have a tool: `ppc_google_targeting`
-  (`references/google-ads-advanced.md`). There is no raw Google Ads mutate surface on this lane; for
-  everything else, the Ads UI with exact steps for the client. Never pretend a capability exists.
+- **No rename tool** for Google campaigns or ad groups (a Microsoft ad group renames through
+  `ppc_bing_ad_group_update`). **No keyword-move operation.** Campaign settings DO have tools now, each
+  preview-first with before/after (`references/google-ads-advanced.md` 2.3): networks, location option
+  and URL options (`ppc_google_campaign_settings_set`), auto-generated text
+  (`ppc_google_campaign_ai_settings_set`), ad schedule (`ppc_google_ad_schedule_set`), call reporting
+  (`ppc_google_call_settings_set`), audience exclusions (`ppc_google_audience_exclusions_set`) and
+  auto-apply (`ppc_google_auto_apply_set`); geo, proximity and language through `ppc_google_targeting`.
+  There is no raw Google Ads mutate surface on this lane; for what remains (renames, ad rotation, the
+  account-level automated-assets switch), the Ads UI with exact steps for the client. Never pretend a
+  capability exists, and never send the owner to the UI for one that does.
 - **No delete.** `ppc_pause_resource` and `ppc_bulk_edit` set status only; removal is a UI action. Both
   pause and enable require `ad_group_id` for resource_type "ad" or "keyword", the most common call error
   here. `ppc_bulk_edit`'s `operations` schema accepts a `daily_budget` field that is refused.
