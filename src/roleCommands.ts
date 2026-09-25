@@ -18,6 +18,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ROLES, roleById, type Role } from './roles';
 import { skillsForRole } from './agencySkills';
+import { MEMORY_EDIT_RULES_PROSE } from './memoryLog';
 
 async function writeCmd(baseDir: string, name: string, body: string): Promise<void> {
   const file = path.join(baseDir, '.claude', 'commands', `${name}.md`);
@@ -33,15 +34,17 @@ const PERSIST_STEP =
   'Finish every session of work the same way: persist notable learnings to department memory. ' +
   'Each department has ONE memory document and `memory_update` replaces all of it, so read it ' +
   '(`memory_list({ domain: "<dept>" })`), merge your note into the full text, and send the whole ' +
-  'document with `memory_update({ memory_id, content })`. Only when the department has none, ' +
-  '`memory_create({ type: "memory", name: "<dept>", content })`; a 409 there means one exists, so read ' +
+  'document with `memory_update({ memory_id, content, reason, expected_version })`. ' +
+  MEMORY_EDIT_RULES_PROSE +
+  ' Only when the department has none, ' +
+  '`memory_create({ type: "memory", name: "<dept>", content, reason })`; a 409 there means one exists, so read ' +
   'and merge. Then reflect the work in Hiveku PM — `pm_tasks_create`/`pm_tasks_update`/`pm_tasks_complete`. ' +
   'Hiveku, not this folder, is the source of truth.';
 
 function dailyCommand(role: Role): string {
   const signals = role.briefTools;
   const domain = role.knowledgeDomains[0] ?? 'marketing';
-  const readTools = ['account_context_get', ...signals, 'mc_tasks_next', 'pm_tasks_list', 'memory_list', 'memory_create', 'memory_update'];
+  const readTools = ['account_context_get', ...signals, 'mc_tasks_next', 'pm_tasks_list', 'memory_list', 'memory_create', 'memory_update', 'memory_get', 'memory_log_list'];
   return `---
 description: Morning brief for this account (role: ${role.label}) — context, signals, then today's tasks. Pass a department to focus this session elsewhere.
 argument-hint: "[department, optional — e.g. ppc, seo, sales]"
@@ -95,8 +98,9 @@ Classify: **RAW** (no brand guide, no avatars, empty memory) / **PARTIAL** (some
 4. **Seed department memory:** for each discipline this account will run, write the operating
    facts you learned (ICP summary, offer, voice notes, competitors, constraints). Read first with
    \`memory_list({ domain: "<dept>" })\`: if the department already has a document, merge into it and
-   send the whole document with \`memory_update({ memory_id, content })\`; only if it has none,
-   \`memory_create({ type: "memory", name: "<dept>", content })\`. This is what makes every future
+   send the whole document with \`memory_update({ memory_id, content, reason, expected_version })\`
+   (${MEMORY_EDIT_RULES_PROSE}); only if it has none,
+   \`memory_create({ type: "memory", name: "<dept>", content, reason })\`. This is what makes every future
    \`account_context_get\` call rich instead of empty.
 5. Show the user what you built (brand voice line, avatar names, journey stages) and refine on
    their feedback (\`brand_guide_update\`, \`customer_avatar_update\`).
@@ -343,7 +347,8 @@ its way of working gets codified once and shared with every operator AND the das
    - locally: \`.claude/commands/hiveku-<dept>-<slug>.md\` (usable immediately as a slash command),
    - to Hiveku: \`memory_create({ type: "command", name: "<slug>", content })\`. A 409 means a command
      with that slug already exists: read it (\`memory_list({ type: "command" })\`), then pick a new slug
-     or, with the user's yes, send the whole revised command with \`memory_update({ memory_id, content })\`.
+     or, with the user's yes, send the whole revised command with
+     \`memory_update({ memory_id, content, reason, expected_version })\`. ${MEMORY_EDIT_RULES_PROSE}
 4. Tell the user: the command now syncs to every operator of this account ("Hiveku: Download
    Everything" / Check Knowledge Sync) and is visible in the dashboard under its department.
 To EDIT an account command later, change the Hiveku entry (\`memory_update\`) — Hiveku is the
@@ -603,7 +608,7 @@ AR chase. 1. \`accounting_ar_aging\` + \`accounting_invoice_list({ status: "all"
       return {
         'hiveku-standup': `---
 description: Standup — what's next, breached, stalled, and milestone health.
-allowed-tools: mcp__hiveku__mc_tasks_next, mcp__hiveku__mc_sla_breached, mcp__hiveku__mc_tasks_stalled, mcp__hiveku__pm_milestones_list, mcp__hiveku__pm_tasks_list, mcp__hiveku__memory_create, mcp__hiveku__memory_update, mcp__hiveku__memory_list
+allowed-tools: mcp__hiveku__mc_tasks_next, mcp__hiveku__mc_sla_breached, mcp__hiveku__mc_tasks_stalled, mcp__hiveku__pm_milestones_list, mcp__hiveku__pm_tasks_list, mcp__hiveku__memory_create, mcp__hiveku__memory_update, mcp__hiveku__memory_list, mcp__hiveku__memory_get, mcp__hiveku__memory_log_list
 ---
 Standup. 1. \`mc_tasks_next\` (the queue) + \`mc_sla_breached\` + \`mc_tasks_stalled\` + \`pm_milestones_list\`.
 2. Report per project: on-track / at-risk / blocked, with the ONE next action each.
@@ -873,7 +878,7 @@ Run this account's weekly pass. Follow the **${s.skill}** skill's weekly cadence
 3. Every change is confirmed before applying; every work item lands as a PM task.
 4. Close with a 5-line "what changed / what's next" note merged into the "${role.knowledgeDomains[0]}" memory: read it
    (\`memory_list({ domain: "${role.knowledgeDomains[0]}" })\`), add the note to the full text, and send the whole
-   document with \`memory_update({ memory_id, content })\`.
+   document with \`memory_update({ memory_id, content, reason, expected_version })\`. ${MEMORY_EDIT_RULES_PROSE}
 `,
     'hiveku-report': `---
 description: Monthly client-grade report (role: ${role.label}) — what an agency sends its clients.

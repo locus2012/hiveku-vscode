@@ -5,6 +5,7 @@
  *   ├─ Tasks                      ← opens the console Tasks board
  *   ├─ Automations                ← opens the console Automations tab
  *   ├─ Account memory             ← read-only document; owners edit it on the dashboard
+ *   ├─ Memory activity            ← who changed the AI memory, from which app, when and why
  *   │   ├─ Edit on the dashboard
  *   │   └─ "Closed on Mondays…"   ← a suggestion from an agent, not reviewed yet
  *   ├─ Outbound (BDR)             ← department; expand to datasets
@@ -36,7 +37,16 @@ import {
 } from './accountMemory';
 
 interface AccountNode { kind: 'account'; record: AccountRecord; }
-interface SectionNode { kind: 'section'; record: AccountRecord; tab: 'tasks' | 'automations'; label: string; icon: string; }
+interface SectionNode {
+  kind: 'section';
+  record: AccountRecord;
+  tab: 'tasks' | 'automations' | 'knowledge';
+  label: string;
+  icon: string;
+  /** A section of the tab to scroll to (the console's `focus`). */
+  focus?: string;
+  tooltip?: string;
+}
 interface DeptNode { kind: 'dept'; record: AccountRecord; deptId: string; label: string; }
 interface DatasetNode { kind: 'dataset'; record: AccountRecord; deptId: string; datasetId: string; label: string; count?: number; }
 interface MessageNode { kind: 'message'; label: string; command?: { command: string; title: string; arguments?: unknown[] }; icon?: string; tooltip?: string; }
@@ -128,7 +138,12 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         item.iconPath = new vscode.ThemeIcon(node.icon);
         // Per-tab context so menus can target one section (e.g. New Task on Tasks only).
         item.contextValue = `hivekuConsoleSection.${node.tab}`;
-        item.command = { command: 'hiveku.consoleOpen', title: 'Open', arguments: [{ record: node.record, tab: node.tab }] };
+        if (node.tooltip) item.tooltip = node.tooltip;
+        item.command = {
+          command: 'hiveku.consoleOpen',
+          title: 'Open',
+          arguments: [{ record: node.record, tab: node.tab, ...(node.focus ? { focus: node.focus } : {}) }],
+        };
         return item;
       }
       case 'dept': {
@@ -220,6 +235,17 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         // No fetch here: the memory loads when this node is expanded, so a big
         // roster does not fire one account_memory_get per account on reveal.
         { kind: 'accountMemory', record: node.record },
+        // The memory event log: opens the console's Knowledge tab at its
+        // Activity section. No fetch here either; the tab loads it.
+        {
+          kind: 'section',
+          record: node.record,
+          tab: 'knowledge',
+          label: 'Memory activity',
+          icon: 'history',
+          focus: 'activity',
+          tooltip: 'Who changed this account\'s AI memory, rules and skills, from which app, when and why.',
+        },
       ];
       let pageAccess: Record<string, boolean> | undefined;
       try {
