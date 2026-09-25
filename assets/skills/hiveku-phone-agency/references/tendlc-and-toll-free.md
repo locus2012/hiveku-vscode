@@ -279,8 +279,9 @@ rejection cycle. The diagnostic: fetch the URL with no JS -
 consent text, "message and data rates", "message frequency", "Reply STOP", "Text HELP", the
 privacy link, and the no-sharing sentence. Present in a browser but absent from raw HTML IS
 the rejection. One trap: on a Hiveku-hosted page a 202 with an empty body (header
-`x-amzn-waf-action: challenge`) is the edge firewall challenging an unidentified client, not a
-missing form - add the `-A` above and re-run before concluding. `voice_sms_cta_preflight` fetches
+`x-amzn-waf-action: challenge`) or a 403 with `x-hiveku-firewall: blocked` is the edge firewall
+refusing an unidentified client, not a missing form - add the `-A` above and re-run before
+concluding. A 403 without that header comes from the site itself. `voice_sms_cta_preflight` fetches
 from Hiveku's own servers and is exempt.
 
 **`voice_sms_cta_preflight` - FIRST, ALWAYS, before any fee.** It fetches each opt-in URL the

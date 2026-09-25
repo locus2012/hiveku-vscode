@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.85.4
+- **Knows the firewall's new "blocked" answer.** When the extension, or an automation it writes, fetches a site on Hiveku hosting, a refusal from the edge firewall can now be either the familiar `202` challenge or a `403` carrying `x-hiveku-firewall: blocked` (an automated client the firewall cannot identify) or `x-hiveku-firewall: blocked-network` (a known bulk-scraper network). Both read as "the firewall refused this client", with what to do about it. A `403` without that header is still the site's own answer, never the firewall.
+- **Firewall help for agents is current.** The vendored web-agency skills explain the refusal shapes, how to find a search crawler in a site's Firewall list (`site_firewall_get` with `q=Googlebot`; the list now filters and pages), why a "Googlebot" on Google Cloud rented servers is usually an impostor, and what the client detail's `logsState` means. Re-vendored from plugin 0.26.27, byte for byte.
+
 ## 0.85.3
 - **Saving a memory entry no longer overwrites someone else's change without warning.** A memory entry you have open can be changed on Hiveku while you work on it: by a person on the dashboard, a department agent, or another Claude Code or Codex session. When you save, the extension now checks first. If the entry moved, it tells you who changed it, from which app, when and why, and lets you compare and merge, save anyway, or cancel. Nothing is saved over the newer version unless you choose that.
 - **Each save can say what changed.** Saving a memory entry, or creating, deleting or restoring one from the console, offers an optional one-line "What changed?" box. Leaving it empty or pressing Escape still saves. With auto save on it is asked once per open tab, and asked again after the tab is closed and reopened.

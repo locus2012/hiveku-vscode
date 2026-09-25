@@ -1,31 +1,47 @@
 # Firewall - the edge protection on every Hiveku-hosted site, and the per-site allowances
 
-Load this when a customer's uptime monitor, audit tool or script reports a blank page or a 202
-from the live site, when "is the site down?" comes from an automated client rather than a
-person, or when you need to read what the edge firewall challenged or blocked for a site and
-allow one specific client through. Nothing here disables protection; there is no tool for that.
+Load this when a customer's uptime monitor, audit tool or script reports a blank page, a 202 or a
+403 from the live site, when "is the site down?" comes from an automated client rather than a
+person, when someone asks whether Googlebot or bingbot is being turned away, or when you need to
+read what the edge firewall challenged or blocked for a site and allow one specific client
+through. Nothing here disables protection; there is no tool for that.
 
 ## What the edge firewall does
 
-Every Hiveku-hosted site sits behind one edge firewall. Bulk scrapers from known crawler cloud
-networks are blocked (403), one address sending more than the limit in five minutes is rate
-limited (429), and an unknown automated client is asked to prove it is a browser (a challenge).
+Every Hiveku-hosted site sits behind one edge firewall. One address sending more than the limit
+in five minutes is rate limited (429), requests from known bulk-scraper cloud networks are
+blocked, and an automated client the firewall cannot identify is refused at the browser check.
 Real visitors, verified search engines, AI assistants, link previews, common uptime monitors and
-any client whose user agent contains `Hiveku` pass. HEAD requests and the paths `/robots.txt`,
-`/sitemap*`, `/llms.txt` and `/.well-known/` are never challenged.
+any client whose user agent contains `Hiveku` pass the browser check. HEAD requests and the paths
+`/robots.txt`, `/sitemap*`, `/llms.txt` and `/.well-known/` are never challenged or blocked as
+automated clients. The per-address rate limit and the scraper-network block still apply to
+everyone, Hiveku's own clients and HEAD requests included.
 
-**The challenge, as a client that cannot run JavaScript sees it: HTTP 202, an empty body, and
-the header `x-amzn-waf-action: challenge`.** A real page is never a 202. Read it as "the edge
-firewall challenged this client", never as "the site is empty", "the deploy failed" or "the
-form is missing from the HTML". From your own terminal, `curl -A 'Hiveku-Session/1.0'` passes
-and `curl -I` (HEAD) passes; WebFetch is not a Hiveku client and is challenged. A 403 is the
-scraper-network block and a 429 is the rate limit: an allowance changes neither.
+**How each refusal looks, and how to tell the firewall from the site.** An automated client the
+firewall cannot identify gets a 202 challenge (empty body, `x-amzn-waf-action: challenge`) or a
+403 with `x-hiveku-firewall: blocked`; a request from a known bulk-scraper network gets a 403 with
+`x-hiveku-firewall: blocked-network`; a 403 without that header comes from the site itself (an
+auth route, an expired signed URL, a missing asset). The rate limit is a 429 with a short
+plain-text body.
+
+- A real page is never a 202. A client that asks for HTML may get a small JavaScript page
+  instead of the empty body; a real browser runs it and passes without anyone noticing.
+- Decide on the status and the `x-hiveku-firewall` header, never on the body text. The firewall's
+  403 carries a short plain-text sentence that can change; the header is the contract.
+- Read a firewall refusal as "the edge firewall refused this client", never as "the site is
+  empty", "the deploy failed" or "the form is missing from the HTML". A 403 without the header is
+  the opposite case: the site answered, so look at the page, not the firewall.
+
+From your own terminal, `curl -A 'Hiveku-Session/1.0'` passes and `curl -I` (HEAD) passes;
+WebFetch is not a Hiveku client and is refused. An allowance lifts the browser check (the 202
+challenge and the 403 with `x-hiveku-firewall: blocked`) and nothing else: the 403 with
+`x-hiveku-firewall: blocked-network` and the 429 stay.
 
 Which Hiveku tools reach the edge, and how:
 
 - `fetch_url` is a direct fetch from Hiveku's own servers with the user agent `Hiveku-Agent/1.0`,
   and the deploy pipeline's smoke check fetches the same way as `Hiveku-Smoke-Check/1.0`. Both
-  are exempt by address and by agent and are never challenged.
+  are exempt by address and by agent and are never challenged or blocked as automated clients.
 - `preview_http_get` hits localhost inside the preview container (a branch preview is fetched
   from Hiveku's servers by its preview address); it never reaches the edge.
 - `web_scrape`, `web_crawl`, `web_extract`, `web_actions` and the screenshot pipeline go through
@@ -33,22 +49,34 @@ Which Hiveku tools reach the edge, and how:
   automated client. A format that drives a real browser (a screenshot, `web_actions`, or
   `waitFor` on `web_scrape`) runs the JavaScript and passes the challenge; a plain-fetch format
   (`markdown`, `html`, `rawHtml` or `links` with no `waitFor`) on a Hiveku-hosted site can come
-  back as `scrape_failed: true` with `reason: 'bot_challenge'` and a 202 status. That is the
-  challenge, not a fetcher defect and not an empty page: switch to a rendering format or read
-  the page with `fetch_url`. Do not report it and do not add an allowance for it.
+  back as `scrape_failed: true` with `reason: 'bot_challenge'` and a 202 or 403 status. That is
+  the firewall refusing a third-party fetcher, not a fetcher defect and not an empty page: switch
+  to a rendering format or read the page with `fetch_url`. Do not report it and do not add an
+  allowance for it.
 
 ## The four tools
 
 Agents get exactly what a person has in Site > Hosting > Firewall: read, read one client's
 evidence, allow, remove.
 
-- `site_firewall_get({ project_id, environment })` - read-only. The last 7 days for that tier
-  (`production` | `staging` | `development`): `totals` (`challenged`, `blocked`, `rateLimited`),
-  `window.through` (the latest rolled day; null when nothing has rolled yet - the numbers are
-  rolled once a day from the access logs, so today's traffic shows tomorrow), `clients[]` (top
-  20 by requests: `userAgent`, `asn`, `country`, `requests`, `lastSeen`, `outcome`, `allowed`)
-  and `exceptions[]` (the active allowances: `id`, `kind`, `value`, `note`, `createdBy`,
-  `createdAt`).
+- `site_firewall_get({ project_id, environment, outcome?, q?, limit?, offset? })` - read-only.
+  The last 7 days for that tier (`production` | `staging` | `development`): `totals`
+  (`challenged`, `blocked`, `rateLimited`), `window.through` (the latest rolled day; null when
+  nothing has rolled yet - the numbers are rolled once a day from the access logs, so today's
+  traffic shows tomorrow), `totalClients`, `clients[]` (busiest first: `userAgent`, `asn`,
+  `country`, `requests`, `lastSeen`, `outcome`, `allowed`) and `exceptions[]` (the active
+  allowances: `id`, `kind`, `value`, `note`, `createdBy`, `createdAt`). The list holds refused
+  requests only, never what was served. `blocked` counts the site's own 403s as well as the
+  firewall's, so a `blocked` row is not proof the firewall refused anything.
+  - `outcome` keeps one kind of refusal: `'challenged'`, `'blocked'` or `'rate_limited'`.
+  - `q` searches, ignoring case, for part of the user agent, the network name the Firewall page
+    shows, `AS` plus the network number or the bare number, or the two-letter country: `q:
+    'Googlebot'`, `q: 'curl'`, `q: 'AS396982'`, `q: 'FR'`. Up to 100 characters.
+  - `limit` (1 to 200, default 20) and `offset` (default 0) page through every matching client.
+    `totalClients` is how many match `outcome` and `q` before paging: while `offset +
+    clients.length` is below it there are more, so call again with `offset + limit`.
+  - `totals` always count the whole window, whatever `outcome` and `q` say. A 400 names the
+    allowed values when a parameter is out of range.
 - `site_firewall_client_get({ project_id, environment, user_agent, asn })` - read-only. The
   evidence behind one `clients[]` row, the same panel a person opens by clicking the row: what
   that client actually got over the window (`totals.served`, `challenged`, `blocked`,
@@ -60,6 +88,17 @@ evidence, allow, remove.
   answers 404. Read this before deciding anything about a row: a browser identity from a cloud
   network with many addresses walking the site is a scraper, not something to allow; one
   address fetching one path every few minutes is a monitor, allow its address.
+  - The detail is read from the access logs on demand (up to about 50 seconds) and kept for 15
+    minutes. Read `logsState` before the numbers. `'read'`: the detail came from the logs
+    (`source: 'access_logs'`). Any other state answers a 200 with `source: 'rollup'`, the daily
+    totals only, where `served`, `bytes` and `addresses` are null: null means "not read", never
+    zero.
+  - `'loading'` (the read is still running) and `'busy'` (the log store was too busy, or the read
+    ran out of time): ask again after about a minute; a read still in progress is reused, not
+    started again. `'failed'`: the logs could not be read; a later try may clear it.
+    `'no_hostname'`: the tier has no served hostname, so there are no logs, and asking again will
+    not change it. `logsError` is the plain sentence for the state; relay it, do not guess at an
+    AWS cause.
 - `site_firewall_allow({ project_id, kind: 'ip' | 'user_agent', value, note? })` - adds one
   allowance and pushes it to the edge. Returns the exception and `edge: 'applied' | 'pending'`;
   `pending` means saved and picked up within the day, not failed. This is a write on a
@@ -74,12 +113,18 @@ directly. If the tools are not on your key yet, say so and hand the user the pat
 
 ## The play: "my monitor says the site is blank"
 
-1. Confirm the shape. Ask what the client received: a 202 with an empty body, or a response
-   carrying `x-amzn-waf-action`, is the challenge. If the customer saw the blank page in a real
-   browser, this is not the firewall: go to `references/build-and-deploy.md`, Class 4.
-2. Read the site: `site_firewall_get({ project_id, environment: "production" })`. Find the
-   client's row in `clients[]`; `userAgent` is the string it sent, and `outcome` must be
-   `challenged` for an allowance to help.
+1. Confirm the shape. Ask what the client received. A 202 with an empty body, a response
+   carrying `x-amzn-waf-action`, or a 403 with `x-hiveku-firewall: blocked` is the browser
+   check, which an allowance lifts. A 403 with `x-hiveku-firewall: blocked-network` is the
+   scraper-network block and a 429 is the rate limit: no allowance lifts either, so say that
+   plainly. A 403 without `x-hiveku-firewall` came from the site, not the firewall: diagnose the
+   page (`deploy_doctor`, `references/build-and-deploy.md`). If the customer saw the blank page in
+   a real browser, this is not the firewall either: `references/build-and-deploy.md`, Class 4.
+2. Read the site: `site_firewall_get({ project_id, environment: "production", q })` with part of
+   the client's user agent as `q`. `userAgent` is the string it sent. `outcome: 'challenged'` is
+   the browser check. A `blocked` row mixes the firewall's 403s with the site's own, so the
+   header from step 1 decides whether an allowance helps; `site_firewall_client_get` on the row
+   gives the evidence.
 3. Allow it by its product token, never by a browser token. The value for `kind: 'user_agent'`
    is the distinctive part of the client's own user agent, 3 to 64 characters, matched
    case-insensitively as a substring: `MyMonitor/2.1`, `StatusCake`, `Site24x7`. The route
@@ -93,16 +138,39 @@ directly. If the tools are not on your key yet, say so and hand the user the pat
    (IPv4 prefix 24 to 32, IPv6 48 to 128; private, loopback and multicast ranges are refused).
 4. Read `edge` in the answer. `applied` means the edge has it now; `pending` means saved and
    picked up within the day - tell the customer that, not "it failed".
-5. Tell the customer what the allowance does and does not do (next section). The other fix is on
+5. Tell the customer what the allowance does and does not do (below). The other fix is on
    their side: a monitor that sends a user agent naming its product and version is what the
-   allowance matches, and one that identifies as Hiveku is never challenged.
+   allowance matches, and one that identifies as Hiveku is never challenged or blocked as an
+   automated client.
+
+## Finding a crawler: "is the firewall turning Googlebot or bingbot away?"
+
+1. Search for it: `site_firewall_get({ project_id, environment: "production", q: 'Googlebot' })`,
+   or `q: 'bingbot'`. The list holds refused requests only, so no row means no refusal in the
+   window, not proof that the crawler was served. For what Google actually fetched, the Search
+   Console URL inspection is the evidence.
+2. The firewall lets real Googlebot and bingbot through by the address they come from, so a real
+   one is not challenged. A row can still appear: the per-address rate limit applies to everyone,
+   and a `blocked` row mixes the site's own 403s with the firewall's. The row cannot tell them
+   apart, and neither can its network number: a 403 carrying `x-hiveku-firewall` is the firewall,
+   one without it is the site. Ask for the response's `x-hiveku-firewall` header, or open the row
+   with `site_firewall_client_get` (step 4), before blaming the page or the firewall.
+3. A Googlebot row on Google Cloud (`asn` 396982) is usually an impostor: anyone can rent a server
+   there and put that name in the user agent. Real bingbot comes from 8075 (Microsoft / Azure),
+   which also carries rented Azure servers, so the network number alone cannot prove a bingbot
+   real or fake.
+4. Open the row with `site_firewall_client_get` for its addresses, paths and verdict before you
+   say anything to the customer. Never allow a crawler name: the route refuses `Googlebot`,
+   `bingbot` and `bot` because anyone can type them.
 
 ## What an allowance does and does not do
 
-- It skips the browser check only. The per-address rate limit, the block on known scraper
-  networks and the fleet-wide volume challenge still apply, so an allowed monitor that hammers
-  the site is still rate limited, and a spoofed token that starts walking a site at scale is
-  still challenged.
+- It lets the client past the browser check, which is what answers an automated client the
+  firewall cannot identify, with the 202 challenge or the 403 with `x-hiveku-firewall: blocked`.
+  It never lifts the per-address rate limit (429), the fingerprint volume challenge, or the
+  scraper-network block (403 with `x-hiveku-firewall: blocked-network`), so an allowed monitor
+  that hammers the site is still rate limited, and a spoofed token that starts walking a site at
+  scale is still challenged.
 - A user-agent allowance works on that site's hostnames only: a token can be copied by anyone,
   so it must not open other customers' sites. An IP allowance is trusted wherever that address
   goes on Hiveku hosting: an address identifies one machine.
@@ -117,13 +185,14 @@ directly. If the tools are not on your key yet, say so and hand the user the pat
 
 `fetch_url`, the deploy smoke check and the other fetchers that run from Hiveku's own servers
 identify themselves with a user agent containing `Hiveku` and come from Hiveku's exempt
-addresses. If one of those direct fetchers says it was challenged, that is a defect in the
-fetcher (its user agent or its egress address), not something to fix with an allowance; report
-it. The Firecrawl-backed tools are the exception: a `bot_challenge` from `web_scrape` on a
-Hiveku-hosted site is the edge doing its job to a third-party browser fleet, and the fix is a
-rendering format or `fetch_url` (above), not a report and not an allowance. Never ask for a
-customer's monitor to be added to Hiveku's own exempt address set: that set is for Hiveku's
-tools, and the customer's allowance is self-service in Site > Hosting > Firewall.
+addresses. If one of those direct fetchers says it was challenged or blocked as an automated
+client, that is a defect in the fetcher (its user agent or its egress address), not something to
+fix with an allowance; report it. The Firecrawl-backed tools are the exception: a
+`bot_challenge` from `web_scrape` on a Hiveku-hosted site is the edge doing its job to a
+third-party browser fleet, and the fix is a rendering format or `fetch_url` (above), not a report
+and not an allowance. Never ask for a customer's monitor to be added to Hiveku's own exempt
+address set: that set is for Hiveku's tools, and the customer's allowance is self-service in
+Site > Hosting > Firewall.
 
 ## Not in this round
 

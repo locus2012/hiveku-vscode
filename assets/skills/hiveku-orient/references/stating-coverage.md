@@ -294,8 +294,9 @@ Real next steps, in order:
    does not tell you what CloudFront or the deployed Lambda returns in prod, so do not present it
    as a production check.
 3. **Hand the user one command** for the live URL: `curl -sSI https://example.com/page` (a HEAD:
-   Hiveku's edge firewall never challenges HEAD, so keep the `-I`; a plain GET from a terminal
-   needs `-A 'Hiveku-Session/1.0'` or it answers 202 with an empty body). Tell them what a bad
+   Hiveku's edge firewall never challenges or blocks HEAD as an automated client, so keep the
+   `-I`; a plain GET from a terminal needs `-A 'Hiveku-Session/1.0'` or the firewall refuses it
+   with a 202 and an empty body, or a 403 with `x-hiveku-firewall: blocked`). Tell them what a bad
    answer looks like (any `x-robots-tag` line containing `noindex`).
 
 ### Canonical validity across the URL set: partial, capped at 50 per call.
