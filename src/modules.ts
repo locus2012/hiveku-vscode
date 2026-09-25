@@ -37,7 +37,8 @@ import {
 import {
   TICKET_SUBJECT_FENCE_SOURCE,
   UNTRUSTED_PROMPT_NOTE,
-  displayUntrusted,
+  displayLabel,
+  displayUntrustedDeep,
   fencedForAgent,
 } from './untrustedText';
 
@@ -365,7 +366,9 @@ const EMAIL_SEND_NOW: ActionSpec = {
 //
 // A person reading the list sees the words: each row gets display_title with
 // the fence stripped, and that is the title the panel lists, filters on and
-// names in its modals. The raw subject stays on the row untouched, and "Copy
+// names in its modals. The detail pane (click a title) shows the fetched
+// ticket with the fence removed from every field that carries it. The raw
+// subject stays on the row untouched, and "Copy
 // for Claude" builds its prompt from it with the fence kept (or added, if an
 // older server sent it bare) plus one line saying what the fence means. The
 // stripped text never goes to an AI. See untrustedText.ts.
@@ -399,15 +402,35 @@ function listToolRows(raw: unknown, tool: string): unknown[] {
   throw new Error(`Could not read the response from ${tool}. This is a display fault, not an empty list: the tickets may exist.`);
 }
 
-/** Ticket rows with display_title: the subject (or title) as a person reads it. Everything else is untouched. */
+/** The label for a ticket whose subject has nothing a person can read. */
+export const NO_SUBJECT_LABEL = '(no subject)';
+
+/**
+ * Ticket rows with display_title: the subject (or title) as a person reads it,
+ * or NO_SUBJECT_LABEL. Always set, so the list never falls back to the raw
+ * fenced subject: a subject of only zero-width characters comes back as an
+ * empty fence. Everything else is untouched.
+ */
 export const helpdeskTicketRows =
   (tool: string) =>
   (raw: unknown): Array<Record<string, unknown>> =>
     listToolRows(raw, tool)
       .filter(isRow)
-      .map((ticket) => ({ ...ticket, display_title: displayUntrusted(ticket.subject) || displayUntrusted(ticket.title) }));
+      .map((ticket) => ({
+        ...ticket,
+        display_title: displayLabel(ticket.subject) || displayLabel(ticket.title) || NO_SUBJECT_LABEL,
+      }));
 
-const TICKET_TITLE_KEYS = ['display_title', 'subject', 'title'];
+/** Titles come from display_title only: the fenced subject is never a label. */
+const TICKET_TITLE_KEYS = ['display_title'];
+
+/**
+ * The ticket detail pane as a person reads it: the subject, the contact's
+ * names, source_meta free text and any message bodies without the fence.
+ * Display only: the pane is never sent to an AI.
+ */
+export const helpdeskTicketDetail = (ticket: Record<string, unknown>): Record<string, unknown> =>
+  displayUntrustedDeep(ticket);
 
 /** "Copy for Claude" on a ticket: the subject stays fenced, and the prompt says what the fence means. */
 export function ticketCopyPrompt(row: Record<string, unknown>): string {
@@ -550,7 +573,7 @@ export const MODULES: ModuleSpec[] = [
           { id: 'claude', label: 'Copy for Claude', kind: 'copy', copyTemplate: ticketCopyPrompt },
           chat('knowledge_base', 'Draft reply'),
         ],
-        detail: { tool: 'helpdesk_ticket_get', idKeys: ['id', 'ticket_id'], idArg: 'id' },
+        detail: { tool: 'helpdesk_ticket_get', idKeys: ['id', 'ticket_id'], idArg: 'id', transform: helpdeskTicketDetail },
         empty: 'No open tickets.',
       },
       {

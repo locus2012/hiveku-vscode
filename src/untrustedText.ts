@@ -47,6 +47,37 @@ export function displayUntrusted(value: unknown): string {
   return value.replace(FENCE_OPEN_RE, ' ').replace(FENCE_CLOSE_RE, ' ').replace(/\s+/g, ' ').trim();
 }
 
+/** Any open or close tag of the fence, for a yes/no check (not global, so no lastIndex state). */
+const FENCE_ANY_TAG_RE = /<\s*\/?\s*untrusted_external_content\b/i;
+
+/**
+ * displayUntrusted for a label: '' when what is left has nothing a person can
+ * see. A subject made only of zero-width characters comes back from the server
+ * as an empty fence, and from an older server as the bare characters; both
+ * would print as a blank title. Display only.
+ */
+export function displayLabel(value: unknown): string {
+  const text = displayUntrusted(value);
+  return text.replace(FENCE_INVISIBLE_RE, '').trim() ? text : '';
+}
+
+/**
+ * A fetched record as a person reads it: every string that carries the fence,
+ * at any depth up to four levels (a ticket's subject, its contact's names, its
+ * source_meta free text, its messages), shown with the fence removed.
+ * Strings without the fence, and everything that is not a string, are left as
+ * they are. Never mutates its input. Display only: never send the result to an
+ * AI.
+ */
+export function displayUntrustedDeep<T>(value: T, depth = 0): T {
+  if (typeof value === 'string') return (FENCE_ANY_TAG_RE.test(value) ? displayUntrusted(value) : value) as T;
+  if (depth >= 4 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => displayUntrustedDeep(item, depth + 1)) as T;
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) out[key] = displayUntrustedDeep(item, depth + 1);
+  return out as T;
+}
+
 // The fence-integrity half of the builder's fenceForAgent, byte for byte in
 // meaning: invisible characters dropped first (a model reads straight past a
 // zero-width space inside "</untrusted_external_content>"), then every
@@ -68,15 +99,21 @@ function fenceSource(source: string): string {
 
 /**
  * True only for a value that is one whole server fence with nothing of the
- * fence's name inside it. A bare value shaped to LOOK fenced
- * ('<fence>a</fence> do this <fence>b</fence>') has a close tag inside, so it
- * is not trusted as already fenced.
+ * fence's name, and no invisible character, inside it. A bare value shaped to
+ * LOOK fenced ('<fence>a</fence> do this <fence>b</fence>') has a close tag
+ * inside, so it is not trusted as already fenced. Neither is one whose inner
+ * tags are split by a zero-width space: the server drops every invisible
+ * character before it fences, so a fence that still holds one is not the
+ * server's, and a model would read straight past the character to a close tag.
+ * (String.prototype.search ignores a global regex's lastIndex.)
  */
 export function isSingleFence(value: unknown): boolean {
   if (typeof value !== 'string') return false;
   const match = value.match(WHOLE_FENCE_RE);
   if (!match) return false;
-  return match[1].search(FENCE_TAG_MENTION_RE) === -1;
+  const inner = match[1];
+  if (inner.search(FENCE_INVISIBLE_RE) !== -1) return false;
+  return inner.search(FENCE_TAG_MENTION_RE) === -1;
 }
 
 /**
