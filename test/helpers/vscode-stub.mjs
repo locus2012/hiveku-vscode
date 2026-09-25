@@ -7,7 +7,7 @@
  */
 import Module from 'node:module';
 
-export const calls = { errors: [], infos: [], warnings: [], openExternal: [], executeCommand: [] };
+export const calls = { errors: [], infos: [], warnings: [], inputs: [], openExternal: [], executeCommand: [] };
 export const config = new Map();
 
 class EventEmitter {
@@ -64,6 +64,8 @@ export const vscodeStub = {
     showErrorMessage: (...a) => { calls.errors.push(a); return thenable(undefined); },
     showInformationMessage: (...a) => { calls.infos.push(a); return thenable(undefined); },
     showWarningMessage: (...a) => { calls.warnings.push(a); return thenable(undefined); },
+    // Escape, by default: a test that wants an answer replaces this.
+    showInputBox: (...a) => { calls.inputs.push(a); return thenable(undefined); },
   },
   env: { openExternal: (u) => { calls.openExternal.push(u); return thenable(true); } },
   commands: { executeCommand: (...a) => { calls.executeCommand.push(a); return thenable(undefined); } },

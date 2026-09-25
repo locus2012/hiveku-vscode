@@ -7,6 +7,16 @@
  *   hiveku:/cms/<accountId>/<projectId>/<collection>/<slug>.json   CMS entry
  *   hiveku:/memory/<accountId>/<memoryId>/<name>.md      account AI memory entry
  *   hiveku:/account-memory/<accountId>/ACCOUNT_MEMORY.md  the account memory (READ-ONLY)
+ *   hiveku:/memory-newer/<accountId>/<memoryId>/<name>.md  the newer Hiveku text of a memory
+ *        entry that changed while it was open (READ-ONLY; the left side of Compare and merge)
+ *
+ * Memory saves check for other writers (memory event log plan 14.3): the
+ * provider remembers the version it served, and a save first reads the entry
+ * again. If it moved, the person is told who changed it, when and why (from
+ * memory_log_list) and picks Compare and merge, Save anyway or Cancel. Every
+ * save sends the version it was based on as expected_version, so once the
+ * server checks it a change that lands mid-save is a 409 with the same dialog.
+ * An optional "What changed?" line rides along as the reason (empty is fine).
  *
  * The account memory is the one family with no save: owners and admins edit it
  * on the Hiveku dashboard and there is no MCP tool that sets it. stat() marks
@@ -24,6 +34,25 @@ import * as vscode from 'vscode';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
 import { quote as quoteEnvValue, parseEnvFile } from './env';
+import {
+  cleanReason,
+  listMemoryLog,
+  memoryUpdateWithContext,
+  versionConflict,
+  versionFromWrite,
+  versionOf,
+} from './memoryLog';
+import {
+  CANCELLED_NOTE,
+  COMPARE_ACTION,
+  COMPARE_NOTE,
+  SAVE_ANYWAY_ACTION,
+  decideSave,
+  describeChange,
+  staleMessage,
+  type CurrentMemory,
+  type OpenedMemory,
+} from './memoryStale';
 import {
   ACCOUNT_MEMORY_FILE,
   accountMemoryDashboardUrl,
@@ -64,13 +93,19 @@ export function memoryUri(accountId: string, memoryId: string, domain: string): 
   return vscode.Uri.parse(`${HIVEKU_SCHEME}:/memory/${accountId}/${memoryId}/${name}.md`);
 }
 
+/** The newer Hiveku text of a memory entry, read-only (Compare and merge's left side). */
+export function memoryNewerUri(accountId: string, memoryId: string, domain: string): vscode.Uri {
+  const name = (domain || 'memory').replace(/[^A-Za-z0-9._:-]+/g, '-').replace(/:/g, '__');
+  return vscode.Uri.parse(`${HIVEKU_SCHEME}:/memory-newer/${accountId}/${memoryId}/${name}.md`);
+}
+
 /** The account memory, read-only (see the header). */
 export function accountMemoryUri(accountId: string): vscode.Uri {
   return vscode.Uri.parse(`${HIVEKU_SCHEME}:/account-memory/${accountId}/${ACCOUNT_MEMORY_FILE}`);
 }
 
 interface ParsedUri {
-  kind: 'env' | 'cms' | 'memory' | 'account-memory';
+  kind: 'env' | 'cms' | 'memory' | 'memory-newer' | 'account-memory';
   accountId: string;
   projectId?: string;
   collectionId?: string;
@@ -95,7 +130,7 @@ function parse(uri: vscode.Uri): ParsedUri {
       slug: parts[4].replace(/\.json$/, ''),
     };
   }
-  if (kind === 'memory' && parts.length >= 4) {
+  if ((kind === 'memory' || kind === 'memory-newer') && parts.length >= 4) {
     return { kind, accountId: parts[1], memoryId: parts[2] };
   }
   if (kind === 'account-memory' && parts.length >= 3 && parts[1]) {
@@ -132,6 +167,16 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
   private readonly sizes = new Map<string, number>();
   /** uri → last read/write time; stat() must NOT invent a new mtime per call. */
   private readonly mtimes = new Map<string, number>();
+  /** memory uri → the version this editor was given, and when (the stale-edit check). */
+  private readonly opened = new Map<string, OpenedMemory>();
+  /**
+   * memory uri → the last "What changed?" answer, offered again on the next
+   * save while that document stays open. Cleared when it closes (forget), so
+   * a later, unrelated edit is asked again instead of reusing an old reason.
+   */
+  private readonly reasons = new Map<string, string>();
+  /** `${accountId}/${memoryId}` → the newer Hiveku text shown by Compare and merge. */
+  private readonly newer = new Map<string, string>();
 
   constructor(
     private readonly clientFor: ClientFor,
@@ -140,6 +185,17 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
 
   private dashboardUrl(accountId: string): string {
     return accountMemoryDashboardUrl(this.appUrlFor(), accountId);
+  }
+
+  /**
+   * A document on this scheme closed: drop what was kept for it while it was
+   * open (its "What changed?" answer and the version it was given). The next
+   * open reads the entry again and the next save asks for a reason again.
+   */
+  forget(uri: vscode.Uri): void {
+    const key = uri.toString();
+    this.reasons.delete(key);
+    this.opened.delete(key);
   }
 
   watch(): vscode.Disposable {
@@ -154,7 +210,9 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
       mtime: this.mtimes.get(uri.toString()) ?? 0,
       size: this.sizes.get(uri.toString()) ?? 0,
       // The editor opens it locked ("Cannot edit in read-only editor").
-      ...(p.kind === 'account-memory' ? { permissions: vscode.FilePermission.Readonly } : {}),
+      ...(p.kind === 'account-memory' || p.kind === 'memory-newer'
+        ? { permissions: vscode.FilePermission.Readonly }
+        : {}),
     };
   }
 
@@ -195,10 +253,21 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
         fetchedAt: new Date().toISOString(),
         appUrl: this.appUrlFor(),
       });
+    } else if (p.kind === 'memory-newer') {
+      const cached = this.newer.get(`${p.accountId}/${p.memoryId}`);
+      if (cached !== undefined) {
+        text = cached;
+      } else {
+        const entry = await api.memoryGet(client, p.memoryId!);
+        if (!entry) throw vscode.FileSystemError.FileNotFound(uri);
+        text = entry.content ?? '';
+      }
     } else {
       const entry = await api.memoryGet(client, p.memoryId!);
       if (!entry) throw vscode.FileSystemError.FileNotFound(uri);
       text = entry.content ?? '';
+      // What this editor was given: a later save compares against it.
+      this.opened.set(uri.toString(), { version: versionOf(entry.version), readAt: new Date().toISOString() });
     }
     const bytes = enc.encode(text);
     this.sizes.set(uri.toString(), bytes.byteLength);
@@ -232,6 +301,11 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
 
   async writeFile(uri: vscode.Uri, content: Uint8Array): Promise<void> {
     const p = parse(uri);
+    if (p.kind === 'memory-newer') {
+      throw vscode.FileSystemError.NoPermissions(
+        'This is the newer text from Hiveku, for comparing. Copy what you want into your own tab and save that.',
+      );
+    }
     if (p.kind === 'account-memory') {
       // Refused BEFORE any client or tool call: there is nothing to save it with,
       // and a save that returned quietly would look like it had worked.
@@ -260,17 +334,125 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
         });
         vscode.window.showInformationMessage(`Saved CMS entry "${p.slug}" to Hiveku.`);
       } else {
-        await api.memoryUpdate(client, p.memoryId!, text);
+        await this.writeMemory(client, uri, p, text);
         vscode.window.showInformationMessage('Memory entry saved (prior version snapshotted).');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      // A save the person stopped (Cancel, or Compare and merge) is not a failure.
+      if (err instanceof SaveNotApplied) {
+        vscode.window.showInformationMessage(msg);
+        throw vscode.FileSystemError.Unavailable(msg);
+      }
       vscode.window.showErrorMessage(`Hiveku save failed: ${msg}`);
       throw err instanceof vscode.FileSystemError ? err : vscode.FileSystemError.Unavailable(msg);
     }
     this.sizes.set(uri.toString(), content.byteLength);
     this.mtimes.set(uri.toString(), Date.now());
     this._onDidChangeFile.fire([{ type: vscode.FileChangeType.Changed, uri }]);
+  }
+
+  /**
+   * Save a memory entry without silently overwriting someone else's change
+   * (see the header). Throws SaveNotApplied when the person stops the save.
+   */
+  private async writeMemory(client: HivekuMcpClient, uri: vscode.Uri, p: ParsedUri, text: string): Promise<void> {
+    const key = uri.toString();
+    const memoryId = p.memoryId!;
+    const name = memoryDocName(uri);
+    const opened = this.opened.get(key);
+    const entry = await api.memoryGet(client, memoryId);
+    if (!entry) {
+      throw new Error('this memory entry no longer exists on Hiveku (it may have been deleted). Copy your text before closing the tab.');
+    }
+    const decision = decideSave(opened, { version: versionOf(entry.version), content: entry.content ?? '' });
+    let expectedVersion: number | undefined;
+    if (decision.kind === 'stale') {
+      expectedVersion = await this.resolveStale(client, uri, p, name, opened, decision.current, 'check');
+    } else {
+      expectedVersion = decision.expectedVersion;
+    }
+
+    const reason = await this.askReason(key);
+    let res: unknown;
+    try {
+      res = await memoryUpdateWithContext(client, memoryId, text, { reason, expectedVersion });
+    } catch (err) {
+      const conflict = versionConflict(err);
+      if (!conflict) throw err;
+      // The server refused a write based on an older version (builder E2b).
+      const retryVersion = await this.resolveStale(
+        client,
+        uri,
+        p,
+        name,
+        { version: expectedVersion, readAt: opened?.readAt ?? new Date().toISOString() },
+        { version: conflict.version, content: conflict.content },
+        'conflict',
+      );
+      res = await memoryUpdateWithContext(client, memoryId, text, { reason, expectedVersion: retryVersion });
+    }
+    // The saved text is now what this editor has seen.
+    const saved = versionFromWrite(res);
+    this.opened.set(key, { version: saved, readAt: new Date().toISOString() });
+  }
+
+  /**
+   * The entry moved: say who changed it and let the person choose. Returns the
+   * version to save over (Save anyway), or throws SaveNotApplied (Compare and
+   * merge opens the diff; Cancel keeps the tab as it is).
+   */
+  private async resolveStale(
+    client: HivekuMcpClient,
+    uri: vscode.Uri,
+    p: ParsedUri,
+    name: string,
+    opened: OpenedMemory | undefined,
+    current: CurrentMemory,
+    origin: 'check' | 'conflict',
+  ): Promise<number | undefined> {
+    let lines: Awaited<ReturnType<typeof listMemoryLog>>['lines'] = [];
+    try {
+      lines = (
+        await listMemoryLog(client, { memory_id: p.memoryId!, ...(opened?.readAt ? { since: opened.readAt } : {}), limit: 20 })
+      ).lines;
+    } catch {
+      // The log is not on this account yet (or not reachable): the dialog falls back to versions.
+    }
+    const message = staleMessage(name, describeChange(lines, opened?.version), { opened: opened?.version, current: current.version }, origin);
+    const pick = await vscode.window.showWarningMessage(message, { modal: true }, COMPARE_ACTION, SAVE_ANYWAY_ACTION);
+    if (pick === SAVE_ANYWAY_ACTION) return current.version;
+    if (pick === COMPARE_ACTION) {
+      this.newer.set(`${p.accountId}/${p.memoryId}`, current.content);
+      // The person is now looking at the newer version: their next save builds on it.
+      this.opened.set(uri.toString(), { version: current.version, readAt: new Date().toISOString() });
+      const left = memoryNewerUri(p.accountId, p.memoryId!, name);
+      this._onDidChangeFile.fire([{ type: vscode.FileChangeType.Changed, uri: left }]);
+      await vscode.commands.executeCommand('vscode.diff', left, uri, `${name}: on Hiveku now (left) and your edit (right)`);
+      throw new SaveNotApplied(COMPARE_NOTE);
+    }
+    throw new SaveNotApplied(CANCELLED_NOTE);
+  }
+
+  /**
+   * "What changed? (optional)". Empty, or Escape, means no reason, never a
+   * cancelled save. With auto save on, ask once per open document (a prompt
+   * every few seconds would be unusable) and reuse the answer until that
+   * document closes (forget).
+   */
+  private async askReason(key: string): Promise<string | undefined> {
+    const previous = this.reasons.get(key);
+    const autoSave = vscode.workspace.getConfiguration('files').get<string>('autoSave', 'off');
+    if (autoSave && autoSave !== 'off' && this.reasons.has(key)) return previous || undefined;
+    const input = await vscode.window.showInputBox({
+      title: 'What changed? (optional)',
+      prompt: 'One line on why, shown to your team in the memory Activity view. Leave it empty to save without one.',
+      placeHolder: 'For example: Clarified the refund wording',
+      value: previous ?? '',
+    });
+    const reason = cleanReason(input);
+    this.reasons.set(key, reason ?? '');
+    return reason;
   }
 
   private async writeEnv(client: HivekuMcpClient, projectId: string, text: string): Promise<void> {
@@ -319,15 +501,29 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
   }
 }
 
+/** The person stopped a memory save (Cancel, or Compare and merge): not a failure. */
+export class SaveNotApplied extends Error {}
+
+/** The entry's name as its tab shows it ("_rule__pricing.md" → "_rule:pricing"). */
+function memoryDocName(uri: vscode.Uri): string {
+  const file = uri.path.split('/').pop() ?? 'memory';
+  return file.replace(/\.md$/, '').replace(/__/g, ':');
+}
+
 /** Register the provider once at activation. */
 export function registerHivekuFs(
   context: vscode.ExtensionContext,
   clientFor: ClientFor,
   appUrlFor: AppUrlFor = () => DEFAULT_APP_URL,
 ): void {
+  const provider = new HivekuFileSystem(clientFor, appUrlFor);
   context.subscriptions.push(
-    vscode.workspace.registerFileSystemProvider(HIVEKU_SCHEME, new HivekuFileSystem(clientFor, appUrlFor), {
+    vscode.workspace.registerFileSystemProvider(HIVEKU_SCHEME, provider, {
       isCaseSensitive: true,
+    }),
+    // "Ask once per open document": what was kept for a document goes when it closes.
+    vscode.workspace.onDidCloseTextDocument((doc) => {
+      if (doc.uri.scheme === HIVEKU_SCHEME) provider.forget(doc.uri);
     }),
   );
 }
