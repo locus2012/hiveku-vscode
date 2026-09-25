@@ -16,7 +16,8 @@ each rung costs more:
 
 First read the account's own positioning with `account_context_get({ domain })` so the research is framed
 against this brand, not generic. Persist the conclusion to department memory (`memory_list` first, then
-`memory_update` on the standing note; `memory_create` only when none exists) and, for SEO/content, feed
+`memory_update` on the standing note with a one-line `reason`, after checking `memory_log_list` for it if
+you read it earlier in the session; `memory_create` only when none exists) and, for SEO/content, feed
 it into content-gap and keyword work. Cite source URLs in your summary; never fabricate a finding.
 
 7. Index what you used - the evidence outlives this chat. The Content research knowledge base
