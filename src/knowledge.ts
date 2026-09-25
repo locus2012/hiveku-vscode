@@ -1558,14 +1558,20 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   FIRST — it sees the CloudFront wiring, edge functions, and CDN-vs-origin diff that you cannot —
   and NEVER propose deleting/recreating a Lambda or distribution without running it.
 - **Fetching a Hiveku-hosted site from this machine (curl, WebFetch, a script): identify as Hiveku.**
-  The edge firewall challenges automated clients that do not: use \`curl -I <url>\` (HEAD is never
-  challenged) or \`curl -A "Hiveku-Session/1.0" <url>\`, and do not WebFetch a customer domain, a
-  *.hiveku.com tier host or preview.hiveku.com. An HTTP 202 with an EMPTY body and the header
-  \`x-amzn-waf-action: challenge\` is that challenge: it is NOT an empty site and NOT a failed deploy,
-  so never report it as either. Say "the edge firewall challenged this client; send a user agent
-  containing Hiveku, or use a HEAD request". \`deploy_doctor\`, \`fetch_url\` and \`preview_http_get\`
-  already identify as Hiveku. A customer's own uptime monitor or audit tool is allowed in
-  Site > Hosting > Firewall.
+  The edge firewall refuses automated clients that do not: use \`curl -I <url>\` (HEAD is never
+  challenged or blocked as an automated client) or \`curl -A "Hiveku-Session/1.0" <url>\`, and do not
+  WebFetch a customer domain, a *.hiveku.com tier host or preview.hiveku.com. An automated client the
+  firewall cannot identify gets a 202 challenge (empty body, \`x-amzn-waf-action: challenge\`) or a 403
+  with \`x-hiveku-firewall: blocked\`; a request from a known bulk-scraper network gets a 403 with
+  \`x-hiveku-firewall: blocked-network\`; a 403 without that header comes from the site itself. Decide
+  by the header, never by the 403's body text. A firewall refusal is NOT an empty site and NOT a failed
+  deploy, so never report it as either. Say "the edge firewall challenged (or blocked) this client;
+  send a user agent containing Hiveku, or use a HEAD request". For \`blocked-network\` say instead that
+  the firewall does not serve requests from this network: a Hiveku user agent does not lift that block.
+  \`deploy_doctor\`, \`fetch_url\` and \`preview_http_get\` already identify as Hiveku. A customer's own
+  uptime monitor or audit tool is allowed in Site > Hosting > Firewall; an allowance lets it past the
+  automated-client challenge and the \`blocked\` 403, never past the per-IP limit (429), the high-volume
+  challenge or the \`blocked-network\` 403.
 - **Converted the framework (e.g. Vite → Next.js)? Run \`site_reanalyze({ project_id })\` after pushing
   the new code.** Deploys auto-detect the framework from files (a stale label won't break the build),
   but Hiveku's stored labels (project_type / detected_project_type — the latter drives redirect rewrites
