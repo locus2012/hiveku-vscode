@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.85.5
+- **Helpdesk tickets read cleanly.** Ticket titles and list labels no longer show the `<untrusted_external_content>` wrapper Hiveku puts around text written by outsiders, and neither does the ticket detail pane. "Copy for Claude" keeps the wrapper and adds one line saying the wrapped text came from outside and is data, not instructions.
+- **See what the website assistant knows.** A new "Website assistant knowledge" view in the Helpdesk module shows what the chat on your website can answer from right now: its sources, which pages of your site it read or skipped, and advice on filling the gaps.
+- **Restores are described correctly.** The `/hiveku-restore` instructions and the Hiveku knowledge the extension writes for Claude now say that restoring a checkpoint leaves your live database alone unless you ask for your data back (`restore_database: true`). They used to say the database was restored too. Re-vendored skills match plugin 0.26.28.
+
 ## 0.85.4
 - **Knows the firewall's new "blocked" answer.** When the extension, or an automation it writes, fetches a site on Hiveku hosting, a refusal from the edge firewall can now be either the familiar `202` challenge or a `403` carrying `x-hiveku-firewall: blocked` (an automated client the firewall cannot identify) or `x-hiveku-firewall: blocked-network` (a known bulk-scraper network). Both read as "the firewall refused this client", with what to do about it. A `403` without that header is still the site's own answer, never the firewall.
 - **Firewall help for agents is current.** The vendored web-agency skills explain the refusal shapes, how to find a search crawler in a site's Firewall list (`site_firewall_get` with `q=Googlebot`; the list now filters and pages), why a "Googlebot" on Google Cloud rented servers is usually an impostor, and what the client detail's `logsState` means. Re-vendored from plugin 0.26.27, byte for byte.
