@@ -256,12 +256,17 @@ passing gated route.
 **Rule 32. `indeterminate: true` means no HTTP response at all** - DNS or edge, nothing answered. WARN,
 not fail. Usually propagation, not breakage.
 
-**Rule 32a. A 202 with an empty body and `x-amzn-waf-action: challenge` from your own terminal is the
-edge firewall challenging an unidentified client, not a serving failure.** The pipeline's smoke runs
-from Hiveku's own servers and is exempt; your spot-check is not unless it sends a user agent
-containing `Hiveku` or uses HEAD. Do not run `deploy_doctor` or retry the deploy on a 202. A
-customer's own monitor that is challenged is allowed by its product token in Site > Hosting >
-Firewall (`references/firewall.md`); never fix that with a redeploy.
+**Rule 32a. A 202 with an empty body and `x-amzn-waf-action: challenge`, or a 403 with
+`x-hiveku-firewall: blocked`, from your own terminal is the edge firewall refusing an unidentified
+client, not a serving failure.** An automated client the firewall cannot identify gets a 202
+challenge (empty body, `x-amzn-waf-action: challenge`) or a 403 with `x-hiveku-firewall: blocked`;
+a request from a known bulk-scraper network gets a 403 with `x-hiveku-firewall: blocked-network`;
+a 403 without that header comes from the site itself, and that one IS a serving question. The
+pipeline's smoke runs from Hiveku's own servers and is exempt; your spot-check is not unless it
+sends a user agent containing `Hiveku` or uses HEAD. Do not run `deploy_doctor` or retry the
+deploy on a firewall refusal. A customer's own monitor that is refused at the browser check is
+allowed by its product token in Site > Hosting > Firewall (`references/firewall.md`); never fix
+that with a redeploy.
 
 **Rule 33. Page routes under reserved CDN prefixes are excluded from smoke** - they 403 by design, and
 counting them would fail every deploy that has one.
@@ -487,8 +492,8 @@ fixed by editing.** Read the error, decide which class you are in, then act:
   the code. This is the only class where editing is the answer.
 - **Class 4 - blank page, or the HTML serves but interactivity is dead** ->
   `preview_client_errors({ project_id })`; this is hydration territory, see Rule 63. (A blank
-  page from a terminal fetch or WebFetch of a DEPLOYED tier with status 202 is not this class: it
-  is the edge firewall's challenge, Rule 32a.)
+  page from a terminal fetch or WebFetch of a DEPLOYED tier with status 202, or 403 with
+  `x-hiveku-firewall`, is not this class: it is the edge firewall's refusal, Rule 32a.)
   `capture_installed: false` in the result means an old container image ->
   `preview_force_recompile({ refresh_image: true })`.
 

@@ -195,18 +195,26 @@ template family, against both `www` and apex if both resolve:
 `curl -sS -D - -o /dev/null -A 'Hiveku-Session/1.0 (+https://hiveku.com)' '<url>'`
 and grep for `x-robots-tag` (GET, not HEAD, because some stacks vary the header by method; the
 agent names the request as a Hiveku session, which Hiveku's edge firewall lets through). Do not
-send a Googlebot agent: a spoofed Googlebot from a non-Google address is challenged by the edge by
-design (every challenged "Googlebot" in the access logs was a spoof) and answers 202 with an empty
-body and `x-amzn-waf-action: challenge`, which is the firewall, not the header. The Search Console
-UI's live test is the client-facing version of the same evidence and the only way to see what real
-Googlebot is served.
+send a Googlebot agent: a spoofed Googlebot from a non-Google address is refused by the edge by
+design and answers with a 202 challenge (empty body, `x-amzn-waf-action: challenge`) or a 403 with
+`x-hiveku-firewall: blocked`, which is the firewall, not the header. The Search Console UI's live
+test is the client-facing version of the same evidence and the only way to see what real Googlebot
+is served. To see whether the firewall refused a crawler on a Hiveku-hosted site, search its
+refusals by name: `site_firewall_get({ project_id, q: 'Googlebot' })` (or `q: 'bingbot'`). A
+Googlebot row on Google Cloud (`asn` 396982) is usually an impostor. Real bingbot comes from 8075
+(Microsoft / Azure), which also carries rented servers, so the network number alone cannot prove a
+bingbot real or fake. A `blocked` row also counts the site's own 403s. Reading those rows is
+`hiveku-web-agency/references/firewall.md`.
 If you cannot run either, the finding is: "X-Robots-Tag was not verified on production; no Hiveku
 tool reads live response headers, and this is the check most likely to explain a sitewide loss."
 
-Reading the answer on a Hiveku-hosted site: a 202 with an empty body, or any response carrying
-`x-amzn-waf-action`, is the edge firewall's challenge to an unidentified client, not the page and
-not a missing header. Send a user agent containing `Hiveku` as above, or use `curl -I` (HEAD is
-never challenged), and re-run before reporting.
+Reading the answer on a Hiveku-hosted site: an automated client the firewall cannot identify gets
+a 202 challenge (empty body, `x-amzn-waf-action: challenge`) or a 403 with
+`x-hiveku-firewall: blocked`; a request from a known bulk-scraper network gets a 403 with
+`x-hiveku-firewall: blocked-network`; a 403 without that header comes from the site itself. The
+firewall's answers are not the page and not a missing header. Send a user agent containing
+`Hiveku` as above, or use `curl -I` (HEAD is never challenged or blocked as an automated client),
+and re-run before reporting.
 
 ---
 
@@ -313,8 +321,8 @@ that still has backlinks (`seo_backlinks_list`), the old URL set from any migrat
 shell line per URL reports the hop count and the final URL:
 `curl -sS -o /dev/null -L -A 'Hiveku-Session/1.0 (+https://hiveku.com)' -w '%{num_redirects} hops -> %{url_effective} (%{http_code})\n' '<url>'`
 (add `-D -` and grep `^(HTTP/|location:)` for the full chain). Without the `-A` a Hiveku-hosted URL
-answers the first hop with the edge firewall's 202 and the line reports 0 hops, which reads as no
-redirect. Above a few hundred rules a desktop crawler reports the whole chain graph natively.
+answers the first hop with the edge firewall's refusal (a 202, or a 403 with
+`x-hiveku-firewall: blocked`) and the line reports 0 hops, which reads as no redirect. Above a few hundred rules a desktop crawler reports the whole chain graph natively.
 
 ---
 
