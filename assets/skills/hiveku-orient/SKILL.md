@@ -88,7 +88,8 @@ every profile):
   restore, `checkpoint_create` snapshots every current file, every asset and (when configured) a
   database backup, returning a `checkpoint_hash` for a one-call rollback. Know the restore's real
   shape: `checkpoint_restore` is ADDITIVE - files created after the checkpoint are KEPT, and the
-  database is NOT restored - so preview with `project_checkpoint_restore_dry_run` (read-only) and
+  live database is left alone unless you pass `restore_database: true`, only when the user asks for
+  their data back - so preview with `project_checkpoint_restore_dry_run` (read-only) and
   prefer the surgical `project_file_restore` when only one file is wrong. On a scoped key that
   cannot see the checkpoint tools, say the snapshot cannot be taken - do not run the destructive
   step anyway. Deletion targets are never derived by glob or pattern - only from explicit ids or
