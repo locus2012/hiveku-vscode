@@ -171,8 +171,16 @@ export interface SectionSpec {
    * Click a row's title to drill in: fetch this tool with the row id and show all fields.
    * Most tools take one id (idArg + idKeys). For tools that need several ids (e.g.
    * workflow_run_get wants workflow_id AND run_id) use argMap: { toolArg: [rowKey…] }.
+   * transform reshapes the fetched object before its fields are printed (for
+   * display only: the detail pane is read by a person, never sent to an AI).
    */
-  detail?: { tool: string; idKeys?: string[]; idArg?: string; argMap?: Record<string, string[]> };
+  detail?: {
+    tool: string;
+    idKeys?: string[];
+    idArg?: string;
+    argMap?: Record<string, string[]>;
+    transform?: (obj: Record<string, unknown>) => Record<string, unknown>;
+  };
   empty?: string;
 }
 export interface ModuleSpec {
@@ -495,7 +503,8 @@ export function openModulePanel(
           }
           const res = await client.callToolJson<unknown>(d.tool, { ...context, ...idArgs });
           const obj = unwrap(res);
-          const entries = obj && typeof obj === 'object' && !Array.isArray(obj) ? Object.entries(obj as Row) : [];
+          const record = obj && typeof obj === 'object' && !Array.isArray(obj) ? (obj as Row) : undefined;
+          const entries = record ? Object.entries(d.transform ? d.transform(record) : record) : [];
           panel.webview.postMessage({
             type: 'detail',
             section: msg.section,
