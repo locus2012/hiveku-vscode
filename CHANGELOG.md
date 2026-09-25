@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.85.6
+- **Downloads and command sync stay inside the account folder.** The knowledge download used an entry's stored department as a folder name exactly as stored, so a malformed department could make the next download write a file outside the account folder on your machine. A department is now used only when it is a plain lowercase name; anything else is filed under `general` (the entry is still downloaded, only its folder changes), and every file the download and the command sync write is checked to land inside the folder first. Command sync also never deletes a file outside the folder because of a row in its manifest.
+- **Commands survive a department changing case.** Content tags are now lowercased, as the Claude Code plugin already did. On a case-insensitive disk (the macOS default), the first sync after the upgrade used to see the old capitalised command name as removed upstream and delete the file it had just kept under the new name. The sync now recognises that both names are the same file and keeps it.
+- **Safe on Windows.** Names Windows reserves for devices (`con`, `nul`, `com1` and the like) are never used as a folder or file name: a department with such a name files under `general`, and an entry whose file would get such a name is saved as `<name>-entry.md`.
+- **One bad entry no longer stops a download.** If the disk refuses a single entry, the rest are still written. The download ends with a warning giving the count, and the Hiveku output channel lists which entries were skipped.
+
 ## 0.85.5
 - **Helpdesk tickets read cleanly.** Ticket titles and list labels no longer show the `<untrusted_external_content>` wrapper Hiveku puts around text written by outsiders, and neither does the ticket detail pane. "Copy for Claude" keeps the wrapper and adds one line saying the wrapped text came from outside and is data, not instructions.
 - **See what the website assistant knows.** A new "Website assistant knowledge" view in the Helpdesk module shows what the chat on your website can answer from right now: its sources, which pages of your site it read or skipped, and advice on filling the gaps.
