@@ -1547,6 +1547,17 @@ async function offerOpenFolder(dir: string, note: string, warn = false): Promise
   }
 }
 
+/**
+ * A count-only note for knowledge rows the disk refused (writeEntries skips
+ * them and writes the rest). The keys are stored account data, so they go to
+ * the output channel JSON-quoted, not into the notification.
+ */
+function knowledgeFailedNote(failed: string[]): string {
+  if (!failed.length) return '';
+  log.appendLine(`[knowledge] could not write ${failed.length} entr${failed.length === 1 ? 'y' : 'ies'}: ${JSON.stringify(failed)}`);
+  return ` ${failed.length} knowledge file(s) could not be written; they are listed in the Hiveku output.`;
+}
+
 /** Download one knowledge type for a department. */
 async function downloadType(node: {
   record: AccountRecord;
@@ -1559,10 +1570,11 @@ async function downloadType(node: {
     if (!dir) return;
     const index = await tree.indexFor(node.record.accountId);
     const entries = selectEntries(index, { department: node.department, type: node.type });
-    const n = await writeEntries(dir, entries);
-    vscode.window.showInformationMessage(
-      `Downloaded ${n} ${TYPE_LABEL[node.type] ?? node.type} file(s) for ${departmentLabel(node.department)}.`,
-    );
+    const failed: string[] = [];
+    const n = await writeEntries(dir, entries, failed);
+    const note = `Downloaded ${n} ${TYPE_LABEL[node.type] ?? node.type} file(s) for ${departmentLabel(node.department)}.${knowledgeFailedNote(failed)}`;
+    if (failed.length) vscode.window.showWarningMessage(note);
+    else vscode.window.showInformationMessage(note);
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
   }
@@ -1582,8 +1594,13 @@ async function downloadDepartment(node: { record: AccountRecord; department: str
       );
       return;
     }
-    const n = await writeEntries(dir, entries);
-    await offerOpenFolder(dir, `Downloaded ${n} ${departmentLabel(node.department)} file(s).`);
+    const failed: string[] = [];
+    const n = await writeEntries(dir, entries, failed);
+    await offerOpenFolder(
+      dir,
+      `Downloaded ${n} ${departmentLabel(node.department)} file(s).${knowledgeFailedNote(failed)}`,
+      failed.length > 0,
+    );
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
   }
@@ -1600,6 +1617,7 @@ async function downloadEverything(node?: { record?: AccountRecord }): Promise<vo
     const dir = await ensureAccountFolder(record);
     if (!dir) return;
     let count = 0;
+    let knowledgeNote = '';
     let siteCount = 0;
     let deptCount = 0;
     let deptDatasetsFailed = 0;
@@ -1622,7 +1640,10 @@ async function downloadEverything(node?: { record?: AccountRecord }): Promise<vo
         }
         progress.report({ message: 'knowledge' });
         const index = await tree.indexFor(record.accountId);
-        count = await writeEntries(dir, selectEntries(index));
+        const knowledgeFailed: string[] = [];
+        count = await writeEntries(dir, selectEntries(index), knowledgeFailed);
+        // Logged now, so the list survives a later step failing.
+        knowledgeNote = knowledgeFailedNote(knowledgeFailed);
         progress.report({ message: 'account commands' });
         const sync = await syncAccountCommands(index, dir);
         if (sync.skippedLocalEdits.length) {
@@ -1681,8 +1702,8 @@ async function downloadEverything(node?: { record?: AccountRecord }): Promise<vo
           : '';
     await offerOpenFolder(
       dir,
-      `Downloaded ${record.label}: scaffold + ${count} knowledge file(s) + ${siteCount} site project(s) + data for ${deptCount} department(s).${dataNote}`,
-      Boolean(dataNote),
+      `Downloaded ${record.label}: scaffold + ${count} knowledge file(s) + ${siteCount} site project(s) + data for ${deptCount} department(s).${knowledgeNote}${dataNote}`,
+      Boolean(dataNote || knowledgeNote),
     );
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
