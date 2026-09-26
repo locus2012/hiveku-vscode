@@ -268,6 +268,24 @@ in order, each with the tool it names, then re-run. `incomplete` = a check could
 unknown is NOT a pass. Only `go` or `go_with_warnings` (warnings said to the owner) reaches the
 enable, which stays its own confirmed write.
 
+**The enable call itself.** Microsoft ads or ad groups created this session: `ppc_launch_qa` first,
+then pass the parent on `ppc_platform_enable_resource` (`ad_group_id` for an ad, `campaign_id` for an
+ad group), because Hiveku's local mirror may not hold them yet. On "not found in local sync", run
+`ppc_sync({ connection_id })`, confirm its `ad_groups` and `ads` legs read `synced`, then retry ONCE:
+the passed parent id is not honored until the enable-parent fix deploys, so re-sending it alone fails
+the same way. **A Claude Code auto-mode denial never turns into a prompt.** In auto mode a
+classifier can deny the enable (e.g. "[Production Deploy]"): nothing is then waiting for approval, so
+never promise the owner a prompt (one comes only from the steps below) and never retry around the
+denial. Give the owner the exact steps: to run the denied call, in the CLI `/permissions` -> Recently
+denied -> `r` retries it with a manual approval; for the go-live turn, switch the chat to Manual (VS Code:
+the mode indicator under the prompt box; CLI: Shift+Tab) so each enable prompts, then switch back; or
+add a permissions ASK rule naming the enable tool via `/permissions` or settings -
+`mcp__plugin_hiveku_hk__ppc_platform_enable_resource` and `mcp__plugin_hiveku_hk__ppc_enable_resource`
+(Google) for the plugin, and/or `mcp__hiveku__ppc_platform_enable_resource` and
+`mcp__hiveku__ppc_enable_resource` for the VS Code extension. The denial's "add a Bash permission
+rule" is misleading for an MCP tool: the rule names the MCP tool. Never propose an ALLOW rule for a
+tool that starts spend. Depth: `references/spend-change-discipline.md` 4.5.
+
 **Settings writes, preview-first.** Google: `ppc_google_campaign_settings_set` (search partners,
 Display expansion, location option, tracking template, final URL suffix, custom parameters),
 `ppc_google_campaign_ai_settings_set`, `ppc_google_ad_schedule_set`, `ppc_google_call_settings_set`
@@ -441,7 +459,21 @@ NOT a bare `memory_create`. Link the report file in the PM task.
   digest's has_stale warnings. Sync AFTER writes too, or your own dashboards contradict you.
 - `ppc_negative_keyword_add` defaults to BROAD match - always pass match_type explicitly.
 - Pausing an ad or keyword needs the parent: `ppc_pause_resource` requires ad_group_id for resource_type
-  "ad" / "keyword".
+  "ad" / "keyword". Microsoft keyword writes too: `ppc_platform_keyword_bid_update` and
+  `ppc_platform_keyword_match_type_change` REQUIRE `ad_group_id` (the row's `platform_ad_group_id` from
+  `ppc_bing_keyword_performance`). A Microsoft match-type change edits in place; the bid response says
+  nothing about smart bidding, so read the campaign's `bidding_strategy` (`ppc_campaign_get`) first.
+- **An auto-mode classifier denial of an enable never turns into a prompt** (5): nothing is waiting for
+  approval. The owner retries that call from `/permissions` -> Recently denied (`r`, CLI), switches to
+  Manual for the go-live turn, or adds an ASK rule naming the enable tool; never an allow rule, never a
+  retry around the denial.
+- **Test before you call a tool broken.** Before telling an owner a Hiveku tool "doesn't work", call it
+  in this session (read-only, or a no-op or preview where possible). A memory note or handoff that says
+  "broken" is a claim to re-test, not a fact.
+- **Microsoft conversion health:** a goal at `NoRecentConversions` means the UET tag is live and nothing
+  converted in Microsoft's last 7 days (expected while paused), not a broken tag. "No per-goal
+  conversion volume" is a Hiveku gap (Hiveku does not yet read Microsoft's per-goal report), not a
+  Microsoft limit.
 - The Google-only ops family fails on microsoft/meta/tiktok/linkedin connections - route non-Google mutations
   through `ppc_platform_*` and non-Google reads through the platform tools or cached `ppc_metrics`.
 - Don't mix currencies or platform-defined metrics (a Meta "conversion" is not a Google "conversion" is not a
@@ -469,7 +501,7 @@ covers" section. Load ONE when the work actually goes there, not preemptively (t
 
 | Reference | Load it when |
 | --- | --- |
-| `references/spend-change-discipline.md` | BEFORE your first write of the session on an account you did not build: the reads that earn each mutation, diff discipline, code-enforced gates vs prose-only warnings, verify-after-write. |
+| `references/spend-change-discipline.md` | BEFORE your first write of the session on an account you did not build: the reads that earn each mutation, diff discipline, code-enforced gates vs prose-only warnings, the go-live enable (auto-mode denials, parent ids), verify-after-write. |
 | `references/memory-protocol.md` | Before ANY `memory_create` / `memory_update` - read-merge-write, recovery, what belongs in the record. |
 | `references/workflow-templates.md` | Putting a retainer account on the recurring cadence / "automate this play" - template roster, install mechanics, the `is_enabled: true` default trap. |
 | `references/account-structure.md` | Auditing or rebuilding account wiring: campaigns, ad groups, naming, bulk ops, change history, recommendations triage. |
