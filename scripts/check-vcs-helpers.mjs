@@ -106,11 +106,11 @@ await check('stashCounts still normalizes both lanes (envelope irregularity kept
 const FIXTURE_PATH = new URL('./fixtures/version-naming-cases.json', import.meta.url);
 const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
 
-await check('naming fixture: the copied table is whole (143 paths, 90 changes, 31 name checks, max 80)', () => {
+await check('naming fixture: the copied table is whole (153 paths, 94 changes, 31 name checks, max 80)', () => {
   assert.equal(fixture.max_name_length, 80);
   assert.equal(vn.MAX_VERSION_NAME_LENGTH, fixture.max_name_length);
-  assert.ok(fixture.paths.length >= 143, `paths: ${fixture.paths.length}`);
-  assert.ok(fixture.changes.length >= 90, `changes: ${fixture.changes.length}`);
+  assert.ok(fixture.paths.length >= 153, `paths: ${fixture.paths.length}`);
+  assert.ok(fixture.changes.length >= 94, `changes: ${fixture.changes.length}`);
   assert.ok(fixture.name_checks.length >= 31, `name_checks: ${fixture.name_checks.length}`);
 });
 

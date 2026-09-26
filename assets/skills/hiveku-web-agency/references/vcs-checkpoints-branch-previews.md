@@ -82,12 +82,32 @@ Two invariants first. (1) **Bindings decide which tree a tier ships**, never the
   NEW version (kind `revert`, `source` `rollback`, `rolled_back_to`) whose files match the
   target - append-only, the newer versions stay, so it is undoable. It changes NO deployed
   tier: a publish is a separate `deploy_site` with its own yes. Refusals: 400
-  `not_in_history`, 404 `commit_not_found`, 409 `branch_changed` (re-run the dry run), 409
-  `ai_turn_running` (the in-app AI is mid-request), 409 `rollback_incomplete` (files written;
-  run it again with the error's `head_commit_id`), 409 `content_unavailable` (offer the
-  `checkpoint_hash` restore). Database, CMS entries and shared media-library images are not
-  rolled back. `project_vcs_revert` is the older branch-only form (it discards unsaved
-  branch edits instead of saving them); prefer `project_vcs_rollback`.
+  `not_in_history`, 404 `commit_not_found`, 409 `branch_changed` (someone saved since: re-run
+  the dry run and ask again; when it answers a re-send after a timeout, see below), 409
+  `ai_turn_running` (the in-app AI is mid-request), 409 `content_unavailable` (offer the
+  `checkpoint_hash` restore). 409 `rollback_incomplete` (Your site only) is not a refusal:
+  files WERE written, so never say nothing changed. `failed` lists the files not put back; empty means every file was put back but the new version was not
+  recorded. To finish it: when the answer's `head_commit_id` is the dry run's `head_commit_id`
+  or `saved_before.id` (the rollback's own "Saved before rollback" version), apply again with
+  `expected_head_commit_id` set to THIS answer's `head_commit_id` and without
+  `expected_live_fingerprint`; any other `head_commit_id` means someone else saved as well, so
+  run a new dry run and ask again. A 524 or a timeout on an apply does not mean it failed:
+  re-send the identical call (409 `idempotency_pending` while the first still runs; once it is
+  done, its answer only when it succeeded and nothing was saved since, otherwise the call runs
+  again) or read `project_vcs_history` (a version newer than the dry run's `head_commit_id`
+  whose `rolled_back_to` is the target means it finished) before any new dry run. If the
+  re-send answers 409 `branch_changed`, the first run may have finished or stopped part way, so
+  never say nothing changed: read `project_vcs_history`. A version newer than the dry run's
+  `head_commit_id` whose `rolled_back_to` is the target means it finished. A "Saved before
+  rollback" version at the top (the `branch_changed` answer's `head_commit_id`) that is the
+  ONLY version newer than the dry run's `head_commit_id` means it stopped part way: finish it
+  as for `rollback_incomplete` (apply with that `head_commit_id` as `expected_head_commit_id`,
+  without `expected_live_fingerprint`, on the same yes). Anything else, including a "Saved
+  before rollback" version with other versions between it and the dry run's `head_commit_id`,
+  means someone else saved as well: run a new dry run and ask again. Database, CMS entries
+  and shared media-library images are not rolled back. `project_vcs_revert` is the older
+  branch-only form (it discards unsaved branch edits instead of saving them); prefer
+  `project_vcs_rollback`.
 - Tools without a `branch` parameter are `main`-only and REFUSE `branch` rather than silently
   writing `main` (`branch_unsupported_for_tool`): the tarball import lane,
   `project_file_move`, `project_file_restore`, `project_files_bulk_delete`,

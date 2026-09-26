@@ -228,7 +228,14 @@ const ROUTE_STATE_STEMS: readonly string[] = ['error', 'loading', 'default', 'te
 
 const DYNAMIC_SEGMENT_RE = /^\[.*\]$/;
 const LOCALE_SEGMENT_RE = /^\[(locale|lang|lng|language)\]$/;
-const ACRONYMS: Readonly<Record<string, string>> = { faq: 'FAQ', faqs: 'FAQs', seo: 'SEO', cta: 'CTA', ai: 'AI' };
+/** A Map (own entries only), as in the builder: as a plain object, a folder named "constructor" read Object.prototype.constructor. */
+const ACRONYMS: ReadonlyMap<string, string> = new Map([
+  ['faq', 'FAQ'],
+  ['faqs', 'FAQs'],
+  ['seo', 'SEO'],
+  ['cta', 'CTA'],
+  ['ai', 'AI'],
+]);
 
 // ── Classification ───────────────────────────────────────────────────────────
 
@@ -267,7 +274,7 @@ export function humanizeSegment(segment: string): string {
     .filter((word) => word.length > 0)
     .map((word, index) => {
       const lower = word.toLowerCase();
-      const acronym = ACRONYMS[lower];
+      const acronym = ACRONYMS.get(lower);
       if (acronym) return acronym;
       if (isAllCapsWord(word)) return word;
       return index === 0 ? lower.charAt(0).toUpperCase() + lower.slice(1) : lower;

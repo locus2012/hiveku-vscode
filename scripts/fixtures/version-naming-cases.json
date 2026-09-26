@@ -775,6 +775,64 @@
       "expected_kind": "part",
       "expected_name": "Theme toggle",
       "note": "only a whole leading word The is dropped"
+    },
+    {
+      "path": "src/app/constructor/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Constructor",
+      "expected_route": "/constructor",
+      "note": "a folder named like a built-in object property is an ordinary word: ports look words up in their own entries only, never through a prototype"
+    },
+    {
+      "path": "app/valueOf/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Value of",
+      "expected_route": "/valueOf"
+    },
+    {
+      "path": "app/hasOwnProperty/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Has own property",
+      "expected_route": "/hasOwnProperty"
+    },
+    {
+      "path": "app/constructor/[slug]/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Constructor pages",
+      "expected_route": "/constructor/[slug]"
+    },
+    {
+      "path": "pages/constructor.tsx",
+      "expected_kind": "page",
+      "expected_name": "Constructor",
+      "expected_route": "/constructor"
+    },
+    {
+      "path": "constructor.html",
+      "expected_kind": "page",
+      "expected_name": "Constructor",
+      "expected_route": "/constructor"
+    },
+    {
+      "path": "components/constructor.tsx",
+      "expected_kind": "part",
+      "expected_name": "Constructor"
+    },
+    {
+      "path": "components/toString.tsx",
+      "expected_kind": "part",
+      "expected_name": "To string"
+    },
+    {
+      "path": "components/__proto__.tsx",
+      "expected_kind": "part",
+      "expected_name": "Proto",
+      "note": "a part, not a page: under app/ a folder that starts with _ is private in Next.js and never a route, so this row pins the word, not a routing rule"
+    },
+    {
+      "path": "components/sections/constructor/index.tsx",
+      "expected_kind": "part",
+      "expected_name": "Constructor"
     }
   ],
   "changes": [
@@ -1891,6 +1949,50 @@
       },
       "note": "Vue component named TheHeader",
       "expected": "Changed the header"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "src/app/constructor/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "a page folder named constructor is an ordinary word",
+      "expected": "Edited the Constructor page"
+    },
+    {
+      "input": {
+        "added": [
+          "components/constructor.tsx",
+          "components/toString.tsx"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "expected": "Added the constructor and the to string"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/valueOf/page.tsx",
+          "components/__proto__.tsx"
+        ],
+        "removed": []
+      },
+      "expected": "Edited the Value of page and changed the proto"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [],
+        "removed": [
+          "app/constructor/[slug]/page.tsx"
+        ]
+      },
+      "note": "a dynamic page under a folder named constructor",
+      "expected": "Removed each page under Constructor"
     }
   ],
   "name_checks": [

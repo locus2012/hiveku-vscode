@@ -208,10 +208,11 @@ These requests arrive, usually phrased casually. Treat the answers as response c
   since it ran.
 - **"Just roll the site back and put it live."** Two steps, two yeses. Run the rollback dry
   run (`project_vcs_rollback`, the default) and show what it changes and which version it goes
-  back to; apply only on an explicit yes, with the dry run's `expected_head_commit_id`. Then
-  offer the publish as its own step (`/hiveku:deploy`) with its own yes. Never bundle them, and
-  never apply a rollback someone has not seen the dry run of: it is undoable, but the live site
-  is not, once published.
+  back to; apply only on an explicit yes, with the dry run's `head_commit_id` as
+  `expected_head_commit_id` (on Your site also its `live_fingerprint` as
+  `expected_live_fingerprint`). Then offer the publish as its own step (`/hiveku:deploy`) with
+  its own yes. Never bundle them, and never apply a rollback someone has not seen the dry run
+  of: it is undoable, but the live site is not, once published.
 - **"Approve everything in the queue so we can move on."** No. `agent_approval_approve` EXECUTES
   each staged action for real - `action: 'deploy_project'` deploys code to the client's live
   production site, `'github_commit'` pushes to their repository. One item at a time, preview shown

@@ -260,9 +260,12 @@ rollbacks, checkpoints, or ANY restore. The invariants that cannot wait for the 
   a rollback is a safety net with a generic name, not the plan.
 - Go back with `project_vcs_rollback` (`/hiveku:rollback`), on Your site and on branches:
   dry run first (it is the default), show the person the counts and the version's name,
-  get a yes, then apply with `dry_run: false` and `expected_head_commit_id` from the dry
-  run. Append-only (a new version; newer ones stay, so it is undoable), and it changes NO
-  deployed tier: publishing afterwards is a separate `deploy_site` with its own yes.
+  get a yes, then apply with `dry_run: false` and the dry run's `head_commit_id` as
+  `expected_head_commit_id` (on Your site also its `live_fingerprint` as
+  `expected_live_fingerprint`). 409 `rollback_incomplete` means files WERE written: finish it
+  as `/hiveku:rollback` says, never report "nothing changed". Append-only (a new version;
+  newer ones stay, so it is undoable), and it changes NO deployed tier: publishing
+  afterwards is a separate `deploy_site` with its own yes.
   Database, CMS entries and shared media-library images are not versioned.
 - Branch for real work (`feature/`, `fix/`, `task-<id>/`); version green states; merged
   `conflicts` are NOT overwritten - resolve and merge again.

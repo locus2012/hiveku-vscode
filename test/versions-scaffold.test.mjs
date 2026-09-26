@@ -135,11 +135,47 @@ describe('what the commands teach', () => {
     assert.match(text, /`public\/<folder>\/`/);
   });
 
-  test('/hiveku-rollback: a failure with no clear answer is never "nothing changed"; the preview is asked again', async () => {
+  test('/hiveku-rollback: rollback_incomplete finishes with THIS answer\'s head; a timeout is re-sent, not re-previewed', async () => {
     const dir = await scaffoldProject();
-    const text = await read(dir, '.claude', 'commands', 'hiveku-rollback.md');
-    assert.match(text, /never say nothing changed; preview\s+again: `noop: true` means it landed/);
-    assert.match(text, /apply with the NEW\s+preview's head/);
+    // Prose wraps, so compare with whitespace collapsed.
+    const text = (await read(dir, '.claude', 'commands', 'hiveku-rollback.md')).replace(/\s+/g, ' ');
+    // The MCP tool's three cases: files WERE written; the preview's head or
+    // saved_before.id -> apply with this answer's head and no fingerprint; any
+    // other head -> someone else saved, so a new preview and a new yes.
+    assert.ok(text.includes('409 `rollback_incomplete` (Your site only): files WERE written, so never say nothing changed'));
+    assert.ok(text.includes("when its `head_commit_id` is the preview's `head_commit_id` or `saved_before.id`"));
+    assert.ok(text.includes("apply again with `expected_head_commit_id` set to THIS answer's `head_commit_id` and without `expected_live_fingerprint`"));
+    assert.ok(text.includes('Any other `head_commit_id` means someone else saved as well: preview again (step 3) and ask again.'));
+    // No clear answer: never "nothing changed"; re-send the identical call or read History before any new preview.
+    assert.ok(text.includes('No clear answer (a timeout, a 524, a network error, a 5xx): never say nothing changed.'));
+    assert.ok(text.includes('call again with exactly the same arguments (409 `idempotency_pending`'));
+    assert.ok(text.includes('Do not preview again until you know.'));
+    // Wave 3c: the builder replays a cached answer only when that run succeeded
+    // and nothing was saved since; otherwise the re-send runs again and can
+    // answer branch_changed although files WERE written. The History check is
+    // tied to the preview's head (an older rollback to the same version also has
+    // that rolled_back_to).
+    assert.ok(text.includes('then you get that run\'s own answer only when it succeeded and nothing was saved since; otherwise the call runs again'));
+    assert.ok(text.includes("a version newer than the preview's `head_commit_id` whose `rolled_back_to` is this version means it finished"));
+    assert.ok(text.includes('If the re-send answers 409 `branch_changed`, the first run may have finished or stopped part way, so never say nothing changed: read `project_vcs_history`.'));
+    // "Saved before rollback" is the name every rollback's save-first version
+    // gets (a teammate's dashboard rollback, an AI-turn Undo), so only one that
+    // is the ONLY version newer than the preview's head is this rollback's own.
+    assert.ok(text.includes('A "Saved before rollback" version at the top (the `branch_changed` answer\'s `head_commit_id`) that is the ONLY version newer than the preview\'s `head_commit_id` means it stopped part way: finish it as for `rollback_incomplete` (apply with that `head_commit_id` as `expected_head_commit_id`, without `expected_live_fingerprint`, on the same yes).'));
+    assert.ok(text.includes('Anything else, including a "Saved before rollback" version with other versions between it and the preview\'s `head_commit_id`, means someone else saved as well: preview again (step 3) and ask again.'));
+    assert.doesNotMatch(text, /version at the top \(the `branch_changed` answer's `head_commit_id`\) means it stopped part way/, 'the finish is tied to the preview\'s head');
+    // The plain branch_changed rule defers to the timeout case, which comes later.
+    assert.ok(text.includes('409 `branch_changed`: someone saved since the preview (unless it answers a re-send after a timeout: see below); preview again and ask again.'));
+    assert.doesNotMatch(text, /then you get that run's own answer\)/, 'the replay promise is qualified');
+    assert.doesNotMatch(text, /a new version whose `rolled_back_to`/, 'the History check is tied to the preview\'s head');
+    // The old advice: after rollback_incomplete the preview can say noop (every
+    // file is back) and the rollback would never be recorded as a version.
+    assert.doesNotMatch(text, /apply with the NEW preview's head/);
+    assert.doesNotMatch(text, /preview again: `noop: true` means it landed/);
+    // CLAUDE.md names the field the preview returns, not the argument it feeds.
+    const claude = (await read(dir, 'CLAUDE.md')).replace(/\s+/g, ' ');
+    assert.ok(claude.includes("with the preview's `head_commit_id` as `expected_head_commit_id` (on Your site also its `live_fingerprint` as `expected_live_fingerprint`)"));
+    assert.doesNotMatch(claude, /the preview's `expected_head_commit_id`/);
   });
 
   test('no generated text promises an automatic save after a few quiet minutes', async () => {

@@ -1215,11 +1215,28 @@ version ("Saved before rollback"), so nothing is lost. It does NOT change any de
 5. APPLY: \`project_vcs_rollback({ project_id: "${pid}", branch, commit_id, dry_run: false,
    expected_head_commit_id: <the preview's head_commit_id>, expected_live_fingerprint: <its live_fingerprint, Your site only> })\`.
    It is never pre-approved in this folder: the user's yes from step 4 is what allows it. 409 \`branch_changed\`:
-   someone saved since the preview; preview again and ask again. 409 \`ai_turn_running\`: wait for the AI to finish. 409 \`content_unavailable\`: that version's
-   files are gone; offer Project history in the dashboard (\`restore_point_id\`). 409 \`rollback_incomplete\`:
-   files WERE written but not all: preview again (step 3), tell the user, and on their yes apply with the NEW
-   preview's head. No answer at all (a timeout, a network error, a 5xx): never say nothing changed; preview
-   again: \`noop: true\` means it landed (go on to step 6), otherwise tell the user and ask before applying again.
+   someone saved since the preview (unless it answers a re-send after a timeout: see below); preview again and
+   ask again. 409 \`ai_turn_running\`: wait for the AI to finish. 409 \`content_unavailable\`: that version's
+   files are gone; offer Project history in the dashboard (\`restore_point_id\`). 409 \`rollback_incomplete\`
+   (Your site only): files WERE written, so never say nothing changed; tell the user by page or count (\`failed\`
+   = the files not put back; empty = every file is back but the new version was not recorded). To finish it:
+   when its \`head_commit_id\` is the preview's \`head_commit_id\` or \`saved_before.id\` (the rollback's own "Saved
+   before rollback" version), apply again with \`expected_head_commit_id\` set to THIS answer's \`head_commit_id\`
+   and without \`expected_live_fingerprint\` (the user's yes for this version still stands). Any other
+   \`head_commit_id\` means someone else saved as well: preview again (step 3) and ask again.
+   No clear answer (a timeout, a 524, a network error, a 5xx): never say nothing changed. It may still be
+   running: call again with exactly the same arguments (409 \`idempotency_pending\` = still running, wait and call
+   again; then you get that run's own answer only when it succeeded and nothing was saved since; otherwise the call
+   runs again). When unsure, read \`project_vcs_history\` first: a version newer than the preview's \`head_commit_id\`
+   whose \`rolled_back_to\` is this version means it finished (go on to step 6). Do not preview again until you know.
+   If the re-send answers 409 \`branch_changed\`, the first run may have finished or stopped part way, so never say
+   nothing changed: read \`project_vcs_history\`. A version newer than the preview's \`head_commit_id\` whose
+   \`rolled_back_to\` is this version means it finished. A "Saved before rollback" version at the top (the
+   \`branch_changed\` answer's \`head_commit_id\`) that is the ONLY version newer than the preview's \`head_commit_id\`
+   means it stopped part way: finish it as for \`rollback_incomplete\` (apply with that \`head_commit_id\` as
+   \`expected_head_commit_id\`, without \`expected_live_fingerprint\`, on the same yes). Anything else, including a
+   "Saved before rollback" version with other versions between it and the preview's \`head_commit_id\`, means
+   someone else saved as well: preview again (step 3) and ask again.
 6. The live site: only when the user wants visitors to see it, a SEPARATE \`/hiveku-deploy production\` (the
    preview's \`live_includes_undone_work: true\` is the cue to offer it). Going back and deploying are two calls.
 7. \`/hiveku-pull\` so the local files match, then \`/hiveku-verify\`.
@@ -1712,7 +1729,8 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   is waiting. A production deploy of Your site saves leftover changes as a version by itself, under a general
   name: a safety net, not the plan.
 - **Go back** with \`/hiveku-rollback\`: \`project_vcs_rollback\` previews first (a dry run is the default), applies
-  only after the user's yes with the preview's \`expected_head_commit_id\`, and never touches the live site.
+  only after the user's yes with the preview's \`head_commit_id\` as \`expected_head_commit_id\` (on Your site also its
+  \`live_fingerprint\` as \`expected_live_fingerprint\`), and never touches the live site.
   Updating the live site is a separate \`deploy_site\`.
 - Work off to the side: \`project_vcs_branch_create({ project_id, name })\`, commit with
   \`project_vcs_commit({ ..., branch: name })\`, preview live via \`project_vcs_branch_preview\`, then
