@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.85.8
+- **The sales playbook points to the right switch.** When the sales agent is switched off, the skills now say an account owner or admin switches it on from the Sales agent's memory page (CRM, then the Agent menu), and that the per-session cost cap is raised under Settings on the same page. They used to point to a "Settings → AI" page that does not exist. Re-vendored skills match plugin 0.26.31.
+
+## 0.85.7
+- **Turning ads on always asks first, even in auto mode.** Claude Code starts chats in Auto mode, and its safety check blocked an ad or campaign switch-on as a "production deploy" without offering a prompt, so saying "go" could not launch a campaign. Hiveku account folders now carry an ask rule for the four tools that start ad delivery (`ppc_enable_resource`, `ppc_platform_enable_resource`, `ppc_experiment_schedule`, `ppc_bing_experiment_create`), so each switch-on shows an approval card instead. The rules are only ever added, never allow anything, and are skipped when your own deny rules already cover the tool. Folders you already have pick them up the next time the extension opens them; no Refresh Setup needed. The Autonomous mode description now says ad switch-ons still ask.
+- **The paid-ads playbooks are current.** Re-vendored from the plugin's main:
+  - what to do when auto mode blocks a switch-on (it never turns into a prompt; switch to Manual for that turn, or add an ask rule);
+  - pass the ad group or campaign id when switching on an ad or ad group created in the same session;
+  - re-test a tool before calling it broken;
+  - Microsoft conversion statuses explained;
+  - corrected Bing keyword bid and match-type examples.
+
+  Also carries the plugin's X-Robots-Tag guidance for the orient skill.
+
 ## 0.85.6
 - **Downloads and command sync stay inside the account folder.** The knowledge download used an entry's stored department as a folder name exactly as stored, so a malformed department could make the next download write a file outside the account folder on your machine. A department is now used only when it is a plain lowercase name; anything else is filed under `general` (the entry is still downloaded, only its folder changes), and every file the download and the command sync write is checked to land inside the folder first. Command sync also never deletes a file outside the folder because of a row in its manifest.
 - **Commands survive a department changing case.** Content tags are now lowercased, as the Claude Code plugin already did. On a case-insensitive disk (the macOS default), the first sync after the upgrade used to see the old capitalised command name as removed upstream and delete the file it had just kept under the new name. The sync now recognises that both names are the same file and keeps it.

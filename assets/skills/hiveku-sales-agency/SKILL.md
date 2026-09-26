@@ -51,11 +51,13 @@ ladder: `hiveku-orient/references/foundation-first.md`.
    `crm_deal_close`) come back as "staged, awaiting approval" - never treat that as done. Use the
    rail for drafts, plans, and analysis, then make the writes yourself with the direct `crm_*`
    tools, exactly as the other departments work. Account gates carry through: 403
-   `sales_agent_disabled` means the owner turned the sales agent off (Settings → AI) - do not
+   `sales_agent_disabled` means the sales agent is switched off for the account (an account owner
+   or admin switches it on from the Sales agent's memory page: CRM, then the Agent menu) - do not
    route around it through another domain; 402 `session_cost_cap_reached` is the per-session cost
-   cap. The `talk_to_department` enum is 15 domains (seo, social, content, marketing, branding,
-   outbound, ppc, analytics, customer_avatar, customer_journey, before_after_grid, website_design,
-   knowledge_base, workflow, sales); `list_departments` returns `sales` and shows which departments
+   cap (raised under Settings on that same memory page). The `talk_to_department` enum is 15
+   domains (seo, social, content, marketing, branding, outbound, ppc, analytics, customer_avatar,
+   customer_journey, before_after_grid, website_design, knowledge_base, workflow, sales);
+   `list_departments` returns `sales` and shows which departments
    this account actually has enabled. `account_context_get({ domain: "sales" })` (every profile)
    and `agent_identity_get` (full-profile-only; see 0b) remain the no-streaming way to load the
    same context and draft yourself - say that is what you did when you do.

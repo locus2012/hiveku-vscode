@@ -197,10 +197,12 @@ Read from the route (`/api/olympus/research/fetch-url`), not the description:
   in the response, so this one is honest if you look at it.
 - It follows redirects with `redirect: 'manual'` and `MAX_REDIRECTS = 5`, and it does build a
   `visited[]` chain. **`visited` is only returned on the error paths** (`network`, `bad_redirect`,
-  `invalid_scheme`, `private_host_blocked`, `too_many_redirects`). On success the payload is
-  `{ url, status, content_type, body, truncated, byte_count }`. A page reached after four hops
-  is indistinguishable from one served directly.
-- **Of the response headers, only `content-type` survives.** See section 6.
+  `invalid_scheme`, `private_host_blocked`, `too_many_redirects`). On success the payload carries
+  the final `url`, `status`, `content_type`, the body with its size fields and the firewall flags,
+  but no `visited`. A page reached after four hops is indistinguishable from one served directly.
+- **Of the response headers, only `content-type` survives, plus `X-Robots-Tag` as the
+  `x_robots_tag` field on a builder that returns it** (section 6 says how to tell). Every other
+  header is discarded.
 
 ---
 
@@ -233,9 +235,16 @@ Lift these. They are deliberately flat and short, and none of them are apologies
 
 **Reporting what was skipped, and why:**
 
-> Not checked: `X-Robots-Tag` response headers (no Hiveku tool reads them, see below), canonical
-> tags on the 362 pages outside the crawl budget, and redirect-chain depth. The first is a real
-> gap, not an oversight, and I have given you the manual check.
+> Not checked: the `X-Robots-Tag` header on the 403 pages I did not fetch (I read it on the home
+> page and one page per template, 9 URLs, and none sends `noindex`), canonical tags on the 362
+> pages outside the crawl budget, and redirect-chain depth.
+
+When `fetch_url` returned no `x_robots_tag` field at all (see section 6), the header was not read
+anywhere, and the line says so:
+
+> Not checked: `X-Robots-Tag` response headers (the Hiveku tool I used did not return them),
+> canonical tags on the 362 pages outside the crawl budget, and redirect-chain depth. The first is
+> a real gap, not an oversight, and I have given you the manual check.
 
 > `totals.truncated` came back true on the form audit, so every count in the table above is a
 > sample of 5000 scanned rows, not a total. Narrow the window to under 5000 rows if you need the
@@ -268,23 +277,62 @@ coverage sentence.
 
 ## 6. The four gaps the reviewer named, answered honestly for Hiveku
 
-### `X-Robots-Tag` response headers: no tool. This is a real gap.
+### `X-Robots-Tag` response headers: the meta tag alone proves nothing, so read the header.
 
 Verified against Google's own documentation: the `X-Robots-Tag` header and the `robots` meta tag
 "have the same effect". **A `noindex` header deindexes a page exactly like the tag does.** An
 audit that reads only the meta tag will report a healthy page while the entire site is
-deindexed, and it will be confidently wrong.
+deindexed, and it will be confidently wrong. The reverse mistake is just as easy: **a page with no
+robots meta tag is not thereby indexable**, because the header can say `noindex` on its own.
 
 Hiveku builds and deploys Next.js sites, which is precisely where this footgun lives: a header
 set in `middleware.ts` or `next.config` applies to routes with perfectly clean HTML. The builder
 itself does this in two places (`src/middleware.ts` and `src/lib/portal/middleware-portal.ts`
 both set `X-Robots-Tag: noindex, nofollow`), so it is a pattern the codebase already uses.
 
-**There is no Hiveku tool that reads response headers from a live public URL.** `X-Robots-Tag`
-appears nowhere in `hiveku-mcp-api-server/src`, and `fetch_url` discards every response header
-except `content-type`. Do not claim you checked it.
+Hiveku's hosting relies on the header too, on purpose:
 
-Real next steps, in order:
+- **Development, staging and deploy-slot hosts** (`*-development.hiveku.com`,
+  `*-staging.hiveku.com`, `*.deployment.hiveku.com`) get `x-robots-tag: noindex, nofollow` from the
+  edge on every page, replacing whatever the site sends. Their HTML carries no robots meta tag.
+- **Preview hosts** (`*.preview.hiveku.com`) get `noindex, nofollow, noarchive` from the preview
+  router. Their `robots.txt` allows crawling deliberately, because a crawler can only obey a
+  `noindex` it is allowed to fetch.
+- **Production** (the custom domain, or `<uuid>-production.hiveku.com` for a site that has none,
+  where that host IS the live site) is indexable by default. When the owner turns off Search
+  engine indexing under Site > Hosting > Production, every production address sends
+  `noindex, nofollow`, again with nothing in the HTML.
+
+So "the page has no `<meta name="robots">`" is never evidence that a development or preview host
+is exposed to search engines. Read the header before you report anything about indexability.
+
+**Reading it: `fetch_url` returns the header as `data.x_robots_tag`.** Call
+`fetch_url({ url, mode: "none" })` (no body needed; add `contains` if you also want the in-page
+tag in the same call). The field is the header value on the final response, after redirects:
+
+- **A `noindex` directive, or the `none` directive** (shorthand for `noindex, nofollow`; the
+  `none` in `max-image-preview:none` is a different setting), means that page is noindexed,
+  whatever the HTML says: for every crawler, or only for the one a scoped value names, as in
+  `googlebot: noindex`.
+- **`null`** means that response sent no header. It counts as "no header" only on a `status` 200
+  with `challenged` and `blocked` both false. A firewall challenge or block is the edge answering
+  instead of the site and never carries the site's header, and an error status such as a 404 is
+  not an indexable page whatever it sends.
+- **No `x_robots_tag` field at all** (absent, not `null`) means the builder behind the tool
+  predates the field, and the header was not read. Do not write "no X-Robots-Tag"; state it as
+  not checked and use the steps below.
+
+Only `X-Robots-Tag` comes back. `fetch_url` still discards every other response header (a `Link`
+canonical header, caching and redirect headers), and it sends Hiveku's user agent, so a site that
+serves Googlebot a different header will not show it here. For Google's own verdict,
+`seo_gsc_index_coverage` reports `indexing_state` per URL (`seo_gsc_inspect_url` returns the same
+value as `indexStatusResult.indexingState`), which separates a header block from a meta-tag block,
+as of Google's last crawl.
+
+A `noindex` header also only works while the page can be crawled: a `robots.txt` `Disallow` over
+the same URL stops a crawler from ever reading it, and a URL already in the index stays there.
+
+When the field is absent, or to find where an unwanted header comes from, in order:
 
 1. **Check the source, which you can do.** Pull the project with `project_files_bulk_get` and
    grep for `X-Robots-Tag`, `noindex`, `robots:` in `middleware.ts`, `next.config.*` and any

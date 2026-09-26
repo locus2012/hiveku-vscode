@@ -42,7 +42,9 @@ Three separate refusals, and they fail in that order.
   `ppc_linkedin_abm_segment`), and the experiment lane is in the same state until its first live
   run. Do not promise a client an outcome through a
   lane nobody has driven end to end. Say what is validated, say what is not, and let the operator
-  choose.
+  choose. The rule cuts the other way too: before telling an owner a Hiveku tool "doesn't work",
+  call it in this session (read-only, or a no-op or preview where possible). A memory note, handoff
+  or earlier session that says "broken" is a claim to re-test, not a fact.
 - **No approval means no mutations.** Every spend-affecting change gets its own approval exchange.
   Not a batch approval, not an implied approval from an earlier "sounds good", not an approval you
   inferred from a plan the client skimmed last week.
@@ -106,11 +108,11 @@ Never propose a change class without the read that justifies it in hand.
 | Change a campaign setting (networks, location option, URL options, auto-generated text, schedule, call reporting, audience exclusions, auto-apply) | `ppc_google_campaign_settings_get` for the live value (Microsoft: `ppc_bing_url_tracking_get`, `ppc_bing_campaign_ai_settings_get`). Never state a setting's value you did not read this session |
 | Move budget between platforms | `ppc_reallocation_plan` - a plan generator that NEVER applies anything; it names the guardrailed tool per move in `apply_with` and lists `data_gaps[]` |
 | Change a bidding strategy | `ppc_campaign_get` for the current strategy, plus 30-day conversion volume from `ppc_metrics` or `ppc_segment_report({ dimensions: ["date"] })` |
-| Change a keyword bid | `ppc_campaign_get` FIRST - under target CPA/ROAS/Max Conversions the bid is recorded and ignored for ranking; `ppc_keyword_list` for the keyword's current bid and quality components |
+| Change a keyword bid | `ppc_campaign_get` FIRST - under target CPA/ROAS/Max Conversions the bid is recorded and ignored for ranking; `ppc_keyword_list` for the keyword's current bid and quality components. Microsoft: `ppc_bing_keyword_performance` for the current bid plus the `keyword_id` and `platform_ad_group_id` that `ppc_platform_keyword_bid_update` requires; its response carries no smart-bidding note, so the `bidding_strategy` read is the only check |
 | Add a negative keyword | `ppc_search_terms_mine` for where the waste sits (its `verdict` says whether negatives are even the fix), row evidence from `ppc_search_terms_report` / `ppc_bing_search_terms_report`, and `ppc_negatives_lint` on the exact list and reach: add only `clear` items |
 | Remove a negative, or detach a negative list | `ppc_negatives_audit` for the conflict that justifies it and the `remove_handle`; the `ppc_negatives_remove` preview's `plan[]` for what reopens (a detach reopens every member) |
 | Pause a campaign, ad group, ad or keyword | `ppc_metrics` or `ppc_period_comparison` for the trend, `ppc_disapprovals_list` to check it is not already dead for a policy reason |
-| Enable anything | `ppc_campaign_get({ include: "ad_groups,ads,metrics" })` - proof it has an ad group, an ad and a keyword or audience, so it does not enable into an empty shell. Enabling a Search campaign (Google or Microsoft) also needs `ppc_launch_qa`: `no_go` blocks the enable until every fail is fixed with the tool it names; `incomplete` is not a pass |
+| Enable anything | `ppc_campaign_get({ include: "ad_groups,ads,metrics" })` - proof it has an ad group, an ad and a keyword or audience, so it does not enable into an empty shell. Enabling a Search campaign (Google or Microsoft) also needs `ppc_launch_qa`: `no_go` blocks the enable until every fail is fixed with the tool it names; `incomplete` is not a pass. Microsoft ads or ad groups created this session: pass the parent id on the enable (4.5) |
 | Change a bid modifier | `ppc_segment_report` with `["device"]`, `["hour"]`, `["day_of_week"]` or `["geo"]`, or `ppc_performance_breakdown` for the same slices with evidence levels, or `ppc_audience_performance` for audience modifiers |
 | Write new ad copy or change ad text | `ppc_claims_check({ record_only: true })` for the approved and banned claims to write from, and `ppc_claims_check` again before it ships (`include_paused: true`: new ads sit PAUSED until the enable, and the default reads serving text only) |
 | Apply a Google recommendation | `ppc_recommendations_list` with its per-rec impact estimate, plus the read that would justify the same change if you had proposed it yourself |
@@ -315,9 +317,13 @@ because the operator diffed the field they were changing rather than the object 
   a new one, preserving the bid unless `preserve_bid: false`. The old `resource_name` is gone, a new
   one is returned, and quality-score history resets. Your `IF WRONG` line for this one is "the
   keyword's QS history is not recoverable", which is why it belongs in the search-term-evidence lane
-  and never in a preemptive tidy-up. The Microsoft variant,
-  `ppc_platform_keyword_match_type_change`, may reject in-place edits outright; if it does, the
-  documented path is add a new keyword and pause the old one, which is again two objects, not one.
+  and never in a preemptive tidy-up. The Microsoft variant is different:
+  `ppc_platform_keyword_match_type_change({ connection_id, keyword_id, ad_group_id, match_type })`
+  edits in place (Microsoft documents Keyword.MatchType as "Update: Optional"; live-validated
+  2026-07-17), so the keyword keeps its id. `ad_group_id` is required, the keyword's
+  `platform_ad_group_id` from `ppc_bing_keyword_performance`. Only if the call fails with a Microsoft
+  PartialError do you fall back to adding a new keyword and pausing the old one, which is again two
+  objects, not one.
 
 ## 3. One at a time, never bulk
 
@@ -510,6 +516,44 @@ Say these out loud in your own head before you assume you are protected.
 - **Pausing has no gate**, correctly. Pausing is the safe direction. But pausing a high-volume campaign
   is still a spend change with a real cost, so it still gets a diff and an approval.
 
+### 4.5 Going live: the enable call itself
+
+The enable is the write that starts spend, and three traps sit at the call itself.
+
+- **Just-created Microsoft entities need their parent.** Before enabling Microsoft ads or ad groups
+  created in this session, run `ppc_launch_qa`, then pass the parent id on
+  `ppc_platform_enable_resource`: `ad_group_id` for an ad, `campaign_id` for an ad group. Hiveku's
+  local mirror may not hold an entity created minutes ago. If the call returns "not found in local
+  sync", run `ppc_sync({ connection_id })`, confirm its `ad_groups` and `ads` legs read `synced`, then
+  retry ONCE. (A fix that makes the tool use the passed parent id is shipping. Until it deploys the
+  passed parent is ignored, so re-sending the same call fails the same way and only the sync clears
+  the error.)
+- **A Claude Code auto-mode denial never turns into a prompt.** In auto mode a classifier reviews each
+  tool call and can deny an enable, naming a category such as "[Production Deploy]". Nothing is then
+  waiting for approval. Never promise the owner a prompt (one comes only from the steps below), and
+  do not retry around the denial (another tool, a bulk edit, the same call reworded). Give the owner
+  the exact steps instead:
+  1. To run the call that was just denied: in the CLI, `/permissions`, the **Recently denied** tab,
+     select it and press `r` to retry it with a manual approval. That covers one call; a go-live with
+     several enables is easier with 2.
+  2. For the go-live turn, switch the chat to Manual so each enable prompts (VS Code: the mode
+     indicator under the prompt box; CLI: Shift+Tab), then switch back afterwards. Or:
+  3. Add a permissions ASK rule naming the enable tool, via `/permissions` (VS Code: Permissions under
+     Customize in the `/` menu) or `permissions.ask` in settings. The plugin's names are
+     `mcp__plugin_hiveku_hk__ppc_platform_enable_resource` and
+     `mcp__plugin_hiveku_hk__ppc_enable_resource` (Google); the VS Code extension's are
+     `mcp__hiveku__ppc_platform_enable_resource` and `mcp__hiveku__ppc_enable_resource`. Write whole
+     tool names (safe on every Claude Code version).
+
+  The denial text suggests adding a Bash permission rule; for an MCP tool that is misleading, since
+  the rule names the MCP tool. Never propose an ALLOW rule for a tool that starts spend. Three denials
+  in a row can flip auto mode back to prompting; do not rely on it.
+- **Read Microsoft conversion health for what it says.** A goal at `NoRecentConversions` means the UET
+  tag is live and nothing converted in Microsoft's last 7 days, which is expected while the campaign
+  is paused; a broken tag reads `TagUnverified` or `TagInactive`. "No per-goal conversion volume" is a
+  Hiveku gap (Hiveku does not yet read Microsoft's per-goal report), not a Microsoft limit. Say both
+  that way to the owner.
+
 ## 5. Verify after writing
 
 A write that returns success is not proof the platform applied it. It is proof the request was
@@ -523,13 +567,14 @@ and a local mirror that will happily keep showing you the old value.
 | Google daily budget | The response returns `old_daily_budget` and `new_daily_budget`; read `explicitly_shared` | `ppc_sync` then `ppc_campaign_get`, plus `ppc_pacing_summary` the next day for actual spend behavior |
 | Cross-platform budget | Response payload | `ppc_sync` then `ppc_campaign_get` / `ppc_campaign_list` |
 | Bidding strategy | Response payload | `ppc_sync` then `ppc_campaign_get` (the strategy field), and `ppc_change_history`, which records the API-client change and needs no sync |
-| Keyword bid | The response note about whether the bid is honored under the current strategy | `ppc_keyword_list` for the stored bid |
+| Keyword bid | Google: the response note about whether the bid is honored under the current strategy. Microsoft: no such note - you read `bidding_strategy` before the write | `ppc_keyword_list` for the stored bid (Microsoft: `ppc_bing_keyword_performance`) |
 | Bid modifier | Response payload | `ppc_audience_performance` (audience modifiers report `bid_modifier`), or `ppc_segment_report` for the segment's behavior over the following days |
 | Negative keyword (Google) | The returned `resource_name` - capture it, it is the only handle `ppc_negative_keyword_remove` accepts | `ppc_search_terms_report` over the following week: the blocked term should stop appearing |
 | Negative keyword (Microsoft) | Response payload | `ppc_bing_search_terms_report` |
 | Shared negative list (Google) | Response payload | `ppc_google_shared_negatives` operation `shared-sets-list` - member counts AND attached campaigns |
 | Shared negative list (Microsoft) | Response payload | `ppc_bing_shared_negative_list_list` confirms the item count moved; `ppc_negatives_audit` (`params.level: 'shared_list'`) shows which campaigns the list is attached to and any conflict it now causes |
-| Keyword add or match-type change | The returned `criterion_id` and new `resource_name`, plus the OLD `resource_name` that is now removed | `ppc_keyword_list` - the new criterion present, the old absent |
+| Keyword add or match-type change (Google) | The returned `criterion_id` and new `resource_name`, plus the OLD `resource_name` that is now removed | `ppc_keyword_list` - the new criterion present, the old absent |
+| Keyword match-type change (Microsoft) | `updated`, the same `keyword_id`, the new `match_type` (an in-place edit) | `ppc_bing_keyword_performance` - same id, new match type |
 | Pause or enable (any platform) | Response payload | `ppc_sync` then `ppc_campaign_list` / `ppc_ad_group_list` / `ppc_ad_list` filtered by status |
 | Bulk status flip | `applied` and `skipped_unknown` counts in the response - read BOTH | Same status reads as above |
 | New RSA | Response payload | `ppc_ad_list`, then `ppc_disapprovals_list` a day later; a new ad can be disapproved after it is created |

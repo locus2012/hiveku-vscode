@@ -55,11 +55,20 @@ if (!allowBlock) {
 }
 const rules = [...allowBlock[1].matchAll(/'(mcp__hiveku__[^']+)'/g)].map((m) => m[1]);
 
+// The ASK array (HIVEKU_ASK): the tools that start ad spend, forced to a prompt.
+// Scoped out of the deny scrape below, or each one would be counted as a deny.
+const askBlock = src.match(/const HIVEKU_ASK: string\[\] = \[([\s\S]*?)\n\];/);
+if (!askBlock) {
+  console.error('✖ could not find the HIVEKU_ASK array — did the ask-list move or get renamed?');
+  process.exit(1);
+}
+const asked = new Set([...askBlock[1].matchAll(/'mcp__hiveku__([^']+)'/g)].map((m) => m[1]));
+
 // Everything else in the file that names a Hiveku tool is a deny rule (the
 // writeClaudeSettings deny loop). Deny beats allow and beats the permission
 // mode, so a denied name is NOT auto-approved and must not be reported as such.
 const denied = new Set(
-  [...src.replace(allowBlock[0], '').matchAll(/'mcp__hiveku__([^']+)'/g)].map((m) => m[1]),
+  [...src.replace(allowBlock[0], '').replace(askBlock[0], '').matchAll(/'mcp__hiveku__([^']+)'/g)].map((m) => m[1]),
 );
 
 if (rules.length === 0) {
@@ -110,12 +119,35 @@ const FEEDBACK_QUEUE_WRITES = new Set([
 
 const problems = [];
 
+/** A Claude Code permission glob as a regex: '*' is the only wildcard, anchored both ends. */
+const toRe = (glob) =>
+  new RegExp(
+    '^' +
+      glob
+        .split('*')
+        .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('.*') +
+      '$',
+  );
+
 // ── (a) syntax ────────────────────────────────────────────────────────────
 // A '.' is literal in a glob, so any '.' inside a rule is a regex leftover.
 for (const rule of rules) {
   const tail = rule.replace('mcp__hiveku__', '');
   if (tail.includes('.')) {
     problems.push(`${rule} — regex syntax; globs use '*' only ('.' is a literal dot, so this matches nothing)`);
+  }
+}
+// An ask rule is an exact tool name: a glob or a denied name there is a mistake
+// (writeClaudeSettings skips a name its deny list covers, by name or glob, so
+// that ask entry would silently gate nothing).
+for (const name of asked) {
+  if (/[.*]/.test(name)) problems.push(`mcp__hiveku__${name} — an ask rule names one tool exactly, no glob or regex`);
+  const covering = [...denied].filter((d) => d === name || toRe(d).test(name));
+  if (covering.length) {
+    problems.push(
+      `mcp__hiveku__${name} is in HIVEKU_ASK and covered by the deny list (${covering.map((d) => `mcp__hiveku__${d}`).join(', ')}) — pick one`,
+    );
   }
 }
 
@@ -129,22 +161,26 @@ if (!existsSync(REGISTRY)) {
   const require_ = createRequire(import.meta.url);
   const { olympusTools, hivekuMetaTools } = require_(REGISTRY);
   const all = [...olympusTools, ...hivekuMetaTools];
-  const toRe = (glob) =>
-    new RegExp(
-      '^' +
-        glob
-          .split('*')
-          .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-          .join('.*') +
-        '$',
-    );
   const approved = new Set();
   for (const rule of rules) {
     const re = toRe(rule.replace('mcp__hiveku__', ''));
     for (const t of all) if (re.test(t.name)) approved.add(t.name);
   }
-  // A denied name is not approved, whatever the globs matched.
+  // A denied name is not approved, whatever the globs matched. Nor is an asked
+  // one: Claude Code evaluates deny, then ask, then allow, so it prompts.
   for (const name of denied) approved.delete(name);
+  for (const name of asked) approved.delete(name);
+
+  // An ask rule naming no tool gates nothing, silently. A warning, not a
+  // failure: the local registry build can predate a tool the server has.
+  const known = new Set(all.map((t) => t.name));
+  const unknownAsk = [...asked].filter((n) => !known.has(n));
+  if (unknownAsk.length) {
+    console.warn(
+      `⚠ ask rule(s) naming no tool in the local registry build: ${unknownAsk.join(', ')} — ` +
+        'a typo, or a build older than the server (run `npm run build` in ../hiveku-mcp-api-server).',
+    );
+  }
 
   // A tool is auto-approvable only if the server declares it a read: method GET,
   // or an explicit readOnlyHint, or a POST vetted by name above.
@@ -166,7 +202,7 @@ if (!existsSync(REGISTRY)) {
   if (problems.length === 0) {
     const queueWrites = [...approved].filter((n) => FEEDBACK_QUEUE_WRITES.has(n)).length;
     console.log(
-      `✓ ${rules.length} allow rules, ${denied.size} denied — ${approved.size - queueWrites} read tools auto-approved` +
+      `✓ ${rules.length} allow rules, ${denied.size} denied, ${asked.size} ask — ${approved.size - queueWrites} read tools auto-approved` +
         (queueWrites ? `, ${queueWrites} feedback-queue writes by name, 0 other mutations` : ', 0 mutations'),
     );
   }

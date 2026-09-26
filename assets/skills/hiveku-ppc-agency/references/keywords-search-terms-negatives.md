@@ -212,8 +212,12 @@ broad-to-phrase sweep, which resets your winners' history along with your losers
 not the cause): add the phrase version as a **new** keyword rather than converting the exact one, so you
 keep the exact keyword's history and can compare them.
 
-**Bing:** `ppc_platform_keyword_match_type_change({ connection_id, keyword_id, match_type })`. Microsoft
-may reject in-place edits; the documented fallback is add the new keyword and pause the old one.
+**Bing:** `ppc_platform_keyword_match_type_change({ connection_id, keyword_id, ad_group_id, match_type })`.
+`ad_group_id` is REQUIRED (Microsoft addresses a keyword through its ad group): both ids come from the
+keyword's row in `ppc_bing_keyword_performance` (`keyword_id`, `platform_ad_group_id`). Microsoft edits
+match type IN PLACE (its docs list Keyword.MatchType as "Update: Optional"; live-validated 2026-07-17),
+so the keyword keeps its id. Only if the call fails with a Microsoft PartialError, fall back to adding
+the new keyword and pausing the old one.
 
 ### Play 5: Prune sweep and cannibalization (monthly)
 
@@ -365,7 +369,9 @@ reason a negative exists lives nowhere else.
   accidental traffic collapse.
 - **Treat `ppc_keyword_bid_update` as effective under smart bidding.** The bid is recorded and ignored
   for ranking, and the response says so; confirm the strategy first, because reporting ignored bids as
-  optimization is a fabricated deliverable. Same for `ppc_platform_keyword_bid_update` on Bing.
+  optimization is a fabricated deliverable. On Bing, `ppc_platform_keyword_bid_update({ connection_id,
+  keyword_id, ad_group_id, bid })` says NOTHING about smart bidding in its response, so read the
+  campaign's `bidding_strategy` with `ppc_campaign_get` before a Bing keyword bid change.
 
 **Subtle traps.** **Exact is not exact**: close variants match plurals, misspellings, reorderings and
 paraphrases, so check the report for what your exact keywords really match. **Tiered structures are
