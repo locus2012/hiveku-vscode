@@ -1399,6 +1399,11 @@ export async function workflowList(client: HivekuMcpClient): Promise<Workflow[]>
   const list = unwrap<Workflow[]>(res);
   return Array.isArray(list) ? list : [];
 }
+/**
+ * Run a workflow FOR REAL: its emails and texts go out and its record changes
+ * are written. Call it only through modules.ts runWorkflowForReal, which asks
+ * the person first (test/workflow-run-confirm.test.mjs pins that).
+ */
 export async function workflowRun(client: HivekuMcpClient, id: string): Promise<unknown> {
   return client.callToolJson<unknown>('workflow_run', { id });
 }

@@ -312,7 +312,7 @@
       },
       {
         "command": "hiveku.runWorkflow",
-        "title": "Hiveku: Run Workflow",
+        "title": "Hiveku: Run Workflow for Real",
         "icon": "$(play)"
       },
       {

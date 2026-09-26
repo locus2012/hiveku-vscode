@@ -18,6 +18,7 @@ import {
   formCaptureSettingsUpdate,
   maskSecret,
   workflowEnable,
+  workflowRun,
 } from './hivekuApi';
 import type {
   FormCapturePatch,
@@ -136,6 +137,47 @@ export function enabledAnywayNote(result: unknown): string | null {
   return null;
 }
 const enableDone = (result: unknown): string => enabledAnywayNote(result) ?? 'Enable - done.';
+
+// ============================================================
+// Running a workflow by hand is REAL, so it asks first.
+//
+// workflow_run without test_mode fires every step for real: its emails and
+// texts go out, its record changes are written, and the run counts against
+// the plan. A person clicking "Run" to try a workflow out expects none of
+// that. Every place that can start a run (the Automations panel row, the
+// console's Automations tab and the hiveku.runWorkflow command) goes through
+// runWorkflowForReal, which asks in a modal first; only the "Run for real"
+// button proceeds. Cancel, Escape or closing the modal calls nothing.
+//
+// There is deliberately no test run here yet: a try-it-safely path belongs
+// to the workflow editor until the extension gets its own.
+// ============================================================
+
+export const RUN_FOR_REAL_LABEL = 'Run for real';
+export const RUN_FOR_REAL_QUESTION = 'Run this workflow for real now?';
+export const RUN_FOR_REAL_DETAIL =
+  'Its emails, texts and record changes happen. To see what it would do without sending anything, run a test from the workflow editor.';
+
+/** The Run flow, shared by the Automations panel row action, the console and the hiveku.runWorkflow command. */
+export const runWorkflowForReal: NonNullable<ActionSpec['run']> = async (client, args, ui) => {
+  const id = asString(args.id);
+  if (!id) return null;
+  const yes = await ui.confirm(RUN_FOR_REAL_QUESTION, RUN_FOR_REAL_DETAIL, RUN_FOR_REAL_LABEL);
+  if (!yes) return null;
+  const result = await ui.progress(`Running ${ui.subject || 'workflow'}…`, () => workflowRun(client, id));
+  return { result };
+};
+
+/** A run parked on a delay or an approval answers status "waiting" (under `data` when the route wraps it). */
+export function workflowRunDone(result: unknown): string {
+  const top = result && typeof result === 'object' ? (result as Record<string, unknown>) : {};
+  const data = top.data && typeof top.data === 'object' ? (top.data as Record<string, unknown>) : top;
+  const status = asString(data.status ?? top.status).toLowerCase();
+  if (status === 'waiting') {
+    return 'The workflow started and is waiting on a delay or an approval. Recent runs shows how it goes.';
+  }
+  return 'The workflow ran. Recent runs shows what it did.';
+}
 
 const isFutureDate = (value: unknown): boolean => {
   if (typeof value !== 'string' && typeof value !== 'number') return false;
@@ -650,7 +692,7 @@ export const MODULES: ModuleSpec[] = [
         titleKeys: ['name'],
         fields: [{ keys: ['is_enabled'], label: 'enabled' }, { keys: ['run_count'], label: 'runs' }, { keys: ['description'] }],
         rowActions: [
-          { id: 'run', label: 'Run', kind: 'tool', tool: 'workflow_run', args: (r) => ({ id: r.id }), successReload: false },
+          { id: 'run', label: RUN_FOR_REAL_LABEL, kind: 'tool', tool: 'workflow_run', args: (r) => ({ id: r.id }), run: runWorkflowForReal, done: workflowRunDone, successReload: false },
           { id: 'enable', label: 'Enable', kind: 'tool', tool: 'workflow_enable', args: (r) => ({ id: r.id }), run: enableWorkflow, done: enableDone },
           { id: 'disable', label: 'Disable', kind: 'tool', tool: 'workflow_disable', args: (r) => ({ id: r.id }) },
         ],

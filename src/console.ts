@@ -17,7 +17,7 @@ import * as api from './hivekuApi';
 import type { AccountRecord } from './accounts';
 import { departmentById, extractRows, fetchDataset, mapLimit, type Column, type Row } from './deptData';
 import { isExternalProject } from './projectKind';
-import { enableWorkflow, enabledAnywayNote, moduleById } from './modules';
+import { enableWorkflow, enabledAnywayNote, moduleById, runWorkflowForReal, workflowRunDone } from './modules';
 import { modalActionUi, openModulePanel } from './panel';
 import { openTaskDetail } from './taskDetail';
 import { effectiveDepartments } from './roles';
@@ -1089,11 +1089,15 @@ export function openAccountConsole(
           const title = (msg as unknown as { title?: string }).title;
           openTaskDetail(account, { id: msg.id, title }, clientFor, appUrl);
         } else if (msg.type === 'runwf' && msg.id) {
-          await vscode.window.withProgress(
-            { location: vscode.ProgressLocation.Notification, title: 'Running workflow…' },
-            async () => api.workflowRun(await clientFor(account.accountId), msg.id as string),
-          );
-          await load('automations');
+          // A run is real (emails, texts, record changes), so it asks first, in
+          // a VS Code modal raised here in the extension host, never a browser
+          // confirm() in the webview. Cancel calls nothing and reloads nothing.
+          const client = await clientFor(account.accountId);
+          const outcome = await runWorkflowForReal(client, { id: msg.id }, modalActionUi(msg.name ?? '', account.label, dashBase));
+          if (outcome) {
+            void vscode.window.showInformationMessage(workflowRunDone(outcome.result));
+            await load('automations');
+          }
         } else if (msg.type === 'togglewf' && msg.id) {
           const client = await clientFor(account.accountId);
           if (msg.enabled) {
@@ -1540,8 +1544,8 @@ export function consoleHtml(webview: Pick<vscode.Webview, 'cspSource'>, label: s
         var on=(w.is_enabled!=null?w.is_enabled:w.enabled);
         var left=el('div',null);left.appendChild(document.createTextNode(w.name||'(workflow)'));
         var st=el('span','badge '+(on?'ok':''),on?'on':'off');st.style.marginLeft='8px';left.appendChild(st);
-        var actions=el('div');actions.style.display='flex';actions.style.gap='6px';
-        actions.appendChild(btn('Run','',function(){vscode.postMessage({type:'runwf',id:w.id});}));
+        var actions=el('div');actions.style.display='flex';actions.style.gap='6px';actions.style.flexShrink='0';actions.style.whiteSpace='nowrap';
+        actions.appendChild(btn('Run for real','',function(){vscode.postMessage({type:'runwf',id:w.id,name:w.name||''});}));
         actions.appendChild(btn(on?'Disable':'Enable','ghost',function(){vscode.postMessage({type:'togglewf',id:w.id,enabled:!on,name:w.name||''});}));
         r.appendChild(left);r.appendChild(actions);content.appendChild(r);
       });
