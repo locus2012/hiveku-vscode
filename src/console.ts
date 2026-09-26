@@ -17,7 +17,7 @@ import * as api from './hivekuApi';
 import type { AccountRecord } from './accounts';
 import { departmentById, extractRows, fetchDataset, mapLimit, type Column, type Row } from './deptData';
 import { isExternalProject } from './projectKind';
-import { enableWorkflow, enabledAnywayNote, moduleById, runWorkflowForReal, workflowRunDone } from './modules';
+import { enableWorkflow, enabledAnywayNote, moduleById, runWorkflowForReal, workflowRunDone, workflowRunRefusal } from './modules';
 import { modalActionUi, openModulePanel } from './panel';
 import { openTaskDetail } from './taskDetail';
 import { effectiveDepartments } from './roles';
@@ -1092,6 +1092,14 @@ export function openAccountConsole(
           // A run is real (emails, texts, record changes), so it asks first, in
           // a VS Code modal raised here in the extension host, never a browser
           // confirm() in the webview. Cancel calls nothing and reloads nothing.
+          // A workflow that is off is refused before the question (the server
+          // would refuse the run anyway); `enabled` is the row's on/off as the
+          // tab shows it, and only an explicit false refuses.
+          const refusal = workflowRunRefusal({ enabled: msg.enabled });
+          if (refusal) {
+            void vscode.window.showWarningMessage(refusal);
+            return;
+          }
           const client = await clientFor(account.accountId);
           const outcome = await runWorkflowForReal(client, { id: msg.id }, modalActionUi(msg.name ?? '', account.label, dashBase));
           if (outcome) {
@@ -1545,7 +1553,7 @@ export function consoleHtml(webview: Pick<vscode.Webview, 'cspSource'>, label: s
         var left=el('div',null);left.appendChild(document.createTextNode(w.name||'(workflow)'));
         var st=el('span','badge '+(on?'ok':''),on?'on':'off');st.style.marginLeft='8px';left.appendChild(st);
         var actions=el('div');actions.style.display='flex';actions.style.gap='6px';actions.style.flexShrink='0';actions.style.whiteSpace='nowrap';
-        actions.appendChild(btn('Run for real','',function(){vscode.postMessage({type:'runwf',id:w.id,name:w.name||''});}));
+        actions.appendChild(btn('Run for real','',function(){vscode.postMessage({type:'runwf',id:w.id,name:w.name||'',enabled:on});}));
         actions.appendChild(btn(on?'Disable':'Enable','ghost',function(){vscode.postMessage({type:'togglewf',id:w.id,enabled:!on,name:w.name||''});}));
         r.appendChild(left);r.appendChild(actions);content.appendChild(r);
       });

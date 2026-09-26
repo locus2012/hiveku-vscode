@@ -31,7 +31,7 @@ import { openDashboard } from './dashboard';
 import { externalPlatform, externalSiteUrl, isExternalProject } from './projectKind';
 import { openAccountConsole, refreshConsoleTab } from './console';
 import { openModulePanel, isEntitled, modalActionUi } from './panel';
-import { MODULES, PROJECT_MODULE, moduleById, moduleGroupGate, runWorkflowForReal, workflowRunDone } from './modules';
+import { MODULES, PROJECT_MODULE, moduleById, moduleGroupGate, runWorkflowForReal, workflowRunDone, workflowRunRefusal } from './modules';
 import { openTaskDetail } from './taskDetail';
 import {
   writeEntries,
@@ -1744,9 +1744,18 @@ async function completeTask(node: { record: AccountRecord; task: api.PmTask }): 
   }
 }
 
-/** A run is real (emails, texts, record changes): runWorkflowForReal asks in a modal first; cancel calls nothing. */
+/**
+ * A run is real (emails, texts, record changes): runWorkflowForReal asks in a
+ * modal first; cancel calls nothing. A workflow that is off is refused before
+ * the question, since the server refuses its real run anyway.
+ */
 async function runWorkflow(node: { record: AccountRecord; workflow: api.Workflow }): Promise<void> {
   if (!node?.record || !node.workflow?.id) return;
+  const refusal = workflowRunRefusal(node.workflow);
+  if (refusal) {
+    void vscode.window.showWarningMessage(refusal);
+    return;
+  }
   try {
     const client = await clientForAccount(node.record.accountId);
     const dashBase = `${appUrl().replace(/\/+$/, '')}/${node.record.accountId}/dashboard`;

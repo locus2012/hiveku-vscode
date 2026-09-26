@@ -157,6 +157,20 @@ export const RUN_FOR_REAL_LABEL = 'Run for real';
 export const RUN_FOR_REAL_QUESTION = 'Run this workflow for real now?';
 export const RUN_FOR_REAL_DETAIL =
   'Its emails, texts and record changes happen. To see what it would do without sending anything, run a test from the workflow editor.';
+export const RUN_WHILE_OFF_REFUSAL =
+  'This workflow is off. Turn it on before running it for real, or run a test from the workflow editor.';
+
+/**
+ * A real run of a switched-off workflow is refused by the server (the runs
+ * route answers "Workflow is disabled. Enable it first"), so every entry point
+ * refuses BEFORE the "for real" question: warning someone that emails go out,
+ * taking their yes, then failing, is worse than saying why up front. Only an
+ * explicit `false` refuses; a row that does not say is left to the server.
+ */
+export function workflowRunRefusal(workflow: { is_enabled?: unknown; enabled?: unknown }): string | null {
+  const on = workflow.is_enabled ?? workflow.enabled;
+  return on === false ? RUN_WHILE_OFF_REFUSAL : null;
+}
 
 /** The Run flow, shared by the Automations panel row action, the console and the hiveku.runWorkflow command. */
 export const runWorkflowForReal: NonNullable<ActionSpec['run']> = async (client, args, ui) => {
@@ -692,7 +706,7 @@ export const MODULES: ModuleSpec[] = [
         titleKeys: ['name'],
         fields: [{ keys: ['is_enabled'], label: 'enabled' }, { keys: ['run_count'], label: 'runs' }, { keys: ['description'] }],
         rowActions: [
-          { id: 'run', label: RUN_FOR_REAL_LABEL, kind: 'tool', tool: 'workflow_run', args: (r) => ({ id: r.id }), run: runWorkflowForReal, done: workflowRunDone, successReload: false },
+          { id: 'run', label: RUN_FOR_REAL_LABEL, kind: 'tool', tool: 'workflow_run', args: (r) => ({ id: r.id }), guard: workflowRunRefusal, run: runWorkflowForReal, done: workflowRunDone, successReload: false },
           { id: 'enable', label: 'Enable', kind: 'tool', tool: 'workflow_enable', args: (r) => ({ id: r.id }), run: enableWorkflow, done: enableDone },
           { id: 'disable', label: 'Disable', kind: 'tool', tool: 'workflow_disable', args: (r) => ({ id: r.id }) },
         ],

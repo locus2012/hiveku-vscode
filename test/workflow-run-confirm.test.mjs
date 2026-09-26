@@ -10,6 +10,10 @@
  * person picks "Run for real". Escape, Cancel or closing the modal calls
  * nothing.
  *
+ * A workflow that is off is refused before that question, at all three
+ * entry points: the server refuses a real run of a disabled workflow, so
+ * asking "emails go out, OK?" and then failing would be the worse experience.
+ *
  * The panel and the console are driven through their real message handlers
  * with a stub webview, so the assertions are on what a person sees (labels,
  * the modal's words) and on what reaches the MCP client. The command's
@@ -62,8 +66,10 @@ const {
   RUN_FOR_REAL_DETAIL,
   RUN_FOR_REAL_LABEL,
   RUN_FOR_REAL_QUESTION,
+  RUN_WHILE_OFF_REFUSAL,
   runWorkflowForReal,
   workflowRunDone,
+  workflowRunRefusal,
 } = loadOut('modules');
 const { openModulePanel } = loadOut('panel');
 const { openAccountConsole, consoleHtml } = loadOut('console');
@@ -71,6 +77,7 @@ const { openAccountConsole, consoleHtml } = loadOut('console');
 const ACCOUNT = { accountId: '4d9e2b7a-3c1f-4e8a-9b6d-0f2a1c3e5b7d', label: 'Harbor Dental' };
 const APP = 'https://app.hiveku.com';
 const WORKFLOW = { id: '7f3a9c2e-1b4d-4e6f-8a0c-2d4e6f8a0b1c', name: 'New lead alert', is_enabled: true, run_count: 12 };
+const OFF_WORKFLOW = { id: '2c8e4a6f-0b1d-4f3a-9e5c-7a9b1d3f5e7a', name: 'Old promo blast', is_enabled: false, run_count: 3 };
 const RAN = { data: { run_id: 'run-1', status: 'completed', mode: 'sync' } };
 
 const workflowRunCalls = (client) => client.seen.filter((c) => c.name === 'workflow_run');
@@ -141,6 +148,19 @@ describe('runWorkflowForReal', () => {
     await assert.rejects(runWorkflowForReal(client, { id: WORKFLOW.id }, ui), /run_quota_exceeded/);
   });
 
+  test('a workflow that is off is refused, in plain words; one that is on or unknown is not', () => {
+    assert.equal(
+      RUN_WHILE_OFF_REFUSAL,
+      'This workflow is off. Turn it on before running it for real, or run a test from the workflow editor.',
+    );
+    assert.equal(workflowRunRefusal({ is_enabled: false }), RUN_WHILE_OFF_REFUSAL);
+    assert.equal(workflowRunRefusal({ enabled: false }), RUN_WHILE_OFF_REFUSAL, 'the tolerant fallback field counts too');
+    assert.equal(workflowRunRefusal({ is_enabled: true, enabled: false }), null, 'is_enabled is the canonical field');
+    assert.equal(workflowRunRefusal({ is_enabled: true }), null);
+    assert.equal(workflowRunRefusal({}), null, 'a row that does not say is left to the server');
+    assert.equal(workflowRunRefusal({ is_enabled: null, enabled: undefined }), null);
+  });
+
   test('the finished message says whether the run is still waiting', () => {
     assert.equal(workflowRunDone(RAN), 'The workflow ran. Recent runs shows what it did.');
     assert.match(workflowRunDone({ data: { status: 'waiting', run_id: 'r' } }), /^The workflow started and is waiting on a delay or an approval/);
@@ -202,6 +222,18 @@ describe('Automations panel', () => {
     assert.deepEqual(calls.errors, []);
   });
 
+  test('a workflow that is off is refused before the question and nothing is sent', async () => {
+    answerModalsWith('Run for real');
+    const { client, send } = openAutomations({ workflow_list: { data: [OFF_WORKFLOW] }, workflow_run: RAN });
+    await send({ type: 'load', section: 'workflows' });
+    await send({ type: 'rowaction', section: 'workflows', idx: 0, actionId: 'run' });
+
+    assert.deepEqual(calls.warnings, [[RUN_WHILE_OFF_REFUSAL]], 'one plain warning, no "for real" modal');
+    assert.deepEqual(workflowRunCalls(client), [], 'workflow_run was never called');
+    assert.deepEqual(calls.infos, []);
+    assert.deepEqual(calls.errors, []);
+  });
+
   test('every panel action that calls workflow_run goes through the confirmation', () => {
     const actions = [...MODULES, PROJECT_MODULE]
       .flatMap((m) => m.sections)
@@ -210,6 +242,7 @@ describe('Automations panel', () => {
     assert.ok(actions.length >= 1, 'the Automations Run action exists');
     for (const action of actions) {
       assert.equal(action.run, runWorkflowForReal, `${action.id} must run through runWorkflowForReal`);
+      assert.equal(action.guard, workflowRunRefusal, `${action.id} must refuse a workflow that is off before asking`);
       assert.equal(action.label, 'Run for real');
       assert.equal(action.confirm, undefined, 'one question, not two');
     }
@@ -230,8 +263,8 @@ describe('Account console, Automations tab', () => {
   test('the button reads "Run for real" and sends the name for the modal, with no browser popup', () => {
     const html = consoleHtml({ cspSource: 'vscode-resource:' }, 'Harbor Dental');
     assert.ok(
-      html.includes("btn('Run for real','',function(){vscode.postMessage({type:'runwf',id:w.id,name:w.name||''});})"),
-      'the Run button posts runwf with the workflow name',
+      html.includes("btn('Run for real','',function(){vscode.postMessage({type:'runwf',id:w.id,name:w.name||'',enabled:on});})"),
+      'the Run button posts runwf with the workflow name and its on/off state',
     );
     assert.ok(!html.includes("btn('Run',"), 'no bare "Run" button');
     assert.doesNotMatch(html, /\b(window\.)?(confirm|alert|prompt)\(/, 'the webview never raises a browser popup');
@@ -255,10 +288,29 @@ describe('Account console, Automations tab', () => {
     assert.deepEqual(calls.errors, []);
   });
 
+  test('a workflow that is off is refused before the question and nothing is sent', async () => {
+    answerModalsWith('Run for real');
+    const { client, send } = openConsole({ workflow_run: RAN, workflow_list: { data: [OFF_WORKFLOW] }, workflow_runs_recent: { data: [] } });
+    await send({ type: 'runwf', id: OFF_WORKFLOW.id, name: OFF_WORKFLOW.name, enabled: false });
+
+    assert.deepEqual(calls.warnings, [[RUN_WHILE_OFF_REFUSAL]], 'one plain warning, no "for real" modal');
+    assert.deepEqual(client.seen, [], 'no tool was called, not even the reload');
+    assert.deepEqual(calls.infos, []);
+    assert.deepEqual(calls.errors, []);
+  });
+
+  test('a click that does not say on or off still asks, and the server decides', async () => {
+    const { client, send } = openConsole({ workflow_run: RAN });
+    await send({ type: 'runwf', id: WORKFLOW.id, name: WORKFLOW.name });
+    assert.equal(calls.warnings.length, 1);
+    assert.equal(calls.warnings[0][0], RUN_FOR_REAL_QUESTION);
+    assert.deepEqual(client.seen, []);
+  });
+
   test('"Run for real" runs it once, says it ran and reloads the tab', async () => {
     answerModalsWith('Run for real');
     const { client, send } = openConsole({ workflow_run: RAN, workflow_list: { data: [WORKFLOW] }, workflow_runs_recent: { data: [] } });
-    await send({ type: 'runwf', id: WORKFLOW.id, name: WORKFLOW.name });
+    await send({ type: 'runwf', id: WORKFLOW.id, name: WORKFLOW.name, enabled: true });
 
     assert.deepEqual(workflowRunCalls(client), [{ name: 'workflow_run', args: { id: WORKFLOW.id } }]);
     assert.equal(client.seen[0].name, 'workflow_run', 'the run comes first');
@@ -282,6 +334,10 @@ describe('no path runs a workflow without asking', () => {
     const body = ext.slice(start, ext.indexOf('\n}\n', start));
     assert.match(body, /runWorkflowForReal\(/);
     assert.match(body, /if \(!outcome\) return;/, 'cancel returns before any message');
+    const refuse = body.indexOf('workflowRunRefusal(node.workflow)');
+    assert.ok(refuse >= 0, 'a workflow that is off is refused');
+    assert.ok(refuse < body.indexOf('runWorkflowForReal('), 'and refused before the question');
+    assert.match(body.slice(refuse, body.indexOf('runWorkflowForReal(')), /showWarningMessage\(refusal\);\s*return;/);
     assert.doesNotMatch(body, /\bworkflowRun\(|'workflow_run'/, 'no direct run call');
     assert.match(ext, /registerCommand\('hiveku\.runWorkflow', \(node\) => runWorkflow\(node\)\)/);
   });
