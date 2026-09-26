@@ -47,6 +47,7 @@ import {
   setSandboxWorkspace,
   setConnectedAsMap,
   setCodexSupport,
+  ensureSpendAskRules,
   type PermissionMode,
 } from './knowledge';
 import { setLocalHivekuServer, hasLocalHivekuServer, hasUserHivekuServer, claudeConfigUnreadable } from './claudeMcp';
@@ -278,7 +279,7 @@ function clientForAccount(accountId: string): Promise<HivekuMcpClient> {
 }
 
 const PERM_LABELS: Record<PermissionMode, { short: string; icon: string; blurb: string }> = {
-  bypassPermissions: { short: 'Autonomous', icon: '$(unlock)', blurb: 'Skip ALL prompts — bash, deploys, tools. .env*.local still blocked.' },
+  bypassPermissions: { short: 'Autonomous', icon: '$(unlock)', blurb: 'Skip prompts — bash, deploys, tools. Turning ads on still asks; .env*.local still blocked.' },
   acceptEdits: { short: 'Auto-edits', icon: '$(check)', blurb: 'Auto-approve file edits; still ask for bash, deploys, network.' },
   default: { short: 'Ask', icon: '$(shield)', blurb: 'Confirm before every edit and command.' },
 };
@@ -603,6 +604,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   updateSignedInContext();
 
   await loadWorkspaceScms();
+  void applySpendAskRules().catch((err) => log.appendLine(`[settings] ask rules failed: ${errMsg(err)}`));
   warnIfMixedAccounts();
   await autoFocusWorkspaceAccount();
   await updateRootContext();
@@ -2632,6 +2634,26 @@ async function openDepartmentWindow(
   );
   // Focuses the existing account window when it's already open; opens it otherwise.
   await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(dir), true);
+}
+
+/**
+ * Bring the ask rules for the tools that start ad spend (knowledge.ts
+ * HIVEKU_ASK) into the open Hiveku folders. A folder scaffolded before those
+ * rules existed has none, so auto mode keeps blocking an enable there with no
+ * prompt until the owner happens to run Refresh Setup. This adds only those
+ * rules, never rewrites anything else, and writes nothing when they are there.
+ */
+async function applySpendAskRules(): Promise<void> {
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    const root = folder.uri.fsPath;
+    // The same test Refresh Setup uses: a linked site project, or an account folder.
+    const link = scms.get(root)?.link ?? (await readProjectLink(root).catch(() => undefined));
+    const isProject = !!(link?.project_id && link.account_id);
+    const isAccount = accounts.list().some((a) => accounts.getFolder(a.accountId) === root);
+    if (!isProject && !isAccount) continue;
+    const added = await ensureSpendAskRules(root);
+    if (added.length) log.appendLine(`[settings] ${root}: now asks before ${added.join(', ')}`);
+  }
 }
 
 /**

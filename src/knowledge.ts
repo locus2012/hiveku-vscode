@@ -627,6 +627,107 @@ const HIVEKU_ALLOW: string[] = [
   'Bash(find:*)',
 ];
 
+// The tools that START ad delivery or spend, written as permissions.ask so every
+// call shows the owner an approval prompt.
+//
+// Claude Code 2.1.283+ opens VS Code chats in auto mode, and auto mode's
+// classifier blocks an "enable the campaign" call outright as [Production
+// Deploy]: no prompt, so an owner who asked for the enable has nothing to
+// approve and the agent reports it as a limit. An explicit ask rule is resolved
+// BEFORE the classifier, and no mode auto-approves one, so it turns that hard
+// block into an approval card. In default and acceptEdits these tools already
+// prompted, so nothing changes there; under bypassPermissions they used to run
+// unasked and now prompt too, on purpose (they start spending money).
+//
+// Only tools whose primary effect is turning serving ON, checked against the
+// MCP server's own descriptions: the Google-only and the cross-platform enable
+// (the status path every PAUSED create and push points at), Google's
+// experiment schedule ("START ... THIS IS THE MONEY STEP") and Microsoft's
+// experiment create (no SETUP state: the copy serves on start_date). NOT here:
+// budget and bid edits (the plugin's ask list gates those), pauses, reads, the
+// creates that land PAUSED or DRAFT, experiment promote/graduate (they change a
+// campaign that is already serving), and multi-purpose tools whose effect
+// depends on their arguments (ppc_bulk_edit, ppc_bing_experiment_update).
+// check-permission-rules.mjs scrapes this array by name.
+const HIVEKU_ASK: string[] = [
+  'mcp__hiveku__ppc_enable_resource',
+  'mcp__hiveku__ppc_platform_enable_resource',
+  'mcp__hiveku__ppc_experiment_schedule',
+  'mcp__hiveku__ppc_bing_experiment_create',
+];
+
+/**
+ * Does the deny rule `rule` already cover the MCP tool `tool`
+ * (`mcp__<server>__<name>`)? Claude Code matches an MCP deny three ways: the
+ * exact name; the bare server (`mcp__hiveku` covers every tool that server
+ * has); or a glob, where `*` is the only wildcard and the pattern must match
+ * the whole name (`mcp__hiveku__ppc_*`, `mcp__*`, even `*`).
+ */
+function denyCovers(rule: string, tool: string): boolean {
+  if (rule === tool) return true;
+  const serverEnd = tool.indexOf('__', 'mcp__'.length);
+  if (serverEnd > 0 && rule === tool.slice(0, serverEnd)) return true;
+  if (!rule.includes('*')) return false;
+  const pattern = rule
+    .split('*')
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${pattern}$`).test(tool);
+}
+
+/**
+ * Append the HIVEKU_ASK rules to `perms.ask`, additively: the user's entries
+ * keep their order, ours are added once (so a re-run adds nothing), and a tool
+ * a deny rule in `deny` already covers is skipped, since deny beats ask and the
+ * same tool in both lists reads as a contradiction. Leaves `ask` unset when
+ * there is nothing to write and the user had none. Returns the rules it added.
+ */
+function mergeSpendAskRules(perms: Record<string, unknown>, deny: readonly unknown[]): string[] {
+  const ask = Array.isArray(perms.ask) ? (perms.ask as string[]) : [];
+  const haveAsk = new Set(ask);
+  const added: string[] = [];
+  for (const rule of HIVEKU_ASK) {
+    if (haveAsk.has(rule) || deny.some((d) => typeof d === 'string' && denyCovers(d, rule))) continue;
+    ask.push(rule);
+    added.push(rule);
+  }
+  if (ask.length > 0 || Array.isArray(perms.ask)) perms.ask = ask;
+  return added;
+}
+
+/**
+ * Add the HIVEKU_ASK rules to a folder that was scaffolded before they existed,
+ * touching nothing else in its `.claude/settings.json`. The extension calls it
+ * on activation for the open Hiveku folders, so an owner does not have to know
+ * to run Refresh Setup before an enable prompts instead of being blocked.
+ *
+ * Writes only when a rule was added. A missing file (never scaffolded; the next
+ * scaffold writes the rules) or one that does not parse (the owner's edit in
+ * progress) is left alone. Returns the rules added.
+ */
+export async function ensureSpendAskRules(baseDir: string): Promise<string[]> {
+  const file = path.join(baseDir, '.claude', 'settings.json');
+  let settings: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(await fs.readFile(file, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+    settings = parsed as Record<string, unknown>;
+  } catch {
+    return [];
+  }
+  // A permissions or ask value of the wrong shape is the owner's to fix; a
+  // silent update does not overwrite it (a scaffold run would).
+  const current = settings.permissions ?? {};
+  if (typeof current !== 'object' || Array.isArray(current)) return [];
+  const perms = current as Record<string, unknown>;
+  if (perms.ask !== undefined && !Array.isArray(perms.ask)) return [];
+  const added = mergeSpendAskRules(perms, Array.isArray(perms.deny) ? (perms.deny as unknown[]) : []);
+  if (added.length === 0) return [];
+  settings.permissions = perms;
+  await fs.writeFile(file, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  return added;
+}
+
 /**
  * Pre-approve THIS folder's .mcp.json servers so Claude Code does not prompt on
  * first open of every account folder.
@@ -655,7 +756,7 @@ async function writeClaudeLocalSettings(baseDir: string): Promise<void> {
   await fs.writeFile(file, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 }
 
-/** Merge our allow rules + acceptEdits default into .claude/settings.json (non-destructive). */
+/** Merge our allow/deny/ask rules + acceptEdits default into .claude/settings.json (non-destructive). */
 async function writeClaudeSettings(baseDir: string, mode: PermissionMode = configuredPermissionMode): Promise<void> {
   const file = path.join(baseDir, '.claude', 'settings.json');
   let settings: { defaultMode?: string; permissions?: { allow?: string[] } & Record<string, unknown> } & Record<string, unknown> = {};
@@ -736,6 +837,10 @@ async function writeClaudeSettings(baseDir: string, mode: PermissionMode = confi
   const OVERBROAD = new Set(['Write(~/.claude/**)', 'Edit(~/.claude/**)']);
   denyList = denyList.filter((r) => !OVERBROAD.has(r));
   (settings.permissions as Record<string, unknown>).deny = denyList;
+
+  // Ask rules for the tools that start spend (HIVEKU_ASK). Additive like allow,
+  // and a tool the deny list already covers (by name, server or glob) is skipped.
+  mergeSpendAskRules(settings.permissions as Record<string, unknown>, denyList);
 
   // OS-level sandbox — the only thing that can stop a Bash command from writing
   // outside this folder. Default writable = cwd + subdirs + the per-session

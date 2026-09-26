@@ -1037,11 +1037,11 @@
           ],
           "enumDescriptions": [
             "Auto-approve file edits and safe in-folder commands; still ask before deploys, git push, network, and Hiveku writes. Recommended.",
-            "Autonomous — skip permission prompts entirely (Claude Code runs account/site work without asking). Your .env*.local deny rule still blocks secret reads. Use when you trust Claude Code to operate an account end-to-end.",
+            "Autonomous — skip permission prompts (Claude Code runs account/site work without asking), except the tools that turn ads on, which always ask. Your .env*.local deny rule still blocks secret reads. Use when you trust Claude Code to operate an account end-to-end.",
             "Ask before every edit and command (most cautious)."
           ],
           "default": "acceptEdits",
-          "markdownDescription": "How much autonomy Claude Code gets in Hiveku account/site workspaces. Written into each scaffolded folder's `.claude/settings.json` (`permissions.defaultMode`, for terminal Claude Code) and `.vscode/settings.json` (`claudeCode.initialPermissionMode`, for the Claude Code VS Code extension). Run **Hiveku: Refresh Setup** after changing this to apply it to already-open folders. The `.env*.local` deny rule is always enforced, even in `bypassPermissions`."
+          "markdownDescription": "How much autonomy Claude Code gets in Hiveku account/site workspaces. Written into each scaffolded folder's `.claude/settings.json` (`permissions.defaultMode`, for terminal Claude Code) and `.vscode/settings.json` (`claudeCode.initialPermissionMode`, for the Claude Code VS Code extension). Run **Hiveku: Refresh Setup** after changing this to apply it to already-open folders. The `.env*.local` deny rule is always enforced, even in `bypassPermissions`, and the tools that turn ads on (and start spend) always ask first, in every mode."
         },
         "hiveku.codexSupport": {
           "type": "boolean",
