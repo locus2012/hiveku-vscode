@@ -34,7 +34,7 @@ family's mechanics, the write discipline behind one mutation
 | 3. Weekly pass | LIVE end to end |
 | 4. Monthly report | LIVE end to end |
 | 5. Quarterly hygiene | LIVE end to end |
-| 6. Site migration | LIVE on a full-profile key |
+| 6. Site migration | LIVE on a full connection |
 | 7. New-location launch | LIVE end to end |
 | 8. Algorithm-update response | LIVE end to end |
 | 9. Traffic-crash triage | LIVE end to end |
@@ -283,8 +283,9 @@ next quarter's first month.
 ## Recipe 6: Site migration / redesign
 
 **Goal:** a URL, template or platform change that keeps rankings, links and measurement. Needs a
-full-profile key (`project_*`, `cms_*`, `deploy_site` are not visible to a marketing-seo key: say
-"not visible to this key"), the WEBSITE project id from `sites_list`, a checkpoint via
+full connection (step 4 needs the multi-file save, `project_files_bulk_get` and the build check,
+and neither those nor the checkpoint is on a marketing or marketing-seo connection: say "not
+available on this connection"), the WEBSITE project id from `sites_list`, a checkpoint via
 `/hiveku:checkpoint`, and `references/seo-change-discipline.md` read.
 
 1. Freeze into dated tabs: the 16-month GSC set (Recipe 1 step 5); `seo_backlinks_list({
@@ -302,13 +303,14 @@ full-profile key (`project_*`, `cms_*`, `deploy_site` are not visible to a marke
    status 200), then `project_redirects_deploy({ project_id, tier: 'production' })` [CONFIRM, live].
 4. Canonicals, noindex, robots via the code lane: `project_files_bulk_get` -> edit ->
    `project_files_bulk_save` in ONE call -> `project_test_build({ use_db_state: true })` ->
-   `project_vcs_commit` [CONFIRM] -> `deploy_site({ environment })` [CONFIRM, commit is not live].
+   `project_vcs_commit` [CONFIRM] -> `deploy_site({ environment })` [CONFIRM, a version is not live].
    `seo_project_update({ robots_txt_content })` only serves as a deploy-time fallback where the code
    ships no robots source, so robots.txt ships as `public/robots.txt`, verified with `fetch_url`. Per-page SEO field and schema writes:
    `seo_page_seo_set` and `seo_page_schema_set` (`references/on-page-optimization.md`);
    `pages_update` and the code lane still work.
 5. `seo_generate_sitemap({ project_id: <website id> })` returns `{ file_path: 'public/sitemap.xml',
-   content }`; save via `project_files_bulk_save`, commit, deploy, `fetch_url` it live, then
+   content }`; save it with `project_file_save`, then `project_vcs_commit` with NO files, deploy,
+   `fetch_url` it live, then
    `seo_gsc_submit_sitemap({ site_url, sitemap_url })` and `seo_bing_submit_sitemap({ site_url,
    sitemap_url })` [CONFIRM]. The old one: `seo_gsc_delete_sitemap({ site_url, sitemap_url })`
    [CONFIRM, only when the file no longer exists at that path; it destroys the reporting history,

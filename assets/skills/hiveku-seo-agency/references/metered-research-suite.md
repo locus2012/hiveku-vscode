@@ -35,7 +35,7 @@ Every vendor tool below is LIVE, proxied from the vendor MCP service with no bui
 
 Profiles: the vendor families need `includeDataForSEO` (full, marketing, marketing-seo,
 marketing-ads); `seo_research` is an `seo_` tool (full, marketing, marketing-seo). A
-rejection on any other key is "not visible to this key", never "does not exist".
+rejection on any other connection is "not available on this connection", never "does not exist".
 
 Discovery caveat: tool search keys on the first token of a name, so `department: 'seo'` or
 a directory focus of `seo` never returns a vendor tool today. Search with no `department`,

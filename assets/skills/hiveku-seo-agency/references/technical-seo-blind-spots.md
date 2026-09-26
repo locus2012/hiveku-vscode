@@ -20,9 +20,9 @@ here for production response headers (section 2) and redirect chain depth (secti
 
 ## Availability
 
-Every tool named below is LIVE. A name that does not resolve on your key is "not visible to this
-key", never "does not exist": `web_crawl`, `project_files_search`, `preview_http_get` and the
-redirect tools are not visible to a marketing-seo key today.
+Every tool named below is LIVE. A name that does not resolve on this connection is "not available
+on this connection", never "does not exist": `project_files_search` and `preview_http_get` are not
+on a marketing or marketing-seo connection (`web_crawl` and the redirect tools are).
 
 | Tool | Status | Cost | Note |
 |---|---|---|---|

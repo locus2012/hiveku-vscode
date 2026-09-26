@@ -399,8 +399,8 @@ plumbing, not strategy.
 - **Do not let an empty response become a claim** (4.1, 4.2, 4.4). Reported as "no links" or "no
   competitor activity", it is a false statement that will eventually be discovered.
 - **Respect approval thresholds and protected assets.** Anything touching the live site, redirect
-  fixes included, goes through SKILL.md's confirmation and deploy discipline: commit is not live,
-  and an unreviewed redirect fix can take a page down.
+  fixes included, goes through SKILL.md's confirmation and deploy discipline: a version is not live
+  until the deploy, and an unreviewed redirect fix can take a page down.
 - **Multi-site accounts:** filter every account-scoped read by domain before counting (4.3).
 
 ---
@@ -522,9 +522,10 @@ Running the outreach (cross-discipline with Outbound - this is a paid agency ser
    with `backlinks_backlinks` / `seo_new_lost_backlinks`; log each won link
    (`crm_create_activity`) and report links-won + cost-per-link in the monthly report.
 
-Visibility caveat on step 4: `crm_create_activity` is NOT visible to a `marketing-seo` key (that
-profile carries only the seven CRM contact tools; `crm_contacts_bulk_create` in step 3 is one). On
-a scoped key record the won link as a PM task, section 6's rule anyway. Outreach never sends from
+Availability caveat on step 4: `crm_create_activity` is not available on a marketing or
+marketing-seo connection (both profiles carry only the seven CRM contact tools;
+`crm_contacts_bulk_create` in step 3 is one). On those connections record the won link as a PM
+task, section 6's rule anyway. Outreach never sends from
 this skill: drafting and handoff is this file's job, sending is Outbound's, and "just send the
 pitches from here" is refused, including sending through a survey, a GBP review reply or
 `social_create_post`.

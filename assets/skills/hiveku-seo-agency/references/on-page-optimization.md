@@ -30,9 +30,10 @@ means clean or empty.
 |---|---|---|---|
 | `pages_list`, `pages_get` | LIVE | A | pages-model rows; `pages_get` returns `meta_title`, `meta_description`, `meta_keywords`, `focus_keywords`, `slug`, `is_published`, `show_in_sitemap`, `sitemap_frequency`, `sitemap_priority`, `file_path`, `content_structure`; no canonical, robots or schema |
 | `pages_update` | LIVE | write | fields `meta_title`, `meta_description`, `meta_keywords`, `focus_keywords`, `slug`, `show_in_sitemap`, `sitemap_frequency`, `sitemap_priority` (also `name`, `is_published`, `custom_css`, `custom_js`); only the fields you pass change; no confirm |
-| `cms_list_collections`, `cms_read_entry`, `cms_write_entry` | LIVE | write | CMS-driven pages; `draft: true` writes the draft shadow; not visible to a marketing-seo key |
-| `project_files_search`, `project_files_bulk_get`, `project_files_bulk_save`, `project_vcs_commit`, `deploy_site` | LIVE | write | the code lane for templates; not visible to a marketing-seo key |
-| `verify_typecheck`, `project_test_build` | LIVE | free | the build gate before `deploy_site` |
+| `cms_list_collections`, `cms_read_entry`, `cms_write_entry` | LIVE | write | CMS-driven pages; `draft: true` writes the draft shadow; full, marketing and marketing-seo all carry the whole `cms_*` family |
+| `project_files_list`, `project_file_get`, `project_file_save`, `project_vcs_status`, `project_vcs_commit`, `deploy_site` | LIVE | write | the code lane on full, marketing and marketing-seo: read, save one file per call, save the version with NO files, deploy. On marketing and marketing-seo `project_vcs_commit` is version-only: a call carrying `files` or `deletedFiles` is refused (section 1.2) |
+| `project_files_search`, `project_files_bulk_get`, `project_files_bulk_save` | LIVE | write | the multi-file side of the code lane; full only (not on marketing or marketing-seo) |
+| `verify_typecheck`, `project_test_build` | LIVE | free | the build gate before `deploy_site`; full only (not on marketing or marketing-seo) |
 | `seo_task_implement` | LIVE | paid agent turn, two-step | the implement rail for mechanical page-scoped fixes; ends in a staged production deploy a human approves |
 | `seo_schema_markup` | LIVE | A | read only: detected vs suggested per page, sweep-refreshed |
 | `seo_gsc_inspect_url` | LIVE | free | indexed snapshot only: coverage, selected canonical, `lastCrawlTime`, rich-result detection |
@@ -69,7 +70,10 @@ writer" point at this file's Availability table.
   tree, not the served HTML.
 - **A template** is a file. `project_files_search({ project_id, query: '<title' })` or a query
   for `generateMetadata`, `metadata`, `canonical`, `application/ld+json` tells you which file
-  emits the tag, with line numbers; `project_files_bulk_get({ project_id })` pulls the tree.
+  emits the tag, with line numbers; `project_files_bulk_get({ project_id })` pulls the tree. On
+  marketing and marketing-seo (no search or bulk read): `project_files_list({ project_id, search:
+  'layout' })` (a match on the path, not the content) to find the layout or page file, then
+  `project_file_get({ project_id, file_path })` to read it.
 - **The served page** is `fetch_url({ url })`: `data.body` is the HTML the visitor gets, `data.url`
   the URL after redirects, `data.status` the code. This is the only read that settles "what is
   live". `web_scrape` with `formats: ['html']` is the alternative on keys that carry it.
@@ -81,16 +85,78 @@ writer" point at this file's Availability table.
 
 | Situation | Write path | Visible to | Live when |
 |---|---|---|---|
-| Pages-model page, meta or sitemap fields | `pages_update({ project_id, page_id, meta_title, meta_description, ... })` | full, marketing, marketing-seo | on the next render of a page that reads the row; verify with `fetch_url`, and `deploy_site` if a Lambda tier is stale |
-| CMS-driven content (blog, locations, products) | `cms_list_collections` -> `cms_read_entry({ project_id, collection_id, slug })` -> `cms_write_entry({ project_id, collection_id, slug, fields })` | full, marketing (not marketing-seo today) | the entry is a file in the project; whether the live tier picks it up without a deploy depends on the project, so the live URL is the arbiter |
-| Template or code-level (title pattern, canonical, robots meta, JSON-LD, hreflang, image markup) | `project_files_bulk_save` in ONE call -> `verify_typecheck` -> `project_test_build({ project_id, use_db_state: true })` -> `project_vcs_commit({ project_id, message })` with NO files (the save already wrote them; this names the version in plain language) -> `deploy_site({ project_id, environment })` development first, production on approval | full, marketing (not marketing-seo today) | after the production deploy; a version is not live; `project_files_bulk_save` updates the Fly preview instantly for a `preview_screenshot` |
+| Pages-model page, meta or sitemap fields | `pages_update({ project_id, page_id, meta_title, meta_description, ... })` | full, marketing-seo (the catch-all marketing profile has no `pages_*`) | on the next render of a page that reads the row; verify with `fetch_url`, and `deploy_site` if a Lambda tier is stale |
+| CMS-driven content (blog, locations, products) | `cms_list_collections` -> `cms_read_entry({ project_id, collection_id, slug })` -> `cms_write_entry({ project_id, collection_id, slug, fields })` | full, marketing, marketing-seo | the entry is a file in the project; whether the live tier picks it up without a deploy depends on the project, so the live URL is the arbiter |
+| Template or code-level (title pattern, canonical, robots meta, JSON-LD, hreflang, image markup) | full: `project_files_bulk_save` in ONE call -> `verify_typecheck` -> `project_test_build({ project_id, use_db_state: true })` -> `project_vcs_commit({ project_id, message })` with NO files (the save already wrote them; this names the version in plain language) -> `deploy_site({ project_id, environment })` development first, production on approval. marketing and marketing-seo: `project_vcs_status({ project_id, detail: "files" })` before the first save (the version to go back to, saved first when there is none) -> `project_file_save({ project_id, file_path, content })` one file per call -> `project_vcs_status({ project_id, detail: "files" })` -> `project_vcs_commit({ project_id, message })` with NO files -> `deploy_site({ project_id, environment: "development", branch: "main" })`, `fetch_url` there, production on approval | full, marketing, marketing-seo (two paths, see below) | after the production deploy; a version is not live; a save reaches the Fly preview at once (`project_files_bulk_save`, or `project_file_save` with `sync_preview: true`) |
 | Mechanical page-scoped fix on a Hiveku-hosted site (one title, one schema block, one canonical) | `seo_task_implement({ task_id })` preview -> `confirm: true` -> `seo_task_implement_status` -> human `agent_approval_approve` | full, marketing, marketing-seo (the rail is finishable on marketing-seo) | at `completed` with `deployment_url`; never before |
 
 Choose by blast radius, then by profile. A pattern shared by 300 pages is a template change, one
-review, one deploy; never 300 `pages_update` calls. On a marketing-seo key the code lane is not
-visible: page fields go through `pages_update`, everything else through the implement rail or a
-full-profile key, and you say which. Every path ends the same way: `fetch_url` on the live URL,
-then `seo_gsc_inspect_url` only after `lastCrawlTime` passes the ship date.
+review, one deploy; never 300 `pages_update` calls. Every path ends the same way: `fetch_url` on
+the live URL, then `seo_gsc_inspect_url` only after `lastCrawlTime` passes the ship date.
+
+**The code lane on a marketing or marketing-seo connection.** Both profiles carry
+`project_files_list`, `project_file_get`, `project_file_save`, `project_vcs_status`,
+`project_vcs_commit` and `deploy_site`, and neither carries `project_files_bulk_save`,
+`project_files_search`, `project_files_bulk_get`, a file delete or the build check
+(`verify_typecheck`, `project_test_build`). On these two profiles `project_vcs_commit` is
+version-only: it saves a version of changes that are already saved, and a call carrying `files` or
+`deletedFiles` is refused before it is sent (`version_files_not_allowed`), so the files always go
+through `project_file_save` first. The profile is chosen per connection, so the same account on a
+full connection sends files as usual. The path:
+
+1. **The version to go back to, before the first save.** `project_vcs_status({ project_id, detail:
+   "files" })`. When `head_commit_id` is set, `uncommitted` is false and `uncommitted_reason` is not
+   'unknown', that version is the one to go back to: keep `head_commit_id` with
+   `last_version.message` and `last_version.created_at`. Otherwise save one first. `head_commit_id`
+   null (`uncommitted_reason` 'no_version_yet') means the site has never had a version;
+   `uncommitted: true` means changes not in a version yet (someone else's, listed in
+   `changed_files`); 'unknown' means the check could not be made. Skip this and the first version
+   already holds your change, and anyone else's pending edits: there is no version to go back to,
+   and going back would undo their work too. So tell the person, then save the site as it stands
+   with `project_vcs_commit({ project_id, message })` and NO files, named for what it holds
+   (`latest_changes.summary` when there is one, otherwise "The site before the SEO changes"). A
+   409 `nothing_to_commit` is success and carries `latest_version`. Keep that version's `id`,
+   `message` and `created_at` (from `data`, or from `latest_version`): it is the version to go back
+   to. If no version can be saved, stop before the first save. `latest_changes.state` 'editing' at
+   THIS read means someone else wrote in the last 3 minutes and may still be working: say so, and
+   wait or go ahead on the person's yes.
+2. **Save.** Find the file with `project_files_list` (section 1.1), read it with
+   `project_file_get`, and save each changed file with `project_file_save({ project_id, file_path,
+   content })`, one file per call.
+3. **Other writers.** `project_vcs_status({ project_id, detail: "files" })` again, to see
+   everything not in a version yet (you are not the only writer): if `changed_files` lists paths
+   you did not save, tell the person the version will include those changes too (or wait) before
+   saving it. `latest_changes.state` reads 'editing' now because of your own saves, so at this read
+   it is not a sign of another writer: judge by the paths alone.
+4. **The version.** Save it once with `project_vcs_commit({ project_id, message })` and NO files,
+   and keep `data.id` as the new version. A 409 `nothing_to_commit` is success too: the change is
+   already a version (a version saved by another writer, or by Hiveku on its own, can hold it), so
+   keep `latest_version.id` as the new version and never report the call as failed.
+5. **Development, then production.** With no build check on these profiles, deploy to development
+   first and `fetch_url` the development URL before production. Send it as `deploy_site({
+   project_id, environment: "development", branch: "main" })`: `branch` is a check here, not a
+   selector. When development is set to show another branch, the call is refused with 409
+   `branch_not_bound` and ships nothing. Development is then showing other work and cannot check
+   this change: tell the person, check the saved file with `project_file_get` (and, when you saved
+   with `sync_preview: true`, `fetch_url` the preview at `live_preview.url` from `sites_list`), and
+   deploy to production only on the person's explicit yes. On a project connected to GitHub
+   (`project_get` shows `github.connected`), `branch` names a GitHub branch instead: leave it out
+   there.
+
+A file that has to be removed goes to a person or a full connection: never save it empty, which
+leaves a blank file on Your site and puts it in the next version. A template change across many
+files, or one that needs a build check before it ships, goes through the implement rail or a full
+connection, and you say which.
+
+**Undo on these profiles.** `project_vcs_rollback` and `project_vcs_history` are not on them, and
+the site owner's list of Your site's versions shows names and dates, not ids. So the pre-flight
+card's UNDO line names the version to go back to by the name and time kept in step 1: `UNDO: go
+back to the version "<name>" saved <date and time> from Your site's versions, then deploy again`.
+The ids (the version to go back to, and the new version from step 4) go into the PM task
+(`references/seo-change-discipline.md` gate 5), where a full connection's `project_vcs_rollback`
+needs them. Going back is done by the site owner from Your site's versions, or from a full
+connection with `project_vcs_rollback` (dry run first, then the owner's yes), then a separate
+deploy. Never write "none": with step 1 done there is always a version to go back to.
 
 ### 1.3 External (non-Hiveku-hosted) sites
 
@@ -359,7 +425,9 @@ page itself and an `x-default`:
 <link rel="alternate" hreflang="x-default" href="https://example.com/services/" />
 ```
 
-Ship with `project_files_bulk_save` -> `project_vcs_commit` -> `deploy_site`.
+Ship through the code lane in section 1.2: `project_files_bulk_save` -> `project_vcs_commit` ->
+`deploy_site` on full; on marketing and marketing-seo, `project_file_save` per file, then
+`project_vcs_commit` with NO files, then `deploy_site`.
 
 **Option B, in the sitemap.** `xhtml:link rel="alternate"` elements under each `<url>`.
 `seo_generate_sitemap` emits `loc`, `lastmod`, `changefreq` and `priority` only (verified by route
@@ -468,8 +536,12 @@ All industry benchmarks unless a tool is named; state them as such in reports.
 - **Pages model versus code project.** A row without `file_path` renders from the builder and
   honors `pages_update`; a row with one is code, and the file decides. When unsure, change the
   row, `fetch_url`, and believe the HTML.
-- **Scoped key.** On marketing-seo, `pages_update` and the implement rail are your only writes;
-  say "the template change needs a full-profile key or the implement rail", never "Hiveku cannot".
+- **Scoped connection.** On marketing and marketing-seo the code lane is one `project_file_save`
+  per file, then `project_vcs_commit({ project_id, message })` with NO files, then `deploy_site`
+  (section 1.2); `pages_update` is on marketing-seo only. What these profiles lack is the
+  multi-file save, the file delete and the build check: for a change that needs one, say "this
+  change needs a connection that has the site's file tools, or Hiveku's SEO fix flow with your
+  approval", never "Hiveku cannot".
 - **Competitor page audit.** `seo_cro_audit`, `seo_core_web_vitals`, `on_page_instant_pages`,
   `on_page_content_parsing` and `fetch_url` all work on any URL; nothing here writes to one, and
   a competitor's markup is evidence, not a template to copy.

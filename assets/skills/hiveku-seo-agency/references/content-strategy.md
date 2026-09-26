@@ -37,8 +37,9 @@ credentials: neither means clean or empty.
 | `seo_internal_links` | LIVE | A | Hiveku-hosted published projects only; `suggested_links_to/from` not computed |
 | `seo_cro_audit` | LIVE | free | heuristic audit of one URL, works on competitor pages |
 | `seo_task_list`, `seo_task_get`, `seo_task_implement`, `seo_task_implement_status` | LIVE | write (implement spends a paid agent turn) | the implement rail, Play C7; the diff reader an approver needs is `seo_task_changes`, see references/reporting-and-delivery.md |
-| `pages_list`, `pages_update`, `cms_list_collections`, `cms_read_entry`, `cms_write_entry` | LIVE | write | Hiveku-hosted page and CMS edits; `cms_*` not visible to a marketing-seo key |
-| `project_files_bulk_save`, `project_vcs_commit`, `deploy_site` | LIVE | write | the code lane; not visible to a marketing-seo key |
+| `pages_list`, `pages_update`, `cms_list_collections`, `cms_read_entry`, `cms_write_entry` | LIVE | write | Hiveku-hosted page and CMS edits; `cms_*` is on full, marketing and marketing-seo; `pages_*` is on full and marketing-seo, not the catch-all marketing profile |
+| `project_file_save`, `project_vcs_commit`, `deploy_site` | LIVE | write | the code lane on full, marketing and marketing-seo: save one file per call, then the version with NO files, then deploy; on marketing and marketing-seo a version call carrying `files` or `deletedFiles` is refused |
+| `project_files_bulk_save` | LIVE | write | many files in one call; full only (not on marketing or marketing-seo) |
 | `content_create` | LIVE | write | persists a brief or draft |
 | `talk_to_department` | LIVE | free | briefs and copy; its numbers are never evidence |
 | `web_map`, `web_crawl`, `web_extract`, `web_search`, `web_scrape` | LIVE | free | the volume-blind fallback for gap work |
@@ -379,12 +380,19 @@ trace it to a tool call.
 
 **Ship fixes where the site actually lives.** Hiveku-hosted pages: `pages_list` then
 `pages_update` (titles, meta, slugs, SEO fields); CMS content via `cms_list_collections`,
-`cms_read_entry`, `cms_write_entry`. Code-level changes (templates, JSON-LD, redirects): pull
-the project, edit, `project_files_bulk_save` in ONE call, `project_vcs_commit`, verify the
-build, `deploy_site` only after approval. Commit is not live. On a marketing-seo scoped key the
-`cms_*`, `project_*` and `deploy_site` tools are not visible (say "not visible to this key",
-never "does not exist"): ship page-level fixes via `pages_update` and route code-level changes
-through the implement rail (Play C7) or a full-profile key. The per-path matrix and the 12-step
+`cms_read_entry`, `cms_write_entry`. Code-level changes (templates, JSON-LD): on a full connection, pull
+the project, edit, `project_files_bulk_save` in ONE call, verify the build, then
+`project_vcs_commit({ project_id, message })` with NO files, `deploy_site` only after approval.
+On a marketing or marketing-seo connection there is no bulk save and no build check: settle the
+version to go back to with `project_vcs_status({ project_id, detail: "files" })` before the first
+save, save each file with `project_file_save`, one file per call, then `project_vcs_commit({
+project_id, message })` with NO files (on these profiles a version call carrying files or
+deletions is refused), then `deploy_site` to development first with `branch: "main"` (refused,
+not shipped, when development shows another branch) and production after approval; the steps are
+references/on-page-optimization.md section 1.2. A change across many files, or
+one that needs a build check first, goes through the implement rail (Play C7) or a full
+connection. Redirects are `project_redirect_create` then `project_redirects_deploy` on all three. A
+version is not live until the deploy. The per-path matrix and the 12-step
 page protocol are section 1 of references/on-page-optimization.md; every mutation clears the
 gate in references/seo-change-discipline.md first. Never report a fix as shipped because the
 edit call succeeded: `fetch_url` the live URL. After shipping, note the date, then

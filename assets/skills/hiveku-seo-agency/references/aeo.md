@@ -30,10 +30,10 @@ A negative DataForSEO balance turns every metered call into a 402 with no per-to
 | `seo_aeo_brand_audit_history` | LIVE | A | up to 100 prior runs, populated by the weekly sweep |
 | `seo_schema_markup`, `seo_featured_snippets`, `seo_serp_features` | LIVE | A | detected vs suggested markup; winnable snippets; feature history |
 | `seo_project_update` (`robots_txt_content`) | LIVE | write | a deploy-time fallback the code file beats; a real robots.txt ships through the code lane |
-| `project_files_bulk_save`, `project_vcs_commit`, `deploy_site`, `pages_update` | LIVE | write | the code lane and the pages-model write; not all visible to a marketing-seo key |
+| `project_file_save`, `project_vcs_commit`, `deploy_site`, `pages_update` | LIVE | write | the code lane and the pages-model write. The code lane is on full, marketing and marketing-seo: save one file per call with `project_file_save`, then `project_vcs_commit({ project_id, message })` with NO files, then `deploy_site`; on marketing and marketing-seo a version call carrying `files` or `deletedFiles` is refused, and `project_files_bulk_save` is full only. `pages_update` is on full and marketing-seo, not the catch-all marketing profile |
 | `fetch_url` | LIVE | free | verifies the live robots.txt, llms.txt and JSON-LD after a deploy |
 | `seo_deliverable_save` | LIVE | write | persists the AEO baseline and monthly deliverable |
-| `seo_llms_txt_generate` | LIVE | write | takes the WEBSITE project id, not the tracking project id; the code lane (`project_files_bulk_save` `public/llms.txt`, `project_vcs_commit`, `deploy_site`, `fetch_url`) remains the hand-written path |
+| `seo_llms_txt_generate` | LIVE | write | takes the WEBSITE project id, not the tracking project id; the code lane (`project_file_save` `public/llms.txt`, `project_vcs_commit` with NO files, `deploy_site`, `fetch_url`) remains the hand-written path |
 | `seo_ai_visibility` | LIVE | A | one read for citation presence across engines and Google's answer surfaces; `seo_aeo_audit_get` plus `seo_rankings_list` on the AI lanes is the assembled cross-check |
 
 ## 0. Doctrine for this lane
@@ -123,8 +123,8 @@ status allowed / blocked / unspecified plus `via` (bot group, wildcard, none); `
 **Decision:** thresholds in section 3. **Closing write:** one `pm_tasks_create` per failing check,
 naming the file (robots.txt, llms.txt, homepage template) and the directive to add. Where each fix
 ships: **llms.txt** is generated with `seo_llms_txt_generate` (Availability; WEBSITE project id),
-or hand-drafted from the sitemap and the top pages, `project_files_bulk_save` as `public/llms.txt`,
-`project_vcs_commit`, `deploy_site` after approval. **robots.txt**: `seo_project_update({
+or hand-drafted from the sitemap and the top pages, `project_file_save` as `public/llms.txt`,
+`project_vcs_commit({ project_id, message })` with NO files, `deploy_site` after approval. **robots.txt**: `seo_project_update({
 robots_txt_content })` only fills in at the next deploy, and only where the code ships no robots
 source, so a crawler directive ships as
 `public/robots.txt` through the same code lane and is proven with `fetch_url` on the live URL
@@ -222,7 +222,8 @@ official URL for `sameAs`.
 FAQPage or QAPage on the Play E blocks, then Article with a real author and dateModified, then
 Product / Service / LocalBusiness on money pages, then BreadcrumbList. Never mark up an FAQ that is
 not visible on the page. `seo_schema_markup` is a read; JSON-LD ships through the code lane
-(`project_files_bulk_save`, `project_vcs_commit`, `deploy_site`) or `pages_update` per
+(on full `project_files_bulk_save`; on marketing and marketing-seo `project_file_save` one file
+per call; then `project_vcs_commit` with NO files and `deploy_site`) or `pages_update` per
 references/on-page-optimization.md section 1, which also carries the templates and 2025
 eligibility rules, so this playbook produces the spec and one `pm_tasks_create` per template,
 never per page, and verifies with `fetch_url` after the deploy. When the two disagree, mind the
@@ -425,11 +426,12 @@ Cross-cutting: `account_context_get`, `talk_to_department`, `memory_list`, `memo
 
 Where each capability this lane needs actually lives, so the handoff is named and never implied:
 **llms.txt** is `seo_llms_txt_generate` (Availability), with the code lane as the hand path
-(`project_files_bulk_save` of `public/llms.txt`, `project_vcs_commit`, `deploy_site`, then
+(`project_file_save` of `public/llms.txt`, `project_vcs_commit` with NO files, `deploy_site`, then
 `fetch_url` to prove it serves).
 **robots.txt**: `seo_project_update({ robots_txt_content })` is a deploy-time fallback the code
 file beats; ship `public/robots.txt` through the code lane and verify with `fetch_url`. **JSON-LD and pages**: the
 code lane or `pages_update`, per references/on-page-optimization.md section 1. **Deliverables**:
 `seo_deliverable_save` (mechanics in reporting-and-delivery.md). **Synced AI ranking rows**:
 `seo_rankings_list` on the AI-engine lanes (Play H). **Per-competitor brand audits**: none (5.6).
-A tool outside the key's profile fails like a missing feature: say "not visible to this key".
+A tool outside this connection's profile fails like a missing feature: say "not available on this
+connection".

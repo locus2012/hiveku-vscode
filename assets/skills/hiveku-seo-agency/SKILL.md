@@ -26,17 +26,39 @@ metered DataForSEO vendor families `backlinks_`, `dataforseo_labs_`, `serp_`,
   rides `includeCrawl4AI`, which every non-full profile has.
 - **marketing-seo** = the shared marketing prefixes (`memory_`, `content_`, `pm_`, `workflow_`, `kb_`,
   `knowledge_`, `analytics_`, `room_`, `discussion_`, `marketing_`, `media_`, `survey_`) plus `seo_`,
-  `pages_`, `social_`, the approval prefixes, and by exact name TASK_NAMES (`add_task_comment`,
-  `complete_task`, `create_task`, `delete_task`, `get_task`, `list_tasks`, `update_task`),
-  PROJECT_NAMES (`get_account_info`, `get_project`, `list_projects`), CMS_LEGACY_NAMES
-  (`create_content`, `list_content`, `get_content`, `update_content`, `delete_content`) and the
-  seven `crm_` contact names.
-- TODAY neither marketing key sees `web_crawl`, `web_scrape`, `web_map`, `web_extract` (an orphan
-  `web_` prefix), `sites_list`, `project_*` including redirects, `cms_*` or `deploy_site`. A named
-  grant is coming; until then use `pages_update`, `seo_task_implement`, and the always-available
-  `fetch_url` and `web_search`.
-- A tool outside your key's profile is INVISIBLE and fails exactly like a missing feature. Say "not
-  visible to this key", never "does not exist", and file the step with `pm_tasks_create` naming the
+  `pages_`, `social_`, the whole `cms_` family, `webflow_`, the approval prefixes, and by exact
+  name TASK_NAMES (`add_task_comment`, `complete_task`, `create_task`, `delete_task`, `get_task`,
+  `list_tasks`, `update_task`), PROJECT_NAMES (`get_account_info`, `get_project`,
+  `list_projects`), CMS_LEGACY_NAMES (`create_content`, `list_content`, `get_content`,
+  `update_content`, `delete_content`), the seven `crm_` contact names, `site_page_roles_get` and
+  `site_page_roles_set`, the site firewall tools, and the site surface below. **marketing** (the
+  catch-all) carries the same `seo_`, `cms_`, `webflow_` and site surface, but no `pages_`.
+- **The site surface on both marketing profiles**: `web_crawl`, `web_scrape`, `web_map`,
+  `web_extract`, `entity_populate`, `account_audit_health`, the redirect tools
+  (`project_redirects_list`, `project_redirect_create`, `project_redirect_update`,
+  `project_redirect_delete`, `project_redirects_deploy`, `project_domain_apex_redirect_set`),
+  `sites_list`, `project_get`, `project_files_list`, `project_file_get`, `project_file_save`,
+  `project_vcs_status`, `project_vcs_commit` and `deploy_site`. Not on either: `project_files_bulk_save`,
+  `project_files_search`, `project_files_bulk_get`, a file delete, the build check
+  (`verify_typecheck`, `project_test_build`), `project_vcs_history`, `project_vcs_rollback` and
+  checkpoints.
+- **The code lane on a marketing or marketing-seo connection**: `project_file_save` one file per
+  call, then `project_vcs_commit({ project_id, message })` with NO files, then `deploy_site`. On
+  these two profiles `project_vcs_commit` is version-only: a call carrying `files` or
+  `deletedFiles` is refused before it is sent (`version_files_not_allowed`), so the files go
+  through `project_file_save` first. The profile is chosen per connection, not stored on the key.
+  Undo there: read `project_vcs_status({ project_id, detail: "files" })` before the first save.
+  When it shows no version yet (`head_commit_id` null), changes not in a version (`uncommitted`
+  true) or an 'unknown' reason, tell the person and first save the site as it stands (`project_vcs_commit`
+  with NO files; a 409 `nothing_to_commit` is success and carries `latest_version`): that version,
+  or else `head_commit_id`, is the version to go back to. Keep its name and time with its id: the
+  UNDO line names it by name and time, as the owner's list shows it. The site owner goes back from
+  Your site's versions, or a full connection with `project_vcs_rollback` (dry run first, then the
+  owner's yes), then a separate deploy. Never "none".
+  The detail (the first read, no removal, no build check, development first) is
+  `references/on-page-optimization.md` section 1.2.
+- A tool outside this connection's profile is INVISIBLE and fails exactly like a missing feature.
+  Say "not available on this connection", never "does not exist", and file the step with `pm_tasks_create` naming the
   exact tool.
 
 **Discovery.** `hiveku_find_tools` and the directory focus key on the FIRST token of a tool name.
@@ -49,7 +71,7 @@ The SEO surface is growing in batches. Each reference opens with an Availability
 of its tools are LIVE and which are INCOMING, with the fallback.
 
 **A name that does not resolve has not shipped on this server yet - it is NOT proof the capability
-does not exist.** When a documented name fails, climb the ladder: (1) your key's profile, then the
+does not exist.** When a documented name fails, climb the ladder: (1) this connection's profile, then the
 direct tool; (2) a `seo_research` action that wraps the same vendor call; (3) a workflow template or
 node; (4) the dashboard, handed off as one precise step and filed with `pm_tasks_create` naming the
 exact tool. Never say Hiveku cannot do the thing, and never invent a name. **Naming discipline:** an
@@ -131,7 +153,7 @@ target query serves. Check, criteria and ladder: `hiveku-orient/references/found
   `seo_project_update` `robots_txt_content`: it is a deploy-time fallback, served only from the next
   `deploy_site` and only on a project whose code ships no robots source, so the stored write alone
   changes nothing live. Never report a robots.txt as live until `fetch_url` shows it; a wrong
-  Disallow deindexes the site. Offer: `public/robots.txt` via the code lane with a reviewed diff (`project_files_bulk_save`, `project_vcs_commit`, `deploy_site`).
+  Disallow deindexes the site. Offer: `public/robots.txt` via the code lane with a reviewed diff (`project_file_save` of that one file, `project_vcs_commit` with NO files, `deploy_site`).
 - **"Delete the tracking project and start fresh."** Refuse. No tool deletes a tracking project
   today, and the one coming is ask-gated because it destroys the rank history every future report
   reconciles against. Offer: keep the project, prune to what you report on
@@ -291,8 +313,9 @@ Field shapes, payloads and traps: `hiveku-automation-agency/references/node-rail
   request - an empty list can mean the backing table simply has no writer.
 - `seo_gsc_inspect_url` is the indexed snapshot (no live test): verify a fix only after a recrawl;
   "Discovered / Crawled - currently not indexed" at scale is a quality or linking problem.
-- Commit is not live: `project_vcs_commit` saves a version, `deploy_site` ships it, `fetch_url` proves
-  it. `seo_generate_sitemap` returns content, not a submission: commit, deploy, then
+- A version is not live: `project_vcs_commit` saves a version, `deploy_site` ships it, `fetch_url`
+  proves it. `seo_generate_sitemap` returns content, not a submission: save it as
+  `public/sitemap.xml` with `project_file_save`, save a version, deploy, then
   `seo_gsc_submit_sitemap` and `seo_bing_submit_sitemap`; verify with `seo_gsc_list_sitemaps`.
 - `seo_connection_update` accepts `ga_property_id`; list a connection's candidate GA4 properties
   with `seo_analytics_discover_properties` (`references/outcomes-and-measurement.md`).
