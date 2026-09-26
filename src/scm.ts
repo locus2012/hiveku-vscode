@@ -25,6 +25,11 @@ import {
   type CommitFile,
   type ProjectLink,
 } from './workspace';
+// Versions (Wave 2): paged checkout, saving versions, naming. New logic lives
+// in these modules; the hooks below are small and named.
+import { checkoutTree, commitVersion, nothingToSaveMessage, saveVersion, serverCaps } from './versions';
+import { versionNameProblem } from './versionName';
+import { promoteMainIfUncommitted, versionAfterPush, type PromoteOutcome } from './versionFlows';
 
 export interface RemoteStatus {
   behind: string[]; // changed on Hiveku since you pulled, you didn't touch
@@ -82,6 +87,9 @@ export class HivekuScm implements vscode.Disposable {
    *  Branch command, Create Branch's "Switch to it", Merge's "Resolve on",
    *  and Delete Branch's leave-first — so the status bar never goes stale. */
   readonly onDidChangeBranch = this.branchChanged.event;
+  /** Fires after every refresh(), so the status bar's change dot stays current. */
+  private readonly refreshed = new vscode.EventEmitter<void>();
+  readonly onDidRefresh = this.refreshed.event;
 
   constructor(
     private readonly rootUri: vscode.Uri,
@@ -90,8 +98,8 @@ export class HivekuScm implements vscode.Disposable {
     private readonly log: vscode.OutputChannel,
   ) {
     this.sc = vscode.scm.createSourceControl('hiveku', `Hiveku: ${link.project_name}`, rootUri);
-    this.sc.inputBox.placeholder = 'Commit message (saved to Hiveku)';
-    this.sc.acceptInputCommand = { command: 'hiveku.commit', title: 'Commit to Hiveku' };
+    this.sc.inputBox.placeholder = 'Version name, e.g. Updated the Home page (saved to Hiveku)';
+    this.sc.acceptInputCommand = { command: 'hiveku.commit', title: 'Save a version to Hiveku' };
     this.changes = this.sc.createResourceGroup('changes', 'Changes');
 
     // Keep the Changes list live. Without a watcher it only ever reflected the
@@ -112,7 +120,7 @@ export class HivekuScm implements vscode.Disposable {
     watcher.onDidCreate(bump);
     watcher.onDidChange(bump);
     watcher.onDidDelete(bump);
-    this.disposables.push(this.sc, this.changes, watcher, this.branchChanged);
+    this.disposables.push(this.sc, this.changes, watcher, this.branchChanged, this.refreshed);
   }
 
   get root(): string {
@@ -144,7 +152,8 @@ export class HivekuScm implements vscode.Disposable {
       added = status.only_local.map((f) => f.path);
       deleted = status.only_remote.map((f) => f.path);
     } else {
-      const tree = await api.vcsCheckout(client, this.link.project_id, this.branch);
+      // Paged (versions.ts): a whole-tree answer is refused over 150 MB.
+      const tree = await checkoutTree(client, this.link.project_id, this.branch);
       const treeMap = new Map(tree.files.map((f) => [f.path, treeFileHash(f.content, f.encoding)]));
       const localMap = new Map<string, string>();
       for (const rel of await walkFiles(this.root)) {
@@ -175,7 +184,10 @@ export class HivekuScm implements vscode.Disposable {
 
     this.changes.resourceStates = states;
     this.sc.count = states.length;
-    this.sc.inputBox.placeholder = `Commit to ${this.branch} (saved to Hiveku)`;
+    this.sc.inputBox.placeholder =
+      this.branch === 'main'
+        ? 'Version name for Your site (main), e.g. Updated the Home page'
+        : `Version name for ${this.branch}, e.g. Updated the Home page`;
 
     // When the working tree is fully in sync with remote `main` — which is the
     // state right after a commit made out-of-band (e.g. Claude Code calling
@@ -185,6 +197,7 @@ export class HivekuScm implements vscode.Disposable {
     if (this.branch === 'main' && states.length === 0) {
       await captureBaseline(this.root).catch(() => undefined);
     }
+    this.refreshed.fire();
   }
 
   /**
@@ -272,7 +285,7 @@ export class HivekuScm implements vscode.Disposable {
   }
 
   /** The shared "Hiveku moved" modal for commit/push off main. Returns true to proceed. */
-  private async confirmBranchNotMoved(verb: 'Committing' | 'Pushing'): Promise<boolean> {
+  private async confirmBranchNotMoved(verb: 'Saving a version' | 'Pushing'): Promise<boolean> {
     const rs = await this.branchRemoteStatus();
     if (!rs.tracked || !rs.moved) return true;
     const choice = await vscode.window.showWarningMessage(
@@ -284,13 +297,13 @@ export class HivekuScm implements vscode.Disposable {
           'after your last pull or switch. Pull first to bring their work in, then re-apply yours.',
       },
       'Pull first',
-      verb === 'Committing' ? 'Commit anyway' : 'Push anyway',
+      verb === 'Saving a version' ? 'Save anyway' : 'Push anyway',
     );
     if (choice === 'Pull first') {
       await vscode.commands.executeCommand('hiveku.pull');
       return false;
     }
-    return choice === 'Commit anyway' || choice === 'Push anyway';
+    return choice === 'Save anyway' || choice === 'Push anyway';
   }
 
   /** Switch the working tree to another branch (materializes its content). */
@@ -308,16 +321,19 @@ export class HivekuScm implements vscode.Disposable {
         {
           modal: true,
           detail:
-            `${this.sc.count} uncommitted change(s) in this folder will be LOST — the branch's ` +
+            `${this.sc.count} local change(s) not pushed or saved as a version will be LOST — the branch's ` +
             `content replaces local files, and anything not in that branch is deleted. ` +
-            `Commit first if you want to keep them.`,
+            `Push or save a version first if you want to keep them.`,
         },
         'Switch',
       );
       if (ok !== 'Switch') return;
     }
     const client = await this.clientFactory();
-    const tree = await api.vcsCheckout(client, this.link.project_id, branchName);
+    // Paged: switching to Your site reads its whole tree, refused unpaged over 150 MB.
+    const tree = await checkoutTree(client, this.link.project_id, branchName, {
+      onNote: (note) => this.log.appendLine(`[switch] ${note}`),
+    });
     await materializeTree(this.root, tree.files);
     this.link = {
       ...this.link,
@@ -417,9 +433,24 @@ export class HivekuScm implements vscode.Disposable {
 
   /** Commit current changes back to Hiveku's active branch. */
   async commit(): Promise<void> {
-    const message = this.sc.inputBox.value.trim();
+    let message = this.sc.inputBox.value.trim();
     if (!message) {
-      vscode.window.showWarningMessage('Enter a commit message first.');
+      // Asked here rather than refused: the status bar's change dot runs this
+      // command too, and the Source Control box is not on screen then.
+      const typed = await vscode.window.showInputBox({
+        title: `Save a version of ${this.branch === 'main' ? 'Your site (main)' : this.branch}`,
+        prompt: 'Name this version for History: what changed, in plain words.',
+        placeHolder: 'e.g. Updated the pricing section on the Home page',
+        validateInput: (v: string) => versionNameProblem(v),
+      });
+      if (typed === undefined) return;
+      message = typed.trim();
+    }
+    // The server keeps a VS Code version name exactly as sent, so the plain-
+    // language rule (no paths, file types, "fix:" or "AI:") is checked here.
+    const nameProblem = versionNameProblem(message);
+    if (nameProblem) {
+      vscode.window.showWarningMessage(nameProblem);
       return;
     }
     // ALWAYS refresh — never commit from a cached status map.
@@ -433,15 +464,16 @@ export class HivekuScm implements vscode.Disposable {
     // made it maximally deceptive: most of the commit was correct.
     await this.refresh();
     if (this.statuses.size === 0) {
-      if (this.branch !== 'main' && (await this.promoteIfUncommitted(message))) return;
-      vscode.window.showInformationMessage('Nothing to commit — already in sync with Hiveku.');
+      // Versions: "everything is already a version" only when Hiveku said so.
+      const outcome = await this.promoteIfUncommitted(message);
+      if (outcome !== 'offered') vscode.window.showInformationMessage(nothingToSaveMessage(outcome));
       return;
     }
 
     // "You're behind" guard. On main: base manifest vs project_files_status.
     // Off main: the recorded working-tree etag vs the live one.
     if (this.branch !== 'main') {
-      if (!(await this.confirmBranchNotMoved('Committing'))) return;
+      if (!(await this.confirmBranchNotMoved('Saving a version'))) return;
     }
     if (this.branch === 'main') {
       const rs = await this.remoteStatus();
@@ -450,16 +482,16 @@ export class HivekuScm implements vscode.Disposable {
           ? `${rs.conflict.length} file(s) you changed also changed on Hiveku (conflict).`
           : `${rs.behind.length} file(s) changed on Hiveku since you pulled.`;
         const choice = await vscode.window.showWarningMessage(
-          `Hiveku has moved ahead — ${detail} Committing now overwrites those remote changes.`,
+          `Hiveku has moved ahead — ${detail} Saving a version now overwrites those remote changes.`,
           { modal: true },
           'Pull first',
-          'Commit anyway',
+          'Save anyway',
         );
         if (choice === 'Pull first') {
           await vscode.commands.executeCommand('hiveku.pull');
           return;
         }
-        if (choice !== 'Commit anyway') return;
+        if (choice !== 'Save anyway') return;
       }
     }
 
@@ -471,29 +503,34 @@ export class HivekuScm implements vscode.Disposable {
     for (const rel of filesToSend) {
       files.push(await readFileForCommit(this.root, rel));
     }
+    // A server with versions records who saved it (source 'vscode').
+    const caps = await serverCaps(client);
 
-    await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.SourceControl, title: `Committing to ${this.branch}…` },
-      async () => {
-        const commit = await api.vcsCommit(
-          client,
-          this.link.project_id,
-          message,
-          files,
-          deletedFiles,
-          this.branch,
-        );
-        this.log.appendLine(
-          `[commit] ${this.branch} ${commit.id} "${message}" — ${commit.files_committed} changed, ${commit.files_deleted} deleted`,
-        );
-        this.link = { ...this.link, last_commit_id: commit.id, last_pull_at: new Date().toISOString() };
-        await writeProjectLink(this.root, this.link);
-        this.sc.inputBox.value = '';
-        vscode.window.showInformationMessage(
-          `Committed to Hiveku: ${commit.files_committed} file(s) saved` +
-            (commit.files_deleted ? `, ${commit.files_deleted} deleted` : ''),
-        );
-      },
+    // Versions (D1): 409 nothing_to_commit is "already a version", not an error.
+    const result = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.SourceControl, title: `Saving a version of ${this.branch === 'main' ? 'Your site (main)' : this.branch}…` },
+      () => commitVersion(client, this.link.project_id, message, files, deletedFiles, this.branch, caps),
+    );
+    if (result.outcome === 'nothing') {
+      this.log.appendLine(`[commit] ${this.branch}: already a version (nothing_to_commit)`);
+      this.sc.inputBox.value = '';
+      vscode.window.showInformationMessage('Already saved as a version. Nothing new to save.');
+      // The files sent already match Hiveku: re-anchor main's behind-guard. A
+      // branch's etag did not move, so the recorded one stays.
+      if (this.branch === 'main') await this.captureBaseline().catch(() => undefined);
+      await this.refresh();
+      return;
+    }
+    const commit = result.commit;
+    this.log.appendLine(
+      `[commit] ${this.branch} ${commit.id} "${message}" — ${commit.files_committed} changed, ${commit.files_deleted} deleted`,
+    );
+    this.link = { ...this.link, last_commit_id: commit.id, last_pull_at: new Date().toISOString() };
+    await writeProjectLink(this.root, this.link);
+    this.sc.inputBox.value = '';
+    vscode.window.showInformationMessage(
+      `Saved a version on Hiveku: "${message}" (${commit.files_committed} file(s) saved` +
+        (commit.files_deleted ? `, ${commit.files_deleted} deleted` : '') + ').',
     );
 
     // Local now matches Hiveku — reset the baseline so future behind-detection is accurate.
@@ -506,33 +543,54 @@ export class HivekuScm implements vscode.Disposable {
    * Local tree == branch tree, but the branch's WORKING TREE may still hold
    * edits that never became a commit: a push from this extension, or an
    * agent's project_files_bulk_save({branch}), both write the tree without
-   * committing. A commit with NO files promotes them. Returns true when the
-   * user was offered (and took or declined) that path, so the caller does not
-   * also say "nothing to commit".
+   * committing. A commit with NO files promotes them. Returns 'offered' when
+   * the user was offered (and took or declined) that path; otherwise why not
+   * (versions.ts nothingToSaveMessage words it), so "everything is already a
+   * version" is only said when Hiveku said so.
    */
-  private async promoteIfUncommitted(message: string): Promise<boolean> {
+  private async promoteIfUncommitted(message: string): Promise<PromoteOutcome> {
+    // Your site (main): versionFlows decides from the server's status whether
+    // Hiveku holds changes that are not a version yet (old servers: never).
+    if (this.branch === 'main') {
+      const client = await this.clientFactory();
+      return promoteMainIfUncommitted({
+        client,
+        projectId: this.link.project_id,
+        name: message,
+        log: this.log,
+        inputBox: this.sc.inputBox,
+      });
+    }
     let rs: BranchRemoteStatus;
     try {
       rs = await this.branchRemoteStatus();
     } catch {
-      return false;
+      return 'unknown';
     }
-    if (!rs.uncommitted) return false;
+    if (!rs.uncommitted) return 'clean';
     const choice = await vscode.window.showInformationMessage(
-      `No local changes, but branch "${this.branch}" has uncommitted edits on Hiveku (pushed to its working tree, not yet committed). Promote them into a commit?`,
-      { modal: true, detail: `Records "${message}" as a commit of the branch's current working tree. No files are re-uploaded.` },
-      'Promote',
+      `No local changes, but branch "${this.branch}" has changes on Hiveku that aren't a version yet (pushed or saved elsewhere). Save them as a version named "${message}"?`,
+      { modal: true, detail: 'Saves the branch as it is on Hiveku as a version. No files are uploaded again.' },
+      'Save version',
     );
-    if (choice !== 'Promote') return true;
+    if (choice !== 'Save version') return 'offered';
     const client = await this.clientFactory();
-    const commit = await api.vcsCommit(client, this.link.project_id, message, [], [], this.branch);
-    this.log.appendLine(`[commit] ${this.branch} ${commit.id} "${message}" — promoted working tree`);
-    this.link = { ...this.link, last_commit_id: commit.id };
-    await writeProjectLink(this.root, this.link);
+    const result = await saveVersion(client, this.link.project_id, message, this.branch, await serverCaps(client));
+    if (result.outcome === 'saved') {
+      this.log.appendLine(`[commit] ${this.branch} ${result.commit.id} "${message}" — promoted working tree`);
+      this.link = { ...this.link, last_commit_id: result.commit.id };
+      await writeProjectLink(this.root, this.link);
+      vscode.window.showInformationMessage(`Saved a version of "${this.branch}": "${message}".`);
+    } else {
+      vscode.window.showInformationMessage(`"${this.branch}" is already saved as a version.`);
+    }
     this.sc.inputBox.value = '';
-    await this.recordBranchEtag();
-    vscode.window.showInformationMessage(`Promoted "${this.branch}" edits into a commit.`);
-    return true;
+    // A version does not change a branch's working tree, so its etag is the
+    // one read BEFORE the modal (the tree this clean folder matches). A fresh
+    // read here could be someone else's save made while the modal was open,
+    // and recording it would silence the next "branch changed" warning.
+    if (rs.remoteEtag) await this.recordBranchEtag(rs.remoteEtag);
+    return 'offered';
   }
 
   /**
@@ -556,7 +614,10 @@ export class HivekuScm implements vscode.Disposable {
 
     // Binary-aware diff — works on main AND branch, and includes images (the
     // main-branch text-only project_files_status would silently drop them).
-    const tree = await api.vcsCheckout(client, this.link.project_id, this.branch);
+    // Paged: Your site's whole tree is refused in one answer over 150 MB.
+    const tree = await checkoutTree(client, this.link.project_id, this.branch, {
+      onNote: (note) => this.log.appendLine(`[push] ${note}`),
+    });
     const treeMap = new Map(tree.files.map((f) => [f.path, treeFileHash(f.content, f.encoding)]));
     const localPaths = await walkFiles(this.root);
     const localSet = new Set(localPaths);
@@ -666,6 +727,10 @@ export class HivekuScm implements vscode.Disposable {
     const failedPaths: string[] = [];
     let saved = 0;
     let deleted = 0;
+    // For the version after the push (versionFlows.versionAfterPush): what
+    // was deleted, and whether the operator cancelled part of it.
+    const deletedPaths: string[] = [];
+    let cancelledTotal = 0;
     // Branch pushes report the working-tree fingerprint after each batch; the
     // last one is what the next behind-guard compares against.
     let lastEtag: string | null | undefined;
@@ -777,14 +842,16 @@ export class HivekuScm implements vscode.Disposable {
           try {
             await api.fileDelete(client, this.link.project_id, p, this.branch);
             deleted++;
+            deletedPaths.push(p);
           } catch (e) {
             this.log.appendLine(`[push] delete failed ${p}: ${(e as Error).message}`);
             failedPaths.push(p);
           }
         }
+        cancelledTotal = cancelledDeletes;
         if (cancelledDeletes > 0) {
           void vscode.window.showWarningMessage(
-            `Push cancelled — ${deleted} file(s) deleted, ${cancelledDeletes} left on Hiveku. Uploads already sent were kept.`,
+            `Push cancelled — ${deleted} file(s) deleted, ${cancelledDeletes} left on Hiveku. Uploads already sent were kept. Not saved as a version.`,
           );
         }
       },
@@ -796,7 +863,7 @@ export class HivekuScm implements vscode.Disposable {
     if (failedPaths.length) {
       this.log.appendLine(`[push] FAILED paths (${failedPaths.length}): ${failedPaths.join(', ')}`);
       vscode.window.showErrorMessage(
-        `Push incomplete: ${saved} saved${deleted ? `, ${deleted} deleted` : ''}, ${failedPaths.length} failed${oversized.length ? `, ${oversized.length} too big` : ''}. See the Hiveku output channel, then re-run Push.`,
+        `Push incomplete: ${saved} saved${deleted ? `, ${deleted} deleted` : ''}, ${failedPaths.length} failed${oversized.length ? `, ${oversized.length} too big` : ''}. See the Hiveku output channel, then re-run Push. Not saved as a version until every file is in.`,
       );
     } else {
       vscode.window.showInformationMessage(
@@ -811,6 +878,30 @@ export class HivekuScm implements vscode.Disposable {
       // A partial push keeps the old etag: the operator is told to re-run
       // Push, and the guard must not silently bless a half-applied tree.
       await this.recordBranchEtag(deleted > 0 ? undefined : lastEtag);
+    }
+
+    // Push + version: only a push that FULLY landed becomes a version (a
+    // partial or cancelled one says so above and stays unversioned). The name
+    // comes from the code lane and the deletions only: shared-library images
+    // (assets_upload) are outside versions.
+    if (failedPaths.length === 0 && cancelledTotal === 0) {
+      // No etag re-read after it: a version moves only the branch's head,
+      // never its working tree, so the etag recorded above (what this push's
+      // own last save returned) stays right. A re-read could pick up someone
+      // else's save made while the name box was open and silence the next
+      // "branch changed" warning.
+      await versionAfterPush({
+        client,
+        projectId: this.link.project_id,
+        branch: this.branch,
+        inputBox: this.sc.inputBox,
+        log: this.log,
+        changes: {
+          added: codeFiles.filter((f) => !treeMap.has(f.path)).map((f) => f.path),
+          modified: codeFiles.filter((f) => treeMap.has(f.path)).map((f) => f.path),
+          removed: deletedPaths,
+        },
+      });
     }
     await this.refresh();
   }

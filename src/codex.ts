@@ -93,6 +93,9 @@ Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
   (\`project_files_status\` — \`changed\` = they edited it, \`only_remote\` = they added files you lack).
   Before any tree-replace (\`delete_missing: true\`), \`dry_run\` first and read the would-delete list: a
   file you did not send may be someone else's NEW work, not a leftover. Never blind-overwrite.
+- **Versions.** After the saves and checks for one change the owner would recognize, save ONE version: \`project_vcs_commit({ project_id, message })\`
+  with NO files, named in plain words for the owner (never a file path, \`fix:\` prefix or "AI:" byline). Go back with
+  \`project_vcs_rollback\`: dry run first, the user's yes, then apply with the dry run's head; deploying is a separate call.
 - **Keep ALL scratch work in \`.hiveku/tmp/\`.** This machine runs many account folders at once, so
   \`/tmp\` is shared ground — two accounts writing \`/tmp/site.tar.gz\` overwrite each other and leak
   across sessions. Never write temp files to \`/tmp\`, your home dir, or the repo root; never touch

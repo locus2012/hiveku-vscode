@@ -80,7 +80,8 @@ Before any write, all six are true and you can point at what makes each one true
    rule you need is missing, getting it written is the first change you propose.
 5. **An audit trail.** `pm_tasks_comment({ task_id, content })` carries the diff you showed, the
    approval you got, and every id the write returned: redirect `id`, `ranking.id`,
-   `deployment_id`, `checkpoint_hash`. Undo handles need those strings.
+   `deployment_id`, the version id (`data.id` from `project_vcs_commit`), and a `checkpoint_hash`
+   when you took a checkpoint. Undo handles need those strings.
 6. **Remote state matches your preconditions.** The value you diffed against is only as fresh as
    its last sync (1.2).
 
@@ -177,7 +178,9 @@ IF WRONG: the whole site, not a page. A noindex left in a layout removes every U
           recovery takes weeks after the fix. Time-to-notice is "the client calls".
 SCOPE:    every route the layout wraps - name them from pages_list. A staging noindex shipped
           to production is the classic post-deploy regression (technical-seo.md Play T2).
-UNDO:     project_checkpoint_restore with the commit's checkpoint_hash, then deploy again
+UNDO:     project_vcs_rollback to the version before this change (dry run, the owner's yes,
+          apply with the dry run's head_commit_id), then deploy again. Record the version id
+          (data.id from project_vcs_commit) as the handle
 ```
 
 The write looks like one line, the effect is the whole index, and the damage is invisible until
@@ -416,8 +419,10 @@ backlink-opportunity, automated-report and page-schema deletes, plus `seo_rankin
   serves until the next `deploy_site`, and only where the code ships no robots source.
 - **No disavow, no directory submission, no hreflang builder, no GBP Q&A write, no GSC live
   URL test, no Rich Results Test.** Each is a hand-off, named as such.
-- **`deploy_site` has no diff preview of its own.** The diff is your `project_vcs_commit` and its
-  checkpoint; `deploy_get` reads status, not content.
+- **`deploy_site` has no diff preview of its own.** The diff is what you read before the version
+  was saved: `project_vcs_status({ project_id, detail: "files" })` lists the changed files (and
+  `project_vcs_compare` for a branch); a version carries no checkpoint. `deploy_get` reads status,
+  not content.
 - **No restore for a GBP edit, a deleted media item or a deleted reply.** Google keeps no
   version history you can reach.
 - **No gate on `is_published: false` or a slug change.** A 404 wall is one `pages_update` away.
@@ -503,7 +508,7 @@ IF WRONG:                  <pages, rankings, money, and time-to-notice>
 SCOPE:                     <every page, template, lane, location affected>
 RAILS IN PLAY:             <code guardrail? two-step confirm? harness ask? none - name which>
 APPROVED BY / WHEN:        <who said yes to THIS change>
-WRITE RESPONSE:            <returned ids: redirect id / ranking.id / deployment_id / checkpoint_hash>
+WRITE RESPONSE:            <returned ids: redirect id / ranking.id / deployment_id / version id / checkpoint_hash>
 VERIFIED BY:               <the read from 5.1, what it showed, and when>
 UNDO HANDLE:               <tool + identifier, or "none - irreversible">
 ```

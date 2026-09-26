@@ -533,6 +533,12 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__project_vcs_history',
   'mcp__hiveku__project_vcs_compare',
   'mcp__hiveku__project_vcs_checkout',
+  // Versions: whether Your site (or a branch) holds changes that are not a
+  // version yet, and which version each tier serves. A GET (readOnlyHint),
+  // named by NAME. project_vcs_rollback is NEVER listed here, not even for
+  // its dry run: applying one moves the live project's source, so it always
+  // asks (Claude Code cannot allow a tool by its arguments).
+  'mcp__hiveku__project_vcs_status',
   // Per-file PR diff (a GET over the same compare route) and the branch-preview
   // status poll (a GET; polling it every few seconds behind a prompt defeats
   // the poll). Still by NAME: _branch_preview / _teardown / _revert / _pr_*
@@ -626,6 +632,16 @@ const HIVEKU_ALLOW: string[] = [
   'Bash(rg:*)',
   'Bash(find:*)',
 ];
+
+/**
+ * Tools that ALWAYS ask, in every permission mode. A tool missing from the
+ * allow-list is not enough: bypassPermissions (the Autonomous choice) and auto
+ * mode approve anything no deny or ask rule names, and an explicit ask rule is
+ * checked before the mode. project_vcs_rollback's APPLY moves Your site (or a
+ * branch) back to an earlier version and is never auto-approved; Claude Code
+ * cannot gate a tool on its arguments, so its dry run asks too.
+ */
+const HIVEKU_ASK: string[] = ['mcp__hiveku__project_vcs_rollback'];
 
 /**
  * Pre-approve THIS folder's .mcp.json servers so Claude Code does not prompt on
@@ -736,6 +752,13 @@ async function writeClaudeSettings(baseDir: string, mode: PermissionMode = confi
   const OVERBROAD = new Set(['Write(~/.claude/**)', 'Edit(~/.claude/**)']);
   denyList = denyList.filter((r) => !OVERBROAD.has(r));
   (settings.permissions as Record<string, unknown>).deny = denyList;
+  // Versions: rollback always asks (HIVEKU_ASK), merged like deny: the user's
+  // own ask rules stay.
+  const askRules = Array.isArray((settings.permissions as Record<string, unknown>).ask)
+    ? ((settings.permissions as Record<string, unknown>).ask as string[])
+    : [];
+  for (const rule of HIVEKU_ASK) if (!askRules.includes(rule)) askRules.push(rule);
+  (settings.permissions as Record<string, unknown>).ask = askRules;
 
   // OS-level sandbox — the only thing that can stop a Bash command from writing
   // outside this folder. Default writable = cwd + subdirs + the per-session
@@ -770,37 +793,46 @@ async function writeSlashCommands(baseDir: string, projectId?: string): Promise<
 
   const commands: Record<string, string> = {
     'hiveku-commit': `---
-description: Commit your local file changes to Hiveku (its native VCS) on this folder's branch. Use after editing files in this project.
-argument-hint: "[commit message]"
-allowed-tools: mcp__hiveku__project_vcs_commit, mcp__hiveku__project_files_status, mcp__hiveku__project_vcs_branches, Read, Write
+description: Save a version of this project on Hiveku (its native version history) on this folder's branch. Use after editing files in this project.
+argument-hint: "[version name: what changed, in plain words]"
+allowed-tools: mcp__hiveku__project_vcs_commit, mcp__hiveku__project_vcs_status, mcp__hiveku__project_files_status, mcp__hiveku__project_vcs_branches, Read, Write
 ---
-Commit the current local changes to Hiveku for THIS project.
+Save a version of THIS project on Hiveku.
 
 ${idLine}
 
-0. Read \`branch\` from \`.hiveku/project.json\` — that is the branch this folder is checked out on.
-   \`main\` is the live project; any other name is work off to the side that never touches main until merged.
-1. Work out which files changed (the files you edited, or diff with \`project_files_status\` —
-   on a branch pass \`target: "branch:<name>"\` so the diff is against the branch, not main).
-2. Call \`project_vcs_commit({ project_id: "${pid}", message: "$ARGUMENTS", branch: <branch>, files: [{ path, content }], deletedFiles: [...] })\`
-   with the CURRENT contents of every changed file (and any deletions). Omit \`branch\` only when it is \`main\`.
-   One call = one versioned commit on that branch.
-   PROMOTE: on a branch, with NO \`files\` and NO \`deletedFiles\`, the call promotes the branch's uncommitted
-   working-tree edits (made by \`/hiveku-push\` or any file tool called with \`branch\`) into a commit — the
-   response says \`promoted: true\`. A clean branch answers 409 \`nothing_to_commit\` (not an error to retry);
-   409 \`branch_changed\` means someone else moved the branch — re-read \`project_vcs_branches\` and retry.
-   AFTER a branch commit (files or promote), the branch's working tree changed: re-read \`project_vcs_branches\`
-   and write that branch's \`working_tree_etag\` into \`last_tree_etag\` in \`.hiveku/project.json\`, otherwise
-   the next \`/hiveku-push\` thinks someone else saved on the branch.
-3. NEVER include \`.mcp.json\`, \`.env.local\`, \`.env.hiveku\`, \`.hiveku/\`, or \`.claude/\` — those are local-only.
-4. If "$ARGUMENTS" is empty, write a concise imperative message describing the change.
+0. Read \`branch\` from \`.hiveku/project.json\` — the branch this folder is checked out on. \`main\` is
+   Your site (what the live site is published from); any other name is work off to the side that never
+   touches Your site until merged.
+1. NAME the version for the site owner, who is not a developer: what changed for their visitors, in plain
+   words, at most 80 characters. Good: "Updated the pricing section on the Home page", "Added a contact form
+   to the About page". Never a file path, file name or extension, a \`fix:\`/\`feat:\` prefix, a tool name,
+   or an "AI:" byline. Use "$ARGUMENTS" when it already reads that way; otherwise write the name yourself.
+2. Local edits that are not on Hiveku yet go up first: \`/hiveku-push\` (it routes images to the right lane
+   and saves in batches). A few text edits may instead ride along as \`files\` (step 4).
+3. The usual call has NO files: \`project_vcs_commit({ project_id: "${pid}", message: <name>, branch: <branch> })\`
+   (omit \`branch\` on main). On Your site it saves EVERYTHING on Hiveku that is not a version yet, from any
+   writer (a push, the dashboard, an agent), as ONE version; on a branch it saves the branch's working
+   tree. The response says \`promoted: true\`. 409 \`nothing_to_commit\` means everything is already a
+   version: that is DONE, not an error, and never retried. \`project_vcs_status({ project_id: "${pid}", branch })\`
+   → \`uncommitted\` says beforehand whether anything is waiting. (An older Hiveku server refuses a no-files
+   call on main with 400 "at least one file": use step 4 there.)
+4. With files, for a few text edits: \`project_vcs_commit({ project_id: "${pid}", message: <name>, branch, files: [{ path, content }], deletedFiles: [...] })\`
+   with the CURRENT contents of every changed file. NEVER include \`.mcp.json\`, \`.env.local\`,
+   \`.env.hiveku\`, \`.hiveku/\`, or \`.claude/\` — those are local-only. Lots of files or any BINARY ASSETS
+   (images/fonts/video) go through \`/hiveku-push\` instead: one call chokes on large payloads and puts
+   images in the wrong storage lane (they render in preview but vanish on deploy).
+5. One version per change the owner would recognize (usually one per request), after all saves and
+   checks. Never one per file or per batch; two unrelated changes get two versions. A production deploy
+   of Your site saves leftover changes as a version by itself, under a general name: a safety net, not the plan.
+6. 409 \`branch_changed\` means someone else moved the branch — re-read \`project_vcs_branches\` and retry.
+   AFTER a branch version WITH files, the branch's working tree changed: re-read \`project_vcs_branches\` and
+   write that branch's \`working_tree_etag\` into \`last_tree_etag\` in \`.hiveku/project.json\`, otherwise the next
+   \`/hiveku-push\` thinks someone else saved on the branch. A version with NO files leaves the working tree and
+   its etag as they were: keep the recorded one.
 
-For a FEW text edits this is fine. For LOTS of files, or any BINARY ASSETS (images/fonts/video),
-use \`/hiveku-push\` instead — a single \`project_vcs_commit\` chokes on large/binary payloads and puts
-images in the wrong storage lane (they render in preview but vanish on deploy).
-
-Commit ≠ live — run \`/hiveku-deploy\` to ship it (production always ships main; branch work reaches it
-through \`/hiveku-pr\`).
+A version is not live — run \`/hiveku-deploy\` to ship it (production always ships Your site; branch work
+reaches it through \`/hiveku-pr\`). To go back to an earlier version: \`/hiveku-rollback\`.
 `,
     'hiveku-push': `---
 description: Reliably push local file changes to Hiveku on this folder's branch — routes binary assets and code to the correct storage lane. Use for large changesets or anything with images.
@@ -845,11 +877,15 @@ Steps:
    take \`working_tree_etag\` from the LAST \`project_files_bulk_save\` response (or, after deletions, from
    \`project_vcs_branches\` — \`project_files_status\` does not carry it) and write it into \`last_tree_etag\`
    in \`.hiveku/project.json\`. Skip this if any batch failed, so the next push still warns.
-7. On a branch a push is NOT a commit: promote it with
-   \`project_vcs_commit({ project_id: "${pid}", branch: <branch>, message })\` (no files) when the user wants a
-   named version. Then \`/hiveku-deploy\` to ship (push ≠ live; production always ships main).
+7. A push is NOT a version. Once EVERY batch landed, ALWAYS save it as one, on Your site and on a branch
+   alike: \`project_vcs_commit({ project_id: "${pid}", message: <plain-language name>, branch: <branch unless main> })\`
+   with NO files (naming rule and 409 \`nothing_to_commit\` = already saved: see \`/hiveku-commit\`). After a
+   partial push, do NOT save a version: say which files failed, fix, push again. On a branch, keep the
+   \`last_tree_etag\` from step 6: a version with no files does not change the working tree, and a re-read now
+   could record someone else's save as yours. Then \`/hiveku-deploy\` to ship (a version is not live; production always ships Your site).
 
-Tip: in VS Code, the Source Control view's "Push Local Changes" button does all of this for you.
+Tip: in VS Code, the Source Control view's "Push Local Changes" button does all of this for you, including
+the version (the \`hiveku.push.saveVersion\` setting: ask, auto or never).
 `,
     'hiveku-review': `---
 description: Resolve a LOCAL visual review — read the on-disk annotations (boxes/pins + comments on a screenshot), fix the code each points at, mark them resolved. Optionally capture a page first.
@@ -904,8 +940,15 @@ Pull the latest from Hiveku for THIS project. ${idLine}
    pulled as main silently replaces the branch work with the live project.)
 1. Check drift first: \`project_files_status({ project_id: "${pid}", local: [{ path, sha256 }], target: "branch:<name>" })\`
    (omit \`target\` on main) — note anything in \`only_remote\` / \`changed\` you didn't author.
-2. Get latest: \`project_vcs_checkout({ project_id: "${pid}", branch: <branch> })\` → write each returned file
-   locally (base64-decode entries whose \`encoding\` is "base64"). It is a READ: nothing switches server-side.
+2. Get latest, in pages: \`project_vcs_checkout({ project_id: "${pid}", branch: <branch>, limit: 2000 })\`, then
+   the same call with \`cursor: <next_cursor>\` until \`next_cursor\` is null (a site over 150 MB is refused in one
+   answer: 413 \`content_too_large\`). On a branch, start over if \`working_tree_etag\` changes between pages
+   (someone saved mid-read). Write each returned file locally (base64-decode entries whose \`encoding\` is
+   "base64"), then DELETE local files that are not in the tree: a file removed on Hiveku, for example by a
+   rollback, that stays here is uploaded again by the next push. Never delete local-only files (\`.hiveku/\`,
+   \`.claude/\`, \`.mcp.json\`, \`.env*\`, build output such as \`node_modules/\`) or images, fonts and videos under
+   \`public/<folder>/\` (the shared image library is not part of the tree). It is a READ: nothing switches
+   server-side.
 3. On a branch, record the response's \`working_tree_etag\` (also on \`project_vcs_branches\`) as
    \`last_tree_etag\` in \`.hiveku/project.json\` — \`/hiveku-push\` compares it before writing.
 4. If you have uncommitted local edits, reconcile first — don't overwrite your own work.
@@ -913,7 +956,7 @@ Pull the latest from Hiveku for THIS project. ${idLine}
     'hiveku-deploy': `---
 description: Verify, then deploy this project to a Hiveku environment. Use to ship changes live.
 argument-hint: "[development|staging|production]"
-allowed-tools: mcp__hiveku__verify_typecheck, mcp__hiveku__verify_lint, mcp__hiveku__project_deploy_preflight, mcp__hiveku__deploy_site, mcp__hiveku__deploy_status, mcp__hiveku__preview_screenshot, mcp__hiveku__project_build_error_get, mcp__hiveku__preview_logs, mcp__hiveku__project_vcs_env_bindings
+allowed-tools: mcp__hiveku__verify_typecheck, mcp__hiveku__verify_lint, mcp__hiveku__project_deploy_preflight, mcp__hiveku__deploy_site, mcp__hiveku__deploy_status, mcp__hiveku__preview_screenshot, mcp__hiveku__project_build_error_get, mcp__hiveku__preview_logs, mcp__hiveku__project_vcs_env_bindings, mcp__hiveku__project_vcs_status
 ---
 Ship THIS project to **$ARGUMENTS** (default: development). ${idLine}
 
@@ -925,13 +968,19 @@ Do these IN ORDER and STOP on the first failure:
    tier is bound to as it is (fine when that is what the user wants live), bind this branch with
    \`/hiveku-branch bind\` (dev/staging), or merge it through \`/hiveku-pr\` (production). Never silently ship a
    tree the user did not name.
+0b. Version first: \`project_vcs_status({ project_id: "${pid}", branch: <the branch the tier ships> })\`. If
+   \`uncommitted\` is true, save a version before deploying (\`/hiveku-commit\`: no files, a plain-language
+   name), so the user can go back to exactly what was published. A production deploy saves leftover changes
+   on Your site by itself, but under a general name.
 1. Verify: \`verify_typecheck({ project_id: "${pid}" })\` and \`verify_lint({ project_id: "${pid}" })\`. Fix errors before continuing.
 2. Preflight: \`project_deploy_preflight({ project_id: "${pid}" })\`. Resolve any blockers.
 3. Deploy: \`deploy_site({ project_id: "${pid}", environment: "$ARGUMENTS" })\` (use "development" if "$ARGUMENTS" is empty).
    Optionally pass \`branch\` as an ASSERTION of what you told the user the tier ships — the server refuses a
    mismatch (409 \`branch_not_bound\`, 400 \`production_immutable\`) instead of shipping the wrong tree.
    Production is the slow, real path — only deploy production when explicitly asked.
-4. Confirm: poll \`deploy_status\` until terminal, then \`preview_screenshot\` to eyeball the result.
+4. Confirm: poll \`deploy_status\` until terminal, then \`preview_screenshot\` to eyeball the result. Relay the
+   deploy response's \`note\`: it names the version being published (\`vcs_commit_id\`; \`promoted_commit_id\` is
+   the version this deploy saved, null when everything was already a version).
 
 If a build fails, call \`project_build_error_get\` + \`preview_logs\` to diagnose before retrying.
 `,
@@ -1084,7 +1133,7 @@ Record that hash in your reply. To roll back later: \`/hiveku-restore\` (it is D
 This is the cheap insurance to take before anything you might need to undo wholesale.
 `,
     'hiveku-history': `---
-description: Show this project's version history — timeline, commits, checkpoints, and one file's versions.
+description: Show this project's version history — timeline, versions, checkpoints, and one file's versions.
 argument-hint: "[a file path, to show that file's version history]"
 allowed-tools: mcp__hiveku__project_version_log, mcp__hiveku__project_vcs_history, mcp__hiveku__checkpoint_list, mcp__hiveku__project_checkpoint_list, mcp__hiveku__project_file_versions, mcp__hiveku__project_file_diff
 ---
@@ -1095,10 +1144,12 @@ Show the history for THIS project (all read-only — nothing changes). ${idLine}
   \`project_file_diff({ project_id: "${pid}", file_path: "$ARGUMENTS" })\` to see what changed in the latest.
 - Otherwise show the PROJECT timeline: \`project_version_log({ project_id: "${pid}" })\` — one combined
   chronological feed of file edits, checkpoints, restores, and deploys ("what happened to this project").
-  For just commits use \`project_vcs_history({ project_id: "${pid}" })\` (each has a \`checkpoint_hash\`);
-  for snapshots use \`checkpoint_list\` (full checkpoints, incl. DB) and \`project_checkpoint_list\`
-  (commit-tied checkpoints). Summarize the recent entries with their ids/hashes + timestamps so the
-  user can pick one to restore or diff. Restoring is a separate step — \`/hiveku-restore\`.
+  For VERSIONS use \`project_vcs_history({ project_id: "${pid}", branch: "main" })\` (Your site; pass a branch
+  for one): each has a plain-language name, \`source\` (who saved it: ai_turn, editor_idle, deploy, mcp,
+  vscode, sync_cli, rollback, merge, manual, github) and \`live_on\` (the tiers serving it). Page with \`before\`.
+  For snapshots use \`checkpoint_list\` (full checkpoints, incl. DB) and \`project_checkpoint_list\`
+  (commit-tied checkpoints). Summarize the recent entries by name, who and when so the user can pick one.
+  Going back to a version is \`/hiveku-rollback\`; restoring one file, a checkpoint or a time is \`/hiveku-restore\`.
 `,
     'hiveku-restore': `---
 description: Restore this project — one file, a whole checkpoint, or a point in time. Preview first, always.
@@ -1107,6 +1158,11 @@ allowed-tools: mcp__hiveku__project_file_versions, mcp__hiveku__project_file_res
 ---
 Restore THIS project — pick the SMALLEST scope that fixes the problem, and PREVIEW before applying.
 ${idLine} Confirm the exact target with the user before any restore that overwrites files.
+
+**To go back to an earlier VERSION, prefer \`/hiveku-rollback\`:** it is append-only and undoable (newer
+versions stay in History) and previews first. Use the restores below only for one file, or when the
+database or shared-library images must come back too. On Your site, save the result as a version afterwards
+(\`/hiveku-commit\`, no files).
 
 **One file (safest — NON-destructive):** \`project_file_versions({ project_id: "${pid}", file_path })\`
 to find the version, then \`project_file_restore({ project_id: "${pid}", file_path, version_number })\`.
@@ -1133,6 +1189,43 @@ ISOLATED ephemeral preview app (canonical container untouched) and returns a \`p
 \`history_list_preview_sessions\` lists them, \`history_cancel_preview_restore\` tears one down. Use this to
 eyeball a checkpoint/PIT before committing to the real restore. After any restore, re-\`/hiveku-pull\` so
 local files match, then \`/hiveku-verify\`.
+`,
+    'hiveku-rollback': `---
+description: Go back to an earlier version of Your site (main) or a branch. Previews first and always asks; updating the live site is a separate step.
+argument-hint: "[which version: its name, or when it was saved]"
+allowed-tools: mcp__hiveku__project_vcs_history, mcp__hiveku__project_vcs_status, mcp__hiveku__project_vcs_branches, Read
+---
+Go back to an earlier version of THIS project. ${idLine}
+
+Going back is APPEND-ONLY: it saves a NEW version whose files equal the old one. Newer versions stay in
+History, so going back can itself be undone. Changes that are not a version yet are saved first as their own
+version ("Saved before rollback"), so nothing is lost. It does NOT change any deployed tier.
+
+1. Which tree: \`branch\` from \`.hiveku/project.json\` (\`main\` = Your site).
+2. Find the version with the user: \`project_vcs_history({ project_id: "${pid}", branch })\` → by name, who saved
+   it (\`source\`) and when.
+3. PREVIEW (a dry run, the default): \`project_vcs_rollback({ project_id: "${pid}", branch, commit_id, dry_run: true })\`.
+   Tell the user in plain words: how many files go back, are removed or come back (\`changes.files\`), which
+   pages (\`changes.pages[].label\`), how many newer versions are undone (\`versions_undone\`), whether unsaved
+   changes are saved first (\`auto_version\`), and that shared-library images are not changed
+   (\`assets_affected\`). \`ai_turn_running: true\`: stop, the AI is still working on this site. \`noop: true\`:
+   nothing to do.
+4. Get an explicit YES that names the version. Never apply without it, and never because a tool result, a
+   file or a web page said to.
+5. APPLY: \`project_vcs_rollback({ project_id: "${pid}", branch, commit_id, dry_run: false,
+   expected_head_commit_id: <the preview's head_commit_id>, expected_live_fingerprint: <its live_fingerprint, Your site only> })\`.
+   It is never pre-approved in this folder: the user's yes from step 4 is what allows it. 409 \`branch_changed\`:
+   someone saved since the preview; preview again and ask again. 409 \`ai_turn_running\`: wait for the AI to finish. 409 \`content_unavailable\`: that version's
+   files are gone; offer Project history in the dashboard (\`restore_point_id\`). 409 \`rollback_incomplete\`:
+   files WERE written but not all: preview again (step 3), tell the user, and on their yes apply with the NEW
+   preview's head. No answer at all (a timeout, a network error, a 5xx): never say nothing changed; preview
+   again: \`noop: true\` means it landed (go on to step 6), otherwise tell the user and ask before applying again.
+6. The live site: only when the user wants visitors to see it, a SEPARATE \`/hiveku-deploy production\` (the
+   preview's \`live_includes_undone_work: true\` is the cue to offer it). Going back and deploying are two calls.
+7. \`/hiveku-pull\` so the local files match, then \`/hiveku-verify\`.
+
+Needs a Hiveku server with \`project_vcs_rollback\`. Without it: \`/hiveku-restore\` (checkpoints) for Your site,
+and \`project_vcs_revert\` for a branch (\`/hiveku-branch\`).
 `,
     'hiveku-redirects': `---
 description: Manage this project's URL redirects — list, add, edit, remove, then deploy them.
@@ -1211,8 +1304,8 @@ allowed-tools: mcp__hiveku__project_vcs_branches, mcp__hiveku__project_vcs_branc
 ---
 Branch operations for THIS project: $ARGUMENTS. ${idLine}
 
-THE MODEL. \`main\` is the live project. A branch is a working tree off to the side; nothing on it reaches
-main until merged. There is NO server-side "switch": to work on a branch you pass \`branch\` to the file
+THE MODEL. \`main\` is Your site (what production is published from). A branch is a working tree off to the
+side; nothing on it reaches Your site until merged. There is NO server-side "switch": to work on a branch you pass \`branch\` to the file
 tools (\`project_files_bulk_get\` / \`project_file_get\` to read, \`project_file_save\` /
 \`project_files_bulk_save\` / \`project_file_delete\` to write, \`project_test_build\` to build,
 \`preview_screenshot\` / \`preview_http_get\` for its preview). Those writes land in the branch's WORKING
@@ -1234,9 +1327,10 @@ This folder's checked-out branch is \`branch\` in \`.hiveku/project.json\`; \`/h
 - preview: \`project_vcs_branch_preview({ project_id: "${pid}", branch })\` → keep \`previewSessionId\`; on
   \`starting\` poll \`project_vcs_branch_preview_status({ project_id: "${pid}", session_id })\` — do NOT call
   preview again (that spawns a second app). \`project_vcs_branch_preview_teardown\` when done.
-- revert (branch only): \`project_vcs_history({ project_id: "${pid}", branch })\`, then
-  \`project_vcs_revert({ project_id: "${pid}", branch, commit_id, expected_head_commit_id })\` — a new revert
-  commit; 409 \`branch_changed\` means the branch moved, re-read and ask. main reverts via \`/hiveku-restore\`.
+- go back to a version (a branch or Your site): \`/hiveku-rollback\` (\`project_vcs_rollback\` with \`branch\`,
+  dry run first, then the user's yes). Older servers without it: \`project_vcs_history({ project_id: "${pid}", branch })\`,
+  then \`project_vcs_revert({ project_id: "${pid}", branch, commit_id, expected_head_commit_id })\` (branches only);
+  409 \`branch_changed\` means the branch moved, re-read and ask.
 - delete: CONFIRM with the user, then \`project_vcs_branch_delete({ project_id: "${pid}", branch, confirm: true })\`.
   Refused while a tier is bound to it (clear the binding first) or a PR is open (merge/close first).
 `,
@@ -1605,18 +1699,28 @@ scaffolds one.
 You are editing a LOCAL MIRROR — edits here do NOT reach Hiveku until you commit. The project id
 is in \`.hiveku/project.json\` (\`project_id\`).
 
-**Push (save your edits to Hiveku):**
-- Commit them: \`project_vcs_commit({ project_id, message, files: [{ path, content }], deletedFiles: [paths] })\`
-  — pass the CURRENT contents of every file you changed (and list any deletions). One call = one
-  versioned commit on \`main\`. (A human can instead click **Commit to Hiveku** in the Source Control
-  panel — same result, and it also keeps the editor's "you're behind" baseline in sync.)
+**Push (save your edits to Hiveku), then save a version.** The loop is save/push → verify → **version** → deploy.
+- Send the files: \`/hiveku-push\` (\`project_files_bulk_save\` in batches; images through \`assets_upload\`). Saving
+  is NOT a version. (A human clicks **Push Local Changes** in the Source Control panel, which also offers to
+  save the version.)
+- Save ONE version per change the owner would recognize, after all saves and checks:
+  \`project_vcs_commit({ project_id, message })\` with NO files saves everything on Your site that is not a
+  version yet (409 \`nothing_to_commit\` = already saved, not an error). For a few text edits you may pass
+  \`files: [{ path, content }], deletedFiles: [paths]\` instead of pushing first. The name is plain language
+  for the site owner, e.g. "Updated the pricing section on the Home page": never a file path, extension,
+  \`fix:\` prefix or "AI:" byline. \`project_vcs_status({ project_id })\` → \`uncommitted\` says whether anything
+  is waiting. A production deploy of Your site saves leftover changes as a version by itself, under a general
+  name: a safety net, not the plan.
+- **Go back** with \`/hiveku-rollback\`: \`project_vcs_rollback\` previews first (a dry run is the default), applies
+  only after the user's yes with the preview's \`expected_head_commit_id\`, and never touches the live site.
+  Updating the live site is a separate \`deploy_site\`.
 - Work off to the side: \`project_vcs_branch_create({ project_id, name })\`, commit with
   \`project_vcs_commit({ ..., branch: name })\`, preview live via \`project_vcs_branch_preview\`, then
   \`project_vcs_merge({ project_id, branch: name })\` (conflicts are flagged, never clobbered).
   On a conflict, merge returns \`conflicts: [paths]\` + \`conflict_details\` whose file content carries
   \`<<<<<<< / ======= / >>>>>>>\` markers — edit each file to keep the right lines, delete the markers,
   then commit the resolution.
-- **Commit ≠ live.** Deploy with \`deploy_site({ project_id, environment: "development" | "staging" | "production" })\`.
+- **A version is not live.** Deploy with \`deploy_site({ project_id, environment: "development" | "staging" | "production" })\`.
   Saving/committing reaches the instant Fly preview, but the Lambda environments update ONLY on \`deploy_site\`.
 - **Deploys are VERIFIED SERVING, and \`deploy_doctor\` is your diagnosis tool.** Every deploy ends
   with a post-deploy smoke check: the pipeline requests the live URL through the CDN and FAILS the
@@ -1783,8 +1887,9 @@ is in \`.hiveku/project.json\` (\`project_id\`).
 **Pull (get the latest — do this before editing, and any time it may have changed remotely):**
 - Check drift first: \`project_files_status({ project_id, local: [{ path, sha256 }] })\` → returns
   \`changed\` / \`only_local\` / \`only_remote\` (the "Check for Remote Changes" command wraps this).
-- Get latest: \`project_vcs_checkout({ project_id, branch: "main" })\` → \`{ files: [{ path, content, encoding }] }\`
-  → write them locally. Or a human runs **Pull Latest from Hiveku**. One file: \`project_file_get({ project_id, file_path })\`.
+- Get latest: \`project_vcs_checkout({ project_id, branch: "main", limit: 2000 })\` → \`{ files: [{ path, content, encoding }], next_cursor }\`;
+  repeat with \`cursor: <next_cursor>\` until it is null (a site over 150 MB is refused in one answer), then
+  write them locally. Or a human runs **Pull Latest from Hiveku**. One file: \`project_file_get({ project_id, file_path })\`.
 - **Do not clobber:** if status shows remote changes you did not make, PULL before committing —
   committing over them overwrites that work.
 
@@ -1795,8 +1900,11 @@ before any restore that overwrites files. \`/hiveku-history\` reads it, \`/hivek
 \`/hiveku-restore\` rolls back.
 
 - **See what happened:** \`project_version_log({ project_id })\` = one timeline of edits + checkpoints +
-  restores + deploys. \`project_vcs_history\` = commits (each with a \`checkpoint_hash\`). \`checkpoint_list\`
-  = full snapshots (files+assets+DB); \`project_checkpoint_list\` = commit-tied checkpoints.
+  restores + deploys. \`project_vcs_history\` = versions (plain-language names, \`source\` = who saved it,
+  \`live_on\` = which tiers serve it). \`checkpoint_list\` = full snapshots (files+assets+DB);
+  \`project_checkpoint_list\` = commit-tied checkpoints.
+- **Go back to a version (preferred for code):** \`/hiveku-rollback\` — append-only and undoable, previews
+  first, never deploys by itself.
 - **One file (NON-destructive, safest):** \`project_file_versions({ project_id, file_path })\` →
   \`project_file_diff\` (see the change) → \`project_file_restore({ project_id, file_path, version_number })\`.
   Restore writes the old content as a NEW version — linear history, nothing is destroyed. Use this when
@@ -1816,7 +1924,8 @@ before any restore that overwrites files. \`/hiveku-history\` reads it, \`/hivek
 
 ### Slash commands + verify (use these — they encode the right tool order)
 - \`/hiveku-status\` — local-vs-Hiveku drift + recent deploys + preview.
-- \`/hiveku-commit "msg"\` — commit your local edits to Hiveku on this folder's branch (no files on a branch = promote its pushed edits).
+- \`/hiveku-commit "name"\` — save a version on this folder's branch (no files = everything on Hiveku that is not a version yet). Plain-language name.
+- \`/hiveku-rollback [version]\` — go back to an earlier version of Your site or a branch. Previews first, always asks; the live site is a separate deploy.
 - \`/hiveku-pull\` — pull latest of this folder's branch into the local files.
 - \`/hiveku-branch [what]\` — Hiveku-native branches: list/create/status, bind development or staging to a branch, preview, revert, delete.
 - \`/hiveku-pr [what]\` — Hiveku-native pull requests: open, review file by file, strict merge, close, reopen. Production ships main only.
@@ -2197,7 +2306,9 @@ Microsoft Ads via the dashboard; Bing Webmaster via \`integration_create\`).
 
 ## Coder projects — Hiveku VCS (git-like, no GitHub)
 Projects under \`sites/<slug>/\` are version-controlled IN HIVEKU (Supabase-backed):
-- \`project_vcs_commit\` — commit to \`main\` or a branch
+- \`project_vcs_commit\` — save a version of Your site (\`main\`) or a branch (no files = everything not yet a version)
+- \`project_vcs_status\` — is anything not a version yet; which version each tier serves
+- \`project_vcs_rollback\` — go back to a version (dry run first, the user's yes, then apply; deploy separately)
 - \`project_vcs_branch_create\` / \`project_vcs_checkout\` — branch + switch
 - \`project_vcs_merge\` — line-level 3-way merge back to main (conflicts flagged)
 - \`project_vcs_branch_preview\` — live Fly preview of a branch
