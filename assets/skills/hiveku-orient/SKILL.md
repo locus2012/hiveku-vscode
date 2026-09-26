@@ -233,8 +233,10 @@ click an approval card, so the agent's own gated writes (its `crm_email_send`,
 `crm_sequence_enroll`, `crm_deal_close`) come back as "staged, awaiting approval" - not done.
 Use it for generative and strategic work (drafts, plans, analysis), then persist with the direct
 `crm_*` tools yourself, exactly as the other departments work. Two account gates carry through:
-403 `sales_agent_disabled` (the owner turned the sales agent off in Settings → AI - do not route
-around it) and 402 `session_cost_cap_reached` (the per-session cost cap).
+403 `sales_agent_disabled` (the sales agent is switched off for the account - an account owner or
+admin switches it on from the Sales agent's memory page: CRM, then the Agent menu; do not route
+around it) and 402 `session_cost_cap_reached` (the per-session cost cap, raised under Settings on
+that same memory page).
 
 For `helpdesk`, load `agent_identity_get({ domain: 'helpdesk' })` and act as that department
 yourself. Say that is what you are doing; do not silently route the ask to an unrelated
@@ -406,10 +408,12 @@ Five distinct causes, and they need different responses:
   `"tier"`) behind those refusals - but it is full-key surface; `list_departments` runs on every
   key.
 - **Sales account gates** (`domain: 'sales'` only). 403 `sales_agent_disabled` means the account
-  has the sales agent switched off in Settings → AI - an owner decision, so say so and stop; do
-  not re-route the ask through `outbound` or another domain to get the same effect. 402
-  `session_cost_cap_reached` is the per-session cost cap - a smaller ask or a fresh session, not
-  a retry loop.
+  has the sales agent switched off - an owner decision, so say so and stop, and tell the user an
+  account owner or admin switches it on from the Sales agent's memory page (CRM, then the Agent
+  menu); there is no "Settings → AI" page. Do not re-route the ask through `outbound` or another
+  domain to get the same effect. 402 `session_cost_cap_reached` is the per-session cost cap - a
+  smaller ask or a fresh session, not a retry loop; an owner or admin raises it under Settings on
+  the same memory page.
 - **Transient.** "Department '<x>' did not respond within Ns... may be cold-starting or overloaded."
   Wait 30s and retry once, or break the request into a smaller ask. A mid-stream stall returns a
   partial answer in `response` alongside the message - salvage the partial rather than re-running

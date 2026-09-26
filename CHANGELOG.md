@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.85.8
+- **The sales playbook points to the right switch.** When the sales agent is switched off, the skills now say an account owner or admin switches it on from the Sales agent's memory page (CRM, then the Agent menu), and that the per-session cost cap is raised under Settings on the same page. They used to point to a "Settings → AI" page that does not exist. Re-vendored skills match plugin 0.26.31.
+
 ## 0.85.7
 - **Turning ads on always asks first, even in auto mode.** Claude Code starts chats in Auto mode, and its safety check blocked an ad or campaign switch-on as a "production deploy" without offering a prompt, so saying "go" could not launch a campaign. Hiveku account folders now carry an ask rule for the four tools that start ad delivery (`ppc_enable_resource`, `ppc_platform_enable_resource`, `ppc_experiment_schedule`, `ppc_bing_experiment_create`), so each switch-on shows an approval card instead. The rules are only ever added, never allow anything, and are skipped when your own deny rules already cover the tool. Folders you already have pick them up the next time the extension opens them; no Refresh Setup needed. The Autonomous mode description now says ad switch-ons still ask.
 - **The paid-ads playbooks are current.** Re-vendored from the plugin's main:
