@@ -503,7 +503,8 @@ export const DEPARTMENTS: Department[] = [
       'returns the token once. Other trigger rows: ' +
       '`workflow_trigger_create({workflow_id,name,node_id,trigger_type,config})` after the node (check `trigger-types.json` for ' +
       'config keys); remove with `workflow_trigger_delete`. For a webhook-in from scratch, `workflow_provision_webhook({name})` ' +
-      'does create+node+trigger in one shot (with `authentication:"bearer"` the token is shown once). ' +
+      'does create+node+trigger in one shot (with `authentication:"bearer"` the token is shown once); the workflow is ' +
+      'created switched off, so its URL runs nothing until `workflow_enable`. ' +
       'VERIFY BEFORE ENABLING: `workflow_validate({workflow_id})` after every batch of edits, then dry-run with ' +
       '`workflow_test({workflow_id,input_data})` — it fires NO real side effects and writes no run row, so the evidence is on its ' +
       'response: `data.step_states[<node_id>]` carries `.output.would_have` and `.template_values` for simulated nodes and ' +
@@ -514,13 +515,16 @@ export const DEPARTMENTS: Department[] = [
       'never move, but a webhook node whose trigger was deleted gets a NEW URL, named in the response: re-point its senders). ' +
       'Enable/disable: `workflow_enable`/`workflow_disable` (enabling a disabled workflow is refused with 422 ' +
       '`{error:"workflow_invalid", issues}` while validate reports errors; pass `allow_incomplete:true` only on the operator\'s ' +
-      'explicit yes). A create that starts enabled (`workflow_create_from_template` by default) is never refused: when its ' +
-      'response carries `validation_warning`, fix the listed nodes or disable it. ' +
+      'explicit yes). Every create path makes the workflow switched off, and `workflow_enable` is the only call that ' +
+      'switches one on (`workflow_update` refuses `is_enabled:true` with `workflow_enable_required`). ' +
       'Run for real: `workflow_run` (a run parked on a wait or approval answers 202 `status:"waiting"` with its `run_id`: ' +
       'poll `workflow_run_get`, never re-run it). Delete: `workflow_delete`. ' +
-      'TEMPLATES + FORM-WIRING: skip hand-building — `workflow_templates_list` → `workflow_create_from_template({ slug, overrides })`. ' +
+      'TEMPLATES + FORM-WIRING: skip hand-building — `workflow_templates_list` → ' +
+      '`workflow_create_from_template({ slug, overrides, is_enabled: false })` (created switched off; `workflow_enable` ' +
+      'switches it on after the user says yes). ' +
       'To wire EVERY form in a website project in ONE call: `workflow_bulk_provision_for_project({ project_id, template_slug, ' +
-      'file_paths?, dry_run: true })` (dry-run first) — provisions a submit-handler workflow per form; single form: ' +
+      'file_paths?, dry_run: true })` (dry-run first) — provisions a submit-handler workflow per form, each created switched ' +
+      'off (`workflow_enable` each after the user says yes); single form: ' +
       '`workflow_bind_form({ workflow_id, project_id, form_file_path })`. Set who gets notified with `workflow_set_recipient`.',
   },
   {

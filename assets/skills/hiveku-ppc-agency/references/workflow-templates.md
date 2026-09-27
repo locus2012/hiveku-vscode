@@ -18,15 +18,17 @@ campaign context and stages the whole list as ONE ops-inbox item, `auto_apply` O
 (an emailed brief; nothing is applied, you apply via the guardrailed budget tools).
 `workflow_templates_list` → `workflow_create_from_template({ slug, overrides })`
 installs one per client, and **every PPC write inside them stages to approval and never auto-applies**.
-Do this on a retainer account rather than performing the same steps by hand every Monday. Note the tool
-defaults `is_enabled: true`, so confirm with the operator first or pass `is_enabled: false` and enable
-after review. Full manual: the `hiveku-automation-agency` skill.
+Do this on a retainer account rather than performing the same steps by hand every Monday. Pass
+`is_enabled: false`: the install is created switched off, and `workflow_enable` switches it on after the
+operator says yes. Full manual: the `hiveku-automation-agency` skill.
 
 ## The traps
 
-- **`is_enabled: true` is the default.** An install without an explicit `is_enabled: false` is live
-  the moment the call returns. Confirm with the operator first, or install disabled and enable after
-  review - the same one-change-one-confirmation rule that governs every other write.
+- **An install starts switched off, and only `workflow_enable` turns it on.** Pass `is_enabled: false`
+  (the only value the tool accepts; until late September 2026 it created the workflow switched ON by
+  default, so an older note that says so is out of date). Review and dry-run the install, then call
+  `workflow_enable` once the operator says yes - the same one-change-one-confirmation rule that governs
+  every other write. The plugin asks before `workflow_enable` too.
 - **Staged-approval is the rail, not a decoration.** The templates stage PPC writes to the ops inbox
   for human approval. Never flip `auto_apply` on (or override a template to bypass its staging) to
   "save the client time" - that converts a reviewed play into an unattended mutation loop, which is

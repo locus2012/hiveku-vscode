@@ -81,9 +81,8 @@ string), `first_publish_only`. A workflow that must act only on a live page filt
 `visibility: "live"`.
 
 Two templates use it, listed by `workflow_templates_list` and installed with
-`workflow_create_from_template({ slug, overrides, is_enabled: false })` - staged, because the
-create goes live the moment it returns otherwise - then `workflow_test`, then `workflow_enable` on
-the operator's yes:
+`workflow_create_from_template({ slug, overrides, is_enabled: false })` - staged: it is created
+switched off - then `workflow_test`, then `workflow_enable` on the operator's yes:
 
 - `content-published-repurpose` (variables `PLATFORMS`, `RECIPIENT_EMAIL`, `PROJECT_ID`): first
   publish only; the social agent reads `social_repurpose_source` and writes three posts; three

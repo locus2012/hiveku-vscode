@@ -1,11 +1,16 @@
 /**
- * permissions.ask for the tools that start ad spend (src/knowledge.ts HIVEKU_ASK).
+ * permissions.ask for the tools that switch ads on, restart them, or switch a
+ * workflow on (src/knowledge.ts HIVEKU_ASK).
  *
  * Claude Code 2.1.283+ opens VS Code chats in auto mode, whose classifier
  * blocks an "enable the campaign" MCP call with no prompt at all. An explicit
  * ask rule is resolved before the classifier, so writeClaudeSettings writes one
- * per serving-start tool into every scaffolded folder's .claude/settings.json:
- * additive, idempotent, never an allow, and never beside a deny of the same name.
+ * per gated tool into every scaffolded folder's .claude/settings.json: additive,
+ * idempotent, never an allow, and never beside a deny of the same name. The
+ * gated tools are the part of the Claude Code plugin's forced prompts (a hook
+ * the extension never runs) that switches ads on, restarts them, or switches a
+ * workflow on. With the plugin checked out beside this repo, the last block
+ * checks that the plugin gates every one of them too.
  *
  * "Never beside a deny" means any deny that covers the tool: its exact name,
  * the bare server (`mcp__hiveku`) or a glob (`mcp__hiveku__ppc_*`, `mcp__*`).
@@ -22,12 +27,14 @@
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import './helpers/vscode-stub.mjs';
 import { loadOut } from './helpers/load.mjs';
+import { resolvePluginRoot } from '../scripts/agency-skills-set.mjs';
 
 const knowledge = loadOut('knowledge');
 
@@ -36,13 +43,38 @@ const KEY = 'olp_test_key_123';
 const BASE = 'https://core.hiveku.com';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** The serving-start tools, as the scaffold must write them (the .mcp.json server is "hiveku"). */
-const EXPECTED_ASK = [
+/** The four rules 0.85.7 shipped, in the order it wrote them. */
+const FIRST_FOUR = [
   'mcp__hiveku__ppc_enable_resource',
   'mcp__hiveku__ppc_platform_enable_resource',
   'mcp__hiveku__ppc_experiment_schedule',
   'mcp__hiveku__ppc_bing_experiment_create',
 ];
+
+/**
+ * The rules added with plugin 0.26.36 / Codex 0.1.18, which gate the same
+ * tools: three that can switch ads on by status (and ask on every call,
+ * because they also pause and read), four that can restart or widen delivery
+ * without a status change, and the two that switch a workflow on.
+ */
+const ADDED = [
+  'mcp__hiveku__ppc_bulk_edit',
+  'mcp__hiveku__ppc_linkedin_creatives',
+  'mcp__hiveku__ppc_tiktok_split_tests',
+  'mcp__hiveku__ppc_recommendation_apply',
+  'mcp__hiveku__ppc_meta_campaign_update',
+  'mcp__hiveku__ppc_linkedin_campaign_update',
+  'mcp__hiveku__ppc_linkedin_campaign_group_update',
+  'mcp__hiveku__workflow_enable',
+  'mcp__hiveku__workflow_resume',
+  // A batch can carry any of the above as a member, and an ask rule cannot
+  // look inside it, so the batch tool itself asks (as in the Codex plugin).
+  'mcp__hiveku__hiveku_batch',
+];
+
+/** Every ask rule, as the scaffold must write them (the .mcp.json server is "hiveku"). */
+const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED];
+const without = (...names) => EXPECTED_ASK.filter((name) => !names.includes(name));
 
 const dirs = [];
 after(async () => {
@@ -79,8 +111,8 @@ async function seedSettings(dir, settings) {
 const globMatches = (glob, name) =>
   new RegExp('^' + glob.split('*').map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$').test(name);
 
-describe('Scaffolded settings: ask rules for the tools that start ad spend', () => {
-  test('a fresh account folder asks for every serving-start tool, and allows none of them', async () => {
+describe('Scaffolded settings: ask rules for the tools that switch ads or workflows on', () => {
+  test('a fresh account folder asks for every one of them, and allows none of them', async () => {
     const dir = await tmp('hk-ask-fresh-');
     await scaffoldAccount(dir);
     const { permissions } = await readSettings(dir);
@@ -176,9 +208,13 @@ describe('Scaffolded settings: ask rules for the tools that start ad spend', () 
       [['mcp__hiveku__*'], []],
       [['mcp__*'], []],
       [['*'], []],
-      [['mcp__hiveku__ppc_*'], []],
-      [['mcp__hiveku__ppc_*enable_resource'], ['mcp__hiveku__ppc_experiment_schedule', 'mcp__hiveku__ppc_bing_experiment_create']],
-      [['mcp__hiveku__*_experiment_*'], ['mcp__hiveku__ppc_enable_resource', 'mcp__hiveku__ppc_platform_enable_resource']],
+      [['mcp__hiveku__ppc_*'], ['mcp__hiveku__workflow_enable', 'mcp__hiveku__workflow_resume', 'mcp__hiveku__hiveku_batch']],
+      [['mcp__hiveku__workflow_*'], EXPECTED_ASK.filter((name) => !name.startsWith('mcp__hiveku__workflow_'))],
+      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*'], ['mcp__hiveku__hiveku_batch']],
+      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*', 'mcp__hiveku__hiveku_batch'], []],
+      [['mcp__hiveku__ppc_*enable_resource'], without('mcp__hiveku__ppc_enable_resource', 'mcp__hiveku__ppc_platform_enable_resource')],
+      [['mcp__hiveku__*_experiment_*'], without('mcp__hiveku__ppc_experiment_schedule', 'mcp__hiveku__ppc_bing_experiment_create')],
+      [['mcp__hiveku__ppc_linkedin_*'], without('mcp__hiveku__ppc_linkedin_creatives', 'mcp__hiveku__ppc_linkedin_campaign_update', 'mcp__hiveku__ppc_linkedin_campaign_group_update')],
       // Not a cover: another server, a name prefix with no glob, a Bash rule.
       [['mcp__hiveku_old', 'mcp__hiveku__ppc', 'mcp__other__*', 'Bash(*)'], EXPECTED_ASK],
     ];
@@ -242,10 +278,21 @@ describe('ensureSpendAskRules: a folder scaffolded before the ask rules', () => 
   test('skips what the deny list covers, by name or glob', async () => {
     const dir = await tmp('hk-ensure-deny-');
     await seedSettings(dir, { permissions: { deny: ['mcp__hiveku__ppc_*enable_resource', 'mcp__hiveku__ppc_experiment_schedule'] } });
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), ['mcp__hiveku__ppc_bing_experiment_create']);
+    const expected = without('mcp__hiveku__ppc_enable_resource', 'mcp__hiveku__ppc_platform_enable_resource', 'mcp__hiveku__ppc_experiment_schedule');
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), expected);
     const { permissions } = await readSettings(dir);
-    assert.deepEqual(permissions.ask, ['mcp__hiveku__ppc_bing_experiment_create']);
+    assert.deepEqual(permissions.ask, expected);
     assert.deepEqual(permissions.deny, ['mcp__hiveku__ppc_*enable_resource', 'mcp__hiveku__ppc_experiment_schedule']);
+  });
+
+  test('a folder that holds the four 0.85.7 rules gets exactly the new ones, appended in order', async () => {
+    const dir = await tmp('hk-ensure-085-');
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: ['WebFetch', ...FIRST_FOUR] } };
+    await seedSettings(dir, before);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), ADDED);
+    const after = await readSettings(dir);
+    assert.deepEqual(after, { ...before, permissions: { ...before.permissions, ask: ['WebFetch', ...FIRST_FOUR, ...ADDED] } });
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('leaves a missing, unparseable or oddly shaped file alone', async () => {
@@ -291,8 +338,12 @@ describe('Permission gate: the ask array', () => {
     const run = spawnSync(process.execPath, [gate], { encoding: 'utf8' });
     assert.equal(run.status, 0, run.stderr);
     // With no registry build the gate stops after the syntax pass, so the count
-    // line is only asserted when it printed.
-    if (/allow rules/.test(run.stdout)) assert.match(run.stdout, /\b3 denied, 4 ask\b/);
+    // line is only asserted when it printed. With one, every ask name must be a
+    // real tool: a typo would gate nothing, silently.
+    if (/allow rules/.test(run.stdout)) {
+      assert.match(run.stdout, /\b3 denied, 14 ask\b/);
+      assert.doesNotMatch(run.stderr, /naming no tool/);
+    }
   });
 
   test('an ask name that is also denied fails the gate', async () => {
@@ -324,16 +375,58 @@ describe('Permission gate: the ask array', () => {
 
 describe('Autonomous mode copy', () => {
   // Ask rules prompt in every mode, bypassPermissions included, so the copy for
-  // it must not promise that nothing asks.
-  test('the setting and the mode picker say turning ads on still asks', async () => {
+  // it must not promise that nothing asks, and must name both kinds of ask.
+  test('the setting and the mode picker say turning ads or workflows on still asks', async () => {
     const pkg = JSON.parse(await fs.readFile(path.join(ROOT, 'package.json'), 'utf8'));
     const setting = pkg.contributes.configuration.properties['hiveku.claudeCodePermissionMode'];
     const bypass = setting.enumDescriptions[setting.enum.indexOf('bypassPermissions')];
-    assert.match(bypass, /turn ads on, which always ask/);
+    assert.match(bypass, /turn ads on or restart them and the ones that switch a workflow on, which always ask/);
     assert.doesNotMatch(bypass, /entirely/);
-    assert.match(setting.markdownDescription, /tools that turn ads on \(and start spend\) always ask first/);
+    assert.match(
+      setting.markdownDescription,
+      /tools that turn ads on or restart them \(and start spend\), and the ones that switch a workflow on, always ask first/,
+    );
     const extensionSrc = await fs.readFile(path.join(ROOT, 'src', 'extension.ts'), 'utf8');
     assert.doesNotMatch(extensionSrc, /Skip ALL prompts/);
-    assert.match(extensionSrc, /Turning ads on still asks/);
+    assert.match(extensionSrc, /Turning ads or workflows on still asks/);
+  });
+});
+
+describe('The ask list gates what the plugins gate', () => {
+  const bare = (rule) => rule.replace(/^mcp__hiveku__/, '');
+
+  test('adding keywords is left to the owner\'s yes in the skills, as in the plugins', async () => {
+    const dir = await tmp('hk-ask-keywords-');
+    await scaffoldAccount(dir);
+    const { permissions } = await readSettings(dir);
+    for (const name of ['ppc_keyword_add', 'ppc_platform_keyword_add', 'ppc_pause_resource', 'ppc_platform_pause_resource', 'workflow_disable', 'workflow_run']) {
+      assert.ok(!permissions.ask.includes(`mcp__hiveku__${name}`), `${name} should not be an ask rule`);
+    }
+  });
+
+  test('every ask rule names a tool the Claude Code plugin forces a prompt for (sibling checkout)', async (t) => {
+    const pluginRoot = resolvePluginRoot();
+    if (!pluginRoot || !existsSync(path.join(pluginRoot, 'lib', 'tool-safety.mjs'))) {
+      t.skip('hiveku-claude-plugin checkout absent');
+      return;
+    }
+    const { LIVE_CHANGE_WRITES, ALWAYS_ASK_WRITES, decideForPayload } = await import(pathToFileURL(path.join(pluginRoot, 'lib', 'tool-safety.mjs')).href);
+    const critical = JSON.parse(await fs.readFile(path.join(pluginRoot, 'data', 'permission-critical-tools.json'), 'utf8'));
+    const onAskList = new Set(critical.tools.map((tool) => tool.name));
+    // hiveku_batch is the wrapper: the plugin does not list it, its hook asks on
+    // any batch that carries one of the gated calls. Check that instead.
+    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch');
+    for (const member of gated) {
+      const decision = decideForPayload({ tool_name: 'mcp__plugin_hiveku_hk__hiveku_batch', tool_input: { calls: [{ tool: member, args: {} }] } });
+      assert.equal(decision?.hookSpecificOutput?.permissionDecision, 'ask', `the plugin hook does not ask on a batch carrying ${member}`);
+    }
+    const notForced = gated.filter((name) => !LIVE_CHANGE_WRITES.has(name) && !ALWAYS_ASK_WRITES.has(name));
+    assert.deepEqual(notForced, [], 'the plugin hook does not force a prompt for these; one side is out of date');
+    const notListed = gated.filter((name) => !onAskList.has(name));
+    assert.deepEqual(notListed, [], "these are not on the plugin's permission-critical ask list");
+    // And the plugins leave the keyword adds unasked, as this list does.
+    for (const name of ['ppc_keyword_add', 'ppc_platform_keyword_add']) {
+      assert.ok(!LIVE_CHANGE_WRITES.has(name) && !ALWAYS_ASK_WRITES.has(name), `the plugin now forces a prompt for ${name}`);
+    }
   });
 });
