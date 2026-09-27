@@ -701,7 +701,15 @@ async function runEmailAction(
 const TASK_STATUSES = ['todo', 'queued', 'in_progress', 'qa', 'ready_for_review', 'blocked', 'done'];
 const TASK_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 
-async function createTaskFlow(client: HivekuMcpClient): Promise<boolean> {
+/** One row of the "Assign to" pick in createTaskFlow. `id` is what reaches
+ *  pm_tasks_create: undefined leaves the key out (the section's default
+ *  assignee, then the project's, applies), null creates the task unassigned,
+ *  a string assigns that person. */
+interface AssigneePick extends vscode.QuickPickItem {
+  id: string | null | undefined;
+}
+
+export async function createTaskFlow(client: HivekuMcpClient): Promise<boolean> {
   const projects = await api.pmProjectsList(client);
   if (projects.length === 0) {
     vscode.window.showInformationMessage('No PM projects in this account to add a task to.');
@@ -719,14 +727,18 @@ async function createTaskFlow(client: HivekuMcpClient): Promise<boolean> {
   const due = await vscode.window.showInputBox({ prompt: 'Due date (YYYY-MM-DD, empty = none)', placeHolder: '2026-07-18' });
   if (due === undefined) return false;
   const users = await api.accountUsers(client);
-  let assignee: string | undefined;
+  // Omitting assigned_to_id applies the project's default assignee, so
+  // "(unassigned)" has to send an explicit null to mean what it says.
+  let assignee: string | null | undefined;
   if (users.length > 0) {
-    const pick = await vscode.window.showQuickPick(
-      [{ label: '(unassigned)', id: '' }, ...users.map((u) => ({ label: [u.first_name ?? u.name, u.last_name].filter(Boolean).join(' ') || u.email || u.id || '?', description: u.email ?? '', id: u.id ?? '' }))],
-      { placeHolder: 'Assign to' },
-    );
+    const items: AssigneePick[] = [
+      { label: '(project default)', description: "the project's default assignee; nobody if it has none", id: undefined },
+      { label: '(unassigned)', id: null },
+      ...users.map((u) => ({ label: [u.first_name ?? u.name, u.last_name].filter(Boolean).join(' ') || u.email || u.id || '?', description: u.email ?? '', id: u.id || undefined })),
+    ];
+    const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Assign to' });
     if (pick === undefined) return false;
-    assignee = pick.id || undefined;
+    assignee = pick.id;
   }
   await api.pmTaskCreate(client, title, proj.id, {
     priority: priority === '(default)' ? undefined : priority,

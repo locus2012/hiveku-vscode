@@ -595,6 +595,10 @@ const HIVEKU_ALLOW: string[] = [
   // and the _list already match the globs above; the settings update and the
   // purge (a permanent erase) match nothing here and keep prompting.
   'mcp__hiveku__marketing_form_capture_preview',
+  // The PM assignee roster (a GET: GET /api/olympus/pm/projects/:id/team), by
+  // EXACT name: no glob above matches it, and the work-tracking section tells
+  // the agent to read it before assigning anyone or setting a default.
+  'mcp__hiveku__pm_project_team',
   // The feedback loop (2026-09-24), by EXACT name: no glob here matches them,
   // and there is deliberately no '*_status' glob (see above). The one knowing
   // exception to "reads only": the three writes (report_issue, request_feature,
@@ -1675,15 +1679,28 @@ Hiveku PM — not your head, this chat, or a local file — is the single source
    call \`crm_list_users\`, take the member whose \`email\`${connectedAs ? ` is \`${connectedAs}\`` : ' matches the connected account owner'},
    and keep their \`id\` (USER_ID) and \`name\` (USER_NAME).${connectedAs ? '' : ' If you cannot tell who connected, ask the user before creating tasks.'}
    Tasks and comments are attributed to THEM — never to "olympus".
-   **No member with that email = you are not on this account's team.** \`crm_list_users\` lists Team Members only
-   (people whose home is this account, plus invited members); agency/SaaS staff working the account without an
-   invitation are not listed and cannot be assigned. An empty list (it carries a \`hint\`) or one without that email
-   is a real answer, not an error: there is no USER_ID. Create tasks unassigned (omit \`assigned_to_id\`), set
+   **No member with that email = you are not on this account's team.** \`crm_list_users\` lists this account's Team
+   Members only (people whose home is this account, plus invited members); agency/SaaS staff working the account
+   without an invitation are not listed. An empty list (it carries a \`hint\`) or one without that email is a real
+   answer, not an error: there is no USER_ID. Create tasks unassigned by passing \`assigned_to_id: null\`, set
    USER_NAME to the connected person's name (their email if you do not know the name), and tell the user once that
-   inviting them under Team Members makes them assignable. Never borrow another member's id or an id from another account.
+   inviting them under Team Members makes them assignable. Never borrow another member's id, and never use an id
+   that \`pm_project_team\` does not list for that project.
 2. **CREATE a task when you START work:** \`pm_tasks_create({ project_id, title, description, assigned_to_id: USER_ID })\`
    — \`project_id\` from \`pm_projects_list\` (make one with \`pm_projects_create({ name, project_type })\` if the
-   work has no home). Omit \`assigned_to_id\` only when step 1 found no USER_ID.
+   work has no home). Pass \`assigned_to_id: null\` only when step 1 found no USER_ID. Omitting the key does not
+   mean unassigned: it hands the task to the section's default assignee, then the project's.
+   **Assigning other people, and defaults.** Take PM assignee ids from \`pm_project_team({ project_id })\`: the
+   project's own team plus, on a shared project, the other company's people (labelled by company; their emails
+   are hidden). \`crm_list_users\` is this account's own team only. On \`pm_tasks_create\`, pass an id to assign,
+   \`null\` (or \`''\`) to create the task unassigned, or omit \`assigned_to_id\` to let the section's default
+   assignee, then the project's, apply. Set defaults with \`pm_projects_update({ id, default_assignee_id })\` and
+   \`pm_sections_create\` / \`pm_sections_update({ project_id, section_id, default_assignee_id })\`; \`''\` or \`null\`
+   clears one, and the person must be on the project team (a refusal names \`field: 'default_assignee_id'\`).
+   Moving an unassigned task into a section with a default assigns it. Review feedback tasks can have their own
+   assignee, set on the website project with \`project_annotation_settings_set({ project_id, review_assignee_id })\`
+   (take the id from \`project_annotation_settings_get\`'s \`review_assignee.people\`, which lists the team even before a
+   PM project is linked); without one they follow the project default.
 3. **COMMENT as you go — comments are essential:** log the plan, decisions, progress, blockers, and the
    outcome with \`pm_tasks_comment({ id: <task_id>, content, author_codename: USER_NAME })\`. A task with no
    comments is NOT documented work; \`author_codename\` MUST be USER_NAME so the trail reads as that person.
@@ -2173,15 +2190,27 @@ Hiveku PM is the single source of truth for the whole team; never track work onl
 1. **You act on behalf of the authenticated user${opts.connectedAs ? ` — \`${opts.connectedAs}\`` : ''}.** Resolve them ONCE per
    session: \`crm_list_users\` → the member whose \`email\`${opts.connectedAs ? ` is \`${opts.connectedAs}\`` : ' matches the connected owner'} → keep their \`id\` (USER_ID) and \`name\`
    (USER_NAME).${opts.connectedAs ? '' : ' If you cannot tell who connected, ask the user before creating tasks.'} Tasks and comments are attributed to THEM, never to "olympus".
-   **No member with that email = you are not on this account's team.** \`crm_list_users\` lists Team Members only
-   (home users plus invited members); agency/SaaS staff working the account without an invitation are not listed and
-   cannot be assigned. An empty list (it carries a \`hint\`) or one without that email is a real answer: there is no
-   USER_ID. Create tasks unassigned (omit \`assigned_to_id\`), set USER_NAME to the connected person's name (their email
-   if you do not know the name), and tell the user once that inviting them under Team Members makes them assignable.
-   Never borrow another member's id or an id from another account.
+   **No member with that email = you are not on this account's team.** \`crm_list_users\` lists this account's Team
+   Members only (home users plus invited members); agency/SaaS staff working the account without an invitation are
+   not listed. An empty list (it carries a \`hint\`) or one without that email is a real answer: there is no USER_ID.
+   Create tasks unassigned by passing \`assigned_to_id: null\`, set USER_NAME to the connected person's name (their
+   email if you do not know the name), and tell the user once that inviting them under Team Members makes them
+   assignable. Never borrow another member's id, and never use an id that \`pm_project_team\` does not list for that project.
 2. **CREATE a task when you START work:** \`pm_tasks_create({ project_id, title, description, assigned_to_id: USER_ID })\`
-   — \`project_id\` from \`pm_projects_list\` (\`pm_projects_create({ name, project_type })\` if none fits). Omit
-   \`assigned_to_id\` only when step 1 found no USER_ID.
+   — \`project_id\` from \`pm_projects_list\` (\`pm_projects_create({ name, project_type })\` if none fits). Pass
+   \`assigned_to_id: null\` only when step 1 found no USER_ID. Omitting the key does not mean unassigned: it hands
+   the task to the section's default assignee, then the project's.
+   **Assigning other people, and defaults.** Take PM assignee ids from \`pm_project_team({ project_id })\`: the
+   project's own team plus, on a shared project, the other company's people (labelled by company; their emails
+   are hidden). \`crm_list_users\` is this account's own team only. On \`pm_tasks_create\`, pass an id to assign,
+   \`null\` (or \`''\`) to create the task unassigned, or omit \`assigned_to_id\` to let the section's default
+   assignee, then the project's, apply. Set defaults with \`pm_projects_update({ id, default_assignee_id })\` and
+   \`pm_sections_create\` / \`pm_sections_update({ project_id, section_id, default_assignee_id })\`; \`''\` or \`null\`
+   clears one, and the person must be on the project team (a refusal names \`field: 'default_assignee_id'\`).
+   Moving an unassigned task into a section with a default assigns it. Review feedback tasks can have their own
+   assignee, set on the website project with \`project_annotation_settings_set({ project_id, review_assignee_id })\`
+   (take the id from \`project_annotation_settings_get\`'s \`review_assignee.people\`, which lists the team even before a
+   PM project is linked); without one they follow the project default.
 3. **COMMENT as you go — comments are essential:** log the plan, decisions, progress, blockers, and the
    outcome with \`pm_tasks_comment({ id: <task_id>, content, author_codename: USER_NAME })\`. A task with no
    comments is NOT documented work; \`author_codename\` MUST be USER_NAME so the trail reads as that person.

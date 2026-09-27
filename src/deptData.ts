@@ -926,12 +926,22 @@ export const DEPARTMENTS: Department[] = [
       { id: 'tasks', label: 'Tasks', tool: 'pm_tasks_list', args: { limit: 500 }, columns: [{ key: ['task_number', 'id'], label: '#' }, { key: 'title' }, { key: 'status' }, { key: ['assigned_to.name', 'assigned_to.email'], label: 'assignee' }, { key: 'priority' }, { key: 'task_type', label: 'type' }, { key: 'due_date', label: 'due', date: true }, { key: 'project.name', label: 'project' }] },
       { id: 'milestones', label: 'Milestones', tool: 'pm_milestones_list', columns: [{ key: 'name' }, { key: 'status' }, { key: 'due_date', label: 'due', date: true }] },
       { id: 'recurrences', label: 'Recurring tasks', tool: 'pm_task_recurrence_list', columns: [{ key: 'title' }, { key: 'cron' }, { key: 'is_active', label: 'active' }, { key: 'last_fired_at', label: 'last fired', date: true }] },
-      { id: 'sections', label: 'Sections', tool: 'pm_sections_list', scope: { parentTool: 'pm_projects_list', parentIdKey: 'id', parentLabelKey: 'name', argKey: 'project_id' }, columns: [{ key: '_parent', label: 'project' }, { key: 'name' }, { key: 'sort_order', label: 'order' }] },
+      { id: 'sections', label: 'Sections', tool: 'pm_sections_list', scope: { parentTool: 'pm_projects_list', parentIdKey: 'id', parentLabelKey: 'name', argKey: 'project_id' }, columns: [{ key: '_parent', label: 'project' }, { key: 'name' }, { key: 'sort_order', label: 'order' }, { key: 'default_assignee_id', label: 'default assignee' }] },
     ],
     crud:
       'Projects: `pm_projects_create` / `_update` / `_delete`. Tasks: `pm_tasks_create` (+`_create_bulk`) / `_update` / ' +
       '`_delete` / `_complete` / `_uncomplete` / `_comment` / `_reassign_bulk`; attachments `pm_task_attachment_create` / ' +
-      '`_delete`. Sections: `pm_sections_create` (project_id + name [+ sort_order]; no update/delete tool — create-only). ' +
+      '`_delete`. Sections: `pm_sections_create` (project_id + name [+ sort_order, default_assignee_id]) / `_update` ' +
+      '(project_id + section_id; name, sort_order, is_collapsed, default_assignee_id) / `_delete`. ' +
+      'Assignees: take ids from `pm_project_team` (project_id; the project\'s own team plus, on a shared project, the ' +
+      'other company\'s people, labelled by company, emails hidden); `crm_list_users` is this account\'s own team only. ' +
+      'On `pm_tasks_create`, omit `assigned_to_id` to let the section\'s default assignee, then the project\'s, apply; ' +
+      'pass null (or \'\') to create the task unassigned; pass an id to assign. Set a default with `default_assignee_id` ' +
+      'on `pm_projects_update` or `pm_sections_create` / `pm_sections_update` (\'\' or null clears it; the person must be ' +
+      'on the project team, else a refusal with field `default_assignee_id`). Moving an unassigned task into a section ' +
+      'with a default assigns it. Review feedback tasks can have their own assignee (`review_assignee_id` on ' +
+      '`project_annotation_settings_set`; take the id from `project_annotation_settings_get`\'s `review_assignee.people`); ' +
+      'without one they follow the project default. ' +
       'Milestones: `pm_milestones_create` / `_update` / `_delete` / `_close`. ' +
       'Recurrences: `pm_task_recurrence_create` / `_update` / `_delete` / `_pause` / `_resume` / `_run_now`.',
   },
@@ -1204,6 +1214,11 @@ export const DEPARTMENTS: Department[] = [
       'PM task. Work one with `project_annotation_get({project_id, annotation_id})` \u2014 it returns the comment thread, ' +
       'the linked task status, and `deployment_branch`, which is the only reliable statement of WHICH CODE the reviewer ' +
       'saw (fix the wrong branch and nothing the client can see changes).\n' +
+      'The task lands in the website\'s linked PM project and goes to the site\'s review assignee when one is set ' +
+      '(`review_assignee_id`: read it with `project_annotation_settings_get`, set it with `project_annotation_settings_set`; ' +
+      '\'\' or null clears it; take the id from `project_annotation_settings_get`\'s `review_assignee.people`, which lists ' +
+      'the team even before a PM project is linked), else to the PM project\'s default assignee. With more than one ' +
+      'linked PM project (`review_assignee.linked_project_count` above 1) the annotation server picks one arbitrarily.\n' +
       'To SEE the pin, `project_annotation_screenshot({project_id, annotation_id})` returns the screenshot with the ' +
       "reviewer's marker composited on it \u2014 the amber dot and crosshair are HIVEKU'S MARKER, not part of the site, so " +
       'never "fix" them. Do not do the {xPct,yPct} arithmetic by hand; on a long page that is a guess.\n' +
