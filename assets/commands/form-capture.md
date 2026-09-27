@@ -125,11 +125,14 @@ The play:
      `batch.submissions` and `batch.by_form[]` (name, submissions, reason_text);
      `batch.contacts_erasable` against `batch.contacts_kept`, with `batch.contacts_kept_by_reason`
      (a contact with any other history - a deal, an email, another form - is kept);
-     `batch.mixed_groups_left_alone` (submissions a hosted form or webhook also recorded, left
-     alone); `batch.offline_conversions` (`pending` ones are removed; `already_uploaded` stay on
-     the platform, and Meta cannot delete them); `batch.workflow_runs_to_redact`;
-     `more_available`; and every line of `cannot_undo`, verbatim. Say plainly that it is
-     PERMANENT and that the analytics copies are retained (`analytics_copies: "retained"`).
+     `batch.mixed_groups_left_alone` and `batch.captured_copy_groups_left_alone` (submissions left
+     alone because a hosted form, webhook, Webflow or another site also recorded them, or another
+     copy is still captured); `batch.offline_conversions` (`pending` ones are removed;
+     `already_uploaded` stay on the platform, and Meta cannot delete them);
+     `batch.workflow_runs_to_redact`; `analytics_copies` (how many of their analytics events it
+     will erase); `more_available`; and every line of `cannot_undo`, verbatim. Say plainly that
+     it is PERMANENT. After the erase, report `analytics_copies` as returned: the events it
+     confirmed erased and the ones that remain, never more than it says.
    - Only on an explicit yes to those numbers: `marketing_form_capture_purge({ project_id,
      confirm: true, confirm_token, since, limit })` with the SAME `since` and `limit`, within 15
      minutes of the dry run. A 409 `stale_plan` means the set changed: dry-run again and show the
