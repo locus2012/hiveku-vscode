@@ -631,8 +631,8 @@ const HIVEKU_ALLOW: string[] = [
   'Bash(find:*)',
 ];
 
-// The tools that START ad delivery or spend, written as permissions.ask so every
-// call shows the owner an approval prompt.
+// The tools that switch ads on, restart them, or switch a workflow on, written
+// as permissions.ask so every call shows the owner an approval prompt.
 //
 // Claude Code 2.1.283+ opens VS Code chats in auto mode, and auto mode's
 // classifier blocks an "enable the campaign" call outright as [Production
@@ -641,23 +641,64 @@ const HIVEKU_ALLOW: string[] = [
 // BEFORE the classifier, and no mode auto-approves one, so it turns that hard
 // block into an approval card. In default and acceptEdits these tools already
 // prompted, so nothing changes there; under bypassPermissions they used to run
-// unasked and now prompt too, on purpose (they start spending money).
+// unasked and now prompt too, on purpose (they spend money, or act on real
+// customers with nobody watching).
 //
-// Only tools whose primary effect is turning serving ON, checked against the
-// MCP server's own descriptions: the Google-only and the cross-platform enable
-// (the status path every PAUSED create and push points at), Google's
-// experiment schedule ("START ... THIS IS THE MONEY STEP") and Microsoft's
-// experiment create (no SETUP state: the copy serves on start_date). NOT here:
-// budget and bid edits (the plugin's ask list gates those), pauses, reads, the
-// creates that land PAUSED or DRAFT, experiment promote/graduate (they change a
-// campaign that is already serving), and multi-purpose tools whose effect
-// depends on their arguments (ppc_bulk_edit, ppc_bing_experiment_update).
-// check-permission-rules.mjs scrapes this array by name.
+// The extension does not run the Claude Code plugin's hook (that hook matches
+// only mcp__plugin_hiveku_hk__ tools), so these rules are the only ask its
+// mcp__hiveku__ tools get. The list mirrors the plugin's forced asks for the
+// same tools (lib/tool-safety.mjs LIVE_CHANGE_WRITES, plugin 0.26.34) and the
+// Codex plugin's prompts. Each name was checked as a write on the MCP server:
+// - Switching serving on by status: the Google-only and the cross-platform
+//   enable (the status path every PAUSED create and push points at), and three
+//   tools that do more than one thing: ppc_bulk_edit (an ENABLED operation
+//   starts up to 100 entities at once), ppc_linkedin_creatives (set-status
+//   enabled) and ppc_tiktok_split_tests (a create copies the campaigns or ad
+//   groups under test and spends from its start time, with no confirm step).
+// - Starting an experiment: Google's experiment schedule ("START ... THIS IS
+//   THE MONEY STEP") and Microsoft's experiment create (no SETUP state: the
+//   copy serves on start_date).
+// - Restarting or widening delivery without a status change:
+//   ppc_recommendation_apply (can switch bidding, broad match or search
+//   partners with no check on the server), and a later end date on
+//   ppc_meta_campaign_update (stop_time), ppc_linkedin_campaign_update and
+//   ppc_linkedin_campaign_group_update (end_date; the group tool also raises
+//   group budgets). None of the three has a confirm step on the server.
+// - Switching a workflow on: workflow_enable (from then on its triggers run it
+//   and its steps email, text and change records for real customers) and
+//   workflow_resume (clears the automatic pause Hiveku put on a workflow whose
+//   runs kept failing or looped). Every create path makes a workflow switched
+//   off, so workflow_enable is the one way on. The Automations panel's own
+//   Enable button calls the tool through the extension, not Claude Code, and
+//   keeps its own flow.
+// An ask rule names a tool, not its arguments, so the multi-purpose tools ask
+// on every call: a pause-only ppc_bulk_edit, a LinkedIn creatives list, a
+// TikTok split-test read and a rename through the three update tools all
+// prompt, and in a run with nobody to answer (claude -p, a scheduled cadence)
+// they are refused. The vendored PPC skills (plugin 0.26.34) note the prompt
+// where those reads are taught.
+// NOT here: budget and bid edits (the plugin's ask list gates those), single
+// pauses, pure reads, the creates that land PAUSED or DRAFT, experiment
+// promote/graduate (they change a campaign that is already serving),
+// ppc_bing_experiment_update, and keyword adds (ppc_keyword_add,
+// ppc_platform_keyword_add: the skills teach the owner's yes for those, and the
+// plugins leave them unasked too). check-permission-rules.mjs scrapes this
+// array by name. New names go at the END: ensureSpendAskRules appends in this
+// order to folders that already hold the earlier ones.
 const HIVEKU_ASK: string[] = [
   'mcp__hiveku__ppc_enable_resource',
   'mcp__hiveku__ppc_platform_enable_resource',
   'mcp__hiveku__ppc_experiment_schedule',
   'mcp__hiveku__ppc_bing_experiment_create',
+  'mcp__hiveku__ppc_bulk_edit',
+  'mcp__hiveku__ppc_linkedin_creatives',
+  'mcp__hiveku__ppc_tiktok_split_tests',
+  'mcp__hiveku__ppc_recommendation_apply',
+  'mcp__hiveku__ppc_meta_campaign_update',
+  'mcp__hiveku__ppc_linkedin_campaign_update',
+  'mcp__hiveku__ppc_linkedin_campaign_group_update',
+  'mcp__hiveku__workflow_enable',
+  'mcp__hiveku__workflow_resume',
 ];
 
 /**
@@ -842,8 +883,9 @@ async function writeClaudeSettings(baseDir: string, mode: PermissionMode = confi
   denyList = denyList.filter((r) => !OVERBROAD.has(r));
   (settings.permissions as Record<string, unknown>).deny = denyList;
 
-  // Ask rules for the tools that start spend (HIVEKU_ASK). Additive like allow,
-  // and a tool the deny list already covers (by name, server or glob) is skipped.
+  // Ask rules for the tools that switch ads or workflows on (HIVEKU_ASK).
+  // Additive like allow, and a tool the deny list already covers (by name,
+  // server or glob) is skipped.
   mergeSpendAskRules(settings.permissions as Record<string, unknown>, denyList);
 
   // OS-level sandbox — the only thing that can stop a Bash command from writing
