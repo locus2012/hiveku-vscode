@@ -699,6 +699,12 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__ppc_linkedin_campaign_group_update',
   'mcp__hiveku__workflow_enable',
   'mcp__hiveku__workflow_resume',
+  // hiveku_batch can carry any of the calls above as a member, and an ask rule
+  // cannot look inside it, so a batch asks too (the Codex plugin does the same;
+  // the Claude Code plugin's hook asks unless every member is a read). It was
+  // never on the allow list, so outside auto and Autonomous mode it already
+  // prompted; this closes those two modes.
+  'mcp__hiveku__hiveku_batch',
 ];
 
 /**

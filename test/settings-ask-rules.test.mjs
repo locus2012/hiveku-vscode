@@ -67,6 +67,9 @@ const ADDED = [
   'mcp__hiveku__ppc_linkedin_campaign_group_update',
   'mcp__hiveku__workflow_enable',
   'mcp__hiveku__workflow_resume',
+  // A batch can carry any of the above as a member, and an ask rule cannot
+  // look inside it, so the batch tool itself asks (as in the Codex plugin).
+  'mcp__hiveku__hiveku_batch',
 ];
 
 /** Every ask rule, as the scaffold must write them (the .mcp.json server is "hiveku"). */
@@ -205,9 +208,10 @@ describe('Scaffolded settings: ask rules for the tools that switch ads or workfl
       [['mcp__hiveku__*'], []],
       [['mcp__*'], []],
       [['*'], []],
-      [['mcp__hiveku__ppc_*'], ['mcp__hiveku__workflow_enable', 'mcp__hiveku__workflow_resume']],
-      [['mcp__hiveku__workflow_*'], EXPECTED_ASK.filter((name) => name.startsWith('mcp__hiveku__ppc_'))],
-      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*'], []],
+      [['mcp__hiveku__ppc_*'], ['mcp__hiveku__workflow_enable', 'mcp__hiveku__workflow_resume', 'mcp__hiveku__hiveku_batch']],
+      [['mcp__hiveku__workflow_*'], EXPECTED_ASK.filter((name) => !name.startsWith('mcp__hiveku__workflow_'))],
+      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*'], ['mcp__hiveku__hiveku_batch']],
+      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*', 'mcp__hiveku__hiveku_batch'], []],
       [['mcp__hiveku__ppc_*enable_resource'], without('mcp__hiveku__ppc_enable_resource', 'mcp__hiveku__ppc_platform_enable_resource')],
       [['mcp__hiveku__*_experiment_*'], without('mcp__hiveku__ppc_experiment_schedule', 'mcp__hiveku__ppc_bing_experiment_create')],
       [['mcp__hiveku__ppc_linkedin_*'], without('mcp__hiveku__ppc_linkedin_creatives', 'mcp__hiveku__ppc_linkedin_campaign_update', 'mcp__hiveku__ppc_linkedin_campaign_group_update')],
@@ -337,7 +341,7 @@ describe('Permission gate: the ask array', () => {
     // line is only asserted when it printed. With one, every ask name must be a
     // real tool: a typo would gate nothing, silently.
     if (/allow rules/.test(run.stdout)) {
-      assert.match(run.stdout, /\b3 denied, 13 ask\b/);
+      assert.match(run.stdout, /\b3 denied, 14 ask\b/);
       assert.doesNotMatch(run.stderr, /naming no tool/);
     }
   });
@@ -406,12 +410,19 @@ describe('The ask list gates what the plugins gate', () => {
       t.skip('hiveku-claude-plugin checkout absent');
       return;
     }
-    const { LIVE_CHANGE_WRITES, ALWAYS_ASK_WRITES } = await import(pathToFileURL(path.join(pluginRoot, 'lib', 'tool-safety.mjs')).href);
+    const { LIVE_CHANGE_WRITES, ALWAYS_ASK_WRITES, decideForPayload } = await import(pathToFileURL(path.join(pluginRoot, 'lib', 'tool-safety.mjs')).href);
     const critical = JSON.parse(await fs.readFile(path.join(pluginRoot, 'data', 'permission-critical-tools.json'), 'utf8'));
     const onAskList = new Set(critical.tools.map((tool) => tool.name));
-    const notForced = EXPECTED_ASK.map(bare).filter((name) => !LIVE_CHANGE_WRITES.has(name) && !ALWAYS_ASK_WRITES.has(name));
+    // hiveku_batch is the wrapper: the plugin does not list it, its hook asks on
+    // any batch that carries one of the gated calls. Check that instead.
+    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch');
+    for (const member of gated) {
+      const decision = decideForPayload({ tool_name: 'mcp__plugin_hiveku_hk__hiveku_batch', tool_input: { calls: [{ tool: member, args: {} }] } });
+      assert.equal(decision?.hookSpecificOutput?.permissionDecision, 'ask', `the plugin hook does not ask on a batch carrying ${member}`);
+    }
+    const notForced = gated.filter((name) => !LIVE_CHANGE_WRITES.has(name) && !ALWAYS_ASK_WRITES.has(name));
     assert.deepEqual(notForced, [], 'the plugin hook does not force a prompt for these; one side is out of date');
-    const notListed = EXPECTED_ASK.map(bare).filter((name) => !onAskList.has(name));
+    const notListed = gated.filter((name) => !onAskList.has(name));
     assert.deepEqual(notListed, [], "these are not on the plugin's permission-critical ask list");
     // And the plugins leave the keyword adds unasked, as this list does.
     for (const name of ['ppc_keyword_add', 'ppc_platform_keyword_add']) {

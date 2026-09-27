@@ -288,7 +288,8 @@ the CLI `/permissions` -> Recently denied -> `r` retries it with a manual approv
 turn, switch the chat to Manual (VS Code: the mode indicator under the prompt box; CLI: Shift+Tab) so
 each enable prompts, then switch back; on the VS Code extension, check the folder has a permissions
 ASK rule for `mcp__hiveku__ppc_platform_enable_resource` and `mcp__hiveku__ppc_enable_resource`
-(current extension releases write both; add a missing one via `/permissions` or settings); on the
+(extension releases from 0.85.9 write those and the other calls the plugin asks before; on an older
+release, or if one is missing, add it via `/permissions` or settings); on the
 plugin, `/hiveku:update` instead, since its own names already ask. The denial's "add a Bash
 permission rule" is misleading for an MCP tool: the rule names the MCP tool. Never propose an ALLOW
 rule for a tool that starts spend. Depth: `references/spend-change-discipline.md` 4.5.
