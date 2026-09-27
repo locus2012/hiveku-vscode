@@ -244,26 +244,54 @@ A passing build can still hide route conflicts - pair it with
 `project_files_validate_orphan_routes` whenever pages moved. Never treat a slow or silent
 build as a pass: a truncated or empty log is a red flag, not a green light.
 
-## Play 6 - VCS, checkpoints, and restore
-Commit is versioning; it is NOT deploying. Load
+## Play 6 - Versions, rollback, checkpoints, and restore
+A version is NOT a deploy. Load
 `references/vcs-checkpoints-branch-previews.md` before branch previews, merges,
-checkpoints, or ANY restore. The invariants that cannot wait for the reference:
-- Branch for real work (`feature/`, `fix/`, `task-<id>/`); commit green states; merged
+rollbacks, checkpoints, or ANY restore. The invariants that cannot wait for the reference:
+- Saving is not a version. On Your site (`main`) a save is live in the preview and is what a
+  deploy ships, but no version holds it until `project_vcs_commit({ project_id, message })`
+  with NO files (add `branch` for a branch). Once per change the owner would recognize,
+  after all saves and verification, before `deploy_site` - never per file or per batch.
+  `message` is a plain-language name of what changed for visitors ("Updated the pricing
+  section on the Home page"), never paths, `fix:` prefixes, tool names or an "AI:" byline.
+  409 `nothing_to_commit` = already a version. `project_vcs_status({ project_id })` shows
+  what is unversioned (`uncommitted`, `latest_changes`) - including other writers' work,
+  which the version will hold too. Hiveku's automatic version before a publish, a merge or
+  a rollback is a safety net with a generic name, not the plan.
+- Go back with `project_vcs_rollback` (`/hiveku:rollback`), on Your site and on branches:
+  dry run first (it is the default), show the person the counts and the version's name,
+  get a yes, then apply with `dry_run: false` and the dry run's `head_commit_id` as
+  `expected_head_commit_id` (on Your site also its `live_fingerprint` as
+  `expected_live_fingerprint`). 409 `rollback_incomplete` means files WERE written: finish it
+  as `/hiveku:rollback` says, never report "nothing changed". Append-only (a new version;
+  newer ones stay, so it is undoable), and it changes NO deployed tier: publishing
+  afterwards is a separate `deploy_site` with its own yes.
+  Database, CMS entries and shared media-library images are not versioned.
+- Branch for real work (`feature/`, `fix/`, `task-<id>/`); version green states; merged
   `conflicts` are NOT overwritten - resolve and merge again.
-- The working branch is a PARAMETER, not a switch: `project_vcs_checkout` is a read that
-  changes nothing server-side, and no tool switches the project. Pass `branch` on every file,
+- The working branch is a PARAMETER, not a switch: `project_vcs_checkout` is a read (it
+  pages: `limit` up to 2000, then `cursor`) that changes nothing server-side, and no tool
+  switches the project. Pass `branch` on every file,
   build and preview tool to work on a branch's WORKING TREE (`project_files_bulk_get`,
   `project_file_save`, `project_files_bulk_save`, `project_file_delete`, `project_test_build`,
   `preview_screenshot`); omit it and you are on `main`, the live project. Writes with `branch`
   are not commits: `project_vcs_commit({ project_id, branch, message })` with no files
   PROMOTES the working tree (409 `nothing_to_commit` = clean; 409 `branch_changed` = re-read
   `project_vcs_branches` and retry). Record `working_tree_etag` at pull, compare before push.
-  Branch rollback is `project_vcs_revert`, never a checkpoint. `/hiveku:branch`, `/hiveku:pr`.
-- Snapshot BEFORE risky work: `checkpoint_create` before any bulk refactor,
-  `delete_missing` tree replace, dependency bump, DB migration - and immediately before
-  any production deploy. There is no `project_checkpoint_create` - do not guess it.
-- Restores: dry-run BEFORE restore, always (`project_checkpoint_restore_dry_run`; for the
-  point-in-time rail, `project_state_at`). Restore is ADDITIVE - it never removes a file
+  Branch rollback is `project_vcs_rollback` with `branch` (`project_vcs_revert` is the
+  older branch-only form), never a checkpoint. `/hiveku:branch`, `/hiveku:pr`. On a site
+  over 150 MB, starting a branch answers 413 `content_too_large`: work on Your site and
+  version each change; rollback still works for it.
+- Checkpoints cover what versions do not: take `checkpoint_create` before a DB migration
+  or data import, a `delete_missing` tree replace, replacing or deleting shared
+  media-library images (`assets_upload` / `assets_delete` / `assets_migrate_to_public`,
+  `public/<folder>/`), a production deploy that ships database or shared-image changes, or
+  risky work on a project whose database you may need back. For code-file work a version
+  is the rollback point. There is no `project_checkpoint_create` - do not guess it.
+- Restores (a checkpoint with its database, a point in time, one file): dry-run BEFORE
+  restore, always (`project_checkpoint_restore_dry_run`; for the point-in-time rail,
+  `project_state_at`). On Your site each restore records itself as a version
+  (`data.versioning`). Restore is ADDITIVE - it never removes a file
   that exists now and was not in the snapshot. Never re-run a restore as verification;
   verify by reading files and building.
 - No checkpoint near the regression? `history_restore_to_time` restores to an arbitrary
@@ -281,14 +309,18 @@ saves / `preview_sync` reach the Fly PREVIEW instantly and touch NO Lambda envir
 only `deploy_site` does.
 Two invariants govern WHICH TREE ships: (1) the environment BINDINGS decide, never the call
 - read `project_vcs_env_bindings` first; a bound development/staging tier ships its branch
-(unsaved branch edits are promoted into a commit server-side first), an unbound tier ships
+(unsaved branch edits are saved as a version server-side first), an unbound tier ships
 `main`; `branch` on `deploy_site` is only an assertion, refused on mismatch (409
 `branch_not_bound`, 400 `production_immutable`, 409 `binding_source_conflict`). (2)
 Production IS `main`, permanently: branch work reaches production only through a PR merge
 (`/hiveku:pr`), then `deploy_site({ environment: 'production' })`.
-1. Pre-flight: build green (Play 5), changes committed (Play 6), explicit approval. For a
-   PRODUCTION deploy, `checkpoint_create` now - the rollback plan in step 4 assumes a prior
-   good checkpoint; make it minutes old, not hoped-for. Then `project_deploy_preflight`
+1. Pre-flight: build green (Play 5), changes saved as a version (Play 6:
+   `project_vcs_status`, then `project_vcs_commit` with no files if `uncommitted`), explicit
+   approval. A production deploy saves leftovers as a version itself (`promoted_commit_id`,
+   `vcs_commit_id` = the version that ships, and a `note` to relay), but with a generic
+   name. When the database or shared media-library images changed too, `checkpoint_create`
+   now so step 4 has it (versions hold neither). Then
+   `project_deploy_preflight`
    FIRST - surface `blockers[]` verbatim (only the user can fix those); read `hints[]` for
    `reserved_cdn_prefix_page_collision` (a page route under a reserved CDN asset prefix
    WILL 403 on the deployed URL - rename before shipping). Then
@@ -311,8 +343,9 @@ Production IS `main`, permanently: branch work reaches production only through a
    unidentified client, not a broken deploy; a 403 without that header comes from the site itself
    (`references/firewall.md`).
    `deploy_history` records the trail; `deploy_doctor` diagnoses a failed deploy or stale serving.
-4. Regression shipped? Roll back by restoring the prior good checkpoint (dry-run first) and
-   re-deploying - do not hot-patch prod under pressure.
+4. Regression shipped? Roll back to the last good version (`/hiveku:rollback`: dry run, yes,
+   apply), then re-deploy as its own step with its own yes; a checkpoint restore only when
+   the database must come back too. Do not hot-patch prod under pressure.
 5. Nothing ships silently. State what is going live, to which tier, and why; get the yes;
    log the deploy with `memory_create` or on the `pm_tasks_complete` note.
 6. Source of truth (GitHub or not) is a separate axis from the tier:

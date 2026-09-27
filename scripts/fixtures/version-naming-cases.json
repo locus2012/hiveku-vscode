@@ -1,0 +1,2159 @@
+{
+  "about": "Shared naming table for src/lib/vcs/version-naming.ts and its ports (hiveku_agent_server app/services/version_name.py, hiveku-vscode src/versionName.ts). Every port must reproduce every expected value exactly. \"paths\" pins describePath (expected_route only for pages); \"changes\" pins describeChanges; \"name_checks\" pins isPlainVersionName (the check a port runs on a name an agent or a person typed before using it) and, on the rows that carry expected_without_byline, stripLegacyVersionPrefix: the trimmed name without the exact legacy agent byline in front (\"Hiveku AI:\" or \"AI:\", this spelling and case, removed once). A name that starts with the byline is never plain. The builder removes the byline only from names an agent or an API key sent (sources ai_turn, mcp), never from a person's own name (manual, editor_idle, vscode, sync_cli). \"note\" fields are commentary, never inputs. A generated name never contains a path or a file extension and is at most 80 characters. Change a rule and this table in the same commit, then re-run every port.",
+  "max_name_length": 80,
+  "paths": [
+    {
+      "path": "app/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Home",
+      "expected_route": "/"
+    },
+    {
+      "path": "src/app/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Home",
+      "expected_route": "/"
+    },
+    {
+      "path": "app/contact/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Contact",
+      "expected_route": "/contact"
+    },
+    {
+      "path": "app/(marketing)/pricing/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Pricing",
+      "expected_route": "/pricing"
+    },
+    {
+      "path": "app/@modal/login/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Login",
+      "expected_route": "/login"
+    },
+    {
+      "path": "app/blog/[slug]/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Blog posts",
+      "expected_route": "/blog/[slug]"
+    },
+    {
+      "path": "app/blog/[...slug]/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Blog posts",
+      "expected_route": "/blog/[...slug]"
+    },
+    {
+      "path": "app/services/[service]/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Services pages",
+      "expected_route": "/services/[service]"
+    },
+    {
+      "path": "app/[slug]/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "All pages",
+      "expected_route": "/[slug]"
+    },
+    {
+      "path": "app/shop/[category]/[product]/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Shop pages",
+      "expected_route": "/shop/[category]/[product]"
+    },
+    {
+      "path": "app/[locale]/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Home",
+      "expected_route": "/"
+    },
+    {
+      "path": "app/[locale]/about/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "About",
+      "expected_route": "/about"
+    },
+    {
+      "path": "app/about-us/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "About us",
+      "expected_route": "/about-us"
+    },
+    {
+      "path": "app/old-offer/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Old offer",
+      "expected_route": "/old-offer"
+    },
+    {
+      "path": "app/faq/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "FAQ",
+      "expected_route": "/faq"
+    },
+    {
+      "path": "app/HVAC-services/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "HVAC services",
+      "expected_route": "/HVAC-services"
+    },
+    {
+      "path": "app/ai-tools/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "AI tools",
+      "expected_route": "/ai-tools"
+    },
+    {
+      "path": "app/services/roofing/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Roofing",
+      "expected_route": "/services/roofing"
+    },
+    {
+      "path": "app/very-long-page-name-that-goes-on-and-on-forever/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Very long page name that goes…",
+      "expected_route": "/very-long-page-name-that-goes-on-and-on-forever"
+    },
+    {
+      "path": "app/layout.tsx",
+      "expected_kind": "layout",
+      "expected_name": "Site layout"
+    },
+    {
+      "path": "app/(site)/layout.tsx",
+      "expected_kind": "layout",
+      "expected_name": "Site layout"
+    },
+    {
+      "path": "app/blog/layout.tsx",
+      "expected_kind": "page",
+      "expected_name": "Blog",
+      "expected_route": "/blog"
+    },
+    {
+      "path": "app/loading.tsx",
+      "expected_kind": "layout",
+      "expected_name": "Site layout"
+    },
+    {
+      "path": "app/blog/loading.tsx",
+      "expected_kind": "page",
+      "expected_name": "Blog",
+      "expected_route": "/blog"
+    },
+    {
+      "path": "app/error.tsx",
+      "expected_kind": "layout",
+      "expected_name": "Site layout"
+    },
+    {
+      "path": "app/global-error.tsx",
+      "expected_kind": "layout",
+      "expected_name": "Site layout"
+    },
+    {
+      "path": "app/not-found.tsx",
+      "expected_kind": "page",
+      "expected_name": "404",
+      "expected_route": "/404"
+    },
+    {
+      "path": "app/api/contact/route.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "app/api/contact/helpers.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "app/globals.css",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "app/page.module.css",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "app/favicon.ico",
+      "expected_kind": "images",
+      "expected_name": "Images"
+    },
+    {
+      "path": "app/icon.png",
+      "expected_kind": "images",
+      "expected_name": "Images"
+    },
+    {
+      "path": "app/opengraph-image.tsx",
+      "expected_kind": "images",
+      "expected_name": "Images"
+    },
+    {
+      "path": "app/robots.ts",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "app/sitemap.ts",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "app/contact/ContactForm.tsx",
+      "expected_kind": "page",
+      "expected_name": "Contact",
+      "expected_route": "/contact"
+    },
+    {
+      "path": "app/contact/_components/Form.tsx",
+      "expected_kind": "page",
+      "expected_name": "Contact",
+      "expected_route": "/contact"
+    },
+    {
+      "path": "app/blog/[slug]/Comments.tsx",
+      "expected_kind": "page",
+      "expected_name": "Blog posts",
+      "expected_route": "/blog/[slug]"
+    },
+    {
+      "path": "app/pricing/data/plans.ts",
+      "expected_kind": "page",
+      "expected_name": "Pricing",
+      "expected_route": "/pricing"
+    },
+    {
+      "path": "app/_components/Hero.tsx",
+      "expected_kind": "part",
+      "expected_name": "Hero"
+    },
+    {
+      "path": "app/[locale]/_components/Header.tsx",
+      "expected_kind": "part",
+      "expected_name": "Header"
+    },
+    {
+      "path": "app/lib/utils.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "pages/index.tsx",
+      "expected_kind": "page",
+      "expected_name": "Home",
+      "expected_route": "/"
+    },
+    {
+      "path": "pages/about.tsx",
+      "expected_kind": "page",
+      "expected_name": "About",
+      "expected_route": "/about"
+    },
+    {
+      "path": "pages/blog/[slug].tsx",
+      "expected_kind": "page",
+      "expected_name": "Blog posts",
+      "expected_route": "/blog/[slug]"
+    },
+    {
+      "path": "pages/404.tsx",
+      "expected_kind": "page",
+      "expected_name": "404",
+      "expected_route": "/404"
+    },
+    {
+      "path": "pages/api/hello.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "pages/_app.tsx",
+      "expected_kind": "layout",
+      "expected_name": "Site layout"
+    },
+    {
+      "path": "pages/_document.tsx",
+      "expected_kind": "layout",
+      "expected_name": "Site layout"
+    },
+    {
+      "path": "src/pages/About.tsx",
+      "expected_kind": "page",
+      "expected_name": "About",
+      "expected_route": "/About"
+    },
+    {
+      "path": "index.html",
+      "expected_kind": "page",
+      "expected_name": "Home",
+      "expected_route": "/"
+    },
+    {
+      "path": "about.html",
+      "expected_kind": "page",
+      "expected_name": "About",
+      "expected_route": "/about"
+    },
+    {
+      "path": "services/index.html",
+      "expected_kind": "page",
+      "expected_name": "Services",
+      "expected_route": "/services"
+    },
+    {
+      "path": "public/landing.html",
+      "expected_kind": "page",
+      "expected_name": "Landing",
+      "expected_route": "/landing"
+    },
+    {
+      "path": "blog/my-first-post.html",
+      "expected_kind": "page",
+      "expected_name": "My first post",
+      "expected_route": "/blog/my-first-post"
+    },
+    {
+      "path": "404.html",
+      "expected_kind": "page",
+      "expected_name": "404",
+      "expected_route": "/404"
+    },
+    {
+      "path": "components/Header.tsx",
+      "expected_kind": "part",
+      "expected_name": "Header"
+    },
+    {
+      "path": "components/Footer/index.tsx",
+      "expected_kind": "part",
+      "expected_name": "Footer"
+    },
+    {
+      "path": "components/FAQSection.tsx",
+      "expected_kind": "part",
+      "expected_name": "FAQ section"
+    },
+    {
+      "path": "components/ui/button.tsx",
+      "expected_kind": "part",
+      "expected_name": "Button"
+    },
+    {
+      "path": "src/components/sections/HeroSection.tsx",
+      "expected_kind": "part",
+      "expected_name": "Hero section"
+    },
+    {
+      "path": "components/utils.ts",
+      "expected_kind": "other",
+      "expected_name": "Other files",
+      "note": "scripts in a part folder (barrels, registries, helpers) are not site logic"
+    },
+    {
+      "path": "components/Header.test.tsx",
+      "expected_kind": "other",
+      "expected_name": "Other files"
+    },
+    {
+      "path": "lib/cms.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "src/lib/supabase/client.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "hooks/useCart.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "middleware.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "src/middleware.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "supabase/migrations/001_init.sql",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "prisma/schema.prisma",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "package.json",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "package-lock.json",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "next.config.js",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "next.config.mjs",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "tsconfig.json",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": ".env.local",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "public/robots.txt",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "public/sitemap.xml",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "tailwind.config.ts",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "postcss.config.mjs",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "styles/globals.css",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "src/styles/theme.ts",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "public/fonts/inter.woff2",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "public/images/hero.jpg",
+      "expected_kind": "images",
+      "expected_name": "Images"
+    },
+    {
+      "path": "public/logo.svg",
+      "expected_kind": "images",
+      "expected_name": "Images"
+    },
+    {
+      "path": "public/brochure.pdf",
+      "expected_kind": "other",
+      "expected_name": "Other files",
+      "note": "a PDF is a document, not an image"
+    },
+    {
+      "path": "public/data.json",
+      "expected_kind": "other",
+      "expected_name": "Other files"
+    },
+    {
+      "path": "content/blog/first-post.mdx",
+      "expected_kind": "content",
+      "expected_name": "Blog content"
+    },
+    {
+      "path": "posts/hello.md",
+      "expected_kind": "content",
+      "expected_name": "Blog content"
+    },
+    {
+      "path": "src/App.tsx",
+      "expected_kind": "layout",
+      "expected_name": "Site layout"
+    },
+    {
+      "path": "README.md",
+      "expected_kind": "other",
+      "expected_name": "Other files"
+    },
+    {
+      "path": "scripts/seed.ts",
+      "expected_kind": "other",
+      "expected_name": "Other files"
+    },
+    {
+      "path": ".ai/memory.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": ".ai/knowledge/brand.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": "CLAUDE.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": "CLAUDE.local.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": "app/CLAUDE.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": ".claude/commands/deploy.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": ".claude/settings.json",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": ".hiveku/turn_version.json",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": "soul.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": "connected_tools.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": ".mcp.json",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": "data/marketing/plan.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": "claude.md",
+      "expected_kind": "other",
+      "expected_name": "Other files"
+    },
+    {
+      "path": "/app/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Home",
+      "expected_route": "/"
+    },
+    {
+      "path": "./app/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Home",
+      "expected_route": "/"
+    },
+    {
+      "path": "app/page.mdx",
+      "expected_kind": "page",
+      "expected_name": "Home",
+      "expected_route": "/"
+    },
+    {
+      "path": "app/(site)/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Home",
+      "expected_route": "/"
+    },
+    {
+      "path": "app/(site)/services/[slug]/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Services pages",
+      "expected_route": "/services/[slug]"
+    },
+    {
+      "path": "app/[lang]/(site)/about/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "About",
+      "expected_route": "/about"
+    },
+    {
+      "path": "app/[[...slug]]/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "All pages",
+      "expected_route": "/[[...slug]]"
+    },
+    {
+      "path": "app/(site)/contact/actions.ts",
+      "expected_kind": "page",
+      "expected_name": "Contact",
+      "expected_route": "/contact",
+      "note": "a server action beside a page belongs to that page"
+    },
+    {
+      "path": "app/(site)/about/_components/team-grid.tsx",
+      "expected_kind": "page",
+      "expected_name": "About",
+      "expected_route": "/about"
+    },
+    {
+      "path": "app/_lib/api.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "app/_components/index.ts",
+      "expected_kind": "other",
+      "expected_name": "Other files",
+      "note": "a barrel in a part folder is not site logic"
+    },
+    {
+      "path": "app/manifest.ts",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "app/(site)/services/roofing/opengraph-image.tsx",
+      "expected_kind": "images",
+      "expected_name": "Images"
+    },
+    {
+      "path": "app/contact/page.module.css",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "pages/blog/index.tsx",
+      "expected_kind": "page",
+      "expected_name": "Blog",
+      "expected_route": "/blog"
+    },
+    {
+      "path": "pages/_error.tsx",
+      "expected_kind": "layout",
+      "expected_name": "Site layout"
+    },
+    {
+      "path": "public/about/index.html",
+      "expected_kind": "page",
+      "expected_name": "About",
+      "expected_route": "/about"
+    },
+    {
+      "path": "components/structural/site-header.tsx",
+      "expected_kind": "part",
+      "expected_name": "Site header"
+    },
+    {
+      "path": "components/sections/ai-agent-platform/ai-agent-platform-islands.tsx",
+      "expected_kind": "part",
+      "expected_name": "AI agent platform islands"
+    },
+    {
+      "path": "components/sections/pricing/index.ts",
+      "expected_kind": "other",
+      "expected_name": "Other files",
+      "note": "a barrel in a part folder is not site logic"
+    },
+    {
+      "path": "components/Header.module.css",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "lib/schema/local-business.ts",
+      "expected_kind": "logic",
+      "expected_name": "Forms and site logic"
+    },
+    {
+      "path": "lib/tokens.css",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "theme/colors.ts",
+      "expected_kind": "styles",
+      "expected_name": "Site styles"
+    },
+    {
+      "path": "hiveku.cms.json",
+      "expected_kind": "settings",
+      "expected_name": "Site settings"
+    },
+    {
+      "path": "content/settings/agency.json",
+      "expected_kind": "other",
+      "expected_name": "Other files",
+      "note": "CMS entries kept as JSON are not blog content"
+    },
+    {
+      "path": "content/reports/acme-seo-audit.json",
+      "expected_kind": "other",
+      "expected_name": "Other files",
+      "note": "CMS entries kept as JSON are not blog content"
+    },
+    {
+      "path": "public/videos/intro.mp4",
+      "expected_kind": "images",
+      "expected_name": "Images"
+    },
+    {
+      "path": "public/menu.pdf",
+      "expected_kind": "other",
+      "expected_name": "Other files",
+      "note": "a PDF is a document, not an image"
+    },
+    {
+      "path": "SITE_SYSTEM.md",
+      "expected_kind": "other",
+      "expected_name": "Other files"
+    },
+    {
+      "path": "AGENTS.md",
+      "expected_kind": "other",
+      "expected_name": "Other files",
+      "note": "a project's AGENTS.md is the customer's own file (the Codex lane writes none)"
+    },
+    {
+      "path": ".claude/skills/seo/SKILL.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": "docs/.ai/notes.md",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": ".hiveku/pending_main_version.json",
+      "expected_kind": "notes",
+      "expected_name": "Assistant's notes"
+    },
+    {
+      "path": "components/TheHeader.vue",
+      "expected_kind": "part",
+      "expected_name": "Header",
+      "note": "a leading The (Vue's single-instance naming) is dropped, so the phrase is never 'the the header'"
+    },
+    {
+      "path": "components/TheFAQSection.vue",
+      "expected_kind": "part",
+      "expected_name": "FAQ section"
+    },
+    {
+      "path": "components/ThemeToggle.tsx",
+      "expected_kind": "part",
+      "expected_name": "Theme toggle",
+      "note": "only a whole leading word The is dropped"
+    },
+    {
+      "path": "src/app/constructor/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Constructor",
+      "expected_route": "/constructor",
+      "note": "a folder named like a built-in object property is an ordinary word: ports look words up in their own entries only, never through a prototype"
+    },
+    {
+      "path": "app/valueOf/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Value of",
+      "expected_route": "/valueOf"
+    },
+    {
+      "path": "app/hasOwnProperty/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Has own property",
+      "expected_route": "/hasOwnProperty"
+    },
+    {
+      "path": "app/constructor/[slug]/page.tsx",
+      "expected_kind": "page",
+      "expected_name": "Constructor pages",
+      "expected_route": "/constructor/[slug]"
+    },
+    {
+      "path": "pages/constructor.tsx",
+      "expected_kind": "page",
+      "expected_name": "Constructor",
+      "expected_route": "/constructor"
+    },
+    {
+      "path": "constructor.html",
+      "expected_kind": "page",
+      "expected_name": "Constructor",
+      "expected_route": "/constructor"
+    },
+    {
+      "path": "components/constructor.tsx",
+      "expected_kind": "part",
+      "expected_name": "Constructor"
+    },
+    {
+      "path": "components/toString.tsx",
+      "expected_kind": "part",
+      "expected_name": "To string"
+    },
+    {
+      "path": "components/__proto__.tsx",
+      "expected_kind": "part",
+      "expected_name": "Proto",
+      "note": "a part, not a page: under app/ a folder that starts with _ is private in Next.js and never a route, so this row pins the word, not a routing rule"
+    },
+    {
+      "path": "components/sections/constructor/index.tsx",
+      "expected_kind": "part",
+      "expected_name": "Constructor"
+    }
+  ],
+  "changes": [
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "one page",
+      "expected": "Edited the Home page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "src/app/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "src/ prefix",
+      "expected": "Edited the Home page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx",
+          "app/contact/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "two pages, Home first by route",
+      "expected": "Edited the Home and Contact pages"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/contact/page.tsx",
+          "app/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "input order does not matter",
+      "expected": "Edited the Home and Contact pages"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx",
+          "app/contact/page.tsx",
+          "app/about/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "three pages named",
+      "expected": "Edited the Home, About and Contact pages"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx",
+          "app/contact/page.tsx",
+          "app/about/page.tsx",
+          "app/pricing/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "four pages: count form",
+      "expected": "Edited 4 pages"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx",
+          "app/contact/page.tsx",
+          "app/about/page.tsx",
+          "app/pricing/page.tsx",
+          "app/faq/page.tsx"
+        ],
+        "removed": []
+      },
+      "expected": "Edited 5 pages"
+    },
+    {
+      "input": {
+        "added": [
+          "app/pricing/page.tsx"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "note": "new page",
+      "expected": "Added the Pricing page"
+    },
+    {
+      "input": {
+        "added": [
+          "app/pricing/page.tsx",
+          "app/pricing/PricingTable.tsx"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "note": "colocated file joins its page",
+      "expected": "Added the Pricing page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [],
+        "removed": [
+          "app/old-offer/page.tsx"
+        ]
+      },
+      "note": "slug in sentence case",
+      "expected": "Removed the Old offer page"
+    },
+    {
+      "input": {
+        "added": [
+          "app/contact/_components/New.tsx"
+        ],
+        "modified": [
+          "app/contact/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "page status comes from the page file",
+      "expected": "Edited the Contact page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/contact/_components/Form.tsx"
+        ],
+        "removed": []
+      },
+      "note": "private folder file belongs to its page",
+      "expected": "Edited the Contact page"
+    },
+    {
+      "input": {
+        "added": [
+          "app/pricing/page.tsx"
+        ],
+        "modified": [
+          "app/page.tsx",
+          "app/contact/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "later clause summarized",
+      "expected": "Added the Pricing page and edited 2 others"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/contact/page.tsx"
+        ],
+        "removed": [
+          "app/old-offer/page.tsx"
+        ]
+      },
+      "note": "later clause with one page is named",
+      "expected": "Edited the Contact page and removed the Old offer page"
+    },
+    {
+      "input": {
+        "added": [
+          "app/pricing/page.tsx"
+        ],
+        "modified": [
+          "app/page.tsx"
+        ],
+        "removed": [
+          "app/old-offer/page.tsx"
+        ]
+      },
+      "expected": "Added the Pricing page, edited the Home page and removed the Old offer page"
+    },
+    {
+      "input": {
+        "added": [
+          "app/pricing/page.tsx"
+        ],
+        "modified": [
+          "app/page.tsx",
+          "app/contact/page.tsx"
+        ],
+        "removed": [
+          "app/old-offer/page.tsx",
+          "app/older/page.tsx"
+        ]
+      },
+      "expected": "Added the Pricing page, edited 2 others and removed 2 others"
+    },
+    {
+      "input": {
+        "added": [
+          "app/a/page.tsx",
+          "app/b/page.tsx",
+          "app/c/page.tsx",
+          "app/d/page.tsx"
+        ],
+        "modified": [
+          "app/e/page.tsx",
+          "app/f/page.tsx"
+        ],
+        "removed": [
+          "app/g/page.tsx"
+        ]
+      },
+      "expected": "Added 4 pages, edited 2 others and removed the G page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/globals.css"
+        ],
+        "removed": []
+      },
+      "note": "styles",
+      "expected": "Changed site styles"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/globals.css",
+          "tailwind.config.ts"
+        ],
+        "removed": []
+      },
+      "note": "styles collapse to one thing",
+      "expected": "Changed site styles"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "components/Header.tsx"
+        ],
+        "removed": []
+      },
+      "note": "a part",
+      "expected": "Changed the header"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "components/Header.tsx",
+          "components/Footer.tsx"
+        ],
+        "removed": []
+      },
+      "note": "two parts, sorted by name",
+      "expected": "Changed the footer and the header"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "components/Header.tsx",
+          "components/Footer.tsx",
+          "components/Hero.tsx"
+        ],
+        "removed": []
+      },
+      "note": "three or more parts become site sections",
+      "expected": "Changed 3 site sections"
+    },
+    {
+      "input": {
+        "added": [
+          "components/Banner.tsx"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "expected": "Added the banner"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [],
+        "removed": [
+          "components/Banner.tsx"
+        ]
+      },
+      "expected": "Removed the banner"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "components/FAQSection.tsx"
+        ],
+        "removed": []
+      },
+      "note": "acronym kept in a phrase",
+      "expected": "Changed the FAQ section"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/layout.tsx"
+        ],
+        "removed": []
+      },
+      "note": "root layout",
+      "expected": "Changed the site layout"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/blog/layout.tsx"
+        ],
+        "removed": []
+      },
+      "note": "nested layout belongs to its page",
+      "expected": "Edited the Blog page"
+    },
+    {
+      "input": {
+        "added": [
+          "public/images/a.png",
+          "public/images/b.png"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "expected": "Added images"
+    },
+    {
+      "input": {
+        "added": [
+          "public/images/b.png"
+        ],
+        "modified": [
+          "public/images/a.png"
+        ],
+        "removed": []
+      },
+      "note": "mixed image statuses read Changed",
+      "expected": "Changed images"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [],
+        "removed": [
+          "public/images/a.png"
+        ]
+      },
+      "expected": "Removed images"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/api/contact/route.ts",
+          "lib/email.ts"
+        ],
+        "removed": []
+      },
+      "note": "logic",
+      "expected": "Changed forms and site logic"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "package.json",
+          "next.config.js"
+        ],
+        "removed": []
+      },
+      "note": "settings",
+      "expected": "Changed site settings"
+    },
+    {
+      "input": {
+        "added": [
+          "content/blog/hello.mdx"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "note": "blog content",
+      "expected": "Added blog content"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx",
+          "app/globals.css"
+        ],
+        "removed": []
+      },
+      "note": "page then thing",
+      "expected": "Edited the Home page and changed site styles"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx",
+          "app/globals.css",
+          "components/Header.tsx"
+        ],
+        "removed": []
+      },
+      "note": "parts before styles",
+      "expected": "Edited the Home page and changed the header and site styles"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx",
+          "app/globals.css",
+          "components/Header.tsx",
+          "public/hero.jpg",
+          "lib/x.ts",
+          "package.json"
+        ],
+        "removed": []
+      },
+      "note": "four or more things become parts of the site",
+      "expected": "Edited the Home page and changed 5 parts of the site"
+    },
+    {
+      "input": {
+        "added": [
+          "public/new.png"
+        ],
+        "modified": [
+          "app/page.tsx",
+          "app/globals.css",
+          "components/Header.tsx",
+          "components/Footer.tsx"
+        ],
+        "removed": []
+      },
+      "note": "too long, things collapse to one clause",
+      "expected": "Edited the Home page and changed 4 parts of the site"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/blog/[slug]/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "dynamic blog route",
+      "expected": "Edited each page under Blog"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx",
+          "app/blog/[slug]/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "static and dynamic pages join phrases",
+      "expected": "Edited the Home page and each page under Blog"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/services/[service]/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "dynamic route under a static parent",
+      "expected": "Edited each page under Services"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/[slug]/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "dynamic route with no static parent",
+      "expected": "Edited every page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/[locale]/about/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "locale segment dropped",
+      "expected": "Edited the About page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/(marketing)/pricing/page.tsx",
+          "app/@modal/login/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "route groups and slots dropped",
+      "expected": "Edited the Login and Pricing pages"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/services/roofing/page.tsx",
+          "app/blog/roofing/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "same page name counts once",
+      "expected": "Edited the Roofing page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/very-long-page-name-that-goes-on-and-on-forever/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "long page names are cut",
+      "expected": "Edited the Very long page name that goes… page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/very-long-page-name-that-goes-on-and-on-forever/page.tsx",
+          "app/another-extremely-long-page-name-for-testing/page.tsx",
+          "app/and-yet-another-quite-long-page-slug-here/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "too long, pages switch to counts",
+      "expected": "Edited 3 pages"
+    },
+    {
+      "input": {
+        "added": [
+          "app/c-very-long-third-page-name-here-now/page.tsx"
+        ],
+        "modified": [
+          "app/a-very-long-first-page-name-here-okay/page.tsx",
+          "app/b-very-long-second-page-name-here/page.tsx"
+        ],
+        "removed": [
+          "app/d/page.tsx"
+        ]
+      },
+      "note": "counts in every page clause",
+      "expected": "Added 1 page, edited 2 others and removed 1 other"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "index.html",
+          "about.html"
+        ],
+        "removed": []
+      },
+      "note": "static html pages",
+      "expected": "Edited the Home and About pages"
+    },
+    {
+      "input": {
+        "added": [
+          "blog/my-first-post.html"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "expected": "Added the My first post page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "pages/index.tsx",
+          "pages/about.tsx"
+        ],
+        "removed": []
+      },
+      "note": "Pages Router",
+      "expected": "Edited the Home and About pages"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "pages/_app.tsx"
+        ],
+        "removed": []
+      },
+      "expected": "Changed the site layout"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/not-found.tsx"
+        ],
+        "removed": []
+      },
+      "note": "the 404 page",
+      "expected": "Edited the 404 page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "README.md",
+          "scripts/a.ts",
+          "scripts/b.ts",
+          "docs/x.md"
+        ],
+        "removed": []
+      },
+      "note": "fallback: only other files",
+      "expected": "Edited 4 files"
+    },
+    {
+      "input": {
+        "added": [
+          "README.md"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "note": "one other file",
+      "expected": "Added 1 file"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [],
+        "removed": [
+          "scripts/a.ts",
+          "scripts/b.ts"
+        ]
+      },
+      "expected": "Removed 2 files"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx",
+          "README.md"
+        ],
+        "removed": []
+      },
+      "note": "other files are left out when something else changed",
+      "expected": "Edited the Home page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          ".ai/memory.md"
+        ],
+        "removed": []
+      },
+      "note": "only the assistant notes",
+      "expected": "Updated the assistant's notes"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          ".ai/memory.md",
+          "CLAUDE.md",
+          ".claude/commands/deploy.md"
+        ],
+        "removed": []
+      },
+      "expected": "Updated the assistant's notes"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          ".ai/memory.md",
+          "CLAUDE.md",
+          "app/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "notes never appear next to real changes",
+      "expected": "Edited the Home page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "soul.md"
+        ],
+        "removed": []
+      },
+      "note": "server-managed files read as the assistant notes",
+      "expected": "Updated the assistant's notes"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [],
+        "removed": []
+      },
+      "note": "nothing",
+      "expected": "No changes"
+    },
+    {
+      "input": {
+        "added": [
+          "app/page.tsx"
+        ],
+        "modified": [
+          "app/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "a path listed twice counts once, added first",
+      "expected": "Added the Home page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "/app/page.tsx",
+          "./app/contact/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "leading slash and ./ are ignored",
+      "expected": "Edited the Home and Contact pages"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "src/App.tsx"
+        ],
+        "removed": []
+      },
+      "note": "single-page app shell",
+      "expected": "Changed the site layout"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "middleware.ts",
+          "supabase/migrations/001_init.sql"
+        ],
+        "removed": []
+      },
+      "expected": "Changed forms and site logic"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "public/fonts/inter.woff2",
+          "public/robots.txt"
+        ],
+        "removed": []
+      },
+      "note": "fonts are styles, robots.txt is settings",
+      "expected": "Changed site styles and site settings"
+    },
+    {
+      "input": {
+        "added": [
+          "app/pricing/page.tsx"
+        ],
+        "modified": [],
+        "removed": [
+          "app/(marketing)/pricing/page.tsx"
+        ]
+      },
+      "note": "a page moved between route groups was edited",
+      "expected": "Edited the Pricing page"
+    },
+    {
+      "input": {
+        "added": [
+          "app/contact/_components/Map.tsx"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "note": "a new file beside an existing page edits that page",
+      "expected": "Edited the Contact page"
+    },
+    {
+      "input": {
+        "added": [
+          "components/sections/pricing/pricing-table.tsx",
+          "components/sections/pricing/index.ts"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "note": "the barrel next to a new section is left out",
+      "expected": "Added the pricing table"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "content/settings/agency.json"
+        ],
+        "removed": []
+      },
+      "note": "a CMS JSON entry is an other file",
+      "expected": "Edited 1 file"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "content/reports/acme-seo-audit.json",
+          "app/page.tsx"
+        ],
+        "removed": []
+      },
+      "expected": "Edited the Home page"
+    },
+    {
+      "input": {
+        "added": [
+          "app/pricing/page.tsx"
+        ],
+        "modified": [
+          "app/blog/[slug]/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "a later clause with one dynamic page uses its phrase",
+      "expected": "Added the Pricing page and edited each page under Blog"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [],
+        "removed": [
+          "app/blog/[slug]/page.tsx"
+        ]
+      },
+      "expected": "Removed each page under Blog"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/page.tsx",
+          "app/blog/[slug]/page.tsx",
+          "app/about/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "three pages with a dynamic one join phrases",
+      "expected": "Edited the Home page, the About page and each page under Blog"
+    },
+    {
+      "input": {
+        "added": [
+          "components/Banner.tsx"
+        ],
+        "modified": [
+          "app/globals.css"
+        ],
+        "removed": []
+      },
+      "note": "thing clauses: Added before Changed",
+      "expected": "Added the banner and changed site styles"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/globals.css"
+        ],
+        "removed": [
+          "public/old.png"
+        ]
+      },
+      "note": "thing clauses: Changed before Removed",
+      "expected": "Changed site styles and removed images"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [],
+        "removed": [
+          "components/Banner.tsx",
+          "components/Popup.tsx"
+        ]
+      },
+      "expected": "Removed the banner and the popup"
+    },
+    {
+      "input": {
+        "added": [
+          "app/pricing/page.tsx"
+        ],
+        "modified": [
+          "components/Header.tsx",
+          "components/Footer.tsx",
+          "components/Hero.tsx"
+        ],
+        "removed": []
+      },
+      "expected": "Added the Pricing page and changed 3 site sections"
+    },
+    {
+      "input": {
+        "added": [
+          "app/(site)/faq/page.tsx",
+          "components/sections/faq/faq-accordion.tsx",
+          "components/sections/faq/index.ts",
+          "lib/schema/faq.ts"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "note": "page clause, then thing clauses",
+      "expected": "Added the FAQ page, added the FAQ accordion and changed forms and site logic"
+    },
+    {
+      "input": {
+        "added": [
+          "app/(site)/reviews/page.tsx"
+        ],
+        "modified": [
+          "components/structural/site-header.tsx"
+        ],
+        "removed": [
+          "app/(site)/old-offer/page.tsx"
+        ]
+      },
+      "expected": "Added the Reviews page, removed the Old offer page and changed the site header"
+    },
+    {
+      "input": {
+        "added": [
+          "app/(site)/reviews/page.tsx",
+          "app/(site)/gallery/page.tsx"
+        ],
+        "modified": [
+          "app/(site)/page.tsx",
+          "app/(site)/about/page.tsx",
+          "app/(site)/services/page.tsx",
+          "app/(site)/contact/page.tsx",
+          "app/(site)/faq/page.tsx",
+          "app/(site)/blog/page.tsx",
+          "app/(site)/blog/[slug]/page.tsx",
+          "app/(site)/services/[slug]/page.tsx",
+          "app/(site)/team/page.tsx",
+          "app/(site)/pricing/page.tsx",
+          "app/(site)/visit/page.tsx",
+          "app/(site)/book/page.tsx",
+          "components/sections/hero.tsx",
+          "components/sections/cta.tsx",
+          "components/structural/site-header.tsx",
+          "components/structural/site-footer.tsx",
+          "app/globals.css",
+          "tailwind.config.ts",
+          "public/images/hero.jpg",
+          "public/images/team.jpg",
+          "lib/cms.ts",
+          "package.json",
+          ".ai/memory.md",
+          "CLAUDE.md"
+        ],
+        "removed": []
+      },
+      "note": "a large first version (starter layout)",
+      "expected": "Added 2 pages, edited 12 others and changed 8 parts of the site"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "index.html",
+          "about.html",
+          "css/site.css",
+          "js/main.js",
+          "images/logo.png"
+        ],
+        "removed": []
+      },
+      "note": "static HTML site",
+      "expected": "Edited the Home and About pages and changed site styles and images"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "pages/index.tsx",
+          "pages/api/contact.ts",
+          "styles/globals.css"
+        ],
+        "removed": []
+      },
+      "note": "Pages Router site",
+      "expected": "Edited the Home page and changed site styles and forms and site logic"
+    },
+    {
+      "input": {
+        "added": [
+          "content/blog/new-post.mdx",
+          "public/blog/new-post.jpg"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "expected": "Added blog content and images"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/sitemap.ts",
+          "app/robots.ts"
+        ],
+        "removed": []
+      },
+      "note": "sitemap and robots are site settings",
+      "expected": "Changed site settings"
+    },
+    {
+      "input": {
+        "added": [
+          "public/menu.pdf"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "note": "a PDF is a file, not an image",
+      "expected": "Added 1 file"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          ".claude/skills/x/SKILL.md",
+          "components/Header.tsx"
+        ],
+        "removed": []
+      },
+      "note": "server-managed files are left out",
+      "expected": "Changed the header"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "AGENTS.md"
+        ],
+        "removed": []
+      },
+      "note": "AGENTS.md is the customer's own file",
+      "expected": "Edited 1 file"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/[locale]/page.tsx",
+          "app/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "two files of one page count once",
+      "expected": "Edited the Home page"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "components/TheHeader.vue"
+        ],
+        "removed": []
+      },
+      "note": "Vue component named TheHeader",
+      "expected": "Changed the header"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "src/app/constructor/page.tsx"
+        ],
+        "removed": []
+      },
+      "note": "a page folder named constructor is an ordinary word",
+      "expected": "Edited the Constructor page"
+    },
+    {
+      "input": {
+        "added": [
+          "components/constructor.tsx",
+          "components/toString.tsx"
+        ],
+        "modified": [],
+        "removed": []
+      },
+      "expected": "Added the constructor and the to string"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [
+          "app/valueOf/page.tsx",
+          "components/__proto__.tsx"
+        ],
+        "removed": []
+      },
+      "expected": "Edited the Value of page and changed the proto"
+    },
+    {
+      "input": {
+        "added": [],
+        "modified": [],
+        "removed": [
+          "app/constructor/[slug]/page.tsx"
+        ]
+      },
+      "note": "a dynamic page under a folder named constructor",
+      "expected": "Removed each page under Constructor"
+    }
+  ],
+  "name_checks": [
+    {
+      "name": "Updated the pricing section on the Home page",
+      "note": "the owner's example",
+      "expected_plain": true
+    },
+    {
+      "name": "Added a contact form to the About page",
+      "expected_plain": true
+    },
+    {
+      "name": "Fix the header spacing",
+      "note": "a plain verb, no colon",
+      "expected_plain": true
+    },
+    {
+      "name": "Moved e.g. the banner higher",
+      "note": "a dot inside plain words",
+      "expected_plain": true
+    },
+    {
+      "name": "Refreshed St.Patrick's Day banner",
+      "expected_plain": true
+    },
+    {
+      "name": "Version 2.0 of the menu",
+      "expected_plain": true
+    },
+    {
+      "name": "Added images for the F.A.Q. page",
+      "expected_plain": true
+    },
+    {
+      "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "note": "exactly 80 characters",
+      "expected_plain": true
+    },
+    {
+      "name": "src/app/page.tsx",
+      "note": "a path",
+      "expected_plain": false
+    },
+    {
+      "name": "Edited page.tsx",
+      "note": "a file name",
+      "expected_plain": false
+    },
+    {
+      "name": "Updated globals.css colors",
+      "expected_plain": false
+    },
+    {
+      "name": "Updated the .env file",
+      "expected_plain": false
+    },
+    {
+      "name": "Upgraded to Next.js 15",
+      "note": "jargon with a file extension",
+      "expected_plain": false
+    },
+    {
+      "name": "Updated the header\\footer",
+      "note": "a backslash",
+      "expected_plain": false
+    },
+    {
+      "name": "fix: header spacing",
+      "note": "a commit prefix",
+      "expected_plain": false
+    },
+    {
+      "name": "feat(nav): add menu",
+      "expected_plain": false
+    },
+    {
+      "name": "Chore: tidy up",
+      "note": "prefixes match in any case",
+      "expected_plain": false
+    },
+    {
+      "name": "",
+      "note": "empty",
+      "expected_plain": false
+    },
+    {
+      "name": "   ",
+      "note": "blank",
+      "expected_plain": false
+    },
+    {
+      "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "note": "81 characters",
+      "expected_plain": false
+    },
+    {
+      "name": "Hiveku AI: Updated the header",
+      "note": "the legacy agent byline, as older agents wrote it: never plain; an agent's name keeps what follows it",
+      "expected_plain": false,
+      "expected_without_byline": "Updated the header"
+    },
+    {
+      "name": "AI: Updated the header",
+      "note": "the shorter legacy byline",
+      "expected_plain": false,
+      "expected_without_byline": "Updated the header"
+    },
+    {
+      "name": "AI:Updated the header",
+      "note": "no space is needed after the byline's colon",
+      "expected_plain": false,
+      "expected_without_byline": "Updated the header"
+    },
+    {
+      "name": "  Hiveku AI:   Added the Pricing page  ",
+      "note": "spaces around the byline are trimmed",
+      "expected_plain": false,
+      "expected_without_byline": "Added the Pricing page"
+    },
+    {
+      "name": "Hiveku AI: add 1 file, edit 2 files (app/page.tsx, components/Header.tsx)",
+      "note": "the old agent branch summary: without the byline it still names files, so it is not plain either",
+      "expected_plain": false,
+      "expected_without_byline": "add 1 file, edit 2 files (app/page.tsx, components/Header.tsx)"
+    },
+    {
+      "name": "Hiveku AI:",
+      "note": "the byline alone: nothing is left",
+      "expected_plain": false,
+      "expected_without_byline": ""
+    },
+    {
+      "name": "Hiveku AI: AI: Updated the header",
+      "note": "one byline comes off, once: what follows is the agent's own words, kept as written",
+      "expected_plain": false,
+      "expected_without_byline": "AI: Updated the header"
+    },
+    {
+      "name": "AI chatbot added to the Home page",
+      "note": "AI as a word, no colon: not the byline",
+      "expected_plain": true,
+      "expected_without_byline": "AI chatbot added to the Home page"
+    },
+    {
+      "name": "Added the AI: section",
+      "note": "the byline only counts at the start",
+      "expected_plain": true,
+      "expected_without_byline": "Added the AI: section"
+    },
+    {
+      "name": "ai: updated the header",
+      "note": "not the exact byline (lower case): left as written",
+      "expected_plain": true,
+      "expected_without_byline": "ai: updated the header"
+    },
+    {
+      "name": "Hiveku AI - Updated the header",
+      "note": "no colon: not the byline",
+      "expected_plain": true,
+      "expected_without_byline": "Hiveku AI - Updated the header"
+    }
+  ]
+}

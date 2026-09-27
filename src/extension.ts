@@ -74,6 +74,9 @@ import { registerHivekuFs, envUri, accountMemoryUri } from './platformFs';
 import { refreshAccountMemoryCopy, accountMemoryDashboardUrl, type AccountMemoryCopyResult } from './accountMemory';
 import { ACCOUNT_MEMORY_OPEN_COMMAND, ACCOUNT_MEMORY_DASHBOARD_COMMAND } from './consoleTree';
 import { openDatabasePanel } from './databasePanel';
+// Versions (Wave 2): new logic lives in these modules; the hooks below are small and named.
+import { goBackToVersion, versionBeforeDeploy, VersionIndicator } from './versionFlows';
+import { checkoutTree, deployVersionSentence, serverCaps, treeThatShips } from './versions';
 
 let accounts: AccountStore;
 let log: vscode.OutputChannel;
@@ -82,6 +85,8 @@ let statusBar: vscode.StatusBarItem;
 /** Second item: the checked-out Hiveku branch; click = Switch Branch. The
  *  account item (statusBar) keeps its switch-account command. */
 let branchStatusBar: vscode.StatusBarItem;
+/** The branch bar's dot: changes on Hiveku that are not a version yet (versionFlows.ts). */
+let versionIndicator: VersionIndicator | undefined;
 let permStatusBar: vscode.StatusBarItem;
 let tree: HivekuTreeProvider;
 let treeView: vscode.TreeView<unknown>;
@@ -345,6 +350,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   permStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
   permStatusBar.command = 'hiveku.setPermissionMode';
   context.subscriptions.push(log, statusBar, branchStatusBar, permStatusBar);
+  versionIndicator = new VersionIndicator(
+    clientForAccount,
+    () => (scms.size === 1 ? [...scms.values()][0] : undefined),
+    log,
+  );
+  context.subscriptions.push(versionIndicator, versionIndicator.onDidChange(() => refreshStatusBar()));
   refreshPermStatusBar();
 
   context.subscriptions.push(
@@ -359,7 +370,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.restoreAccount', () => restoreAccount()),
     vscode.commands.registerCommand('hiveku.cloneProject', () => cloneProject()),
     vscode.commands.registerCommand('hiveku.refresh', () => withScm((s) => s.refresh())),
-    vscode.commands.registerCommand('hiveku.commit', () => withScm((s) => s.commit(), true)),
+    // After a save or push, re-read the change dot now (not after the throttle).
+    vscode.commands.registerCommand('hiveku.commit', () =>
+      withScm(async (s) => {
+        await s.commit();
+        await versionIndicator?.refreshNow(s);
+      }, true),
+    ),
     // Per-file discard from the Changes list. VS Code hands the resource state
     // for the clicked row, so resolve the owning SCM by path rather than
     // guessing the active one.
@@ -378,7 +395,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await owner.discardFile(path.relative(owner.root, fsPath).split(path.sep).join('/'));
       },
     ),
-    vscode.commands.registerCommand('hiveku.pushLocal', () => withScm((s) => s.push(), true)),
+    vscode.commands.registerCommand('hiveku.pushLocal', () =>
+      withScm(async (s) => {
+        await s.push();
+        await versionIndicator?.refreshNow(s);
+      }, true),
+    ),
     vscode.commands.registerCommand('hiveku.annotateReview', () => withScm((s) => openReviewAnnotator(s.root, s.link.project_name))),
     vscode.commands.registerCommand('hiveku.showHistory', () => withScm((s) => showHistory(s))),
     vscode.commands.registerCommand('hiveku.revert', () => withScm((s) => revert(s), true)),
@@ -797,6 +819,14 @@ async function loadWorkspaceScms(): Promise<void> {
       // HivekuScm.switchBranch, so subscribing here keeps the bar current
       // without each caller remembering to refresh it.
       extensionContext.subscriptions.push(scm.onDidChangeBranch(() => refreshStatusBar()));
+      // The change dot: local changes (every refresh) and Hiveku's own "not a
+      // version yet" (one GET, throttled; versionFlows.VersionIndicator).
+      extensionContext.subscriptions.push(
+        scm.onDidRefresh(() => {
+          refreshStatusBar();
+          versionIndicator?.refreshSoon(scm);
+        }),
+      );
       scm.refresh().catch((e) => log.appendLine(`[refresh] ${String(e)}`));
     }
   }
@@ -819,11 +849,14 @@ function refreshStatusBar(): void {
   }
   if (scms.size === 1) {
     const scm = [...scms.values()][0];
-    branchStatusBar.text = `$(git-branch) ${scm.branch}`;
-    branchStatusBar.tooltip =
-      scm.branch === 'main'
-        ? 'Hiveku branch: main (the live project). Click to switch branch.'
-        : `Hiveku branch: ${scm.branch} (off to the side; main is untouched until merged). Click to switch branch.`;
+    // A dot when this folder has local changes or Hiveku has changes that are
+    // not a version yet; clicking it then saves a version (hiveku.commit).
+    const bar = versionIndicator
+      ? versionIndicator.barState(scm, scm.sc.count ?? 0)
+      : { text: `$(git-branch) ${scm.branch}`, tooltip: `Hiveku branch: ${scm.branch}`, command: 'hiveku.switchBranch' };
+    branchStatusBar.text = bar.text;
+    branchStatusBar.tooltip = bar.tooltip;
+    branchStatusBar.command = bar.command;
     branchStatusBar.show();
   } else {
     branchStatusBar.hide();
@@ -1076,7 +1109,7 @@ async function signOut(node?: { record: AccountRecord }): Promise<void> {
     // uncommitted work instead of reassuring past it.
     const dirty = await uncommittedProjectsUnder(folder);
     const risk = dirty.length
-      ? `\n\n${dirty.length} project(s) have UNCOMMITTED changes that exist nowhere else:\n` +
+      ? `\n\n${dirty.length} project(s) have LOCAL changes not on Hiveku that exist nowhere else:\n` +
         dirty.slice(0, 5).map((d) => `  • ${d}`).join('\n') +
         (dirty.length > 5 ? `\n  …and ${dirty.length - 5} more` : '')
       : '';
@@ -1085,7 +1118,7 @@ async function signOut(node?: { record: AccountRecord }): Promise<void> {
       {
         modal: true,
         detail:
-          `${folder}\n\nCommitted work is safe on Hiveku. Anything not committed is not — ` +
+          `${folder}\n\nWork saved on Hiveku is safe. Anything only in this folder is not — ` +
           `that includes local edits, pulled .env.local secrets, hiveku-data exports and ` +
           `local automations.${risk}\n\nThe folder is moved to the OS trash, so it can be recovered from there.`,
       },
@@ -2720,7 +2753,7 @@ async function refreshSetup(): Promise<void> {
   }
   if (refreshed) {
     vscode.window.showInformationMessage(
-      `Refreshed Hiveku setup for ${details.join(', ')} — new /hiveku-* commands + CLAUDE.md are current. Your code and uncommitted changes were NOT touched.`,
+      `Refreshed Hiveku setup for ${details.join(', ')} — new /hiveku-* commands + CLAUDE.md are current. Your code and local changes were NOT touched.`,
     );
   } else {
     vscode.window.showInformationMessage('No Hiveku project or account folder found in this workspace to refresh.');
@@ -3017,7 +3050,7 @@ async function showHistory(scm: HivekuScm): Promise<void> {
   const client = await clientForAccount(scm.link.account_id);
   const history = await api.vcsHistory(client, scm.link.project_id, 100);
   if (history.length === 0) {
-    vscode.window.showInformationMessage('No commits yet.');
+    vscode.window.showInformationMessage('No versions yet.');
     return;
   }
   await vscode.window.showQuickPick(
@@ -3039,6 +3072,10 @@ async function revert(scm: HivekuScm): Promise<void> {
   if (scm.branch && scm.branch !== 'main') return revertBranch(scm);
 
   const client = await clientForAccount(scm.link.account_id);
+  // Versions (Wave 2): with project_vcs_rollback, Your site goes back to ANY
+  // version (append-only, undoable; the live site is a separate deploy).
+  // Without it, the checkpoint restore below is unchanged.
+  if ((await serverCaps(client)).rollback) return goBackWithVersions(scm, client);
   const history = await api.vcsHistory(client, scm.link.project_id, 100, 'main');
   const restorable = history.filter((c) => c.checkpoint_hash);
   if (restorable.length === 0) {
@@ -3076,8 +3113,32 @@ async function revert(scm: HivekuScm): Promise<void> {
   vscode.window.showInformationMessage(`Reverted to "${pick.commit.message}".`);
 }
 
+/** Go back to a version through project_vcs_rollback (dry run, confirm, apply, optional deploy). */
+async function goBackWithVersions(scm: HivekuScm, client: HivekuMcpClient): Promise<void> {
+  await goBackToVersion({
+    client,
+    projectId: scm.link.project_id,
+    branch: scm.branch,
+    log,
+    // Files the rollback removed on Your site are moved to the trash here.
+    root: scm.root,
+    localChanges: async () => {
+      await scm.refresh();
+      return scm.sc.count ?? 0;
+    },
+    pullInto: () => pullInto(scm, client),
+    refresh: () => scm.refresh(),
+    // The live site is its OWN call, only when the person chose it.
+    deployProduction: () => api.deploySite(client, scm.link.project_id, 'production'),
+  });
+  await versionIndicator?.refreshNow(scm);
+}
+
 async function revertBranch(scm: HivekuScm): Promise<void> {
   const client = await clientForAccount(scm.link.account_id);
+  // Versions (Wave 2): project_vcs_rollback works on branches too; the old
+  // project_vcs_revert path below is the fallback for servers without it.
+  if ((await serverCaps(client)).rollback) return goBackWithVersions(scm, client);
   const [history, branches] = await Promise.all([
     api.vcsHistory(client, scm.link.project_id, 100, scm.branch),
     api.vcsBranches(client, scm.link.project_id),
@@ -3441,7 +3502,7 @@ async function pullRequestActions(scm: HivekuScm, client: HivekuMcpClient, pr: a
     vscode.window.showWarningMessage(
       `Nothing was merged — ${conflicts.length} file(s) conflict: ` +
         `${conflicts.slice(0, 4).join(', ')}${conflicts.length > 4 ? '…' : ''}. ` +
-        `Resolve them on "${fresh.source_branch}", commit, then merge again.`,
+        `Resolve them on "${fresh.source_branch}", save a version, then merge again.`,
     );
   }
 }
@@ -3488,7 +3549,7 @@ async function deleteMergedBranch(scm: HivekuScm, client: HivekuMcpClient, branc
   if (scm.branch === branch) {
     await scm.switchBranch('main');
     if (scm.branch === branch) {
-      vscode.window.showInformationMessage(`Still on "${branch}" — nothing was deleted. Commit or discard your changes first.`);
+      vscode.window.showInformationMessage(`Still on "${branch}" — nothing was deleted. Save a version or discard your changes first.`);
       return;
     }
   }
@@ -3720,7 +3781,7 @@ async function deleteBranch(scm: HivekuScm): Promise<void> {
     await scm.switchBranch('main');
     if (scm.branch === pick.label) {
       vscode.window.showInformationMessage(
-        `Still on "${pick.label}" — nothing was deleted. Commit or discard your changes first.`,
+        `Still on "${pick.label}" — nothing was deleted. Save a version or discard your changes first.`,
       );
       return;
     }
@@ -3979,6 +4040,11 @@ async function deploy(scm: HivekuScm, preset?: api.EnvId): Promise<void> {
     );
     if (go !== 'Deploy') return;
   }
+  // Versions (Wave 2): the tree this tier ships may hold changes that are not
+  // a version yet; offer to save one first. Skipped when bindings are unknown
+  // or the server has no status tool, and never blocks on its own failure.
+  const ships = treeThatShips(tier, bindings);
+  if (ships && (await versionBeforeDeploy({ client, projectId: scm.link.project_id, tree: ships, tier, log })) === 'cancel') return;
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Deploying to ${env.label}…` },
     async () => {
@@ -3990,11 +4056,14 @@ async function deploy(scm: HivekuScm, preset?: api.EnvId): Promise<void> {
       // deploySite normalizes the route's `deploy_id` into deployment_id.
       log.appendLine(
         `[deploy] ${env.label} (${api.bindingLabel(tier, bindings)}) → ${res.deployment_id ?? '(no id)'} ${res.status ?? ''}` +
+          `${res.vcs_commit_id ? ` version=${res.vcs_commit_id}` : ''}` +
           `${res.promoted_commit_id ? ` promoted=${res.promoted_commit_id}` : ''}${res.note ? ` note: ${res.note}` : ''}`,
       );
+      const versionLine = deployVersionSentence(res);
       vscode.window.showInformationMessage(
         `Deploy to ${env.label} started${res.deployment_id ? ` (${res.deployment_id})` : ''} — ${api.bindingLabel(tier, bindings)}.` +
-          (res.note ? ` ${res.note}` : ''),
+          (res.note ? ` ${res.note}` : '') +
+          (versionLine ? ` ${versionLine}` : ''),
       );
     },
   );
@@ -4011,8 +4080,8 @@ async function pull(scm: HivekuScm): Promise<void> {
       {
         modal: true,
         detail:
-          `${scm.sc.count} uncommitted change(s) in this folder will be overwritten with ` +
-          `Hiveku's current state. Commit or push first if you want to keep them.`,
+          `${scm.sc.count} local change(s) in this folder will be overwritten with ` +
+          `Hiveku's current state. Push or save a version first if you want to keep them.`,
       },
       'Pull anyway',
     );
@@ -4036,7 +4105,9 @@ async function pullInto(scm: HivekuScm, client: HivekuMcpClient): Promise<void> 
     // branch's working tree — the same call Switch Branch makes — and records
     // its fingerprint for the behind-guard. Code only: CDN-lane assets are
     // project-wide (no branch axis) and are not part of a branch tree.
-    const tree = await api.vcsCheckout(client, scm.link.project_id, scm.branch);
+    const tree = await checkoutTree(client, scm.link.project_id, scm.branch, {
+      onNote: (note) => log.appendLine(`[pull] ${note}`),
+    });
     await materializeTree(scm.root, tree.files);
     scm.link = { ...scm.link, last_pull_at: new Date().toISOString(), last_tree_etag: tree.working_tree_etag ?? null };
     if (!tree.working_tree_etag) await scm.recordBranchEtag();

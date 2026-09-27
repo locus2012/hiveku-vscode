@@ -2,7 +2,7 @@
   "name": "hiveku-vscode",
   "displayName": "Hiveku",
   "description": "Run entire Hiveku accounts from VS Code with Claude Code — role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
-  "version": "0.85.12",
+  "version": "0.86.0",
   "publisher": "hiveku",
   "license": "MIT",
   "icon": "icon.png",
@@ -78,7 +78,7 @@
       },
       {
         "command": "hiveku.commit",
-        "title": "Hiveku: Commit to Hiveku",
+        "title": "Hiveku: Save a Version",
         "icon": "$(check)"
       },
       {
@@ -98,7 +98,7 @@
       },
       {
         "command": "hiveku.revert",
-        "title": "Hiveku: Revert to a Commit…"
+        "title": "Hiveku: Go Back to a Version…"
       },
       {
         "command": "hiveku.deploy",
@@ -1017,6 +1017,21 @@
           "type": "boolean",
           "default": true,
           "description": "Include binary assets (images, fonts, etc.) when downloading a project."
+        },
+        "hiveku.push.saveVersion": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "auto",
+            "never"
+          ],
+          "enumDescriptions": [
+            "After a push that fully lands, ask for a version name (prefilled from what changed, or from the Source Control box).",
+            "After a push that fully lands, save a version straight away, named from the Source Control box or from what changed.",
+            "Never save a version after a push. Save one any time with Hiveku: Save a Version; publishing Your site to production also saves its changes as a version first."
+          ],
+          "default": "ask",
+          "markdownDescription": "Whether **Push Local Changes** also saves the push as a version you can go back to. Only a push where every file landed is saved; a partial push never is. Needs a Hiveku server with versions on Your site (older servers keep the previous behaviour)."
         },
         "hiveku.workspaceRoot": {
           "type": "string",

@@ -73,7 +73,10 @@ const ADDED = [
 ];
 
 /** Every ask rule, as the scaffold must write them (the .mcp.json server is "hiveku"). */
-const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED];
+/** Versions Wave 2: a rollback apply always asks. */
+const VERSIONS = ['mcp__hiveku__project_vcs_rollback'];
+
+const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED, ...VERSIONS];
 const without = (...names) => EXPECTED_ASK.filter((name) => !names.includes(name));
 
 const dirs = [];
@@ -208,10 +211,10 @@ describe('Scaffolded settings: ask rules for the tools that switch ads or workfl
       [['mcp__hiveku__*'], []],
       [['mcp__*'], []],
       [['*'], []],
-      [['mcp__hiveku__ppc_*'], ['mcp__hiveku__workflow_enable', 'mcp__hiveku__workflow_resume', 'mcp__hiveku__hiveku_batch']],
+      [['mcp__hiveku__ppc_*'], ['mcp__hiveku__workflow_enable', 'mcp__hiveku__workflow_resume', 'mcp__hiveku__hiveku_batch', ...VERSIONS]],
       [['mcp__hiveku__workflow_*'], EXPECTED_ASK.filter((name) => !name.startsWith('mcp__hiveku__workflow_'))],
-      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*'], ['mcp__hiveku__hiveku_batch']],
-      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*', 'mcp__hiveku__hiveku_batch'], []],
+      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*'], ['mcp__hiveku__hiveku_batch', ...VERSIONS]],
+      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*', 'mcp__hiveku__hiveku_batch'], VERSIONS],
       [['mcp__hiveku__ppc_*enable_resource'], without('mcp__hiveku__ppc_enable_resource', 'mcp__hiveku__ppc_platform_enable_resource')],
       [['mcp__hiveku__*_experiment_*'], without('mcp__hiveku__ppc_experiment_schedule', 'mcp__hiveku__ppc_bing_experiment_create')],
       [['mcp__hiveku__ppc_linkedin_*'], without('mcp__hiveku__ppc_linkedin_creatives', 'mcp__hiveku__ppc_linkedin_campaign_update', 'mcp__hiveku__ppc_linkedin_campaign_group_update')],
@@ -289,9 +292,9 @@ describe('ensureSpendAskRules: a folder scaffolded before the ask rules', () => 
     const dir = await tmp('hk-ensure-085-');
     const before = { ...OLD, permissions: { ...OLD.permissions, ask: ['WebFetch', ...FIRST_FOUR] } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), ADDED);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...ADDED, ...VERSIONS]);
     const after = await readSettings(dir);
-    assert.deepEqual(after, { ...before, permissions: { ...before.permissions, ask: ['WebFetch', ...FIRST_FOUR, ...ADDED] } });
+    assert.deepEqual(after, { ...before, permissions: { ...before.permissions, ask: ['WebFetch', ...FIRST_FOUR, ...ADDED, ...VERSIONS] } });
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
@@ -341,7 +344,7 @@ describe('Permission gate: the ask array', () => {
     // line is only asserted when it printed. With one, every ask name must be a
     // real tool: a typo would gate nothing, silently.
     if (/allow rules/.test(run.stdout)) {
-      assert.match(run.stdout, /\b3 denied, 14 ask\b/);
+      assert.match(run.stdout, /\b3 denied, 15 ask\b/);
       assert.doesNotMatch(run.stderr, /naming no tool/);
     }
   });
@@ -415,7 +418,12 @@ describe('The ask list gates what the plugins gate', () => {
     const onAskList = new Set(critical.tools.map((tool) => tool.name));
     // hiveku_batch is the wrapper: the plugin does not list it, its hook asks on
     // any batch that carries one of the gated calls. Check that instead.
-    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch');
+    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch' && name !== 'project_vcs_rollback');
+    // project_vcs_rollback is gated on its arguments in the plugin hook (a dry run is
+    // allowed, an apply asks); an ask rule here cannot read dry_run, so it asks always.
+    const applyDecision = decideForPayload({ tool_name: 'mcp__plugin_hiveku_hk__project_vcs_rollback', tool_input: { project_id: 'p', commit_id: 'c', dry_run: false } });
+    assert.equal(applyDecision?.hookSpecificOutput?.permissionDecision, 'ask', 'the plugin hook does not ask on a rollback apply');
+    assert.ok(onAskList.has('project_vcs_rollback'), "project_vcs_rollback is not on the plugin's permission-critical ask list");
     for (const member of gated) {
       const decision = decideForPayload({ tool_name: 'mcp__plugin_hiveku_hk__hiveku_batch', tool_input: { calls: [{ tool: member, args: {} }] } });
       assert.equal(decision?.hookSpecificOutput?.permissionDecision, 'ask', `the plugin hook does not ask on a batch carrying ${member}`);

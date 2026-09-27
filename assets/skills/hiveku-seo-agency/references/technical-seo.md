@@ -19,8 +19,8 @@ one is not stated, check the tool's schema rather than guessing.
 
 ## Availability
 
-Every tool here is LIVE unless the Note says otherwise; a name that does not resolve on your key is
-"not visible to this key", never "does not exist". Two capabilities are owned elsewhere and named
+Every tool here is LIVE unless the Note says otherwise; a name that does not resolve on this
+connection is "not available on this connection", never "does not exist". Two capabilities are owned elsewhere and named
 only by description: the diff-and-preview reader for a staged implement task
 (`references/reporting-and-delivery.md` Availability) and the per-page meta and schema write path
 (`references/on-page-optimization.md` Availability).
@@ -36,7 +36,7 @@ only by description: the diff-and-preview reader for a staged implement task
 | `seo_bing_crawl_stats`, `seo_bing_inspect_url`, `seo_bing_list_sitemaps`, `seo_bing_submit_sitemap`, `seo_bing_submit_url` | LIVE | free | Bing takes `sitemap_url` and `url`. |
 | `seo_generate_sitemap`, `seo_internal_links`, `seo_schema_markup`, `seo_entity_check`, `seo_aeo_readiness`, `seo_project_get`, `seo_project_update` | LIVE | free | Hosted projects for the first three; `seo_generate_sitemap` needs WEBSITE `project_id` + `base_url` and writes nothing; `robots_txt_content` is a deploy-time fallback only (1.4). |
 | `domain_analytics_technologies_domain_technologies`, `domain_analytics_whois_overview` | LIVE | B, per request | Vendor tools; need includeDataForSEO. |
-| `fetch_url`, `web_map`, `web_scrape`, `web_extract`, `web_crawl`, `project_files_bulk_save`, `project_vcs_commit`, `deploy_site`, `project_redirects_list`, `project_redirect_create`, `project_redirects_deploy` | LIVE | free; crawl credits for `web_crawl` | `web_crawl` and the code and redirect lanes are not visible to a marketing-seo key today. |
+| `fetch_url`, `web_map`, `web_scrape`, `web_extract`, `web_crawl`, `project_file_save`, `project_vcs_commit`, `deploy_site`, `project_redirects_list`, `project_redirect_create`, `project_redirects_deploy` | LIVE | free; crawl credits for `web_crawl` | All on full, marketing and marketing-seo. On marketing and marketing-seo the code lane is one `project_file_save` per file, then `project_vcs_commit({ project_id, message })` with NO files (a version call carrying `files` or `deletedFiles` is refused there), then `deploy_site`; `project_files_bulk_save` and the build check are full only. |
 
 ---
 
@@ -117,9 +117,10 @@ only), Google's crawl-stats report and Removals (Search Console UI), or a bulk i
   `/robots.txt`, but only on a project whose code ships no robots source of its own, and never on the
   Fly preview, the dev tier, a GitHub-connected project, or a raw-source static project carrying a
   `package.json`. The file in the code always wins, so a real robots.txt still ships as
-  `public/robots.txt` through the code lane (`project_files_bulk_save` -> `project_vcs_commit` ->
-  `deploy_site`), the one lane that works on every project shape, and is verified with `fetch_url` on
-  the live URL. Never report the stored field as the live file.
+  `public/robots.txt` through the code lane (`project_file_save` of that one file ->
+  `project_vcs_commit({ project_id, message })` with NO files -> `deploy_site`, the same on full,
+  marketing and marketing-seo), the one lane that works on every project shape, and is verified
+  with `fetch_url` on the live URL. Never report the stored field as the live file.
 - **meta robots**: `web_scrape` with `formats: ['rawHtml']`, or `instant-page` for the rendered view.
 - **X-Robots-Tag**: no HTML reader sees it; `references/technical-seo-blind-spots.md` section 2.
 - **Ad-hoc crawl outside the audit**: `seo_audit_start` with `max_crawl_pages` set, then the crawl
@@ -130,8 +131,12 @@ only), Google's crawl-stats report and Removals (Search Console UI), or a bulk i
 ### 1.5 Writes and their lanes
 
 `pages_update` (pages-model title, meta, slug, sitemap flags) and `cms_write_entry` for content-level
-fields; the code lane (`project_files_bulk_save` in ONE call -> `project_vcs_commit` ->
-`deploy_site`) for robots.txt, the sitemap file, template JSON-LD, headers and middleware; redirects
+fields; the code lane for robots.txt, the sitemap file, template JSON-LD, headers and middleware
+(full: `project_files_bulk_save` in ONE call -> `project_vcs_commit` with NO files ->
+`deploy_site`; marketing and marketing-seo: `project_file_save` one file per call ->
+`project_vcs_commit({ project_id, message })` with NO files -> `deploy_site`, with no bulk save,
+no file delete and no build check on those profiles, see `references/on-page-optimization.md`
+section 1.2); redirects
 via `project_redirect_create` -> `project_redirects_deploy` (nothing is live until the deploy); the
 implement rail `seo_task_implement` (two-step confirm) stages a production deploy behind a human
 `agent_approval_approve` - never auto-approve; "implement this" is not pre-approval. Per-page meta

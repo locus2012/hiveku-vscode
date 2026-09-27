@@ -31,7 +31,7 @@ mentions, about $0.10 per keyword per engine; I = one Business Listings search, 
 | Tool | Status | Cost | Note |
 |---|---|---|---|
 | `pages_update`, `cms_write_entry` | LIVE | write | page-model fields and CMS upserts; no confirm |
-| `project_files_bulk_save`, `project_vcs_commit`, `deploy_site` | LIVE | write | the code lane; commit is not live; no confirm on deploy |
+| `project_files_bulk_save`, `project_vcs_commit`, `deploy_site` | LIVE | write | the code lane; a version is not live until the deploy; no confirm on deploy; on marketing and marketing-seo there is no bulk save: `project_file_save` per file, then `project_vcs_commit` with NO files (files or deletions in it are refused there) |
 | `project_redirect_create`, `project_redirect_update`, `project_redirect_delete`, `project_redirects_deploy` | LIVE | write | stored until deploy; deploy defaults to production |
 | `seo_gsc_submit_sitemap`, `seo_gsc_delete_sitemap`, `seo_bing_submit_sitemap`, `seo_bing_submit_url` | LIVE | write | delete destroys the reporting row, never deindexes |
 | `seo_track_keyword`, `seo_tracked_keyword_delete` | LIVE | write, G on AI lanes | delete is partial and irreversible, 2.7 |
@@ -62,10 +62,33 @@ shows only one line of prose.
 
 Before any write, all six are true and you can point at what makes each one true:
 
-1. **A tested capability on this key.** `seo_` rides full, marketing and marketing-seo keys;
-   `project_` (redirects included), `cms_` and `deploy_site` are not visible to a marketing-seo
-   key today. A tool outside the profile fails like a missing feature: say "not visible to this
-   key", never "does not exist", and route through `pages_update` or the implement rail.
+1. **A tested capability on this connection.** `seo_` rides full, marketing and marketing-seo
+   connections, and both marketing profiles also carry `cms_`, the redirect tools,
+   `project_file_save`, `project_vcs_status`, `project_vcs_commit` and `deploy_site`. What they
+   lack is the multi-file side of the code lane (`project_files_bulk_save`, `project_files_search`,
+   `project_files_bulk_get`), a file delete, the build check and rollback. On them the code lane is
+   one `project_file_save` per file, then `project_vcs_commit({ project_id, message })` with NO
+   files (a version call carrying `files` or `deletedFiles` is refused there), then `deploy_site`
+   (`references/on-page-optimization.md` section 1.2). A tool outside the profile fails like a
+   missing feature: say "not available on this connection", never "does not exist", and route
+   through the implement rail or a full connection (the profile is chosen per connection, so the
+   same key works there). Undo on these two profiles: `project_vcs_rollback` and
+   `project_vcs_history` are not on them, so settle the version to go back to BEFORE the first save
+   with `project_vcs_status({ project_id, detail: "files" })`. When `head_commit_id` is null
+   (`uncommitted_reason` 'no_version_yet'), `uncommitted` is true, or the reason is 'unknown', tell
+   the person and first save the site as it stands with `project_vcs_commit({ project_id, message
+   })` and NO files, named for what is pending; a 409 `nothing_to_commit` is success and carries
+   `latest_version`. That version (`data`, or `latest_version`) is the version to go back to; only
+   otherwise is it `head_commit_id`, with `last_version.message` and `last_version.created_at`.
+   Without that step the first version already holds the change (and anyone else's pending edits),
+   and there is nothing to go back to. The new version is `data.id` from the version call after the
+   saves, or `latest_version.id` when that call answers 409 `nothing_to_commit` (success: the change
+   is already a version). The UNDO line names the version to go back to by its name and time, the
+   way the owner's list of Your site's versions shows it, never by id; the ids go to the PM task
+   (gate 5). Going back is done by the site owner from Your site's versions, or from a full
+   connection with `project_vcs_rollback` (dry run first, then the owner's yes), then a separate
+   deploy. Never write "none" for a code lane change: with that first read done, and the version it
+   calls for saved, there is always a version to go back to.
 2. **Explicit ids from a read THIS session, with the id space named.** Website project id from
    `sites_list`; `page_id` from `pages_list`; SEO tracking project id from `seo_list_projects`;
    `connection_id` from `seo_connections_list`; `keyword_id` from `seo_tracked_keywords_list`
@@ -80,7 +103,10 @@ Before any write, all six are true and you can point at what makes each one true
    rule you need is missing, getting it written is the first change you propose.
 5. **An audit trail.** `pm_tasks_comment({ task_id, content })` carries the diff you showed, the
    approval you got, and every id the write returned: redirect `id`, `ranking.id`,
-   `deployment_id`, `checkpoint_hash`. Undo handles need those strings.
+   `deployment_id`, the version id (`data.id` from `project_vcs_commit`) or, when that call answers
+   409 `nothing_to_commit`, `latest_version.id`, the version before the change (settled before the
+   first save, gate 1) with its name and time, and a `checkpoint_hash` when you took a checkpoint.
+   Undo handles need those strings.
 6. **Remote state matches your preconditions.** The value you diffed against is only as fresh as
    its last sync (1.2).
 
@@ -93,7 +119,7 @@ Until all six hold the change is a DRAFT. Write drafts into the PM task, not int
 | Object | The read | What it settles |
 |---|---|---|
 | Page (pages model) | `pages_list({ project_id })`, `pages_get({ project_id, page_id })`, plus `fetch_url({ url })` | Stored `meta_title`, `meta_description`, `slug`, `show_in_sitemap`, `is_published`, `file_path`; and what the live HTML serves, the only diff that matters |
-| Template / code | `project_files_search({ project_id, query })`, then `project_files_bulk_get` | Which file emits the title, canonical, robots meta or JSON-LD, and whether it overrides the page row |
+| Template / code | `project_files_search({ project_id, query })`, then `project_files_bulk_get`; on marketing and marketing-seo (no search or bulk read), `project_files_list({ project_id, search })` by path, then `project_file_get` | Which file emits the title, canonical, robots meta or JSON-LD, and whether it overrides the page row |
 | Redirects | `project_redirects_list({ project_id })` | Every rule's `id`, `from_path`, `to_path`, `status_code`, `match_type`, `is_active`; the chain you are about to lengthen |
 | Sitemap | `seo_gsc_list_sitemaps({ site_url })`, `seo_gsc_get_sitemap({ site_url, feedpath })` | Submitted vs indexed, `lastDownloaded`, `errors[]`; the reporting row a delete destroys |
 | GBP listing | `seo_gbp_location({ connection_id })` | Live title, phone, address, hours, categories; refreshes the cached snapshot. Quota-limited: once per location, never looped |
@@ -155,8 +181,9 @@ CURRENT:  meta_title "Roof Repair | Acme" (pages_get this session; live <title> 
 PROPOSED: meta_title "Roof Repair in Dallas - Same-Day Estimates | Acme" (58 chars)
 IF WRONG: one page's CTR for two weeks; visible in seo_gsc_search_analytics with a page filter
           after the 3-day lag. Reversible in one call.
-SCOPE:    this page. If pages_get shows a file_path, confirm with project_files_search that the
-          template reads meta_title, or the write is a no-op that still returns 200.
+SCOPE:    this page. If pages_get shows a file_path, confirm with project_files_search (on
+          marketing-seo, project_file_get of that file_path) that the template reads
+          meta_title, or the write is a no-op that still returns 200.
 UNDO:     pages_update back to the CURRENT string
 ```
 
@@ -177,7 +204,21 @@ IF WRONG: the whole site, not a page. A noindex left in a layout removes every U
           recovery takes weeks after the fix. Time-to-notice is "the client calls".
 SCOPE:    every route the layout wraps - name them from pages_list. A staging noindex shipped
           to production is the classic post-deploy regression (technical-seo.md Play T2).
-UNDO:     project_checkpoint_restore with the commit's checkpoint_hash, then deploy again
+UNDO:     project_vcs_rollback to the version before this change (dry run, the owner's yes,
+          apply with the dry run's head_commit_id), then deploy again. Record the version id
+          (data.id from project_vcs_commit) as the handle
+```
+
+On a marketing or marketing-seo connection the card changes in CHANGE (`project_file_save` of
+that one file, then `project_vcs_commit` with NO files, then `deploy_site`), CURRENT
+(`project_file_get` of the file instead of `project_files_search`) and UNDO. The rollback there is
+the site owner's or a full connection's, and the owner's list shows names and dates, not ids, so
+the UNDO line names the version settled before the first save (gate 1) by its name and time:
+
+```
+UNDO:     go back to the version "Updated the pricing section on the Home page", saved
+          Sep 24, 2026, 3:10 PM, from Your site's versions, then deploy again. Both version
+          ids are in the PM task (gate 5)
 ```
 
 The write looks like one line, the effect is the whole index, and the damage is invisible until
@@ -416,8 +457,10 @@ backlink-opportunity, automated-report and page-schema deletes, plus `seo_rankin
   serves until the next `deploy_site`, and only where the code ships no robots source.
 - **No disavow, no directory submission, no hreflang builder, no GBP Q&A write, no GSC live
   URL test, no Rich Results Test.** Each is a hand-off, named as such.
-- **`deploy_site` has no diff preview of its own.** The diff is your `project_vcs_commit` and its
-  checkpoint; `deploy_get` reads status, not content.
+- **`deploy_site` has no diff preview of its own.** The diff is what you read before the version
+  was saved: `project_vcs_status({ project_id, detail: "files" })` lists the changed files (and
+  `project_vcs_compare` for a branch); a version carries no checkpoint. `deploy_get` reads status,
+  not content.
 - **No restore for a GBP edit, a deleted media item or a deleted reply.** Google keeps no
   version history you can reach.
 - **No gate on `is_published: false` or a slug change.** A 404 wall is one `pages_update` away.
@@ -503,7 +546,7 @@ IF WRONG:                  <pages, rankings, money, and time-to-notice>
 SCOPE:                     <every page, template, lane, location affected>
 RAILS IN PLAY:             <code guardrail? two-step confirm? harness ask? none - name which>
 APPROVED BY / WHEN:        <who said yes to THIS change>
-WRITE RESPONSE:            <returned ids: redirect id / ranking.id / deployment_id / checkpoint_hash>
+WRITE RESPONSE:            <returned ids: redirect id / ranking.id / deployment_id / version id / checkpoint_hash>
 VERIFIED BY:               <the read from 5.1, what it showed, and when>
 UNDO HANDLE:               <tool + identifier, or "none - irreversible">
 ```

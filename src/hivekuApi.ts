@@ -64,6 +64,10 @@ export interface CheckoutTree {
   head_commit_id?: string | null;
   working_tree_etag?: string | null;
   uncommitted?: boolean;
+  /** Paged answers only (a `limit` or `cursor` was sent): resume after this path; null on the last page. */
+  next_cursor?: string | null;
+  /** Paged answers only: how many files the whole tree has. */
+  total_files?: number;
 }
 
 export interface MergeResult {
@@ -337,7 +341,11 @@ export async function filesStatus(
  * extension or an agent's project_files_bulk_save({branch})) becomes a commit
  * without re-uploading bytes; the result carries `promoted: true`. A clean
  * branch answers 409 nothing_to_commit (thrown here). On main an empty commit
- * is refused up front rather than sent.
+ * is refused up front rather than sent, unless `opts.allowEmptyMain`: a server
+ * with versions on main (versions.ts serverCaps().status) turns it into a
+ * PROMOTE of everything on Your site that is not a version yet. Old servers
+ * answer that with 400 "at least one file", so only versions.ts sets it.
+ * `opts.source` ('vscode') records who saved the version; an old server ignores it.
  */
 export async function vcsCommit(
   client: HivekuMcpClient,
@@ -346,9 +354,10 @@ export async function vcsCommit(
   files: CommitFile[],
   deletedFiles: string[],
   branch?: string,
+  opts?: { source?: 'vscode'; allowEmptyMain?: boolean },
 ): Promise<CommitSummary> {
   const onBranch = 'branch' in branchArg(branch);
-  if (!onBranch && files.length === 0 && deletedFiles.length === 0) {
+  if (!onBranch && files.length === 0 && deletedFiles.length === 0 && !opts?.allowEmptyMain) {
     throw new Error('Nothing to commit on main (a commit with no files only promotes a branch working tree).');
   }
   const res = await client.callToolJson<unknown>('project_vcs_commit', {
@@ -357,6 +366,7 @@ export async function vcsCommit(
     files,
     deletedFiles,
     ...branchArg(branch),
+    ...(opts?.source ? { source: opts.source } : {}),
   });
   const commit = unwrap<CommitSummary>(res);
   return { ...commit, promoted: readPromoted(res) };
@@ -492,14 +502,22 @@ export async function vcsBranchCreate(
   return unwrap<BranchRef>(res);
 }
 
+/**
+ * ONE answer of project_vcs_checkout. Without `page` it is the whole tree,
+ * which the builder refuses with 413 content_too_large for a site over 150 MB;
+ * callers that want a whole tree use versions.ts checkoutTree(), which pages.
+ */
 export async function vcsCheckout(
   client: HivekuMcpClient,
   projectId: string,
   branch: string,
+  page?: { limit: number; cursor?: string | null },
 ): Promise<CheckoutTree> {
   const res = await client.callToolJson<unknown>('project_vcs_checkout', {
     project_id: projectId,
     branch,
+    ...(page ? { limit: page.limit } : {}),
+    ...(page?.cursor ? { cursor: page.cursor } : {}),
   });
   return unwrap<CheckoutTree>(res);
 }

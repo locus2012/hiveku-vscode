@@ -60,11 +60,16 @@ profile; the natural scoped profile is `marketing`. Re-derived from the MCP serv
 `src/tools/profiles.ts` (2026-09-12): the `marketing` key carries the whole `content_*` family,
 the whole `cms_*` family (32 tools, Webflow-backed collections included), `webflow_*`, `seo_*`,
 `social_*`, `brand_*`, `design_*`, `media_*`, `email_*`, and by name `sites_list`,
-`project_get`, `project_files_list`, `project_file_get`, `project_file_save` and `deploy_site` -
-a marketing key reads its own project ids, reads and writes CMS entries, and deploys. What it
-does NOT carry: `pages_*` (`marketing-seo` / `dev` only), the rest of `project_*` (secrets,
-databases, VCS, bulk saves - `dev`), and `account_seed_initialize` (no `account_` prefix on any
-scoped profile; `full` only - see `references/brand-foundation-api.md`). `account_context_get`,
+`project_get`, `project_files_list`, `project_file_get`, `project_file_save`,
+`project_vcs_status`, `project_vcs_commit` and `deploy_site` - a marketing key reads its own
+project ids, reads and writes CMS entries, saves versions, and deploys. A save to the site
+(`project_file_save`, or `content_publish_to_site` writing the entry's file) is live in the
+preview but is not a version: before `deploy_site`, call `project_vcs_commit({ project_id,
+message })` with NO files and a plain-language name of what changed for visitors ("Published the
+spring pricing guide on the blog") - once per piece of work; 409 `nothing_to_commit` means it is
+already a version. What it does NOT carry: `pages_*` (`marketing-seo` / `dev` only), the rest of
+`project_*` (secrets, databases, rollback and the rest of VCS, bulk saves - `dev`), and
+`account_seed_initialize` (no `account_` prefix on any scoped profile; `full` only - see `references/brand-foundation-api.md`). `account_context_get`,
 `talk_to_department`, `web_search`, `fetch_url`, and `audit_query` are always available on
 every profile; `audit_query` reads the account's MCP audit log - introspect a suspicious write
 there before re-deriving from guesswork. The content->CMS bridge in Play 4 stays the canonical

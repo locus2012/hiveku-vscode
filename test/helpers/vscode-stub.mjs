@@ -6,8 +6,9 @@
  * Import this BEFORE requiring anything from out/.
  */
 import Module from 'node:module';
+import { rm } from 'node:fs/promises';
 
-export const calls = { errors: [], infos: [], warnings: [], inputs: [], openExternal: [], executeCommand: [] };
+export const calls = { errors: [], infos: [], warnings: [], inputs: [], picks: [], openExternal: [], executeCommand: [], trashed: [] };
 export const config = new Map();
 
 class EventEmitter {
@@ -29,6 +30,8 @@ class Uri {
     }
     return new Uri(m[1], decodeURIComponent(rest.split(/[?#]/)[0]));
   }
+  // A file URI carries fsPath, as HivekuScm and versionFlows read it.
+  static file(p) { const u = new Uri('file', p); u.fsPath = p; return u; }
   toString() { return `${this.scheme}:${this.path}`; }
 }
 
@@ -44,6 +47,17 @@ class TreeItem {
 }
 class ThemeIcon { constructor(id) { this.id = id; } }
 class Disposable { constructor(fn) { this.fn = fn; } dispose() { this.fn?.(); } }
+class RelativePattern { constructor(base, pattern) { this.base = base; this.pattern = pattern; } }
+
+/** A Source Control the tests can read: the input box, the count and the Changes list. */
+function createSourceControl(id, label, rootUri) {
+  return {
+    id, label, rootUri, count: 0, acceptInputCommand: undefined,
+    inputBox: { value: '', placeholder: '' },
+    createResourceGroup: (gid, glabel) => ({ id: gid, label: glabel, resourceStates: [], dispose() {} }),
+    dispose() {},
+  };
+}
 
 const thenable = (value) => Promise.resolve(value);
 
@@ -54,11 +68,13 @@ export const vscodeStub = {
   TreeItem,
   ThemeIcon,
   Disposable,
+  RelativePattern,
+  scm: { createSourceControl },
   FileType: { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 },
   FilePermission: { Readonly: 1 },
   FileChangeType: { Changed: 1, Created: 2, Deleted: 3 },
   TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
-  ProgressLocation: { Notification: 15 },
+  ProgressLocation: { SourceControl: 1, Window: 10, Notification: 15 },
   StatusBarAlignment: { Left: 1, Right: 2 },
   window: {
     showErrorMessage: (...a) => { calls.errors.push(a); return thenable(undefined); },
@@ -66,11 +82,20 @@ export const vscodeStub = {
     showWarningMessage: (...a) => { calls.warnings.push(a); return thenable(undefined); },
     // Escape, by default: a test that wants an answer replaces this.
     showInputBox: (...a) => { calls.inputs.push(a); return thenable(undefined); },
+    // Escape, by default, like showInputBox.
+    showQuickPick: (...a) => { calls.picks.push(a); return thenable(undefined); },
+    // Runs the task at once with a progress that reports nowhere.
+    withProgress: (_opts, task) => task({ report() {} }, { isCancellationRequested: false, onCancellationRequested() { return { dispose() {} }; } }),
   },
   env: { openExternal: (u) => { calls.openExternal.push(u); return thenable(true); } },
   commands: { executeCommand: (...a) => { calls.executeCommand.push(a); return thenable(undefined); } },
   workspace: {
     getConfiguration: () => ({ get: (k, d) => (config.has(k) ? config.get(k) : d) }),
+    createFileSystemWatcher: () => ({ onDidCreate() {}, onDidChange() {}, onDidDelete() {}, dispose() {} }),
+    // Moving to the OS trash is recorded; the file then leaves the folder.
+    fs: {
+      delete: async (uri, opts) => { calls.trashed.push({ path: uri.fsPath ?? uri.path, useTrash: opts?.useTrash === true }); await rm(uri.fsPath ?? uri.path, { force: true }); },
+    },
   },
 };
 

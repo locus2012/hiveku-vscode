@@ -1,6 +1,6 @@
 ---
 name: hiveku-orient
-description: "How to operate a Hiveku account safely from Claude Code - read this FIRST before any Hiveku work. Covers which account you are on, profile-scoped keys, the you-are-not-the-only-writer rule, scratch and secrets hygiene, department agents, PM tasks, the approval and escalation rails, the Owner update, the end-of-session memory write-back, and what to do when a Hiveku tool itself fails or a capability is missing. Also load this for any risky ask before touching a tool: wipe / reset / clear out a department's memory, delete memory entries, skip the dry run, force or blind-overwrite a tree-replace push (delete_missing), approve or reject everything pending in the approval queue, restore a checkpoint over current work, or ship to a client's live site without checks."
+description: "How to operate a Hiveku account safely from Claude Code - read this FIRST before any Hiveku work. Covers which account you are on, profile-scoped keys, the you-are-not-the-only-writer rule, scratch and secrets hygiene, department agents, PM tasks, the approval and escalation rails, the Owner update, the end-of-session memory write-back, and what to do when a Hiveku tool itself fails or a capability is missing. Also load this for any risky ask before touching a tool: wipe / reset / clear out a department's memory, delete memory entries, skip the dry run, force or blind-overwrite a tree-replace push (delete_missing), approve or reject everything pending in the approval queue, restore a checkpoint over current work, roll the live project (Your site) back to an earlier version, or ship to a client's live site without checks."
 ---
 
 Read and follow this before using any Hiveku tool.
@@ -94,6 +94,17 @@ every profile):
   cannot see the checkpoint tools, say the snapshot cannot be taken - do not run the destructive
   step anyway. Deletion targets are never derived by glob or pattern - only from explicit ids or
   paths the user named, or a manifest you both read.
+- **Saving is not a version; version every finished change.** A website save is live in the
+  preview straight away (on `main`, "Your site", it is also what the next deploy ships), but no
+  version holds it until `project_vcs_commit({ project_id, message })` with NO files - once per
+  change the owner would recognize, after the saves and checks, before `deploy_site`. The
+  `message` is a plain-language name of what changed for visitors ("Updated the pricing section
+  on the Home page"): never file paths, `fix:` prefixes, tool names or an "AI:" byline. It holds
+  everyone's unversioned changes, not only yours - `project_vcs_status` shows them first. To go
+  back, `/hiveku:rollback`: a dry run first, the person's yes, then the apply; it never touches
+  the live website, which changes only with a separate, separately confirmed publish. With the
+  person, say "version" and "Your site", never "commit" or "main". A folder can turn the
+  end-of-session reminder off with `"version_reminder": false` in `.hiveku/guardrails.json`.
 - **Start strategic work with `account_context_get({ domain })`.** It returns the persona, brand
   voice, avatars, memory, skills and rules. Skipping it is the single most common cause of output
   that sounds nothing like the client. The `domain` values are a fixed enum - see below. Full-key
@@ -217,6 +228,13 @@ These requests arrive, usually phrased casually. Treat the answers as response c
   only place a colleague's new work is visible before it is destroyed. Run `dry_run`, read the
   list, then push. "The last dry run was clean" does not carry over - the point is what changed
   since it ran.
+- **"Just roll the site back and put it live."** Two steps, two yeses. Run the rollback dry
+  run (`project_vcs_rollback`, the default) and show what it changes and which version it goes
+  back to; apply only on an explicit yes, with the dry run's `head_commit_id` as
+  `expected_head_commit_id` (on Your site also its `live_fingerprint` as
+  `expected_live_fingerprint`). Then offer the publish as its own step (`/hiveku:deploy`) with
+  its own yes. Never bundle them, and never apply a rollback someone has not seen the dry run
+  of: it is undoable, but the live site is not, once published.
 - **"Approve everything in the queue so we can move on."** No. `agent_approval_approve` EXECUTES
   each staged action for real - `action: 'deploy_project'` deploys code to the client's live
   production site, `'github_commit'` pushes to their repository. One item at a time, preview shown
@@ -224,7 +242,7 @@ These requests arrive, usually phrased casually. Treat the answers as response c
   staged work. Anything you are unsure about stays in the queue and goes to the owner as a
   question.
 
-All three are the operations where a second's convenience converts someone else's finished work
+All four are the operations where a second's convenience converts someone else's finished work
 into a recovery project.
 
 ## Department domains - one table, two different enums
@@ -636,8 +654,8 @@ as a plain question in their words, never a tool name. Three families, in priori
 1. **The safety check before a risky act** - the duplicate/fraud screen before paying a bill, a
    tracking check before any ads-performance verdict, a checkpoint before a destructive edit.
 2. **The follow-through after a read** - after listing missed calls or voicemails, offer to text
-   the caller back; after a commit, say plainly "that's saved but NOT live yet - want me to put
-   it live?"; after real work in any department, offer to log it as a PM task so it shows in the
+   the caller back; after saving a version, say plainly "that's saved as a version but NOT live
+   yet - want me to put it live?"; after real work in any department, offer to log it as a PM task so it shows in the
    client's status.
 3. **The automation on repetition** - when you watch the same manual play a second time, or a
    when-X-do-Y process run by hand, offer the matching workflow template or scheduled run ("want

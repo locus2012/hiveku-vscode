@@ -17,7 +17,12 @@ Two invariants first. (1) **Bindings decide which tree a tier ships**, never the
 - There is no switch. `project_vcs_checkout({ project_id, branch })` is a READ: it returns the
   branch's full tree (`{ files: [{path, content, encoding}] }` plus `head_commit_id`,
   `working_tree_etag`, `uncommitted`) so you can materialize it locally, and it changes
-  nothing server-side - not the editor, not any tier, and no tool does. The working branch is
+  nothing server-side - not the editor, not any tier, and no tool does. It pages: send
+  `limit` (1-2000 files) and then `cursor: <next_cursor>` until `next_cursor` is null (a
+  paged answer adds `total_files`; restart if a branch's `working_tree_etag` changes between
+  pages). Unpaged, a read of Your site over 150 MB answers 413 `content_too_large` with a
+  `hint` to page ("Nothing was changed"). On Your site `working_tree_etag` is always null
+  and `uncommitted` always false here: read `project_vcs_status` for its unversioned state. The working branch is
   the `branch` parameter you pass on every file tool: `project_files_bulk_get` /
   `project_file_get` read a branch's working tree; `project_file_save` /
   `project_files_bulk_save` / `project_file_delete` write it; `project_files_status({
@@ -31,6 +36,16 @@ Two invariants first. (1) **Bindings decide which tree a tier ships**, never the
   uncommitted edits promotes them first. `project_vcs_branches` lists every branch with
   `ahead` / `behind` (null on `main` and on a branch with no base: "does not apply", not "in
   sync"), `uncommitted`, and `working_tree_etag`.
+- Versions on Your site. A save to `main` is live in the preview and is what a deploy
+  ships, but it is not a version (`uncommitted: true` on the save's answer).
+  `project_vcs_commit({ project_id, message })` with NO files saves everything on Your site
+  that no version holds yet, from any writer, as ONE version (`data.promoted` true; 409
+  `nothing_to_commit` = already a version). `project_vcs_status({ project_id, detail:
+  "files" })` shows `uncommitted`, `latest_changes` and `changed_files` first. Name it in
+  plain language for the site owner ("Updated the pricing section on the Home page"): never
+  paths, `fix:` prefixes, tool names or an "AI:" byline. Once per change, before
+  `deploy_site`. Hiveku also saves a version automatically before a publish, a merge or a
+  rollback - a safety net with a generic name.
 - Promote. Writes with `branch` update the working tree only (`uncommitted: true`,
   `working_tree_etag`, `checkpoint_hash: null` with a `note`). `project_vcs_commit({
   project_id, branch, message })` with NO `files` / `deletedFiles` PROMOTES the working tree
@@ -56,14 +71,43 @@ Two invariants first. (1) **Bindings decide which tree a tier ships**, never the
   path does not exist, `status` `added` / `removed` / `modified` / `same`, sides over 1 MB
   come back `tooLarge`. `project_vcs_compare({ from, to })` lists the paths and statuses
   first; both include uncommitted working-tree edits.
-- Revert a branch: `project_vcs_revert({ project_id, branch, commit_id,
-  expected_head_commit_id, message? })` writes a NEW commit (kind `revert`) whose tree is the
-  target commit's and moves the head there - linear history, nothing deleted, and the
-  branch's uncommitted edits are DISCARDED as part of the move. `commit_id` must be on this
-  branch (400 `not_revertable`); `main` is refused (400 `main_not_allowed` - `main` rolls back
-  through `project_checkpoint_restore` with a commit's `checkpoint_hash`); always pass
-  `expected_head_commit_id` so a concurrent save answers 409 `branch_changed` instead of
-  being thrown away. A live branch preview is not resynced - restart it.
+- Roll back (Your site or a branch): `project_vcs_rollback({ project_id, commit_id,
+  branch? })` is a DRY RUN unless `dry_run: false` - it reports `target`, `noop`,
+  `changes.files` (`changed` / `removed` / `added_back`), `changes.pages`, `auto_version`
+  (unsaved work will be saved first as "Saved before rollback"), `versions_undone`,
+  `skipped.shared_assets`, `live_includes_undone_work` and the `head_commit_id` (plus
+  `live_fingerprint` on Your site). Show the person the counts and the version's name, get a
+  yes, then apply with `dry_run: false`, `expected_head_commit_id` (REQUIRED on Your site:
+  400 `expected_head_required`) and, on Your site, `expected_live_fingerprint`. It writes a
+  NEW version (kind `revert`, `source` `rollback`, `rolled_back_to`) whose files match the
+  target - append-only, the newer versions stay, so it is undoable. It changes NO deployed
+  tier: a publish is a separate `deploy_site` with its own yes. Refusals: 400
+  `not_in_history`, 404 `commit_not_found`, 409 `branch_changed` (someone saved since: re-run
+  the dry run and ask again; when it answers a re-send after a timeout, see below), 409
+  `ai_turn_running` (the in-app AI is mid-request), 409 `content_unavailable` (offer the
+  `checkpoint_hash` restore). 409 `rollback_incomplete` (Your site only) is not a refusal:
+  files WERE written, so never say nothing changed. `failed` lists the files not put back; empty means every file was put back but the new version was not
+  recorded. To finish it: when the answer's `head_commit_id` is the dry run's `head_commit_id`
+  or `saved_before.id` (the rollback's own "Saved before rollback" version), apply again with
+  `expected_head_commit_id` set to THIS answer's `head_commit_id` and without
+  `expected_live_fingerprint`; any other `head_commit_id` means someone else saved as well, so
+  run a new dry run and ask again. A 524 or a timeout on an apply does not mean it failed:
+  re-send the identical call (409 `idempotency_pending` while the first still runs; once it is
+  done, its answer only when it succeeded and nothing was saved since, otherwise the call runs
+  again) or read `project_vcs_history` (a version newer than the dry run's `head_commit_id`
+  whose `rolled_back_to` is the target means it finished) before any new dry run. If the
+  re-send answers 409 `branch_changed`, the first run may have finished or stopped part way, so
+  never say nothing changed: read `project_vcs_history`. A version newer than the dry run's
+  `head_commit_id` whose `rolled_back_to` is the target means it finished. A "Saved before
+  rollback" version at the top (the `branch_changed` answer's `head_commit_id`) that is the
+  ONLY version newer than the dry run's `head_commit_id` means it stopped part way: finish it
+  as for `rollback_incomplete` (apply with that `head_commit_id` as `expected_head_commit_id`,
+  without `expected_live_fingerprint`, on the same yes). Anything else, including a "Saved
+  before rollback" version with other versions between it and the dry run's `head_commit_id`,
+  means someone else saved as well: run a new dry run and ask again. Database, CMS entries
+  and shared media-library images are not rolled back. `project_vcs_revert` is the older
+  branch-only form (it discards unsaved branch edits instead of saving them); prefer
+  `project_vcs_rollback`.
 - Tools without a `branch` parameter are `main`-only and REFUSE `branch` rather than silently
   writing `main` (`branch_unsupported_for_tool`): the tarball import lane,
   `project_file_move`, `project_file_restore`, `project_files_bulk_delete`,
@@ -75,8 +119,8 @@ Two invariants first. (1) **Bindings decide which tree a tier ships**, never the
   It applies the non-conflicting changes and returns `{ merged_into, applied, deleted,
   conflicts, commit }`. Files changed on BOTH sides are returned in `conflicts` and are NOT
   overwritten - resolve them yourself and merge again. The branch is not deleted, so a
-  partial merge is recoverable. A `main` merge commit carries a `checkpoint_hash`, so the
-  whole branch's work can be undone in one restore. Reviewed work takes the PR lane below.
+  partial merge is recoverable. A merge into `main` is a version, so the whole branch's
+  work can be undone with one rollback. Reviewed work takes the PR lane below.
 - Delete a finished branch with `project_vcs_branch_delete({ project_id, branch, confirm:
   true })` - `confirm` is a query parameter and required (400 `confirm_required`). Refused for
   `main` (400), while bound to an environment (409 - clear the binding first), with an open
@@ -157,11 +201,13 @@ Two invariants first. (1) **Bindings decide which tree a tier ships**, never the
 
 ## Checkpoints
 
-- Snapshot BEFORE risky work: `checkpoint_create({ project_id, description })` captures
-  every current file, every asset, and (when configured) a DB backup, and returns a
-  `checkpoint_hash` - record it in your reply. Take one before any bulk refactor,
-  `delete_missing` tree replace, dependency bump, or DB migration - and immediately before
-  any `production` deploy, so the rollback plan points at a checkpoint minutes old.
+- Versions are the everyday undo for FILES; a checkpoint is for what they do not hold.
+  `checkpoint_create({ project_id, description })` captures every current file, every
+  asset, and (when configured) a DB backup, and returns a `checkpoint_hash` - record it in
+  your reply. Take one before a DB migration or data import, a `delete_missing` tree
+  replace, replacing or deleting shared media-library images (`assets_upload` /
+  `assets_delete` / `assets_migrate_to_public`, `public/<folder>/`), or a production deploy
+  that ships database or shared-image changes.
   `project_files_bulk_save({ delete_missing: true })` already takes one automatically and
   aborts with `code: 'checkpoint_failed'` before touching anything if it cannot. Clean up
   with `checkpoint_delete`.
@@ -230,9 +276,10 @@ One bad file does not need a whole-tree restore:
   as version_number ints). `format: 'unified'` returns a unified-diff string,
   `format: 'json'` returns hunks; binary files are flagged `binary: true` and not diffed.
 - `project_file_restore` restores one file to an earlier version by writing the prior
-  content as a NEW version - history stays linear, no destructive rewrites. Pass
-  `commit: true` to also push the restored content to GitHub (recommended on a
-  GitHub-connected project so the rollback shows in commit history with a clear message).
+  content as a NEW file version - history stays linear, no destructive rewrites; on Your
+  site the restore is also recorded as a version (`data.versioning`). `commit: true` only
+  pushes the restored content to GitHub (recommended on a GitHub-connected project); it is
+  not a Hiveku version.
 
 ## Source of truth: the GitHub axis (from Play 7)
 

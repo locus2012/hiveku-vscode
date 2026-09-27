@@ -109,6 +109,13 @@ const SLOW_TOOL_TIMEOUT_MS = new Map<string, number>(Object.entries({
   project_files_bulk_save: 290_000,
   // A full branch tree read out of S3/Postgres; maxDuration = 180 on the route.
   project_vcs_checkout: 180_000,
+  // Rollback reads the target's files and writes a new version; the route is
+  // maxDuration = 300. Like every entry here it is still capped at
+  // EDGE_TIMEOUT_CEILING_MS (the edge closes the connection first), so a slow
+  // apply can time out here while the server finishes it: versionFlows.ts
+  // treats that as "not known", asks the dry run again, and never says
+  // "nothing was changed" for it.
+  project_vcs_rollback: 300_000,
   // Spawns an isolated Fly app and syncs the branch tree into it before
   // answering; route maxDuration = 180. Aborting client-side leaves the app
   // running with no previewSessionId to poll or tear down.
@@ -407,6 +414,24 @@ export class HivekuMcpClient {
       throw new McpToolError(`Tool ${name} errored: ${text}`, name, parseJsonOrUndefined(text));
     }
     return result;
+  }
+
+  /**
+   * The names of the tools this key may call (tools/list, filtered server-side
+   * to the key's scope and profile). One request that returns the whole
+   * registry, so callers cache it: versions.ts serverCaps() asks once per
+   * client, and a reconnect makes a new client, which asks again.
+   */
+  async listToolNames(): Promise<string[]> {
+    await this.initialize();
+    const result = await this.request<{ tools?: Array<{ name?: unknown }>; _meta?: McpToolResult['_meta'] }>(
+      'tools/list',
+      {},
+      EDGE_TIMEOUT_CEILING_MS,
+    );
+    noteRegistryStamp(result?._meta);
+    const tools = Array.isArray(result?.tools) ? result.tools : [];
+    return tools.map((t) => t?.name).filter((n): n is string => typeof n === 'string' && n.length > 0);
   }
 
   /** Call a tool that returns a single JSON-serialized text block. */
