@@ -82,9 +82,9 @@ First session on a Microsoft connection, then quarterly.
      (`conversion_goal_count`, `recording_goal_count`, ...) are `null`, never `0`, when the goal read
      did not happen: a null count is not "no goals". Anything that is not a proven `true` blocks
      Play 7 and every conversion-based bidding strategy. A goal at `NoRecentConversions` has a LIVE tag
-     and nothing converted in the last 7 days (expected while paused), not a broken tag; and a missing
-     per-goal conversion volume is a Hiveku gap (Hiveku does not yet read Microsoft's per-goal report),
-     not a Microsoft limit.
+     and nothing converted in the last 7 days (expected while paused), not a broken tag. Per-goal 7- and
+     30-day volume comes from Microsoft's goals report (click-dated); when it is missing, `coverage_gaps`
+     says why, and it is unknown, not zero.
 6. `ppc_bing_keyword_performance` with `ad_group_id` omitted sweeps all synced ad groups. The ONLY source of Bing keyword ids (keywords are not mirrored locally). Read editorial status: a disapproved keyword is a silent zero.
 7. `ppc_bing_ad_extension_list` and `ppc_bing_shared_negative_list_list` for coverage gaps. The
    extension read is **TYPE-SCOPED** (default `SitelinkAdExtension` + `CalloutAdExtension`), so a

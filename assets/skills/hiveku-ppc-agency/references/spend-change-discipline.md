@@ -550,9 +550,10 @@ The enable is the write that starts spend, and three traps sit at the call itsel
   in a row can flip auto mode back to prompting; do not rely on it.
 - **Read Microsoft conversion health for what it says.** A goal at `NoRecentConversions` means the UET
   tag is live and nothing converted in Microsoft's last 7 days, which is expected while the campaign
-  is paused; a broken tag reads `TagUnverified` or `TagInactive`. "No per-goal conversion volume" is a
-  Hiveku gap (Hiveku does not yet read Microsoft's per-goal report), not a Microsoft limit. Say both
-  that way to the owner.
+  is paused; a broken tag reads `TagUnverified` or `TagInactive`. Its 7- and 30-day counts come from
+  Microsoft's goals report and are credited to the date of the ad click, so a quiet week can still show
+  conversions from older clicks. Missing counts are unknown, not zero, and `coverage_gaps` says why.
+  Say both that way to the owner.
 
 ## 5. Verify after writing
 

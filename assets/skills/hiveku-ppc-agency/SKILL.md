@@ -471,9 +471,11 @@ NOT a bare `memory_create`. Link the report file in the PM task.
   in this session (read-only, or a no-op or preview where possible). A memory note or handoff that says
   "broken" is a claim to re-test, not a fact.
 - **Microsoft conversion health:** a goal at `NoRecentConversions` means the UET tag is live and nothing
-  converted in Microsoft's last 7 days (expected while paused), not a broken tag. "No per-goal
-  conversion volume" is a Hiveku gap (Hiveku does not yet read Microsoft's per-goal report), not a
-  Microsoft limit.
+  converted in Microsoft's last 7 days (expected while paused), not a broken tag. Microsoft goals carry
+  7- and 30-day conversions from Microsoft's goals report, credited to the date of the ad click. Missing
+  counts are unknown, not zero: `coverage_gaps` says why (the report was not ready or not readable this
+  run, or the account runs Shopping, which that report does not cover). An urgent `zero_volume_primary`
+  on Bing means 0 conversions in 30 days while the account got 200+ non-Shopping clicks.
 - The Google-only ops family fails on microsoft/meta/tiktok/linkedin connections - route non-Google mutations
   through `ppc_platform_*` and non-Google reads through the platform tools or cached `ppc_metrics`.
 - Don't mix currencies or platform-defined metrics (a Meta "conversion" is not a Google "conversion" is not a
