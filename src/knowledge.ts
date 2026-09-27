@@ -647,7 +647,7 @@ const HIVEKU_ALLOW: string[] = [
 // The extension does not run the Claude Code plugin's hook (that hook matches
 // only mcp__plugin_hiveku_hk__ tools), so these rules are the only ask its
 // mcp__hiveku__ tools get. The list mirrors the plugin's forced asks for the
-// same tools (lib/tool-safety.mjs LIVE_CHANGE_WRITES, plugin 0.26.34) and the
+// same tools (lib/tool-safety.mjs LIVE_CHANGE_WRITES, plugin 0.26.36) and the
 // Codex plugin's prompts. Each name was checked as a write on the MCP server:
 // - Switching serving on by status: the Google-only and the cross-platform
 //   enable (the status path every PAUSED create and push points at), and three
@@ -675,7 +675,7 @@ const HIVEKU_ALLOW: string[] = [
 // on every call: a pause-only ppc_bulk_edit, a LinkedIn creatives list, a
 // TikTok split-test read and a rename through the three update tools all
 // prompt, and in a run with nobody to answer (claude -p, a scheduled cadence)
-// they are refused. The vendored PPC skills (plugin 0.26.34) note the prompt
+// they are refused. The vendored PPC skills (plugin 0.26.36) note the prompt
 // where those reads are taught.
 // NOT here: budget and bid edits (the plugin's ask list gates those), single
 // pauses, pure reads, the creates that land PAUSED or DRAFT, experiment

@@ -52,7 +52,7 @@ const FIRST_FOUR = [
 ];
 
 /**
- * The rules added with plugin 0.26.34 / Codex 0.1.17, which gate the same
+ * The rules added with plugin 0.26.36 / Codex 0.1.18, which gate the same
  * tools: three that can switch ads on by status (and ask on every call,
  * because they also pause and read), four that can restart or widen delivery
  * without a status change, and the two that switch a workflow on.
