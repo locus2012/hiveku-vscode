@@ -600,9 +600,23 @@ the other side does not degrade gracefully; it 404s or returns nothing.
 
 `pm_projects_create` has a `website_project_id` field that links a PM project to its website
 (`pm_projects_update` sets it later, `null` unlinks). A website's review feedback lands in the
-website's linked PM project. If a site has more than one linked project, the annotation server
-picks one arbitrarily, so check `project_annotation_settings_get`'s `review_assignee.pm_project`
-before setting a cross-company review assignee.
+site's oldest linked PM project that is not archived, and `project_annotation_settings_get`'s
+`review_assignee.pm_project` names it. Linking a project created after the site's current one does
+not move it, but linking an older one does: the rule goes by the project's creation date, not the
+link date. A cloned site (`site_clone` or the dashboard's Clone Project) or a site made with
+`site_create` or `site_create_external` has no linked PM project until the editor, the tasks page, a discussion convert or the first review comment
+creates one, and on a site with no linked project that is not archived the project you link becomes
+where feedback lands, so call `project_annotation_settings_get` before linking. To move it, unlink
+each older one (`pm_projects_update` with `website_project_id: null`) or share the existing one
+with the other company; unlinking keeps that project and its tasks in the PM project lists, but they
+leave this site's Tasks page and the editor's "This Project" task view, and their "Implement with
+AI" can no longer find the site's code. Archive the older project (`status: 'archived'`) only
+when its work is finished, because archiving hides it and all its open tasks from every list. When
+no linked project is left, the next writer creates one ("Website Feedback: <site>" from a review
+comment, "PM - <site>" from the editor or the tasks page), so read `review_assignee.pm_project`
+rather than assuming a name. Only that project's team can be the review assignee, so check
+`project_annotation_settings_get`'s `review_assignee.pm_project` before setting a cross-company
+review assignee.
 
 Also note `list_projects` exposes `github_repo_full_name`, which is usually null even when GitHub
 IS connected - `sites_list` reads the canonical GitHub state, so never report "GitHub

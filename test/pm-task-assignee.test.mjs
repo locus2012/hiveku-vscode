@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { resetCalls, vscodeStub } from './helpers/vscode-stub.mjs';
 import { loadOut, fakeClient } from './helpers/load.mjs';
 
@@ -183,7 +184,71 @@ describe('scaffolded instructions teach default assignees and the project roster
     assert.match(review.crud, /`review_assignee_id`: read it with `project_annotation_settings_get`, set it with `project_annotation_settings_set`/);
     assert.match(review.crud, /take the id from `project_annotation_settings_get`'s `review_assignee\.people`, which lists the team even before a PM project is linked/);
     assert.doesNotMatch(review.crud, /listed by `pm_project_team`\), else to the PM project's default assignee/);
-    assert.match(review.crud, /the annotation server picks one arbitrarily/);
+    // One primary linked PM project (2026-09-27): the oldest that is not
+    // archived, never an arbitrary one, and how to move it: unlink first,
+    // archive only a finished project (archiving hides its open tasks).
+    assert.match(review.crud, /Review feedback lands in the site's oldest linked PM project that is not archived \(`review_assignee\.pm_project`, even when `review_assignee\.linked_project_count` is above 1\)\./);
+    // Round 8: EACH older one. With three or more linked projects, unlinking
+    // only the oldest hands feedback to the next-oldest.
+    assert.match(review.crud, /To move feedback, unlink each older one \(`pm_projects_update` with `website_project_id: null`\); archive it only when its work is finished, because archiving hides it and its open tasks from every list\./);
+    assert.match(review.crud, /The review assignee must be on that project's team; `review_assignee\.stale` is true when the saved person is not \(they left, or they are only on another linked project's team\)\./);
+    assert.match(review.crud, /When no linked project is left the next writer creates one, so read `review_assignee\.pm_project` rather than assuming a name\./);
+    assert.doesNotMatch(review.crud, /archive or unlink/i);
+    assert.doesNotMatch(review.crud, /arbitrar/i);
+    for (const d of manifest.departments) {
+      assert.doesNotMatch(`${d.crud ?? ''} ${d.setup ?? ''}`, /picks? one (of them )?arbitrarily/i, `${d.id}: still says a linked PM project is picked arbitrarily`);
+      assert.doesNotMatch(`${d.crud ?? ''} ${d.setup ?? ''}`, /unlink the older (project|one)\b/i, `${d.id}: still says to unlink only the older project`);
+    }
     assert.match(pm.crud, /take the id from `project_annotation_settings_get`'s `review_assignee\.people`/);
+  });
+
+  test('the vendored skills in assets/skills do not teach the retired linked-project rules', async () => {
+    // assets/skills is the plugin's skills copied byte for byte by `npm run
+    // gen:skills` and shipped in the extension. check:skills compares it with
+    // the sibling plugin checkout, which can itself be stale, so the retired
+    // sentences are scanned here too: a linked project "picked arbitrarily",
+    // and archiving offered as the first way to move feedback.
+    const root = fileURLToPath(new URL('../assets/skills/', import.meta.url));
+    const files = [];
+    const walk = async (dir) => {
+      for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+        const child = path.join(dir, entry.name);
+        if (entry.isDirectory()) await walk(child);
+        else if (entry.name.endsWith('.md')) files.push(child);
+      }
+    };
+    await walk(root);
+    assert.ok(files.some((f) => f.endsWith(path.join('hiveku-orient', 'SKILL.md'))), 'the vendored orient skill is missing');
+    const offenders = [];
+    for (const file of files) {
+      const text = (await fs.readFile(file, 'utf8')).replace(/\s+/g, ' ');
+      const rel = path.relative(root, file);
+      if (/picks? one (of them )?arbitrarily/i.test(text)) offenders.push(`${rel}: a linked PM project picked arbitrarily`);
+      if (/archive or unlink the old project/i.test(text)) offenders.push(`${rel}: archiving offered first`);
+      // Round 7: only dashboard-created sites have "PM - <site>" from birth.
+      // Sites made with site_create, site_create_external or site_clone start
+      // with none, so a new link there becomes where feedback lands.
+      if (/Linking a newer project does not move it\./.test(text)) offenders.push(`${rel}: a new link never moves feedback`);
+      if (/"PM - <site>"[^.]*from (creation|the start)/i.test(text)) offenders.push(`${rel}: every site has "PM - <site>" from creation`);
+      if (/no PM project yet/i.test(text)) offenders.push(`${rel}: "no PM project yet"`);
+      // Round 8: a site cloned on the dashboard starts with none too; unlinking
+      // only the oldest of three hands feedback to the next-oldest; and linking
+      // an older existing project does move feedback (creation-date order).
+      if (/created from the dashboard have[^.]*from birth/i.test(text)) offenders.push(`${rel}: a dashboard clone counted as born with "PM - <site>"`);
+      if (/unlink the older (project|one)\b/i.test(text)) offenders.push(`${rel}: unlink only the older project`);
+      if (/(a new link|linking a new one) does not move (it|feedback)/i.test(text)) offenders.push(`${rel}: a new link never moves feedback`);
+    }
+    assert.deepEqual(offenders, []);
+    const orient = (await fs.readFile(path.join(root, 'hiveku-orient', 'SKILL.md'), 'utf8')).replace(/\s+/g, ' ');
+    assert.ok(
+      orient.includes(
+        "Linking a project created after the site's current one does not move it, but linking an older one does: the rule goes by the project's creation date, not the link date. A cloned site (`site_clone` or the dashboard's Clone Project) or a site made with `site_create` or `site_create_external` has no linked PM project until the editor, the tasks page, a discussion convert or the first review comment creates one, and on a site with no linked project that is not archived the project you link becomes where feedback lands, so call `project_annotation_settings_get` before linking.",
+      ),
+      'the vendored orient skill does not say which sites start with no linked PM project, or that linking an older project moves feedback',
+    );
+    assert.ok(
+      orient.includes('To move it, unlink each older one (`pm_projects_update` with `website_project_id: null`)'),
+      'the vendored orient skill does not say to unlink each older project',
+    );
   });
 });
