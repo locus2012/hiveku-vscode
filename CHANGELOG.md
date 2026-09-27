@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.85.9
+- **Bing conversion health reads real numbers.** Hiveku now reads Microsoft's per-goal conversion report, so each Bing conversion goal shows its conversions in the last 7 and 30 days, credited to the date of the ad click. The vendored paid-ads playbooks now tell agents:
+  - a missing count is unknown, not zero (the answer's `coverage_gaps` says why);
+  - a goal that only the report saw, such as an offline call goal, is listed separately;
+  - an urgent "dead goal" on Bing means 0 conversions in 30 days while the account got 200+ non-Shopping clicks.
+
+  Re-vendored from plugin 0.26.34.
+
 ## 0.85.8
 - **The sales playbook points to the right switch.** When the sales agent is switched off, the skills now say an account owner or admin switches it on from the Sales agent's memory page (CRM, then the Agent menu), and that the per-session cost cap is raised under Settings on the same page. They used to point to a "Settings → AI" page that does not exist. Re-vendored skills match plugin 0.26.31.
 
