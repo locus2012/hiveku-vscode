@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.85.11
+- **Task assignment: the whole shared team, and default assignees.**
+  - The agent instructions in Hiveku account folders now say to take PM assignee ids from `pm_project_team`, which lists both companies on a shared project. `crm_list_users` is only this account's own team.
+  - Leaving out the assignee now hands a new task to the section's default assignee, then the project's. To create a task with nobody on it, pass `null`. Projects and sections set their defaults with `default_assignee_id`, and review feedback can go to its own person with `review_assignee_id`.
+  - In the account console's New task picker, "(project default)" leaves the choice to the project, and "(unassigned)" really creates the task unassigned. Before, "(unassigned)" sent nothing, which now means "use the default".
+  - The PM and review help texts in the department registry say the same.
+
+  Re-vendored from plugin 0.26.35.
+
 ## 0.85.10
 - **Running a workflow asks first.**
   - "Run" on a workflow is now "Run for real", in the Automations panel, the account console and the Run Workflow command. It shows a confirmation before anything happens: "Run this workflow for real now? Its emails, texts and record changes happen."
