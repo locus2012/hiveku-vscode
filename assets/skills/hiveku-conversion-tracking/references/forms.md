@@ -149,7 +149,7 @@ This is **the form-side gap explanation**. It is the tool you run the moment a f
 
 ### The buckets (they sum to the total)
 
-`deleted | duplicate | spam | archived | workflow_failed | no_attribution | unpaid_attribution | counted`
+`deleted | duplicate | spam | archived | excluded | workflow_failed | no_attribution | unpaid_attribution | counted`
 
 | Bucket | What it means | What you do |
 |---|---|---|
@@ -157,6 +157,7 @@ This is **the form-side gap explanation**. It is the tool you run the moment a f
 | `duplicate` | Deduped against another row | Expected and healthy. Remember dedupe never links two rows of the **same source**, so anything here was cross-source. A `duplicate` count near the `counted` count is normal on a site running both embed writers |
 | `spam` | Classified spam by `classifyFormSubmission`. **The row still exists** | Read the rows, do not read the number. Human-looking rows here means the reCAPTCHA hostname trap or a name-based rule beating a real value. Machine-shaped rows at constant daily volume means a pixel or bot |
 | `archived` | Archived in the UI | Same conversation as `deleted`, softer. Often a client workflow you did not know about |
+| `excluded` | Captured automatically before its form or page was excluded, or before capture was switched off (section 11). Judged by the site's capture settings as they are NOW, so it moves when they change. The four buckets above still win: a spam row is `spam` whether or not its form is excluded | Not a lead, and not uploaded as an offline conversion (one uploaded before the exclusion stays with the platform). The platform's own tag may still have fired on those pages and counted them, which is part of the gap. If a real enquiry form sits here, the rule is wrong: fix it with the owner (`/hiveku:form-capture`). Erase the rows only if the owner wants them gone: `marketing_form_capture_purge`, dry run first. Until agent execution is switched on the execute answers 403 `agent_execute_disabled`, and the owner erases in the dashboard (section 10) |
 | `workflow_failed` | The row exists; the downstream half failed | **This is the "we never got the email" bucket.** The lead is captured, the business was not told. The sweeper retries the CRM half for `needs_attention`; anything still sitting here is your action item |
 | `no_attribution` | No source could be recovered at all | Expect some. A large share means an instrumentation problem, not a lead problem. Attribution is recovered `utm_params -> landing_page -> page_path`, all-or-nothing per source, so this bucket means all three were empty |
 | `unpaid_attribution` | Attributed, but to a channel that is not the paid one you are reconciling | **The single most common honest answer to "the ad platform shows fewer".** These are real leads from organic, direct, or referral. They should not be in a paid count |

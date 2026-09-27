@@ -284,7 +284,8 @@ A file input inside a captured form is handled by the platform. The visitor pick
 tool call, not archaeology: `marketing_form_conversion_audit` returns form submissions with
 their source attribution (UTMs, click ids, channel, landing page), aggregated the way a
 platform aggregates, plus named discrepancy buckets that SUM TO THE TOTAL - deleted,
-duplicate, spam, archived, workflow_failed, no_attribution, unpaid_attribution, counted.
+duplicate, spam, archived, excluded, workflow_failed, no_attribution, unpaid_attribution,
+counted (`excluded`: a form the site's capture settings now exclude, so not a lead).
 Use `buckets.counted` as OUR number and explain the gap with the rest; unlike the dashboard
 Forms tab it INCLUDES spam, deleted and duplicate rows and labels them, because they ARE
 the answer. ALWAYS read the caveats in the response before reporting a discrepancy (this is

@@ -107,10 +107,13 @@ gap. A stable 18 percent gap is a constant. An 18 percent gap that became 44 per
 **The Hiveku side of the triangle now has its own instruments** (visible to marketing keys via the
 `marketing_` prefix). `marketing_form_conversion_audit` explains a platform-vs-CRM gap for FORM fills:
 submissions with their source attribution, aggregated the way a platform aggregates, plus named
-discrepancy buckets that SUM TO THE TOTAL (deleted, duplicate, spam, archived, workflow_failed,
-no_attribution, unpaid_attribution, counted) - use `buckets.counted` as our number and explain the gap
-with the rest; `has_click_id` isolates paid-click submissions recovered from utm_params OR the
-landing-page URL, which catches real paid clicks the CRM recorded as organic.
+discrepancy buckets that SUM TO THE TOTAL (deleted, duplicate, spam, archived, excluded,
+workflow_failed, no_attribution, unpaid_attribution, counted) - use `buckets.counted` as our number and
+explain the gap with the rest (`excluded` = rows from forms the site's capture settings now exclude: not
+leads, not uploaded as offline conversions - one uploaded before the exclusion stays with the platform -
+and the platform's own tag may have counted them);
+`has_click_id` isolates paid-click submissions recovered from utm_params OR the landing-page URL, which
+catches real paid clicks the CRM recorded as organic.
 `marketing_call_attribution_breakdown` does the same for CALLS - by source/medium/campaign and day, plus
 the call-quality read the platform structurally cannot give (duration distribution against THIS
 account's configured threshold, disposition mix, missed/voicemail/abandoned: Google counts a 12-second
