@@ -1318,9 +1318,12 @@ export async function pmTaskCreate(
   client: HivekuMcpClient,
   title: string,
   projectId: string,
-  extras: { description?: string; priority?: string; due_date?: string; assigned_to_id?: string } = {},
+  /** assigned_to_id: leave it out for the section's, then the project's,
+   *  default assignee; null for an unassigned task; an id to assign. */
+  extras: { description?: string; priority?: string; due_date?: string; assigned_to_id?: string | null } = {},
 ): Promise<unknown> {
   const args: Record<string, unknown> = { title, project_id: projectId };
+  // undefined and '' are left out; null is sent (it means "unassigned").
   for (const [k, v] of Object.entries(extras)) if (v !== undefined && v !== '') args[k] = v;
   return client.callToolJson<unknown>('pm_tasks_create', args);
 }

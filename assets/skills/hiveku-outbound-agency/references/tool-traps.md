@@ -394,4 +394,6 @@ sales/full keys only), the operating order is:
   (the Resend surface). Cold-email volume lives on the campaign counters and in
   `outbound_health_status`. Never label one as the other, never sum them.
 - **`email_webhook_create` is for Hiveku's own send events**, not provider replies. Provider
-  replies come via `workflow_provision_webhook` + the provider's webhook settings, or polling.
+  replies come via `workflow_provision_webhook` + the provider's webhook settings, or polling. The
+  provisioned workflow is created switched off, so `workflow_enable` it (on the user's yes) before
+  the URL goes into the provider.

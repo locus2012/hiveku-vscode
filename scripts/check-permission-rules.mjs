@@ -173,7 +173,9 @@ if (!existsSync(REGISTRY)) {
 
   // An ask rule naming no tool gates nothing, silently. A warning, not a
   // failure: the local registry build can predate a tool the server has.
-  const known = new Set(all.map((t) => t.name));
+  // hiveku_batch is served by the MCP server's own handler (src/tools/local-tools.ts),
+  // not the Olympus registry this reads, so name it here as known.
+  const known = new Set([...all.map((t) => t.name), 'hiveku_batch']);
   const unknownAsk = [...asked].filter((n) => !known.has(n));
   if (unknownAsk.length) {
     console.warn(

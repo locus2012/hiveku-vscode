@@ -228,8 +228,14 @@ read their output conservatively, and note they are `seo_`-prefixed - invisible 
 ## 7. `marketing_form_conversion_audit` - where the leads went
 
 **The discrepancy buckets SUM TO THE TOTAL**, which makes this an explanation, not an estimate:
-`deleted | duplicate | spam | archived | workflow_failed | no_attribution | unpaid_attribution |
-counted`.
+`deleted | duplicate | spam | archived | excluded | workflow_failed | no_attribution |
+unpaid_attribution | counted`.
+- `excluded` = captured from a form or page the site's CURRENT capture settings exclude (a
+  sign-in form, an excluded page or form, capture switched off) - not a lead, and not uploaded
+  as an offline conversion (one uploaded before the exclusion stays with the platform). The
+  platform's own tag may still have fired on those pages and counted them, so these rows can be
+  part of a platform-above-CRM gap. It follows the settings as they are now, so it moves when they
+  change.
 - `spam` includes leads filed by the hostname/reCAPTCHA check: a production site fronted by a proxy
   on a hostname not registered on the project scores 0 and is filed to spam with nobody told
   (remedy: register the domain).
@@ -365,9 +371,11 @@ gates whether tracking fires while editing; `seo_gtm_install` installs a contain
   click is not added, does not move the capture timestamp, and is recoverable only from the landing
   URL server-side. This explains most "wrong attribution" reports, and `source_history[]` on the
   contact is the ONLY place that knows WHEN a click happened.
-- *Platform count ABOVE the CRM* - MANY_PER_CLICK counting, duplicate install, or short calls
-  clearing the duration bar. *CRM count ABOVE the platform* - `no_attribution` /
-  `unpaid_attribution` leads, consent-denied conversions, or the offline lane never enabled.
+- *Platform count ABOVE the CRM* - MANY_PER_CLICK counting, duplicate install, short calls
+  clearing the duration bar, or `excluded` form rows (the platform's own tag may still have fired
+  on those pages and counted them, and one uploaded before the exclusion stays with the platform).
+  *CRM count ABOVE the platform* - `no_attribution` / `unpaid_attribution` leads, consent-denied
+  conversions, or the offline lane never enabled.
 - *Calls attributed to the wrong visitor* - pool DID reassignment; session matching is anchored to
   `call.started_at` so a late sweep cannot credit whoever holds the DID now. Read the crediting pool
   session in `marketing_call_attribution_list`.

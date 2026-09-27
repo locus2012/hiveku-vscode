@@ -503,7 +503,8 @@ export const DEPARTMENTS: Department[] = [
       'returns the token once. Other trigger rows: ' +
       '`workflow_trigger_create({workflow_id,name,node_id,trigger_type,config})` after the node (check `trigger-types.json` for ' +
       'config keys); remove with `workflow_trigger_delete`. For a webhook-in from scratch, `workflow_provision_webhook({name})` ' +
-      'does create+node+trigger in one shot (with `authentication:"bearer"` the token is shown once). ' +
+      'does create+node+trigger in one shot (with `authentication:"bearer"` the token is shown once); the workflow is ' +
+      'created switched off, so its URL runs nothing until `workflow_enable`. ' +
       'VERIFY BEFORE ENABLING: `workflow_validate({workflow_id})` after every batch of edits, then dry-run with ' +
       '`workflow_test({workflow_id,input_data})` — it fires NO real side effects and writes no run row, so the evidence is on its ' +
       'response: `data.step_states[<node_id>]` carries `.output.would_have` and `.template_values` for simulated nodes and ' +
@@ -514,13 +515,16 @@ export const DEPARTMENTS: Department[] = [
       'never move, but a webhook node whose trigger was deleted gets a NEW URL, named in the response: re-point its senders). ' +
       'Enable/disable: `workflow_enable`/`workflow_disable` (enabling a disabled workflow is refused with 422 ' +
       '`{error:"workflow_invalid", issues}` while validate reports errors; pass `allow_incomplete:true` only on the operator\'s ' +
-      'explicit yes). A create that starts enabled (`workflow_create_from_template` by default) is never refused: when its ' +
-      'response carries `validation_warning`, fix the listed nodes or disable it. ' +
+      'explicit yes). Every create path makes the workflow switched off, and `workflow_enable` is the only call that ' +
+      'switches one on (`workflow_update` refuses `is_enabled:true` with `workflow_enable_required`). ' +
       'Run for real: `workflow_run` (a run parked on a wait or approval answers 202 `status:"waiting"` with its `run_id`: ' +
       'poll `workflow_run_get`, never re-run it). Delete: `workflow_delete`. ' +
-      'TEMPLATES + FORM-WIRING: skip hand-building — `workflow_templates_list` → `workflow_create_from_template({ slug, overrides })`. ' +
+      'TEMPLATES + FORM-WIRING: skip hand-building — `workflow_templates_list` → ' +
+      '`workflow_create_from_template({ slug, overrides, is_enabled: false })` (created switched off; `workflow_enable` ' +
+      'switches it on after the user says yes). ' +
       'To wire EVERY form in a website project in ONE call: `workflow_bulk_provision_for_project({ project_id, template_slug, ' +
-      'file_paths?, dry_run: true })` (dry-run first) — provisions a submit-handler workflow per form; single form: ' +
+      'file_paths?, dry_run: true })` (dry-run first) — provisions a submit-handler workflow per form, each created switched ' +
+      'off (`workflow_enable` each after the user says yes); single form: ' +
       '`workflow_bind_form({ workflow_id, project_id, form_file_path })`. Set who gets notified with `workflow_set_recipient`.',
   },
   {
@@ -926,12 +930,22 @@ export const DEPARTMENTS: Department[] = [
       { id: 'tasks', label: 'Tasks', tool: 'pm_tasks_list', args: { limit: 500 }, columns: [{ key: ['task_number', 'id'], label: '#' }, { key: 'title' }, { key: 'status' }, { key: ['assigned_to.name', 'assigned_to.email'], label: 'assignee' }, { key: 'priority' }, { key: 'task_type', label: 'type' }, { key: 'due_date', label: 'due', date: true }, { key: 'project.name', label: 'project' }] },
       { id: 'milestones', label: 'Milestones', tool: 'pm_milestones_list', columns: [{ key: 'name' }, { key: 'status' }, { key: 'due_date', label: 'due', date: true }] },
       { id: 'recurrences', label: 'Recurring tasks', tool: 'pm_task_recurrence_list', columns: [{ key: 'title' }, { key: 'cron' }, { key: 'is_active', label: 'active' }, { key: 'last_fired_at', label: 'last fired', date: true }] },
-      { id: 'sections', label: 'Sections', tool: 'pm_sections_list', scope: { parentTool: 'pm_projects_list', parentIdKey: 'id', parentLabelKey: 'name', argKey: 'project_id' }, columns: [{ key: '_parent', label: 'project' }, { key: 'name' }, { key: 'sort_order', label: 'order' }] },
+      { id: 'sections', label: 'Sections', tool: 'pm_sections_list', scope: { parentTool: 'pm_projects_list', parentIdKey: 'id', parentLabelKey: 'name', argKey: 'project_id' }, columns: [{ key: '_parent', label: 'project' }, { key: 'name' }, { key: 'sort_order', label: 'order' }, { key: 'default_assignee_id', label: 'default assignee' }] },
     ],
     crud:
       'Projects: `pm_projects_create` / `_update` / `_delete`. Tasks: `pm_tasks_create` (+`_create_bulk`) / `_update` / ' +
       '`_delete` / `_complete` / `_uncomplete` / `_comment` / `_reassign_bulk`; attachments `pm_task_attachment_create` / ' +
-      '`_delete`. Sections: `pm_sections_create` (project_id + name [+ sort_order]; no update/delete tool — create-only). ' +
+      '`_delete`. Sections: `pm_sections_create` (project_id + name [+ sort_order, default_assignee_id]) / `_update` ' +
+      '(project_id + section_id; name, sort_order, is_collapsed, default_assignee_id) / `_delete`. ' +
+      'Assignees: take ids from `pm_project_team` (project_id; the project\'s own team plus, on a shared project, the ' +
+      'other company\'s people, labelled by company, emails hidden); `crm_list_users` is this account\'s own team only. ' +
+      'On `pm_tasks_create`, omit `assigned_to_id` to let the section\'s default assignee, then the project\'s, apply; ' +
+      'pass null (or \'\') to create the task unassigned; pass an id to assign. Set a default with `default_assignee_id` ' +
+      'on `pm_projects_update` or `pm_sections_create` / `pm_sections_update` (\'\' or null clears it; the person must be ' +
+      'on the project team, else a refusal with field `default_assignee_id`). Moving an unassigned task into a section ' +
+      'with a default assigns it. Review feedback tasks can have their own assignee (`review_assignee_id` on ' +
+      '`project_annotation_settings_set`; take the id from `project_annotation_settings_get`\'s `review_assignee.people`); ' +
+      'without one they follow the project default. ' +
       'Milestones: `pm_milestones_create` / `_update` / `_delete` / `_close`. ' +
       'Recurrences: `pm_task_recurrence_create` / `_update` / `_delete` / `_pause` / `_resume` / `_run_now`.',
   },
@@ -1204,6 +1218,11 @@ export const DEPARTMENTS: Department[] = [
       'PM task. Work one with `project_annotation_get({project_id, annotation_id})` \u2014 it returns the comment thread, ' +
       'the linked task status, and `deployment_branch`, which is the only reliable statement of WHICH CODE the reviewer ' +
       'saw (fix the wrong branch and nothing the client can see changes).\n' +
+      'The task lands in the website\'s linked PM project and goes to the site\'s review assignee when one is set ' +
+      '(`review_assignee_id`: read it with `project_annotation_settings_get`, set it with `project_annotation_settings_set`; ' +
+      '\'\' or null clears it; take the id from `project_annotation_settings_get`\'s `review_assignee.people`, which lists ' +
+      'the team even before a PM project is linked), else to the PM project\'s default assignee. With more than one ' +
+      'linked PM project (`review_assignee.linked_project_count` above 1) the annotation server picks one arbitrarily.\n' +
       'To SEE the pin, `project_annotation_screenshot({project_id, annotation_id})` returns the screenshot with the ' +
       "reviewer's marker composited on it \u2014 the amber dot and crosshair are HIVEKU'S MARKER, not part of the site, so " +
       'never "fix" them. Do not do the {xPct,yPct} arithmetic by hand; on a long page that is a guess.\n' +

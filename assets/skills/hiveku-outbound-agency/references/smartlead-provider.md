@@ -60,9 +60,13 @@ anything else:
    `outbound_add_sales_asset({ asset_type, name, url?, content?, use_cases?, persona_tags? })`
    with `asset_type` one of pricing | calendar | case_study | one_pager | demo | other. The
    calendar link is the minimum - without it every positive reply improvises a booking step.
-5. Reply events: `workflow_provision_webhook({ name })` -> `{ webhook_url, trigger_id }`; paste
-   `webhook_url` into the provider's own webhook settings to push replies into a Hiveku workflow.
-   Otherwise rely on Hiveku's own inbox sync plus the reply-triage worker. (`email_webhook_create`
+5. Reply events: `workflow_provision_webhook({ name, is_enabled: false })` ->
+   `{ workflow_id, webhook_url, trigger_id }`. The workflow is created switched off: its URL answers
+   SmartLead with a 200 but runs nothing, so a reply sent to it then is not acted on and SmartLead
+   does not send it again. Build and `workflow_test` the workflow, switch it on with
+   `workflow_enable` once the user says yes, and only then paste `webhook_url` into the provider's
+   own webhook settings to push replies into it. Otherwise rely on Hiveku's own inbox sync plus the
+   reply-triage worker. (`email_webhook_create`
    covers Hiveku's OWN email send events, NOT provider replies - never use it for this.)
 
 ## Infrastructure

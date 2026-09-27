@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.85.12
+- **More of the calls that start or restart ads now ask first, and so does switching a workflow on.** Hiveku folders already asked before the two ad switch-on tools and the two experiment starts. They now also ask before a bulk status edit (`ppc_bulk_edit`), a LinkedIn creatives call, a TikTok split-test call, applying a Google recommendation, and the Meta campaign, LinkedIn campaign and LinkedIn campaign group updates (a later end date can put a campaign that has ended back into delivery, and the group update also changes budgets). They also ask before switching a workflow on (`workflow_enable`) or clearing the automatic pause Hiveku puts on a failing workflow (`workflow_resume`). A batch call (`hiveku_batch`) asks too, because it can carry any of these. The rule is on the tool, so a pause-only bulk edit, a LinkedIn creatives list and a TikTok split-test read ask too, and a scheduled or `claude -p` run cannot make those calls. Adding keywords does not ask. This matches the Claude Code plugin 0.26.36 and the Codex plugin 0.1.18. Folders you already have pick up the new rules the next time the extension opens them; no Refresh Setup needed. The Autonomous mode description now says which calls still ask.
+- **New workflows start switched off.** Every Hiveku tool Claude uses to make a workflow (a template install, a webhook, wiring a site's forms) now creates it switched off, and only switching it on makes it run. The Automations panel's own buttons and the department agents keep their own behaviour. The department guidance Claude reads now says so: test the workflow, and switch it on once you say yes. For a SmartLead reply webhook, it is switched on before the URL goes into SmartLead; while a workflow is off its URL accepts replies but does nothing with them, and SmartLead does not send them again.
+- **The vendored skills match plugin 0.26.36.** The SEO, PPC, content, outbound and web skills carry the same two changes: new workflows start switched off, and the paid-ads playbooks list the calls that ask first and note where a read now asks too.
+
+## 0.85.11
+- **Task assignment: the whole shared team, and default assignees.**
+  - The agent instructions in Hiveku account folders now say to take PM assignee ids from `pm_project_team`, which lists both companies on a shared project. `crm_list_users` is only this account's own team.
+  - Leaving out the assignee now hands a new task to the section's default assignee, then the project's. To create a task with nobody on it, pass `null`. Projects and sections set their defaults with `default_assignee_id`, and review feedback can go to its own person with `review_assignee_id`.
+  - In the account console's New task picker, "(project default)" leaves the choice to the project, and "(unassigned)" really creates the task unassigned. Before, "(unassigned)" sent nothing, which now means "use the default".
+  - The PM and review help texts in the department registry say the same.
+
+  Re-vendored from plugin 0.26.35.
+
 ## 0.85.10
 - **Running a workflow asks first.**
   - "Run" on a workflow is now "Run for real", in the Automations panel, the account console and the Run Workflow command. It shows a confirmation before anything happens: "Run this workflow for real now? Its emails, texts and record changes happen."

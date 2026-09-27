@@ -230,7 +230,9 @@ verify connection state (`integration_list` on a full key; else read `integratio
 `outbound_list_campaigns` rows), connect SmartLead in the dashboard (dashboard-ONLY -
 `integration_create` 422s for it), `.env` keys only if running the worker, seed sales assets
 (the calendar link is the minimum), reply webhooks via `workflow_provision_webhook` (NEVER
-`email_webhook_create` - that is Hiveku's own send events).
+`email_webhook_create` - that is Hiveku's own send events). The provisioned workflow is created
+switched off: switch it on with `workflow_enable` after the user says yes, BEFORE the URL goes into
+SmartLead, or the replies sent in between are not acted on.
 
 ## 3. List building + segmentation
 

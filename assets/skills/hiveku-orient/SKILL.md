@@ -150,27 +150,49 @@ every profile):
   `Mozilla`) in Site > Hosting > Firewall: `hiveku-web-agency/references/firewall.md`.
 - **PM tasks are required.** Create the task with
   `pm_tasks_create({ project_id, title, assigned_to_id })`, where `project_id` comes from
-  `pm_projects_list` (or `pm_projects_create`) and `assigned_to_id` is the `id` field from
-  `crm_list_users` - NOT `clerk_user_id`, which is a different id space and errors the whole write.
-  The field is `title`, not `name`.
-  **An empty roster is a real answer.** `crm_list_users` lists the account's Team Members only
-  (people whose home account it is, plus invited members). Agency and SaaS operators working a
-  client account without an invitation are not listed and cannot be assigned. When it returns
-  `{ users: [], hint }`, or when the person the work belongs to is not in the list, leave
-  `assigned_to_id` (and `owner_id` on CRM records) unset: the task or record is created
-  unassigned, which is correct. Never borrow another member's id to stand in for them, and
-  never use an id from another account. Tell the user once that inviting them under Team
-  Members makes them assignable, then carry on. Comment as you go with `pm_tasks_comment`, read the thread back
-  with `pm_task_comments_list`, and close with `pm_tasks_complete({ id, summary })` (sets
+  `pm_projects_list` (or `pm_projects_create`) and `assigned_to_id` is a member `id` from
+  `pm_project_team({ project_id })` - NOT `clerk_user_id`, which is a different id space and
+  errors the whole write. The field is `title`, not `name`.
+  **Who can be assigned.** `pm_project_team` is the roster for PM assignment: the people on the
+  project's own account and, when the project is shared, the other account's people too (each
+  labelled by company; the other company's emails are hidden). It also returns the project's
+  `default_assignee_id` and whether the project is shared. `crm_list_users` is this account's
+  own team only: it is the roster for CRM owners, and on a shared project it misses the other
+  company's people, so prefer `pm_project_team` for PM work.
+  **Omit, null, or an id.** Leave `assigned_to_id` out and the new task goes to its section's
+  default assignee, else the project's (each checked against the current team, so someone who
+  has left is skipped). Pass `null` (or `''`) to create it unassigned even when a default is set.
+  Pass an id to assign that person. Moving an unassigned task into a section that has a default
+  (`pm_tasks_update({ id, section_id })`) assigns it to that section's default. Defaults are set
+  with `pm_projects_update` and `pm_sections_create` / `pm_sections_update`
+  (`default_assignee_id`; `''` or `null` clears; someone off the project team is refused with
+  `field: 'default_assignee_id'`), and review feedback tasks can have their own assignee
+  (`review_assignee_id`), else they follow the project default: take that id from
+  `project_annotation_settings_get`'s `review_assignee.people` (it lists the team even before a PM
+  project is linked). `hiveku-pm-mission-control` has the rules.
+  **An empty roster is a real answer.** The roster lists Team Members only (people whose home
+  account it is, plus invited members). Agency and SaaS operators working a client account
+  without an invitation are not listed and cannot be assigned. When the roster comes back empty
+  (`members: []` from `pm_project_team`, `{ users: [], hint }` from `crm_list_users`), or when
+  the person the work belongs to is not in it, leave `assigned_to_id` (and `owner_id` on CRM
+  records) unset: the task goes to the default assignee when one is set and is otherwise
+  created unassigned, and the record is created unowned, which is correct. Never borrow another
+  member's id to stand in for them, and never use an id from another account unless
+  `pm_project_team` lists that person (the other company on a shared project). Tell the user
+  once that inviting them under Team Members makes them assignable, then carry on. Comment as
+  you go with `pm_tasks_comment`, read the thread back with `pm_task_comments_list`, and close
+  with `pm_tasks_complete({ id, summary })` (sets
   status='done', completed_at=now, progress_percentage=100; the summary is recorded as an audit
   comment). `pm_tasks_complete` takes no attribution argument - attribution is set at create/update
   time. To reopen a task closed too early use `pm_tasks_uncomplete`, never `pm_tasks_update`: the
   update PATCH allow-list cannot clear `completed_at`, so the task keeps reading as done in every
   report while sitting in an open status.
-  Visibility: `crm_list_users` reaches full, sales and helpdesk keys only (and sales in turn
-  cannot see `pm_tasks_create`); on other scoped keys ask the user for the assignee rather than
-  guessing an id. A tool missing from the key's profile is a scope question; the tool answering
-  an empty list is the empty-roster case above. For bulk, `pm_tasks_create_bulk` creates up to 500 tasks per call (`project_id` +
+  Visibility: every key that can create a PM task (`pm_tasks_create`, or `create_task` on a sales
+  key) also sees `pm_project_team`. `crm_list_users` reaches full, sales and helpdesk keys only
+  (and sales in turn cannot see `pm_tasks_create`). With neither roster tool in the session, ask the user for the assignee
+  rather than guessing an id, or leave it out so the default applies. A tool missing from the
+  key's profile is a scope question; the tool answering an empty list is the empty-roster case
+  above. For bulk, `pm_tasks_create_bulk` creates up to 500 tasks per call (`project_id` +
   `title` per row, `name` accepted as alias; ownership of every `project_id` is validated before
   any insert, so one bad id blocks the whole batch).
 - **Every completed task ends with an Owner update** - two to four calm, plain sentences a busy owner
@@ -573,12 +595,18 @@ the other side does not degrade gracefully; it 404s or returns nothing.
   no account-wide website lister.
 - **pm_projects** - the PM board: tasks, milestones, sections, recurrences. Resolve with
   `pm_projects_list` (or the equivalent `list_projects`) and `get_project({ project_id })`.
-  `pm_tasks_create`, `pm_task_recurrence_create` and `mc_task_spawn_pm` all want THIS id.
+  `pm_tasks_create`, `pm_task_recurrence_create`, `mc_task_spawn_pm` and `pm_project_team` all
+  want THIS id.
 
-`pm_projects_create` has a `website_project_id` field that links a PM project to its website. Also
-note `list_projects` exposes `github_repo_full_name`, which is usually null even when GitHub IS
-connected - `sites_list` reads the canonical GitHub state, so never report "GitHub disconnected"
-off the pm_projects field.
+`pm_projects_create` has a `website_project_id` field that links a PM project to its website
+(`pm_projects_update` sets it later, `null` unlinks). A website's review feedback lands in the
+website's linked PM project. If a site has more than one linked project, the annotation server
+picks one arbitrarily, so check `project_annotation_settings_get`'s `review_assignee.pm_project`
+before setting a cross-company review assignee.
+
+Also note `list_projects` exposes `github_repo_full_name`, which is usually null even when GitHub
+IS connected - `sites_list` reads the canonical GitHub state, so never report "GitHub
+disconnected" off the pm_projects field.
 
 `account_audit_health` is worth one call before a daily/standup pass on an unfamiliar account: a
 single-call health snapshot with counts and last-activity timestamps for memory, Mission Control,

@@ -601,6 +601,10 @@ const HIVEKU_ALLOW: string[] = [
   // and the _list already match the globs above; the settings update and the
   // purge (a permanent erase) match nothing here and keep prompting.
   'mcp__hiveku__marketing_form_capture_preview',
+  // The PM assignee roster (a GET: GET /api/olympus/pm/projects/:id/team), by
+  // EXACT name: no glob above matches it, and the work-tracking section tells
+  // the agent to read it before assigning anyone or setting a default.
+  'mcp__hiveku__pm_project_team',
   // The feedback loop (2026-09-24), by EXACT name: no glob here matches them,
   // and there is deliberately no '*_status' glob (see above). The one knowing
   // exception to "reads only": the three writes (report_issue, request_feature,
@@ -633,8 +637,8 @@ const HIVEKU_ALLOW: string[] = [
   'Bash(find:*)',
 ];
 
-// The tools that START ad delivery or spend, written as permissions.ask so every
-// call shows the owner an approval prompt.
+// The tools that switch ads on, restart them, or switch a workflow on, written
+// as permissions.ask so every call shows the owner an approval prompt.
 //
 // Claude Code 2.1.283+ opens VS Code chats in auto mode, and auto mode's
 // classifier blocks an "enable the campaign" call outright as [Production
@@ -643,27 +647,73 @@ const HIVEKU_ALLOW: string[] = [
 // BEFORE the classifier, and no mode auto-approves one, so it turns that hard
 // block into an approval card. In default and acceptEdits these tools already
 // prompted, so nothing changes there; under bypassPermissions they used to run
-// unasked and now prompt too, on purpose (they start spending money).
+// unasked and now prompt too, on purpose (they spend money, or act on real
+// customers with nobody watching).
 //
-// Only tools whose primary effect is turning serving ON, checked against the
-// MCP server's own descriptions: the Google-only and the cross-platform enable
-// (the status path every PAUSED create and push points at), Google's
-// experiment schedule ("START ... THIS IS THE MONEY STEP") and Microsoft's
-// experiment create (no SETUP state: the copy serves on start_date). NOT here:
-// budget and bid edits (the plugin's ask list gates those), pauses, reads, the
-// creates that land PAUSED or DRAFT, experiment promote/graduate (they change a
-// campaign that is already serving), and multi-purpose tools whose effect
-// depends on their arguments (ppc_bulk_edit, ppc_bing_experiment_update).
-// check-permission-rules.mjs scrapes this array by name.
-//
-// Versions: project_vcs_rollback is here too. Its APPLY moves Your site (or a
-// branch) back to an earlier version and is never auto-approved; Claude Code
-// cannot gate a tool on its arguments, so its dry run asks as well.
+// The extension does not run the Claude Code plugin's hook (that hook matches
+// only mcp__plugin_hiveku_hk__ tools), so these rules are the only ask its
+// mcp__hiveku__ tools get. The list mirrors the plugin's forced asks for the
+// same tools (lib/tool-safety.mjs LIVE_CHANGE_WRITES, plugin 0.26.36) and the
+// Codex plugin's prompts. Each name was checked as a write on the MCP server:
+// - Switching serving on by status: the Google-only and the cross-platform
+//   enable (the status path every PAUSED create and push points at), and three
+//   tools that do more than one thing: ppc_bulk_edit (an ENABLED operation
+//   starts up to 100 entities at once), ppc_linkedin_creatives (set-status
+//   enabled) and ppc_tiktok_split_tests (a create copies the campaigns or ad
+//   groups under test and spends from its start time, with no confirm step).
+// - Starting an experiment: Google's experiment schedule ("START ... THIS IS
+//   THE MONEY STEP") and Microsoft's experiment create (no SETUP state: the
+//   copy serves on start_date).
+// - Restarting or widening delivery without a status change:
+//   ppc_recommendation_apply (can switch bidding, broad match or search
+//   partners with no check on the server), and a later end date on
+//   ppc_meta_campaign_update (stop_time), ppc_linkedin_campaign_update and
+//   ppc_linkedin_campaign_group_update (end_date; the group tool also raises
+//   group budgets). None of the three has a confirm step on the server.
+// - Switching a workflow on: workflow_enable (from then on its triggers run it
+//   and its steps email, text and change records for real customers) and
+//   workflow_resume (clears the automatic pause Hiveku put on a workflow whose
+//   runs kept failing or looped). Every create path makes a workflow switched
+//   off, so workflow_enable is the one way on. The Automations panel's own
+//   Enable button calls the tool through the extension, not Claude Code, and
+//   keeps its own flow.
+// An ask rule names a tool, not its arguments, so the multi-purpose tools ask
+// on every call: a pause-only ppc_bulk_edit, a LinkedIn creatives list, a
+// TikTok split-test read and a rename through the three update tools all
+// prompt, and in a run with nobody to answer (claude -p, a scheduled cadence)
+// they are refused. The vendored PPC skills (plugin 0.26.36) note the prompt
+// where those reads are taught.
+// NOT here: budget and bid edits (the plugin's ask list gates those), single
+// pauses, pure reads, the creates that land PAUSED or DRAFT, experiment
+// promote/graduate (they change a campaign that is already serving),
+// ppc_bing_experiment_update, and keyword adds (ppc_keyword_add,
+// ppc_platform_keyword_add: the skills teach the owner's yes for those, and the
+// plugins leave them unasked too). check-permission-rules.mjs scrapes this
+// array by name. New names go at the END: ensureSpendAskRules appends in this
+// order to folders that already hold the earlier ones.
 const HIVEKU_ASK: string[] = [
   'mcp__hiveku__ppc_enable_resource',
   'mcp__hiveku__ppc_platform_enable_resource',
   'mcp__hiveku__ppc_experiment_schedule',
   'mcp__hiveku__ppc_bing_experiment_create',
+  'mcp__hiveku__ppc_bulk_edit',
+  'mcp__hiveku__ppc_linkedin_creatives',
+  'mcp__hiveku__ppc_tiktok_split_tests',
+  'mcp__hiveku__ppc_recommendation_apply',
+  'mcp__hiveku__ppc_meta_campaign_update',
+  'mcp__hiveku__ppc_linkedin_campaign_update',
+  'mcp__hiveku__ppc_linkedin_campaign_group_update',
+  'mcp__hiveku__workflow_enable',
+  'mcp__hiveku__workflow_resume',
+  // hiveku_batch can carry any of the calls above as a member, and an ask rule
+  // cannot look inside it, so a batch asks too (the Codex plugin does the same;
+  // the Claude Code plugin's hook asks unless every member is a read). It was
+  // never on the allow list, so outside auto and Autonomous mode it already
+  // prompted; this closes those two modes.
+  'mcp__hiveku__hiveku_batch',
+  // Versions: project_vcs_rollback's APPLY moves Your site (or a branch) back to
+  // an earlier version and is never auto-approved. An ask rule cannot look at
+  // dry_run, so its dry run asks as well.
   'mcp__hiveku__project_vcs_rollback',
 ];
 
@@ -848,9 +898,10 @@ async function writeClaudeSettings(baseDir: string, mode: PermissionMode = confi
   const OVERBROAD = new Set(['Write(~/.claude/**)', 'Edit(~/.claude/**)']);
   denyList = denyList.filter((r) => !OVERBROAD.has(r));
   (settings.permissions as Record<string, unknown>).deny = denyList;
-  // Ask rules for the tools that start spend and for the version rollback
-  // (HIVEKU_ASK). Additive like allow,
-  // and a tool the deny list already covers (by name, server or glob) is skipped.
+
+  // Ask rules for the tools that switch ads or workflows on (HIVEKU_ASK).
+  // Additive like allow, and a tool the deny list already covers (by name,
+  // server or glob) is skipped.
   mergeSpendAskRules(settings.permissions as Record<string, unknown>, denyList);
 
   // OS-level sandbox — the only thing that can stop a Bash command from writing
@@ -1774,15 +1825,28 @@ Hiveku PM — not your head, this chat, or a local file — is the single source
    call \`crm_list_users\`, take the member whose \`email\`${connectedAs ? ` is \`${connectedAs}\`` : ' matches the connected account owner'},
    and keep their \`id\` (USER_ID) and \`name\` (USER_NAME).${connectedAs ? '' : ' If you cannot tell who connected, ask the user before creating tasks.'}
    Tasks and comments are attributed to THEM — never to "olympus".
-   **No member with that email = you are not on this account's team.** \`crm_list_users\` lists Team Members only
-   (people whose home is this account, plus invited members); agency/SaaS staff working the account without an
-   invitation are not listed and cannot be assigned. An empty list (it carries a \`hint\`) or one without that email
-   is a real answer, not an error: there is no USER_ID. Create tasks unassigned (omit \`assigned_to_id\`), set
+   **No member with that email = you are not on this account's team.** \`crm_list_users\` lists this account's Team
+   Members only (people whose home is this account, plus invited members); agency/SaaS staff working the account
+   without an invitation are not listed. An empty list (it carries a \`hint\`) or one without that email is a real
+   answer, not an error: there is no USER_ID. Create tasks unassigned by passing \`assigned_to_id: null\`, set
    USER_NAME to the connected person's name (their email if you do not know the name), and tell the user once that
-   inviting them under Team Members makes them assignable. Never borrow another member's id or an id from another account.
+   inviting them under Team Members makes them assignable. Never borrow another member's id, and never use an id
+   that \`pm_project_team\` does not list for that project.
 2. **CREATE a task when you START work:** \`pm_tasks_create({ project_id, title, description, assigned_to_id: USER_ID })\`
    — \`project_id\` from \`pm_projects_list\` (make one with \`pm_projects_create({ name, project_type })\` if the
-   work has no home). Omit \`assigned_to_id\` only when step 1 found no USER_ID.
+   work has no home). Pass \`assigned_to_id: null\` only when step 1 found no USER_ID. Omitting the key does not
+   mean unassigned: it hands the task to the section's default assignee, then the project's.
+   **Assigning other people, and defaults.** Take PM assignee ids from \`pm_project_team({ project_id })\`: the
+   project's own team plus, on a shared project, the other company's people (labelled by company; their emails
+   are hidden). \`crm_list_users\` is this account's own team only. On \`pm_tasks_create\`, pass an id to assign,
+   \`null\` (or \`''\`) to create the task unassigned, or omit \`assigned_to_id\` to let the section's default
+   assignee, then the project's, apply. Set defaults with \`pm_projects_update({ id, default_assignee_id })\` and
+   \`pm_sections_create\` / \`pm_sections_update({ project_id, section_id, default_assignee_id })\`; \`''\` or \`null\`
+   clears one, and the person must be on the project team (a refusal names \`field: 'default_assignee_id'\`).
+   Moving an unassigned task into a section with a default assigns it. Review feedback tasks can have their own
+   assignee, set on the website project with \`project_annotation_settings_set({ project_id, review_assignee_id })\`
+   (take the id from \`project_annotation_settings_get\`'s \`review_assignee.people\`, which lists the team even before a
+   PM project is linked); without one they follow the project default.
 3. **COMMENT as you go — comments are essential:** log the plan, decisions, progress, blockers, and the
    outcome with \`pm_tasks_comment({ id: <task_id>, content, author_codename: USER_NAME })\`. A task with no
    comments is NOT documented work; \`author_codename\` MUST be USER_NAME so the trail reads as that person.
@@ -2288,15 +2352,27 @@ Hiveku PM is the single source of truth for the whole team; never track work onl
 1. **You act on behalf of the authenticated user${opts.connectedAs ? ` — \`${opts.connectedAs}\`` : ''}.** Resolve them ONCE per
    session: \`crm_list_users\` → the member whose \`email\`${opts.connectedAs ? ` is \`${opts.connectedAs}\`` : ' matches the connected owner'} → keep their \`id\` (USER_ID) and \`name\`
    (USER_NAME).${opts.connectedAs ? '' : ' If you cannot tell who connected, ask the user before creating tasks.'} Tasks and comments are attributed to THEM, never to "olympus".
-   **No member with that email = you are not on this account's team.** \`crm_list_users\` lists Team Members only
-   (home users plus invited members); agency/SaaS staff working the account without an invitation are not listed and
-   cannot be assigned. An empty list (it carries a \`hint\`) or one without that email is a real answer: there is no
-   USER_ID. Create tasks unassigned (omit \`assigned_to_id\`), set USER_NAME to the connected person's name (their email
-   if you do not know the name), and tell the user once that inviting them under Team Members makes them assignable.
-   Never borrow another member's id or an id from another account.
+   **No member with that email = you are not on this account's team.** \`crm_list_users\` lists this account's Team
+   Members only (home users plus invited members); agency/SaaS staff working the account without an invitation are
+   not listed. An empty list (it carries a \`hint\`) or one without that email is a real answer: there is no USER_ID.
+   Create tasks unassigned by passing \`assigned_to_id: null\`, set USER_NAME to the connected person's name (their
+   email if you do not know the name), and tell the user once that inviting them under Team Members makes them
+   assignable. Never borrow another member's id, and never use an id that \`pm_project_team\` does not list for that project.
 2. **CREATE a task when you START work:** \`pm_tasks_create({ project_id, title, description, assigned_to_id: USER_ID })\`
-   — \`project_id\` from \`pm_projects_list\` (\`pm_projects_create({ name, project_type })\` if none fits). Omit
-   \`assigned_to_id\` only when step 1 found no USER_ID.
+   — \`project_id\` from \`pm_projects_list\` (\`pm_projects_create({ name, project_type })\` if none fits). Pass
+   \`assigned_to_id: null\` only when step 1 found no USER_ID. Omitting the key does not mean unassigned: it hands
+   the task to the section's default assignee, then the project's.
+   **Assigning other people, and defaults.** Take PM assignee ids from \`pm_project_team({ project_id })\`: the
+   project's own team plus, on a shared project, the other company's people (labelled by company; their emails
+   are hidden). \`crm_list_users\` is this account's own team only. On \`pm_tasks_create\`, pass an id to assign,
+   \`null\` (or \`''\`) to create the task unassigned, or omit \`assigned_to_id\` to let the section's default
+   assignee, then the project's, apply. Set defaults with \`pm_projects_update({ id, default_assignee_id })\` and
+   \`pm_sections_create\` / \`pm_sections_update({ project_id, section_id, default_assignee_id })\`; \`''\` or \`null\`
+   clears one, and the person must be on the project team (a refusal names \`field: 'default_assignee_id'\`).
+   Moving an unassigned task into a section with a default assigns it. Review feedback tasks can have their own
+   assignee, set on the website project with \`project_annotation_settings_set({ project_id, review_assignee_id })\`
+   (take the id from \`project_annotation_settings_get\`'s \`review_assignee.people\`, which lists the team even before a
+   PM project is linked); without one they follow the project default.
 3. **COMMENT as you go — comments are essential:** log the plan, decisions, progress, blockers, and the
    outcome with \`pm_tasks_comment({ id: <task_id>, content, author_codename: USER_NAME })\`. A task with no
    comments is NOT documented work; \`author_codename\` MUST be USER_NAME so the trail reads as that person.

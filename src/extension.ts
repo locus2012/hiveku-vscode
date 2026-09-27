@@ -284,7 +284,7 @@ function clientForAccount(accountId: string): Promise<HivekuMcpClient> {
 }
 
 const PERM_LABELS: Record<PermissionMode, { short: string; icon: string; blurb: string }> = {
-  bypassPermissions: { short: 'Autonomous', icon: '$(unlock)', blurb: 'Skip prompts — bash, deploys, tools. Turning ads on still asks; .env*.local still blocked.' },
+  bypassPermissions: { short: 'Autonomous', icon: '$(unlock)', blurb: 'Skip prompts — bash, deploys, tools. Turning ads or workflows on still asks; .env*.local still blocked.' },
   acceptEdits: { short: 'Auto-edits', icon: '$(check)', blurb: 'Auto-approve file edits; still ask for bash, deploys, network.' },
   default: { short: 'Ask', icon: '$(shield)', blurb: 'Confirm before every edit and command.' },
 };
@@ -2683,11 +2683,13 @@ async function openDepartmentWindow(
 }
 
 /**
- * Bring the ask rules for the tools that start ad spend (knowledge.ts
- * HIVEKU_ASK) into the open Hiveku folders. A folder scaffolded before those
- * rules existed has none, so auto mode keeps blocking an enable there with no
- * prompt until the owner happens to run Refresh Setup. This adds only those
- * rules, never rewrites anything else, and writes nothing when they are there.
+ * Bring the ask rules for the tools that switch ads or workflows on
+ * (knowledge.ts HIVEKU_ASK) into the open Hiveku folders. A folder scaffolded
+ * before those rules existed lacks some or all of them, so auto mode keeps
+ * blocking an enable there with no prompt (and bypassPermissions runs one
+ * unasked) until the owner happens to run Refresh Setup. This adds only the
+ * missing rules, never rewrites anything else, and writes nothing when they
+ * are all there.
  */
 async function applySpendAskRules(): Promise<void> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {

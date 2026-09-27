@@ -273,18 +273,26 @@ then pass the parent on `ppc_platform_enable_resource` (`ad_group_id` for an ad,
 ad group), because Hiveku's local mirror may not hold them yet. On "not found in local sync", run
 `ppc_sync({ connection_id })`, confirm its `ad_groups` and `ads` legs read `synced`, then retry ONCE:
 the passed parent id is not honored until the enable-parent fix deploys, so re-sending it alone fails
-the same way. **A Claude Code auto-mode denial never turns into a prompt.** In auto mode a
-classifier can deny the enable (e.g. "[Production Deploy]"): nothing is then waiting for approval, so
-never promise the owner a prompt (one comes only from the steps below) and never retry around the
-denial. Give the owner the exact steps: to run the denied call, in the CLI `/permissions` -> Recently
-denied -> `r` retries it with a manual approval; for the go-live turn, switch the chat to Manual (VS Code:
-the mode indicator under the prompt box; CLI: Shift+Tab) so each enable prompts, then switch back; or
-add a permissions ASK rule naming the enable tool via `/permissions` or settings -
-`mcp__plugin_hiveku_hk__ppc_platform_enable_resource` and `mcp__plugin_hiveku_hk__ppc_enable_resource`
-(Google) for the plugin, and/or `mcp__hiveku__ppc_platform_enable_resource` and
-`mcp__hiveku__ppc_enable_resource` for the VS Code extension. The denial's "add a Bash permission
-rule" is misleading for an MCP tool: the rule names the MCP tool. Never propose an ALLOW rule for a
-tool that starts spend. Depth: `references/spend-change-discipline.md` 4.5.
+the same way. **The plugin asks before each enable:** its hook asks the owner before
+`ppc_enable_resource`, `ppc_platform_enable_resource`, `ppc_bulk_edit`, `ppc_linkedin_creatives` and
+`ppc_tiktok_split_tests` (and before the restart calls: `ppc_recommendation_apply`, and the end-date
+edits on `ppc_meta_campaign_update`, `ppc_linkedin_campaign_update` and
+`ppc_linkedin_campaign_group_update`) whatever the settings allow, and auto mode still shows that
+prompt, so show the diff first and let the card be the owner's yes. **A Claude Code auto-mode
+denial never turns into a prompt.** On an older plugin or the VS Code extension's tools (the
+hook never sees them) a
+classifier can still deny the enable (e.g. "[Production Deploy]"): nothing is then waiting for
+approval, so never promise the owner a prompt (one comes only from the plugin's ask or the steps
+below) and never retry around the denial. Give the owner the exact steps: to run the denied call, in
+the CLI `/permissions` -> Recently denied -> `r` retries it with a manual approval; for the go-live
+turn, switch the chat to Manual (VS Code: the mode indicator under the prompt box; CLI: Shift+Tab) so
+each enable prompts, then switch back; on the VS Code extension, check the folder has a permissions
+ASK rule for `mcp__hiveku__ppc_platform_enable_resource` and `mcp__hiveku__ppc_enable_resource`
+(extension releases from 0.85.12 write those and the other calls the plugin asks before; on an older
+release, or if one is missing, add it via `/permissions` or settings); on the
+plugin, `/hiveku:update` instead, since its own names already ask. The denial's "add a Bash
+permission rule" is misleading for an MCP tool: the rule names the MCP tool. Never propose an ALLOW
+rule for a tool that starts spend. Depth: `references/spend-change-discipline.md` 4.5.
 
 **Settings writes, preview-first.** Google: `ppc_google_campaign_settings_set` (search partners,
 Display expansion, location option, tracking template, final URL suffix, custom parameters),
@@ -402,8 +410,9 @@ ICP; wrong seniority = targeting fix, not creative fix). Pause/enable anywhere:
 10. Log everything: pm_tasks_comment on the weekly task - changes made (with confirmations), changes
     proposed, tests running and their end dates.
 
-These plays ship as installable workflow templates - roster, install mechanics, and the
-`is_enabled: true` default trap: `references/workflow-templates.md`. Install them on a retainer account
+These plays ship as installable workflow templates - roster, install mechanics, and switching an
+install on (created off; `workflow_enable` on the operator's yes): `references/workflow-templates.md`.
+Install them on a retainer account
 rather than performing the same steps by hand every Monday.
 
 ## 8. Monthly report (client deliverable)
@@ -463,10 +472,15 @@ NOT a bare `memory_create`. Link the report file in the PM task.
   `ppc_platform_keyword_match_type_change` REQUIRE `ad_group_id` (the row's `platform_ad_group_id` from
   `ppc_bing_keyword_performance`). A Microsoft match-type change edits in place; the bid response says
   nothing about smart bidding, so read the campaign's `bidding_strategy` (`ppc_campaign_get`) first.
-- **An auto-mode classifier denial of an enable never turns into a prompt** (5): nothing is waiting for
-  approval. The owner retries that call from `/permissions` -> Recently denied (`r`, CLI), switches to
-  Manual for the go-live turn, or adds an ASK rule naming the enable tool; never an allow rule, never a
-  retry around the denial.
+- **The plugin asks before the calls that can switch ads on or restart them** (the two enables,
+  `ppc_bulk_edit`, `ppc_linkedin_creatives`, `ppc_tiktok_split_tests`, `ppc_recommendation_apply`,
+  `ppc_meta_campaign_update`, `ppc_linkedin_campaign_update`, `ppc_linkedin_campaign_group_update`),
+  even in auto mode. Adding keywords (`ppc_keyword_add`, `ppc_platform_keyword_add`) does not ask:
+  that yes is yours to get. **An auto-mode classifier
+  denial of an enable never turns into a prompt** (5): nothing is waiting for approval. The owner
+  retries that call from `/permissions` -> Recently denied (`r`, CLI), switches to Manual for the
+  go-live turn, or (VS Code extension only) adds an ASK rule naming the `mcp__hiveku__` enable tool;
+  never an allow rule, never a retry around the denial.
 - **Test before you call a tool broken.** Before telling an owner a Hiveku tool "doesn't work", call it
   in this session (read-only, or a no-op or preview where possible). A memory note or handoff that says
   "broken" is a claim to re-test, not a fact.
@@ -505,7 +519,7 @@ covers" section. Load ONE when the work actually goes there, not preemptively (t
 | --- | --- |
 | `references/spend-change-discipline.md` | BEFORE your first write of the session on an account you did not build: the reads that earn each mutation, diff discipline, code-enforced gates vs prose-only warnings, the go-live enable (auto-mode denials, parent ids), verify-after-write. |
 | `references/memory-protocol.md` | Before ANY `memory_create` / `memory_update` - read-merge-write, recovery, what belongs in the record. |
-| `references/workflow-templates.md` | Putting a retainer account on the recurring cadence / "automate this play" - template roster, install mechanics, the `is_enabled: true` default trap. |
+| `references/workflow-templates.md` | Putting a retainer account on the recurring cadence / "automate this play" - template roster, install mechanics, created switched off and `workflow_enable` on the operator's yes. |
 | `references/account-structure.md` | Auditing or rebuilding account wiring: campaigns, ad groups, naming, bulk ops, change history, recommendations triage. |
 | `references/keywords-search-terms-negatives.md` | Search-term mining (`ppc_search_terms_mine`), the negatives manager (audit, lint, remove), match-type strategy or migration, keyword research (`ppc_keyword_ideas`) and forecasting on Google and Microsoft. |
 | `references/bidding-budgets-pacing.md` | Anything about money: the goals record, bid strategies, the bid and budget simulator, modifiers and dayparting, budget caps, pacing, spend control, impression-share economics. |
