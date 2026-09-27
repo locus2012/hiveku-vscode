@@ -246,8 +246,9 @@ sitting in the landing URL, which is what `landing_page` recovery is for.
 channel label. **Do not conclude:** that no click id in all three sources proves the lead was not paid.
 It proves only that no available observation carried one. Size that unknown with
 `marketing_form_conversion_audit`'s `no_attribution` bucket; its buckets
-(`deleted | duplicate | spam | archived | workflow_failed | no_attribution | unpaid_attribution |
-counted`) sum to the total, so the unknown is always quantified rather than hand-waved.
+(`deleted | duplicate | spam | archived | excluded | workflow_failed | no_attribution |
+unpaid_attribution | counted`) sum to the total, so the unknown is always quantified rather than
+hand-waved.
 
 ---
 

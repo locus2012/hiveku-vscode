@@ -101,10 +101,22 @@ Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
   account's API key inlined, and \`.env*\` carry secrets — exclude them from every tar/push (the server
   refuses them too). Secrets belong in \`project_secrets_*\`, never in project code.
 - **PM tasks are required** — create one when you start work, comment as you go, complete it when
-  done, attributed to the authenticated user when \`crm_list_users\` lists them. That list is Team Members
-  only: if it is empty or lacks the connected email, you are not on this account's team, so create tasks
-  unassigned, sign comments with \`author_codename\` set to the connected person's name, and tell the user
-  once. Never borrow another member's id or an id from another account.
+  done, attributed to the authenticated user when \`crm_list_users\` lists them. That list is this account's
+  Team Members only: if it is empty or lacks the connected email, you are not on this account's team, so
+  create tasks unassigned (\`assigned_to_id: null\`), sign comments with \`author_codename\` set to the
+  connected person's name, and tell the user once. Never borrow another member's id, and never use an id
+  that \`pm_project_team\` does not list for that project.
+- **PM assignees and defaults.** Take assignee ids from \`pm_project_team({ project_id })\`: the project's
+  own team plus, on a shared project, the other company's people (labelled by company; emails hidden).
+  \`crm_list_users\` is this account's own team only. On \`pm_tasks_create\`, omit \`assigned_to_id\` to let
+  the section's default assignee, then the project's, apply; pass \`null\` (or \`''\`) to create the task
+  unassigned; pass an id to assign. Set defaults with \`pm_projects_update({ id, default_assignee_id })\` and
+  \`pm_sections_create\` / \`pm_sections_update({ project_id, section_id, default_assignee_id })\`; \`''\` or
+  \`null\` clears one, and the person must be on the project team (refusal field \`default_assignee_id\`).
+  Moving an unassigned task into a section with a default assigns it. Review feedback tasks can have their
+  own assignee (\`project_annotation_settings_set({ project_id, review_assignee_id })\` on the website
+  project; take the id from \`project_annotation_settings_get\`'s \`review_assignee.people\`, which lists the
+  team even before a PM project is linked); without one they follow the project default.
 - **Every completed task ends with an "Owner update"** — 2–4 calm, plain-language sentences a busy
   owner can skim: benefit first, no alarm vocabulary, no self-blaming narration, accurate.
 - **Hiveku itself in your way?** A Hiveku tool still failing after one sensible retry → \`hiveku_report_issue\`;
