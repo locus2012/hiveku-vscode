@@ -265,7 +265,8 @@ consolidate memory, without deleting history anyone reports on.
    status: 'archived' })` [CONFIRM]; `seo_deliverable_delete` is permanent, not a tidying tool.
 6. `workflow_list` against `workflow_templates_list`; install a missing standing play with
    `workflow_create_from_template({ slug, overrides, is_enabled: false })` [CONFIRM], read
-   `variables[]` first, enable after review.
+   `variables[]` first; it is created switched off, so `workflow_enable` it after review, on the
+   operator's yes.
 7. `seo_ga4_conversion_audit({ connection_id, days: 90 })`; a key event silent for a quarter is a
    task; `seo_ga4_key_event_delete` never runs from a sweep.
 8. Memory consolidation: `memory_list({ domain: 'seo' })`, rewrite into one current state,

@@ -519,9 +519,9 @@ step 1), and this play works it.
    link and first comment, then an email that they wait for approval) and `content-digest-weekly`
    (Tuesday digest of the week's published pieces as a DRAFT newsletter, approval-gated, "nothing
    published" on an empty week). `workflow_templates_list` shows their variables;
-   `workflow_create_from_template({ slug, overrides, is_enabled: false })` stages one, then
-   `workflow_test`, then `workflow_enable` on the operator's yes - the create goes live on its own
-   otherwise. Offer both on the first publish of an account that has neither; `/hiveku:automate`
+   `workflow_create_from_template({ slug, overrides, is_enabled: false })` stages one, created
+   switched off, then `workflow_test`, then `workflow_enable` on the operator's yes. Offer both on
+   the first publish of an account that has neither; `/hiveku:automate`
    for anything beyond the template.
 3. **Social derivatives.** `social_pillar_list` for the pillar strategy (create missing pillars
    with `social_pillar_create`); `social_list_accounts` for connected platforms. Per published

@@ -132,6 +132,10 @@ const KNOWN_NOT_TOOLS = new Set([
   'email_service_suspended',
   'integration_inactive',
   'integration_missing_key',
+  // workflow_update / the create tools refuse is_enabled:true with this code
+  // (2026-09-27): every create makes a workflow switched off and only
+  // workflow_enable switches one on. The workflows crud names it.
+  'workflow_enable_required',
   // Enum values: shopify_admin's admin_action, shopify_connect_start's intent_type,
   // oauth_app provider/product slugs, social target_platforms.
   'create_product_draft',

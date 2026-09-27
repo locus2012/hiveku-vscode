@@ -206,7 +206,9 @@ plus pause-old, on fresh Quality Score history. Expect a 1 to 2 week dip, and sa
 `{ mutate_op: "ad_group_status", ad_group_id, status }`, and
 `{ mutate_op: "keyword_status", ad_group_id, criterion_id, status }`. Budget ops are **refused** with code
 `budget_op_in_bulk_edit`; budgets go one campaign at a time through the step-capped path in
-`references/bidding-budgets-pacing.md`.
+`references/bidding-budgets-pacing.md`. The plugin asks the owner before every `ppc_bulk_edit` call,
+pause-only ones too (an `ENABLED` op starts spend, and the ask is on the tool name), so expect one
+approval per chunk; an unattended emergency stop uses `ppc_pause_resource`, which does not ask.
 
 Build candidates from the local files joined to `metrics_daily.json` using the section-4 zombie criteria.
 **Enumerate to the user by name**: "pause 34 ad groups" is not a confirmation, 34 vetoable names is. Chunk
@@ -254,7 +256,8 @@ because the API reaches only 30 days.
    **Client approval always**: CAMPAIGN_BUDGET, MOVE_UNUSED_BUDGET, TARGET_CPA_OPT_IN, BIDDING_STRATEGY,
    ENHANCED_CPC_OPT_IN.
 4. Apply **one at a time**: `ppc_recommendation_apply({ connection_id, resource_name })`, which uses
-   Google's defaults exactly like the UI Apply button, so you do not control the specifics. UI-only types
+   Google's defaults exactly like the UI Apply button, so you do not control the specifics. The plugin
+   asks the owner before every call, so each apply is its own yes. UI-only types
    return a structured 400 with a reason: surface it rather than retrying. Re-read with `ppc_campaign_get`
    afterwards to confirm the defaults did what you expected.
 

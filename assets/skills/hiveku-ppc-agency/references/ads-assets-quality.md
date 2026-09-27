@@ -314,6 +314,9 @@ Sequence: callouts (no destinations), sitelinks (need real URLs), structured sni
      text is app-tier-dependent and may come back status-only (reasons_available=false) with the detail
      living in Campaign Manager; LinkedIn creatives are unnamed (name is always null) - use
      content_reference or `ppc_linkedin_creatives` detail for context; optional campaign_id scopes.
+     The plugin asks the owner before every `ppc_linkedin_creatives` call, detail included, because
+     the ask is on the tool name; in a scheduled or `-p` run nobody can answer, so skip that detail
+     read there and use content_reference.
    Remediation on all three follows the Meta/LinkedIn build lanes in `paid-social-and-bing.md` (replace
    + pause, never edit-in-place where the platform forbids it), each write confirmed.
 

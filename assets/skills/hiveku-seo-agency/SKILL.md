@@ -233,8 +233,9 @@ warning; 503 `dataforseo_unconfigured` means no credentials. Neither means "clea
 Several plays ship as installable templates (rank-drop response, content-decay refresh, lost-backlink
 alert, GBP review SLA, CWV watch and more): `workflow_templates_list`, then
 `workflow_create_from_template({ slug, overrides })`. Read the
-template's `variables[]` FIRST - a missing required variable is a 400. It defaults `is_enabled: true`,
-so pass `is_enabled: false` and enable after review, or confirm the default. Node families: schedule
+template's `variables[]` FIRST - a missing required variable is a 400. Pass `is_enabled: false`: the
+install is created switched off, and `workflow_enable` switches it on after the operator says yes.
+Node families: schedule
 triggers, SEO read nodes (rankings, GSC, audit, backlinks), notification and PM-task nodes, and the
 GBP and PPC action nodes that STAGE to the approval inbox rather than auto-applying.
 Field shapes, payloads and traps: `hiveku-automation-agency/references/node-rail.md`.
