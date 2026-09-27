@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.86.1
+- **Agents say where review feedback lands.** The review department and the vendored orient skill now say that each review comment becomes a task in the site's oldest linked PM project that is not archived. They also say how to move it: unlink each older project (its tasks leave the site's Tasks page), and archive a project only when its work is finished. They used to say a linked project was picked arbitrarily. This matches the Claude Code plugin 0.27.1 and the Codex plugin 0.2.1.
+
 ## 0.86.0
 - **Your site keeps versions you can go back to.** Hiveku now saves your site's changes as named versions, the same way branches already worked.
   - After a push where every file landed, the extension offers to save it as a version, named from the Source Control box or from what changed. The new setting `hiveku.push.saveVersion` chooses: ask (the default), save straight away, or never. A push where some files failed is never saved as a version.
