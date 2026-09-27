@@ -36,12 +36,13 @@ const KEY = 'olp_test_key_123';
 const BASE = 'https://core.hiveku.com';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** The serving-start tools, as the scaffold must write them (the .mcp.json server is "hiveku"). */
+/** The always-ask tools (serving-start + the version rollback), as the scaffold must write them (the .mcp.json server is "hiveku"). */
 const EXPECTED_ASK = [
   'mcp__hiveku__ppc_enable_resource',
   'mcp__hiveku__ppc_platform_enable_resource',
   'mcp__hiveku__ppc_experiment_schedule',
   'mcp__hiveku__ppc_bing_experiment_create',
+  'mcp__hiveku__project_vcs_rollback',
 ];
 
 const dirs = [];
@@ -176,9 +177,10 @@ describe('Scaffolded settings: ask rules for the tools that start ad spend', () 
       [['mcp__hiveku__*'], []],
       [['mcp__*'], []],
       [['*'], []],
-      [['mcp__hiveku__ppc_*'], []],
-      [['mcp__hiveku__ppc_*enable_resource'], ['mcp__hiveku__ppc_experiment_schedule', 'mcp__hiveku__ppc_bing_experiment_create']],
-      [['mcp__hiveku__*_experiment_*'], ['mcp__hiveku__ppc_enable_resource', 'mcp__hiveku__ppc_platform_enable_resource']],
+      // A ppc-only deny still leaves the version rollback asked.
+      [['mcp__hiveku__ppc_*'], ['mcp__hiveku__project_vcs_rollback']],
+      [['mcp__hiveku__ppc_*enable_resource'], ['mcp__hiveku__ppc_experiment_schedule', 'mcp__hiveku__ppc_bing_experiment_create', 'mcp__hiveku__project_vcs_rollback']],
+      [['mcp__hiveku__*_experiment_*'], ['mcp__hiveku__ppc_enable_resource', 'mcp__hiveku__ppc_platform_enable_resource', 'mcp__hiveku__project_vcs_rollback']],
       // Not a cover: another server, a name prefix with no glob, a Bash rule.
       [['mcp__hiveku_old', 'mcp__hiveku__ppc', 'mcp__other__*', 'Bash(*)'], EXPECTED_ASK],
     ];
@@ -242,9 +244,9 @@ describe('ensureSpendAskRules: a folder scaffolded before the ask rules', () => 
   test('skips what the deny list covers, by name or glob', async () => {
     const dir = await tmp('hk-ensure-deny-');
     await seedSettings(dir, { permissions: { deny: ['mcp__hiveku__ppc_*enable_resource', 'mcp__hiveku__ppc_experiment_schedule'] } });
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), ['mcp__hiveku__ppc_bing_experiment_create']);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), ['mcp__hiveku__ppc_bing_experiment_create', 'mcp__hiveku__project_vcs_rollback']);
     const { permissions } = await readSettings(dir);
-    assert.deepEqual(permissions.ask, ['mcp__hiveku__ppc_bing_experiment_create']);
+    assert.deepEqual(permissions.ask, ['mcp__hiveku__ppc_bing_experiment_create', 'mcp__hiveku__project_vcs_rollback']);
     assert.deepEqual(permissions.deny, ['mcp__hiveku__ppc_*enable_resource', 'mcp__hiveku__ppc_experiment_schedule']);
   });
 
@@ -292,7 +294,7 @@ describe('Permission gate: the ask array', () => {
     assert.equal(run.status, 0, run.stderr);
     // With no registry build the gate stops after the syntax pass, so the count
     // line is only asserted when it printed.
-    if (/allow rules/.test(run.stdout)) assert.match(run.stdout, /\b3 denied, 4 ask\b/);
+    if (/allow rules/.test(run.stdout)) assert.match(run.stdout, /\b3 denied, 5 ask\b/);
   });
 
   test('an ask name that is also denied fails the gate', async () => {

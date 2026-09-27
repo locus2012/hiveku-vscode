@@ -77,7 +77,10 @@ describe('permissions', () => {
     await knowledge.writeProjectScaffold(args);
     await knowledge.writeProjectScaffold(args);
     const settings = JSON.parse(await read(dir, '.claude', 'settings.json'));
-    assert.deepEqual(settings.permissions.ask, ['Bash(git push:*)', 'mcp__hiveku__project_vcs_rollback']);
+    const ask = settings.permissions.ask;
+    assert.equal(ask[0], 'Bash(git push:*)', "the user's own ask rule stays first");
+    assert.equal(ask.filter((r) => r === 'mcp__hiveku__project_vcs_rollback').length, 1, 'the rollback rule is written once');
+    assert.equal(new Set(ask).size, ask.length, 'a re-scaffold adds no duplicate');
   });
 
   test('no generated command pre-approves project_vcs_rollback in allowed-tools', async () => {

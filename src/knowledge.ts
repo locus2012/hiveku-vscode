@@ -655,11 +655,16 @@ const HIVEKU_ALLOW: string[] = [
 // campaign that is already serving), and multi-purpose tools whose effect
 // depends on their arguments (ppc_bulk_edit, ppc_bing_experiment_update).
 // check-permission-rules.mjs scrapes this array by name.
+//
+// Versions: project_vcs_rollback is here too. Its APPLY moves Your site (or a
+// branch) back to an earlier version and is never auto-approved; Claude Code
+// cannot gate a tool on its arguments, so its dry run asks as well.
 const HIVEKU_ASK: string[] = [
   'mcp__hiveku__ppc_enable_resource',
   'mcp__hiveku__ppc_platform_enable_resource',
   'mcp__hiveku__ppc_experiment_schedule',
   'mcp__hiveku__ppc_bing_experiment_create',
+  'mcp__hiveku__project_vcs_rollback',
 ];
 
 /**
@@ -733,16 +738,6 @@ export async function ensureSpendAskRules(baseDir: string): Promise<string[]> {
   await fs.writeFile(file, JSON.stringify(settings, null, 2) + '\n', 'utf8');
   return added;
 }
-
-/**
- * Tools that ALWAYS ask, in every permission mode. A tool missing from the
- * allow-list is not enough: bypassPermissions (the Autonomous choice) and auto
- * mode approve anything no deny or ask rule names, and an explicit ask rule is
- * checked before the mode. project_vcs_rollback's APPLY moves Your site (or a
- * branch) back to an earlier version and is never auto-approved; Claude Code
- * cannot gate a tool on its arguments, so its dry run asks too.
- */
-const HIVEKU_ASK: string[] = ['mcp__hiveku__project_vcs_rollback'];
 
 /**
  * Pre-approve THIS folder's .mcp.json servers so Claude Code does not prompt on
@@ -853,15 +848,8 @@ async function writeClaudeSettings(baseDir: string, mode: PermissionMode = confi
   const OVERBROAD = new Set(['Write(~/.claude/**)', 'Edit(~/.claude/**)']);
   denyList = denyList.filter((r) => !OVERBROAD.has(r));
   (settings.permissions as Record<string, unknown>).deny = denyList;
-  // Versions: rollback always asks (HIVEKU_ASK), merged like deny: the user's
-  // own ask rules stay.
-  const askRules = Array.isArray((settings.permissions as Record<string, unknown>).ask)
-    ? ((settings.permissions as Record<string, unknown>).ask as string[])
-    : [];
-  for (const rule of HIVEKU_ASK) if (!askRules.includes(rule)) askRules.push(rule);
-  (settings.permissions as Record<string, unknown>).ask = askRules;
-
-  // Ask rules for the tools that start spend (HIVEKU_ASK). Additive like allow,
+  // Ask rules for the tools that start spend and for the version rollback
+  // (HIVEKU_ASK). Additive like allow,
   // and a tool the deny list already covers (by name, server or glob) is skipped.
   mergeSpendAskRules(settings.permissions as Record<string, unknown>, denyList);
 
