@@ -1218,11 +1218,16 @@ export const DEPARTMENTS: Department[] = [
       'PM task. Work one with `project_annotation_get({project_id, annotation_id})` \u2014 it returns the comment thread, ' +
       'the linked task status, and `deployment_branch`, which is the only reliable statement of WHICH CODE the reviewer ' +
       'saw (fix the wrong branch and nothing the client can see changes).\n' +
-      'The task lands in the website\'s linked PM project and goes to the site\'s review assignee when one is set ' +
+      'The task lands in the website\'s PM project and goes to the site\'s review assignee when one is set ' +
       '(`review_assignee_id`: read it with `project_annotation_settings_get`, set it with `project_annotation_settings_set`; ' +
       '\'\' or null clears it; take the id from `project_annotation_settings_get`\'s `review_assignee.people`, which lists ' +
-      'the team even before a PM project is linked), else to the PM project\'s default assignee. With more than one ' +
-      'linked PM project (`review_assignee.linked_project_count` above 1) the annotation server picks one arbitrarily.\n' +
+      'the team even before a PM project is linked), else to the PM project\'s default assignee. Review feedback lands ' +
+      'in the site\'s oldest linked PM project that is not archived (`review_assignee.pm_project`, even when ' +
+      '`review_assignee.linked_project_count` is above 1). The review assignee must be on that project\'s team; ' +
+      '`review_assignee.stale` is true when the saved person is not (they left, or they are only on another linked ' +
+      'project\'s team). To move feedback, unlink each older one (`pm_projects_update` with `website_project_id: null`); ' +
+      'archive it only when its work is finished, because archiving hides it and its open tasks from every list. When ' +
+      'no linked project is left the next writer creates one, so read `review_assignee.pm_project` rather than assuming a name.\n' +
       'To SEE the pin, `project_annotation_screenshot({project_id, annotation_id})` returns the screenshot with the ' +
       "reviewer's marker composited on it \u2014 the amber dot and crosshair are HIVEKU'S MARKER, not part of the site, so " +
       'never "fix" them. Do not do the {xPct,yPct} arithmetic by hand; on a long page that is a guess.\n' +
