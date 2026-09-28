@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.86.3
+- **The firewall's Blocked count is the firewall's own.** The vendored firewall reference now says that Blocked counts only the 403s the firewall itself sends, from 28 September 2026. A 403 or 429 your site sends itself is counted apart, as `totals.siteRefused`, and listed under `outcome: 'site_refused'` in `site_firewall_get`. Earlier days still count those under Blocked.
+- **The vendored skills match plugin 0.27.3.**
+
 ## 0.86.2
 - **Every new site starts with a task project.** The vendored orient skill now says that every new site gets a linked "PM - <site>" project when it is created, including sites made with site_create or by cloning. Sites made before this may still have none, so Claude checks before linking one.
 - **Agents can record more on tasks and projects.** The Hiveku tools Claude calls now describe what Hiveku accepts from agents: task hours, instructions, test cases and deliverables, comment types, and project status, priority and tags. Reopening a finished task still uses "uncomplete", which also resets progress and reopens the review comment.
