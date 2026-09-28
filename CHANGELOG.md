@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.86.2
+- **Every new site starts with a task project.** The vendored orient skill now says that every new site gets a linked "PM - <site>" project when it is created, including sites made with site_create or by cloning. Sites made before this may still have none, so Claude checks before linking one.
+- **Agents can record more on tasks and projects.** The Hiveku tools Claude calls now describe what Hiveku accepts from agents: task hours, instructions, test cases and deliverables, comment types, and project status, priority and tags. Reopening a finished task still uses "uncomplete", which also resets progress and reopens the review comment.
+- **The vendored skills match plugin 0.27.2.**
+
 ## 0.86.1
 - **Agents say where review feedback lands.** The review department and the vendored orient skill now say that each review comment becomes a task in the site's oldest linked PM project that is not archived. They also say how to move it: unlink each older project (its tasks leave the site's Tasks page), and archive a project only when its work is finished. They used to say a linked project was picked arbitrarily. This matches the Claude Code plugin 0.27.1 and the Codex plugin 0.2.1.
 
