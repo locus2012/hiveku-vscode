@@ -237,18 +237,35 @@ describe('scaffolded instructions teach default assignees and the project roster
       if (/created from the dashboard have[^.]*from birth/i.test(text)) offenders.push(`${rel}: a dashboard clone counted as born with "PM - <site>"`);
       if (/unlink the older (project|one)\b/i.test(text)) offenders.push(`${rel}: unlink only the older project`);
       if (/(a new link|linking a new one) does not move (it|feedback)/i.test(text)) offenders.push(`${rel}: a new link never moves feedback`);
+      // Round 9 (builder #242): every new site gets "PM - <site>" when it is
+      // created, so no vendored page may say only dashboard sites do, or that
+      // cloned and agent-made sites start with none.
+      if (/created new from the dashboard have/i.test(text)) offenders.push(`${rel}: only dashboard sites born with "PM - <site>"`);
+      if (/\bcloned sites?\b[^.]*\b(have|has|start with) (none|no linked PM project)\b/i.test(text)) offenders.push(`${rel}: a cloned site starts with no linked PM project`);
+      if (/made with `?site_create`? or `?site_create_external`? (have|has|start with) (none|no linked)/i.test(text)) offenders.push(`${rel}: sites made with site_create start with none`);
+      // Round 9: pm_tasks_update moving a task out of done clears completed_at;
+      // only progress stays at 100. The old reason contradicted the MCP tools.
+      if (/allow-list (cannot clear|can't clear|does not include|doesn't include) `?completed_at/i.test(text)) offenders.push(`${rel}: pm_tasks_update cannot clear completed_at`);
+      if (/reopen leaves `?completed_at`? set/i.test(text)) offenders.push(`${rel}: an update reopen leaves completed_at set`);
+      if (/keeps reading as done in every report/i.test(text)) offenders.push(`${rel}: an update reopen keeps reading as done`);
     }
     assert.deepEqual(offenders, []);
     const orient = (await fs.readFile(path.join(root, 'hiveku-orient', 'SKILL.md'), 'utf8')).replace(/\s+/g, ' ');
     assert.ok(
       orient.includes(
-        "Linking a project created after the site's current one does not move it, but linking an older one does: the rule goes by the project's creation date, not the link date. A cloned site (`site_clone` or the dashboard's Clone Project) or a site made with `site_create` or `site_create_external` has no linked PM project until the editor, the tasks page, a discussion convert or the first review comment creates one, and on a site with no linked project that is not archived the project you link becomes where feedback lands, so call `project_annotation_settings_get` before linking.",
+        "Linking a project created after the site's current one does not move it, but linking an older one does: the rule goes by the project's creation date, not the link date. Every new site gets a linked \"PM - <site>\" project when it is created: from the dashboard, `site_create`, `site_create_external`, a clone (`site_clone` or the dashboard's Clone Project), a Webflow site added in the account hub, or a GitHub import that makes a new site. A site created before that by `site_create`, `site_create_external` or `site_clone`, or by the dashboard's Clone Project, may have none until the editor Tasks panel, the tasks page, a session recording, a discussion convert or the first review comment creates one, and on a site with no linked project that is not archived the project you link becomes where feedback lands, so call `project_annotation_settings_get` before linking.",
       ),
-      'the vendored orient skill does not say which sites start with no linked PM project, or that linking an older project moves feedback',
+      'the vendored orient skill does not say every new site gets "PM - <site>" and which older sites may have none, or that linking an older project moves feedback',
     );
     assert.ok(
       orient.includes('To move it, unlink each older one (`pm_projects_update` with `website_project_id: null`)'),
       'the vendored orient skill does not say to unlink each older project',
+    );
+    assert.ok(
+      orient.includes(
+        '`pm_tasks_update` moving the status out of done also clears `completed_at`, but it leaves progress at 100 unless you send `progress_percentage` too, so the task still reads as finished in progress reports.',
+      ),
+      'the vendored orient skill does not give the true reason to reopen with pm_tasks_uncomplete',
     );
   });
 });
