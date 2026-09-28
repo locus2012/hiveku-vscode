@@ -184,9 +184,11 @@ every profile):
   with `pm_tasks_complete({ id, summary })` (sets
   status='done', completed_at=now, progress_percentage=100; the summary is recorded as an audit
   comment). `pm_tasks_complete` takes no attribution argument - attribution is set at create/update
-  time. To reopen a task closed too early use `pm_tasks_uncomplete`, never `pm_tasks_update`: the
-  update PATCH allow-list cannot clear `completed_at`, so the task keeps reading as done in every
-  report while sitting in an open status.
+  time. To reopen a task closed too early use `pm_tasks_uncomplete`, never `pm_tasks_update`: it
+  clears `completed_at`, resets progress (default 0, at most 99), reopens the linked review
+  annotation and records an optional reopen summary, all in one call. `pm_tasks_update` moving the
+  status out of done also clears `completed_at`, but it leaves progress at 100 unless you send
+  `progress_percentage` too, so the task still reads as finished in progress reports.
   Visibility: every key that can create a PM task (`pm_tasks_create`, or `create_task` on a sales
   key) also sees `pm_project_team`. `crm_list_users` reaches full, sales and helpdesk keys only
   (and sales in turn cannot see `pm_tasks_create`). With neither roster tool in the session, ask the user for the assignee
@@ -603,10 +605,14 @@ the other side does not degrade gracefully; it 404s or returns nothing.
 site's oldest linked PM project that is not archived, and `project_annotation_settings_get`'s
 `review_assignee.pm_project` names it. Linking a project created after the site's current one does
 not move it, but linking an older one does: the rule goes by the project's creation date, not the
-link date. A cloned site (`site_clone` or the dashboard's Clone Project) or a site made with
-`site_create` or `site_create_external` has no linked PM project until the editor, the tasks page, a discussion convert or the first review comment
-creates one, and on a site with no linked project that is not archived the project you link becomes
-where feedback lands, so call `project_annotation_settings_get` before linking. To move it, unlink
+link date. Every new site gets a linked "PM - <site>" project when it is created: from the
+dashboard, `site_create`, `site_create_external`, a clone (`site_clone` or the dashboard's Clone
+Project), a Webflow site added in the account hub, or a GitHub import that makes a new site. A site
+created before that by `site_create`, `site_create_external` or `site_clone`, or by the dashboard's
+Clone Project, may have none until the editor Tasks panel, the tasks page, a session recording, a
+discussion convert or the first review comment creates one, and on a site with no linked project
+that is not archived the project you link becomes where feedback lands, so call
+`project_annotation_settings_get` before linking. To move it, unlink
 each older one (`pm_projects_update` with `website_project_id: null`) or share the existing one
 with the other company; unlinking keeps that project and its tasks in the PM project lists, but they
 leave this site's Tasks page and the editor's "This Project" task view, and their "Implement with
