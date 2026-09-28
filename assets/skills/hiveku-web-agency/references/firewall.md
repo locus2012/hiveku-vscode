@@ -61,14 +61,16 @@ evidence, allow, remove.
 
 - `site_firewall_get({ project_id, environment, outcome?, q?, limit?, offset? })` - read-only.
   The last 7 days for that tier (`production` | `staging` | `development`): `totals`
-  (`challenged`, `blocked`, `rateLimited`), `window.through` (the latest rolled day; null when
+  (`challenged`, `blocked`, `rateLimited`, `siteRefused`), `window.through` (the latest rolled day; null when
   nothing has rolled yet - the numbers are rolled once a day from the access logs, so today's
   traffic shows tomorrow), `totalClients`, `clients[]` (busiest first: `userAgent`, `asn`,
   `country`, `requests`, `lastSeen`, `outcome`, `allowed`) and `exceptions[]` (the active
   allowances: `id`, `kind`, `value`, `note`, `createdBy`, `createdAt`). The list holds refused
-  requests only, never what was served. `blocked` counts the site's own 403s as well as the
-  firewall's, so a `blocked` row is not proof the firewall refused anything.
-  - `outcome` keeps one kind of refusal: `'challenged'`, `'blocked'` or `'rate_limited'`.
+  requests only, never what was served. `challenged`, `blocked` and `rateLimited` are the
+  firewall's own refusals. `siteRefused` counts 403s and 429s the site itself sent, which the
+  firewall had let through (days rolled before 2026-09-28 still count those under `blocked`).
+  - `outcome` keeps one kind of refusal: `'challenged'`, `'blocked'`, `'rate_limited'`, or
+    `'site_refused'` for the site's own. Without it the list holds the firewall's refusals only.
   - `q` searches, ignoring case, for part of the user agent, the network name the Firewall page
     shows, `AS` plus the network number or the bare number, or the two-letter country: `q:
     'Googlebot'`, `q: 'curl'`, `q: 'AS396982'`, `q: 'FR'`. Up to 100 characters.
@@ -150,11 +152,13 @@ directly. If the tools are not on your key yet, say so and hand the user the pat
    window, not proof that the crawler was served. For what Google actually fetched, the Search
    Console URL inspection is the evidence.
 2. The firewall lets real Googlebot and bingbot through by the address they come from, so a real
-   one is not challenged. A row can still appear: the per-address rate limit applies to everyone,
-   and a `blocked` row mixes the site's own 403s with the firewall's. The row cannot tell them
-   apart, and neither can its network number: a 403 carrying `x-hiveku-firewall` is the firewall,
-   one without it is the site. Ask for the response's `x-hiveku-firewall` header, or open the row
-   with `site_firewall_client_get` (step 4), before blaming the page or the firewall.
+   one is not challenged or blocked. A row can still appear: the per-address rate limit applies to
+   everyone, and the site itself may refuse a crawler, which lists under `outcome:
+   'site_refused'`: check the page, not the firewall. A `blocked` row is the firewall's own 403
+   (days rolled before 2026-09-28 also count the site's own 403s there). Its network number cannot
+   say whether the client is real: a 403 carrying `x-hiveku-firewall` is the firewall, one without
+   it is the site. Read the `crawlers` counts, or open the row with `site_firewall_client_get`
+   (step 4), before blaming the page or the firewall.
 3. A Googlebot row on Google Cloud (`asn` 396982) is usually an impostor: anyone can rent a server
    there and put that name in the user agent. Real bingbot comes from 8075 (Microsoft / Azure),
    which also carries rented Azure servers, so the network number alone cannot prove a bingbot

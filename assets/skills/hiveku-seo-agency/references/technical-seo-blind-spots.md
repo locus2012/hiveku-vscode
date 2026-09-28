@@ -203,7 +203,8 @@ is served. To see whether the firewall refused a crawler on a Hiveku-hosted site
 refusals by name: `site_firewall_get({ project_id, q: 'Googlebot' })` (or `q: 'bingbot'`). A
 Googlebot row on Google Cloud (`asn` 396982) is usually an impostor. Real bingbot comes from 8075
 (Microsoft / Azure), which also carries rented servers, so the network number alone cannot prove a
-bingbot real or fake. A `blocked` row also counts the site's own 403s. Reading those rows is
+bingbot real or fake. A crawler the site itself refused lists under `outcome: 'site_refused'`,
+not `blocked`. Reading those rows is
 `hiveku-web-agency/references/firewall.md`.
 If you cannot run either, the finding is: "X-Robots-Tag was not verified on production; no Hiveku
 tool reads live response headers, and this is the check most likely to explain a sitewide loss."
