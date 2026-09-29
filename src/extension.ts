@@ -73,6 +73,7 @@ import {
 import { registerHivekuFs, envUri, accountMemoryUri } from './platformFs';
 import { refreshAccountMemoryCopy, accountMemoryDashboardUrl, type AccountMemoryCopyResult } from './accountMemory';
 import { ACCOUNT_MEMORY_OPEN_COMMAND, ACCOUNT_MEMORY_DASHBOARD_COMMAND } from './consoleTree';
+import { memoryPageUrl } from './memoryOwner';
 import { openDatabasePanel } from './databasePanel';
 // Versions (Wave 2): new logic lives in these modules; the hooks below are small and named.
 import { goBackToVersion, versionBeforeDeploy, VersionIndicator } from './versionFlows';
@@ -518,6 +519,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('hiveku.consoleOpen', (arg) => openConsoleFocused(arg)),
     vscode.commands.registerCommand(ACCOUNT_MEMORY_OPEN_COMMAND, (arg) => openAccountMemory(arg)),
     vscode.commands.registerCommand(ACCOUNT_MEMORY_DASHBOARD_COMMAND, (arg) => editAccountMemoryOnDashboard(arg)),
+    vscode.commands.registerCommand(OPEN_MEMORY_COMMAND, (arg) => openMemoryPage(arg)),
     vscode.commands.registerCommand('hiveku.openProjectEnv', (node) => openProjectEnv(node)),
     vscode.commands.registerCommand('hiveku.projectDatabase', (node) => openProjectDatabase(node)),
     vscode.commands.registerCommand('hiveku.refreshConsole', () => {
@@ -545,7 +547,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (doc.uri.scheme !== 'hiveku') return;
       const seg = doc.uri.path.replace(/^\/+/, '').split('/');
       if (seg[0] === 'cms') refreshConsoleTab(seg[1], 'cms');
-      else if (seg[0] === 'memory') refreshConsoleTab(seg[1], 'knowledge');
+      // A new entry's first save creates it: the Knowledge tab lists it now.
+      else if (seg[0] === 'memory' || seg[0] === 'memory-new') refreshConsoleTab(seg[1], 'knowledge');
     }),
   );
 
@@ -1953,20 +1956,36 @@ async function saveAccountMemoryCopy(
   return result;
 }
 
-/** Open the account memory as a read-only document (live from Hiveku). */
+/** Open About your business (the account memory) as a read-only document (live from Hiveku). */
 async function openAccountMemory(arg?: { record?: AccountRecord }): Promise<void> {
-  const record = arg?.record ?? (await accounts.pick('Open the account memory for which account?'));
+  const record = arg?.record ?? (await accounts.pick('Open About your business for which account?'));
   if (!record) return;
   try {
     const doc = await vscode.workspace.openTextDocument(accountMemoryUri(record.accountId));
     await vscode.window.showTextDocument(doc, { preview: true });
   } catch (err) {
-    vscode.window.showErrorMessage(`Could not open the account memory for ${record.label}: ${errMsg(err)}`);
+    vscode.window.showErrorMessage(`Could not open About your business for ${record.label}: ${errMsg(err)}`);
   }
 }
 
+/** The command that opens the Memory page ("Hiveku: Open Memory"). */
+const OPEN_MEMORY_COMMAND = 'hiveku.openMemory';
+
 /**
- * Owners and admins edit the account memory on the dashboard; open it there.
+ * "Hiveku: Open Memory": the account's one Memory page, About your business
+ * and every agent (https://app.hiveku.com/<account>/dashboard/memory),
+ * optionally at one agent or item (`?agent=`, `&item=`). From the palette it
+ * asks which account; from the console tree it opens that account's.
+ */
+async function openMemoryPage(arg?: { record?: AccountRecord; agent?: string; item?: string }): Promise<void> {
+  const record = arg?.record ?? (await accounts.pick('Open the Memory page for which account?'));
+  if (!record) return;
+  const url = memoryPageUrl(appUrl(), record.accountId, { agent: arg?.agent, item: arg?.item });
+  await vscode.env.openExternal(vscode.Uri.parse(url));
+}
+
+/**
+ * Owners and admins edit About your business on the Memory page; open it there.
  * Called from the tree (a node carrying `record`), from the read-only editor's
  * title bar (the document's hiveku:/account-memory/<accountId>/... URI), or
  * from the palette (asks which account).
@@ -1979,7 +1998,7 @@ async function editAccountMemoryOnDashboard(arg?: { record?: AccountRecord } | v
   } else {
     accountId = arg?.record?.accountId;
   }
-  if (!accountId) accountId = (await accounts.pick('Edit the account memory for which account?'))?.accountId;
+  if (!accountId) accountId = (await accounts.pick('Change About your business for which account?'))?.accountId;
   if (!accountId) return;
   await vscode.env.openExternal(vscode.Uri.parse(accountMemoryDashboardUrl(appUrl(), accountId)));
 }
@@ -2503,7 +2522,7 @@ async function setRole(node: { record: AccountRecord } | undefined): Promise<voi
   if (record) await pickRole(record, 'how do you run this account?');
 }
 
-/** Pull account-defined commands/agents (_command:/_agent:) into .claude/ for Claude Code. */
+/** Pull account-defined commands, skills and agents (_command:/_skill:/_agent:) into .claude/ for Claude Code. */
 async function syncCommands(node: { record: AccountRecord } | undefined): Promise<void> {
   const record = node?.record ?? (await accounts.pick('Sync account commands for which account?'));
   if (!record) return;
@@ -2517,7 +2536,7 @@ async function syncCommands(node: { record: AccountRecord } | undefined): Promis
     const res = await syncAccountCommands(index, folder);
     const bits = [`${res.written.length} written`, `${res.removed.length} removed`];
     if (res.skippedLocalEdits.length) bits.push(`${res.skippedLocalEdits.length} skipped (local edits — Hiveku entry is the source of truth)`);
-    vscode.window.showInformationMessage(`Account commands synced: ${bits.join(', ')}.`);
+    vscode.window.showInformationMessage(`Account commands, skills and agents synced: ${bits.join(', ')}.`);
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
   }

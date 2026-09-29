@@ -8,7 +8,7 @@
 import Module from 'node:module';
 import { rm } from 'node:fs/promises';
 
-export const calls = { errors: [], infos: [], warnings: [], inputs: [], picks: [], openExternal: [], executeCommand: [], trashed: [] };
+export const calls = { errors: [], infos: [], warnings: [], inputs: [], picks: [], openExternal: [], executeCommand: [], trashed: [], opened: [], shown: [], clipboard: [], panels: [] };
 export const config = new Map();
 
 class EventEmitter {
@@ -28,7 +28,10 @@ class Uri {
       const slash = rest.indexOf('/', 2);
       rest = slash === -1 ? '/' : rest.slice(slash);
     }
-    return new Uri(m[1], decodeURIComponent(rest.split(/[?#]/)[0]));
+    const uri = new Uri(m[1], decodeURIComponent(rest.split(/[?#]/)[0]));
+    // The whole address as given, for tests that check a query or a host.
+    uri.raw = value;
+    return uri;
   }
   // A file URI carries fsPath, as HivekuScm and versionFlows read it.
   static file(p) { const u = new Uri('file', p); u.fsPath = p; return u; }
@@ -70,6 +73,9 @@ export const vscodeStub = {
   Disposable,
   RelativePattern,
   scm: { createSourceControl },
+  QuickPickItemKind: { Separator: -1, Default: 0 },
+  ViewColumn: { Active: -1, Beside: -2, One: 1 },
+  extensions: { getExtension: () => undefined },
   FileType: { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 },
   FilePermission: { Readonly: 1 },
   FileChangeType: { Changed: 1, Created: 2, Deleted: 3 },
@@ -86,11 +92,34 @@ export const vscodeStub = {
     showQuickPick: (...a) => { calls.picks.push(a); return thenable(undefined); },
     // Runs the task at once with a progress that reports nowhere.
     withProgress: (_opts, task) => task({ report() {} }, { isCancellationRequested: false, onCancellationRequested() { return { dispose() {} }; } }),
+    showTextDocument: (...a) => { calls.shown.push(a); return thenable(undefined); },
+    // A webview panel a test can talk to: `handler` is what the extension
+    // registered with onDidReceiveMessage, `posted` what it sent the webview.
+    createWebviewPanel: (viewType, title) => {
+      const panel = {
+        viewType, title, handler: null, posted: [],
+        webview: {
+          html: '', cspSource: 'vscode-resource:',
+          onDidReceiveMessage(fn) { panel.handler = fn; return { dispose() {} }; },
+          postMessage(m) { panel.posted.push(m); return thenable(true); },
+        },
+        disposers: [],
+        onDidDispose(fn) { panel.disposers.push(fn); return { dispose() {} }; },
+        dispose() { for (const fn of panel.disposers) fn(); },
+        reveal() {},
+      };
+      calls.panels.push(panel);
+      return panel;
+    },
   },
-  env: { openExternal: (u) => { calls.openExternal.push(u); return thenable(true); } },
+  env: {
+    openExternal: (u) => { calls.openExternal.push(u); return thenable(true); },
+    clipboard: { writeText: (t) => { calls.clipboard.push(t); return thenable(undefined); } },
+  },
   commands: { executeCommand: (...a) => { calls.executeCommand.push(a); return thenable(undefined); } },
   workspace: {
     getConfiguration: () => ({ get: (k, d) => (config.has(k) ? config.get(k) : d) }),
+    openTextDocument: (uri) => { calls.opened.push(uri); return thenable({ uri }); },
     createFileSystemWatcher: () => ({ onDidCreate() {}, onDidChange() {}, onDidDelete() {}, dispose() {} }),
     // Moving to the OS trash is recorded; the file then leaves the folder.
     fs: {

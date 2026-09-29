@@ -136,11 +136,15 @@ export function accountMemoryDashboardUrl(appUrl: string | undefined, accountId:
   return UUID_RE.test(accountId) ? `${base}/${accountId.toLowerCase()}/${DASHBOARD_PATH}` : `${base}/${DASHBOARD_PATH}`;
 }
 
-/** The message every refused save shows. */
+/**
+ * The message every refused save shows. The Memory page calls this document
+ * About your business (memory surfaces audit G15); the file the plugin, hiveku-sync and
+ * this extension write keeps its shared wording (renderAccountMemoryDocument).
+ */
 export function accountMemoryReadOnlyMessage(dashboardUrl: string): string {
   return (
-    'The account memory cannot be changed from VS Code, so nothing was saved. ' +
-    `Owners and admins edit it on the Hiveku dashboard: ${dashboardUrl}`
+    'About your business cannot be changed from VS Code, so nothing was saved. ' +
+    `Owners and admins change it on the Memory page: ${dashboardUrl}`
   );
 }
 

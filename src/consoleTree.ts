@@ -4,9 +4,9 @@
  *   Forney Corporation            ← account
  *   ├─ Tasks                      ← opens the console Tasks board
  *   ├─ Automations                ← opens the console Automations tab
- *   ├─ Account memory             ← read-only document; owners edit it on the dashboard
+ *   ├─ About your business        ← read-only document; owners change it on the Memory page
  *   ├─ Memory activity            ← who changed the AI memory, from which app, when and why
- *   │   ├─ Edit on the dashboard
+ *   │   ├─ Edit on the Memory page
  *   │   └─ "Closed on Mondays…"   ← a suggestion from an agent, not reviewed yet
  *   ├─ Outbound (BDR)             ← department; expand to datasets
  *   │   ├─ Campaigns      12      ← opens the console focused on this dataset
@@ -55,7 +55,7 @@ interface SuggestionNode { kind: 'memorySuggestion'; record: AccountRecord; sugg
 
 export type ConsoleNode = AccountNode | SectionNode | DeptNode | DatasetNode | MessageNode | AccountMemoryNode | SuggestionNode;
 
-/** Commands the Account memory node uses (registered in extension.ts). */
+/** Commands the About your business node uses (registered in extension.ts). */
 export const ACCOUNT_MEMORY_OPEN_COMMAND = 'hiveku.accountMemoryOpen';
 export const ACCOUNT_MEMORY_DASHBOARD_COMMAND = 'hiveku.accountMemoryEditOnDashboard';
 
@@ -168,7 +168,8 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         return item;
       }
       case 'accountMemory': {
-        const item = new vscode.TreeItem('Account memory', vscode.TreeItemCollapsibleState.Collapsed);
+        // The account memory, in the Memory page's words (memory surfaces audit G15).
+        const item = new vscode.TreeItem('About your business', vscode.TreeItemCollapsibleState.Collapsed);
         item.iconPath = new vscode.ThemeIcon('book');
         item.contextValue = 'hivekuConsoleAccountMemory';
         const mem = this.memoryCache.get(node.record.accountId);
@@ -184,8 +185,8 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
           item.description = 'read-only';
         }
         item.tooltip =
-          'What every department agent reads about this business. Read-only here: ' +
-          'owners and admins edit it on the Hiveku dashboard. Expand for the suggestions agents made.';
+          'What your agents read about this business when you or your team chat with them. Read-only here: ' +
+          'owners and admins change it on the Memory page. Expand for the suggestions agents made.';
         item.command = { command: ACCOUNT_MEMORY_OPEN_COMMAND, title: 'Open', arguments: [{ record: node.record }] };
         return item;
       }
@@ -197,7 +198,7 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
         item.description = suggestionByline(s);
         item.tooltip =
           `${oneLine(s.text)}\n\nSuggested by ${oneLine(s.source)}, ${formatWhen(s.at)}. ` +
-          'No owner has reviewed it yet: an owner keeps or removes it on the dashboard.';
+          'No owner has reviewed it yet: an owner keeps or removes it on the Memory page.';
         item.command = { command: ACCOUNT_MEMORY_OPEN_COMMAND, title: 'Open', arguments: [{ record: node.record }] };
         return item;
       }
@@ -297,10 +298,10 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
     if (node.kind === 'accountMemory') {
       const edit: ConsoleNode = {
         kind: 'message',
-        label: 'Edit on the dashboard',
+        label: 'Edit on the Memory page',
         icon: 'link-external',
-        tooltip: 'Owners and admins edit the account memory on the Hiveku dashboard. Opens it in your browser.',
-        command: { command: ACCOUNT_MEMORY_DASHBOARD_COMMAND, title: 'Edit on the dashboard', arguments: [{ record: node.record }] },
+        tooltip: 'Owners and admins change About your business on the Memory page. Opens it in your browser.',
+        command: { command: ACCOUNT_MEMORY_DASHBOARD_COMMAND, title: 'Edit on the Memory page', arguments: [{ record: node.record }] },
       };
       let mem = this.memoryCache.get(node.record.accountId);
       if (!mem) {
@@ -316,7 +317,7 @@ export class AccountConsoleProvider implements vscode.TreeDataProvider<ConsoleNo
             edit,
             {
               kind: 'message',
-              label: 'Could not load the account memory',
+              label: 'Could not load About your business',
               icon: 'warning',
               tooltip: msg,
             },

@@ -393,7 +393,7 @@
       },
       {
         "command": "hiveku.syncCommands",
-        "title": "Hiveku: Sync Account Commands (to Claude Code)"
+        "title": "Hiveku: Sync Account Commands and Skills (to Claude Code)"
       },
       {
         "command": "hiveku.consoleShowAll",
@@ -454,12 +454,17 @@
       },
       {
         "command": "hiveku.accountMemoryOpen",
-        "title": "Hiveku: Open Account Memory (read-only)",
+        "title": "Hiveku: Open About Your Business (read-only)",
         "icon": "$(book)"
       },
       {
         "command": "hiveku.accountMemoryEditOnDashboard",
-        "title": "Hiveku: Edit Account Memory on the Dashboard",
+        "title": "Hiveku: Edit About Your Business on the Memory Page",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "hiveku.openMemory",
+        "title": "Hiveku: Open Memory",
         "icon": "$(link-external)"
       }
     ],
@@ -850,6 +855,11 @@
           "command": "hiveku.syncCommands",
           "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
           "group": "1_role@1"
+        },
+        {
+          "command": "hiveku.openMemory",
+          "when": "view == hiveku.console && viewItem == hivekuConsoleAccount",
+          "group": "1_role@2"
         },
         {
           "command": "hiveku.autoRefresh",

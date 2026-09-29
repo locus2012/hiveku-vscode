@@ -138,7 +138,8 @@ describe('Knowledge tab: last changed by and Activity', () => {
     assert.doesNotThrow(() => new vm.Script(script), 'the webview script must be valid JavaScript');
     assert.match(script, /function renderMemActivity\(d\)/);
     assert.match(script, /sec\.id='ds-activity'/);
-    assert.match(script, /h:'last changed by'/);
+    // The grouped Knowledge tab's tables carry the column (memTable).
+    assert.match(script, /'last changed by'/);
     assert.match(script, /type:'memactivity',cursor:ACT\.next/);
     assert.match(script, /m\.type==='memactivitypage'/);
     // Every cell is text: the table renders with el(), whose third argument is textContent.
@@ -338,9 +339,13 @@ describe('Console writes ask for an optional reason', () => {
 
   test('delete and restore pass the reason through the new wrappers (source check)', async () => {
     const src = await fs.readFile(new URL('../src/console.ts', import.meta.url), 'utf8');
-    assert.match(src, /memoryDeleteWithContext\(await clientFor\(account\.accountId\), msg\.id, \{ reason \}\)/);
+    // Delete also sends the version the list showed (expected_version).
+    assert.match(src, /memoryDeleteWithContext\(await clientFor\(account\.accountId\), msg\.id, \{ reason, expectedVersion \}\)/);
     assert.match(src, /memoryRestoreWithContext\(client, pick\.versionId, \{ reason \}\)/);
-    assert.match(src, /memoryCreateWithContext\(/);
+    // "+ New entry" creates on the first save of its tab (platformFs), with a reason.
+    const fsSrc = await fs.readFile(new URL('../src/platformFs.ts', import.meta.url), 'utf8');
+    assert.match(fsSrc, /memoryCreateWithContext\(client, \{ type: target\.kind, name: target\.name, content: body, department \}, \{ reason \}\)/);
+    assert.doesNotMatch(src, /memoryCreateWithContext\(/, 'the console creates nothing itself');
     // Negative control: the reasonless calls are gone from the console.
     assert.doesNotMatch(src, /api\.memoryDelete\(/);
     assert.doesNotMatch(src, /api\.memoryRestoreVersion\(/);

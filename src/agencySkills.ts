@@ -52,6 +52,13 @@ const VENDORED_SKILLS = [
 type VendoredSkill = (typeof VENDORED_SKILLS)[number];
 
 /**
+ * The vendored skill directory names. commandSync.ts never gives an account
+ * skill one of these names: a role switch removes these directories and a
+ * scaffold replaces them whole.
+ */
+export const VENDORED_SKILL_NAMES: readonly string[] = VENDORED_SKILLS;
+
+/**
  * How to operate a Hiveku account safely from Claude Code - which account you
  * are on, the you-are-not-the-only-writer rule, the approval rails. Every role
  * receives it; it is not a discipline, so it is appended rather than listed.
