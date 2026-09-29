@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.86.4
+- **Google products connect on Hiveku's own app.** The department setup texts, the `/hiveku-connect` command, each account's CLAUDE.md and the "Copy setup prompt" texts no longer send anyone into Google Cloud or ask for a Google Ads developer token. Google Ads, Analytics and Tag Manager, Search Console, Business Profile and Calendar connect with one link on Hiveku's app, and a connection on the account's own app moves onto Hiveku's. Only Gmail keeps an app of the account's own. Microsoft Ads is unchanged. Account folders you already have pick this up on "Hiveku: Refresh Setup".
+- **The E911 count already leaves toll-free numbers out.** The vendored phone skills no longer tell Claude to subtract toll-free numbers from the count of numbers with no emergency address, which undercounted. They also describe the current rule for an account's default outgoing caller ID.
+- **The vendored skills match plugin 0.27.6.**
+
 ## 0.86.3
 - **The firewall's Blocked count is the firewall's own.** The vendored firewall reference now says that Blocked counts only the 403s the firewall itself sends, from 28 September 2026. A 403 or 429 your site sends itself is counted apart, as `totals.siteRefused`, and listed under `outcome: 'site_refused'` in `site_firewall_get`. Earlier days still count those under Blocked.
 - **The vendored skills match plugin 0.27.3.**
