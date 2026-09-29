@@ -138,8 +138,9 @@ describe('where the Memory page puts a row', () => {
     assert.deepEqual(place({ domain: '_rule:x', department: 'graphic_design' }), { place: 'other', owner: 'graphic_design', group: 'rules' });
   });
 
-  test('read-only here: shared rows and every _account:* row; owned rows are not', () => {
+  test('read-only here: shared rules and skills and every _account:* row; owned rows are not', () => {
     assert.equal(owner.isReadOnlyRow({ domain: '_rule:x', content: 'x' }), true);
+    assert.equal(owner.isReadOnlyRow({ domain: '_skill:x', content: 'x' }), true);
     assert.equal(owner.isReadOnlyRow({ domain: '_account:soul' }), true);
     assert.equal(owner.isReadOnlyRow({ domain: '_account:pronunciations' }), true);
     assert.equal(owner.isReadOnlyRow({ domain: '_workspace:x' }), true);
@@ -149,6 +150,26 @@ describe('where the Memory page puts a row', () => {
     assert.equal(owner.isReadOnlyRow({ domain: '_identity:orchestrator', content: '---\nname: Iris\n---\n' }), false);
     assert.match(owner.readOnlyReason(place({ domain: '_rule:x' })), /shared with every agent.*Memory page/);
     assert.match(owner.readOnlyReason(place({ domain: '_account:soul' })), /chief of staff/);
+  });
+
+  test('a shared kind the Memory page does not change stays editable here (review F2)', () => {
+    // The Memory page's shared editor takes rules and skills only (any other kind is a 404 there).
+    const shared = [
+      { domain: '_command:weekly-report', content: '# weekly-report\n\n(Write the command content here, then save.)\n' },
+      { domain: '_agent:closer', content: 'x' },
+      { domain: 'competitors', content: 'Acme undercuts us.' },
+      { domain: '_identity:patrick', content: '---\nname: Patrick\n---\n' },
+    ];
+    for (const row of shared) {
+      const placement = place(row);
+      assert.equal(placement.place, 'shared', row.domain);
+      assert.equal(owner.isReadOnlyRow(row, placement), false, row.domain);
+      assert.equal(owner.isSharedChangedHere(placement), true, row.domain);
+    }
+    // Negative controls: the page's own kinds, and a row an agent owns.
+    assert.equal(owner.isSharedChangedHere(place({ domain: '_rule:x', content: 'x' })), false);
+    assert.equal(owner.isSharedChangedHere(place({ domain: '_skill:x', content: 'x' })), false);
+    assert.equal(owner.isSharedChangedHere(place({ domain: '_command:x', department: 'ppc' })), false);
   });
 });
 
@@ -213,6 +234,26 @@ describe('+ New entry (audit G7)', () => {
       owner.withDepartmentMarker('---\ndescription: Weekly tune\n---\nStep 1', 'ppc'),
       '---\ndescription: Weekly tune\n---\n<!-- department: ppc -->\nStep 1',
     );
+  });
+
+  test("who else follows an entry, by the builder's follow rule (review F4)", () => {
+    // Every Marketing topic follows the Marketing lead's; the website agent follows the lead's and the website topics'.
+    assert.deepEqual(owner.alsoFollowedBy('marketing'), ['every Marketing topic', 'the Website agent']);
+    for (const topic of ['branding', 'content', 'website_design', 'customer_avatar', 'customer_journey', 'knowledge_base', 'before_after_grid']) {
+      assert.deepEqual(owner.alsoFollowedBy(topic, 'rule'), ['the Website agent'], topic);
+    }
+    // SEO: its skills only, never its rules.
+    assert.deepEqual(owner.alsoFollowedBy('seo', 'skill'), ['the Website agent']);
+    assert.deepEqual(owner.alsoFollowedBy('seo', 'rule'), []);
+    assert.deepEqual(owner.alsoFollowedBy('seo'), []);
+    // Notes are their owner's own; the other agents and topics are followed by no one else.
+    assert.deepEqual(owner.alsoFollowedBy('marketing', 'memory'), []);
+    for (const key of ['sales', 'helpdesk', 'comms', 'production', 'accounting', 'coder', 'ppc', 'email', 'social', 'outbound', 'workflow']) {
+      assert.deepEqual(owner.alsoFollowedBy(key, 'skill'), [], key);
+    }
+    // The same owner set the builder pins (team-keys.ts WEBSITE_AGENT_FOLLOWS, the ownership fixture).
+    assert.deepEqual(owner.WEBSITE_AGENT_FOLLOWED_OWNERS, ['marketing', 'branding', 'content', 'website_design', 'customer_avatar', 'customer_journey', 'knowledge_base', 'before_after_grid']);
+    assert.deepEqual(owner.WEBSITE_AGENT_FOLLOWED_SKILL_OWNERS, ['seo']);
   });
 });
 

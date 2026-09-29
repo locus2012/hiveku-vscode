@@ -29,6 +29,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import { readTree, type SkillFile } from './agencySkills';
+import { accountMemoryDashboardUrl } from './accountMemory';
 
 /** Marker pair for the Hiveku-managed region inside AGENTS.md. */
 const AGENTS_BEGIN = '<!-- hiveku:begin -->';
@@ -82,7 +83,8 @@ Ignore only its Claude-specific file paths (\`.claude/*\`) — your equivalents 
 Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
 - Verify identity before ANY write: \`get_account_info\` must return THIS account.
 - **Context and memory.** Call \`account_context_get({ domain })\` first, before any copy, plan or analysis.
-  The account memory is read-only to you: owners edit it on the Hiveku dashboard, the local copy is
+  The account memory is read-only to you: it is About your business on the Memory page
+  (${accountMemoryDashboardUrl(undefined, opts.accountId)}), where owners and admins change it. The local copy is
   \`hiveku-data/account/ACCOUNT_MEMORY.md\` (never edit or upload it); suggest one line with \`account_memory_append\`.
   Department memory is ONE document per department: read it (\`memory_list({ domain })\`), merge, then send the
   whole document with \`memory_update({ memory_id, content, reason, expected_version })\`. Never create-then-overwrite on a 409.

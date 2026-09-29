@@ -10,15 +10,17 @@
  *   hiveku:/memory-newer/<accountId>/<memoryId>/<name>.md  the newer Hiveku text of a memory
  *        entry that changed while it was open (READ-ONLY; the left side of Compare and merge)
  *   hiveku:/memory-view/<accountId>/<memoryId>/<name>.md   a memory entry VS Code does not change
- *        (shared with every agent, or an `_account:*` row): READ-ONLY, "Open in Memory"
+ *        (a rule or skill shared with every agent, or an `_account:*` row): READ-ONLY, "Open in Memory"
  *   hiveku:/memory-new/<accountId>/<department>/<name>.md  a new rule, skill, shortcut,
  *        specialist or notes for one agent: empty until its FIRST SAVE creates the entry with
  *        that department (audit G7; no placeholder entry is ever created)
  *
- * A memory save also keeps the one owner rule (memoryOwner.ts): a row shared
- * with every agent or an `_account:*` row is refused with "Open in Memory"
- * whichever way it was opened, a `<!-- department: x -->` line an edit dropped
- * is put back, and an edit that would move a rule to another agent is refused.
+ * A memory save also keeps the one owner rule (memoryOwner.ts): a rule or
+ * skill shared with every agent, or an `_account:*` row, is refused with "Open
+ * in Memory" whichever way it was opened (the Memory page changes those; it
+ * does not change the other shared kinds, which save here), a
+ * `<!-- department: x -->` line an edit dropped is put back, and an edit that
+ * would move a rule to another agent is refused.
  *
  * Memory saves check for other writers (memory event log plan 14.3): the
  * provider remembers the version it served, and a save first reads the entry
@@ -56,6 +58,7 @@ import {
 import {
   checkOwnerOnSave,
   isReadOnlyRow,
+  isSharedChangedHere,
   markerDepartment,
   memoryLinkFor,
   memoryPageUrl,
@@ -494,10 +497,16 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
     }
     const owner = checkOwnerOnSave(row, edited);
     if (!owner.ok) {
+      // The Memory page does not move a kind it does not change (a shared
+      // shortcut, specialist, notes or profile): say what does work.
+      const how = isSharedChangedHere(placement)
+        ? `Remove that line. The Memory page does not move this kind: to give it to ${ownerName(owner.to)}, add it for ` +
+          `${ownerName(owner.to)} with "+ New entry" in the Knowledge tab, then delete this one.`
+        : 'Remove that line, or move the entry to another agent on the Memory page.';
       this.refuse(
-        `"${name}" belongs to ${ownerName(owner.from)}. The line <!-- department: ${owner.to} --> would have the agents ` +
-          `that read it follow it as ${ownerName(owner.to)}'s instead, so nothing was saved. Remove that line, or move ` +
-          'the entry to another agent on the Memory page.',
+        `"${name}" ${owner.from ? `belongs to ${ownerName(owner.from)}` : 'is shared with every agent'}. The line ` +
+          `<!-- department: ${owner.to} --> would have the agents that read it follow it as ${ownerName(owner.to)}'s ` +
+          `instead, so nothing was saved. ${how}`,
         this.memoryUrl(p.accountId, placement, domain),
       );
     }

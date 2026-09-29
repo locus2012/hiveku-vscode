@@ -4,11 +4,15 @@
  *
  *   - About your business, then each agent (the Marketing team by topic),
  *     then Shared with every agent; internal rows are not shown;
- *   - rows shared with every agent and `_account:*` rows are read-only, with
- *     "Open in Memory" (the account's Memory page, at the agent and item);
+ *   - rules and skills shared with every agent and `_account:*` rows are
+ *     read-only, with "Open in Memory" (the account's Memory page, at the agent
+ *     and item); the other shared kinds, which the page does not change, are
+ *     changed and deleted here;
  *   - Delete sends the version the list showed (expected_version);
- *   - "+ New entry" asks who it is for first, then opens an empty editor;
- *   - "Train" tells Claude which agent a new rule is for.
+ *   - "+ New entry" asks who it is for first, then opens an empty editor, and
+ *     names who else follows what is filed for that agent;
+ *   - "Train" tells Claude which agent a new rule is for, by `department` and
+ *     by its department line.
  *
  * Runs against the compiled extension (npm test compiles first).
  */
@@ -195,6 +199,19 @@ describe('the Knowledge tab in the webview', () => {
     assert.ok(posted.some((m) => m.type === 'memopen' && m.url === `${PAGE}?agent=orchestrator&item=_account%3Asoul`));
   });
 
+  test('a shortcut every agent reads is drawn as changed here, with Edit and Delete (review F2)', async () => {
+    const placeholder = { id: 'c-old', domain: '_command:weekly-report', name: 'weekly-report', department: null, version: 1, content: 'x' };
+    const tab = await consolePanel.loadKnowledgeTab(knowledgeClient([placeholder, ROWS.find((r) => r.id === 'r-shared')]), { accountId: ACCOUNT, appUrl: APP });
+    const { content, posted } = render(tab);
+    const all = texts(content);
+    assert.ok(all.includes(' changed here'), 'the badge');
+    assert.ok(all.some((t) => /The Memory page does not change the other kinds/.test(String(t))), 'the Shared section says so');
+    const own = buttons(content).filter((b) => b.textContent === 'Delete');
+    assert.equal(own.length, 1, 'Delete for the shortcut, none for the shared rule');
+    own[0].listeners.click[0]();
+    assert.deepEqual({ ...posted.find((m) => m.type === 'memdel') }, { type: 'memdel', id: 'c-old', domain: '_command:weekly-report', version: 1 });
+  });
+
   test('negative control: the render helpers really run (a broken payload throws)', () => {
     assert.throws(() => render(null));
   });
@@ -259,20 +276,81 @@ describe('+ New entry: who it is for first (G7)', () => {
 });
 
 describe('Train with Claude/Codex (G7)', () => {
-  test('step 6 creates with the department of the agent the entry belongs to', () => {
+  const step6Of = (prompt) => prompt.split('\n').find((l) => l.startsWith('6.'));
+
+  test('step 6 creates with the department of the agent the entry belongs to, and its department line', () => {
     const prompt = consolePanel.trainPrompt(account, { domain: '_rule:no-discounts', owner: 'sales' });
-    const step6 = prompt.split('\n').find((l) => l.startsWith('6.'));
+    const step6 = step6Of(prompt);
     assert.match(step6, /memory_create\(\{ type, name, content, reason, department \}\)/);
     assert.match(step6, /"sales" \(Sales\), the agent this entry belongs to/);
-    assert.match(step6, /Without a department EVERY agent follows it/);
+    // The MCP server that drops `department` still files the rule by this line (review F3).
+    assert.match(step6, /first line of content `<!-- department: sales -->`, exactly so \(after its front matter/);
+    assert.match(step6, /even where memory_create does not take department/);
+    assert.match(step6, /With neither, EVERY agent follows it/);
     assert.match(step6, /helpdesk \(Support\)/);
     assert.ok(!/orchestrator|analytics/.test(step6), 'only agents a new entry can be for');
     assert.match(prompt, /Keep any `<!-- department: \.\.\. -->` line exactly as it is/);
   });
 
+  test('an owner "+ New entry" does not offer is not proposed: Claude asks (review F3)', () => {
+    for (const owner of ['orchestrator', 'analytics', 'graphic_design']) {
+      const prompt = consolePanel.trainPrompt(account, { domain: '_rule:x', owner });
+      const step6 = step6Of(prompt);
+      assert.match(step6, /department is the agent it is for: ask me which one/, owner);
+      assert.match(step6, /`<!-- department: <the department you send> -->`/, owner);
+      assert.ok(!step6.includes(`"${owner}"`) && !step6.includes(`department: ${owner}`), `${owner} is not proposed`);
+    }
+    // The entry itself is still named for whoever it is filed under.
+    assert.match(consolePanel.trainPrompt(account, { domain: '_rule:brief-iris', owner: 'orchestrator' }), /the "_rule:brief-iris" entry \(Chief of staff\)/);
+  });
+
   test('without an entry it asks which agent', () => {
-    const step6 = consolePanel.trainPrompt(account).split('\n').find((l) => l.startsWith('6.'));
+    const step6 = step6Of(consolePanel.trainPrompt(account));
     assert.match(step6, /department is the agent it is for: ask me which one/);
+  });
+});
+
+describe('+ New entry names who else follows it (review F4)', () => {
+  function firstPickItems() {
+    let items;
+    vscodeStub.window.showQuickPick = (list) => {
+      items = list;
+      return Promise.resolve(undefined);
+    };
+    return consolePanel.startNewMemoryEntry(fakeClient({}), account, APP).then(() => items);
+  }
+
+  test('the Marketing lead and the website topics say who also follows them; no "Only that agent"', async () => {
+    const items = await firstPickItems();
+    const about = (label) => items.find((it) => it.label === label)?.description;
+    assert.equal(about('Marketing strategy'), "the Marketing team's lead; every Marketing topic and the Website agent follow it too (not its notes)");
+    assert.equal(about('Content'), 'the Website agent follows it too (not its notes)');
+    assert.equal(about('Ideal customers'), 'the chat on the Ideal customers pages; the Website agent follows it too');
+    assert.equal(about('SEO'), 'the Website agent follows its skills too');
+    // Negative controls: an agent and a topic nobody else follows say nothing more.
+    assert.equal(about('Sales'), undefined);
+    assert.equal(about('Paid ads'), undefined);
+  });
+
+  test('the placeholder no longer says only that agent follows it', async () => {
+    let opts;
+    vscodeStub.window.showQuickPick = (list, o) => {
+      opts = o;
+      return Promise.resolve(undefined);
+    };
+    await consolePanel.startNewMemoryEntry(fakeClient({}), account, APP);
+    assert.doesNotMatch(opts.placeHolder, /Only/);
+    assert.match(opts.placeHolder, /so do any agents named beside it/);
+  });
+
+  test('once the kind is chosen, the message names the followers for that kind', () => {
+    assert.equal(consolePanel.newEntryFollowersSentence('marketing', 'rule'), 'Every Marketing topic and the Website agent follow it too.');
+    assert.equal(consolePanel.newEntryFollowersSentence('branding', 'command'), 'The Website agent follows it too.');
+    assert.equal(consolePanel.newEntryFollowersSentence('seo', 'skill'), 'The Website agent follows it too.');
+    // SEO's rules, anyone's notes, and an agent nobody else follows: no one else.
+    assert.equal(consolePanel.newEntryFollowersSentence('seo', 'rule'), '');
+    assert.equal(consolePanel.newEntryFollowersSentence('marketing', 'memory'), '');
+    assert.equal(consolePanel.newEntryFollowersSentence('sales', 'skill'), '');
   });
 });
 
@@ -327,6 +405,33 @@ describe('the console handlers', () => {
     // Negative control: an agent's own row opens editable.
     await panel.handler({ type: 'memedit', id: 'r-sales', domain: '_rule:no-discounts' });
     assert.equal(calls.opened.at(-1).path, `/memory/${ACCOUNT}/r-sales/_rule__no-discounts.md`);
+  });
+
+  test('a shortcut every agent reads is changed here: it opens editable and Delete sends its version (review F2)', async () => {
+    // What 0.86's "+ New entry" created: a placeholder no agent owns. The
+    // Memory page changes only shared rules and skills, so VS Code must.
+    const placeholder = { id: 'c-old', domain: '_command:weekly-report', name: 'weekly-report', department: null, version: 1, content: '# weekly-report\n\n(Write the command content here, then save.)\n' };
+    const note = { id: 'n-old', domain: 'competitors', name: 'competitors', department: null, version: 2, content: 'Acme undercuts us.' };
+    const rows = [placeholder, note, ROWS.find((r) => r.id === 'r-shared')];
+    const tab = await consolePanel.loadKnowledgeTab(knowledgeClient(rows), { accountId: ACCOUNT, appUrl: APP });
+    const byId = Object.fromEntries(tab.memories.map((m) => [m.id, m]));
+    for (const id of ['c-old', 'n-old']) {
+      assert.deepEqual([byId[id].place, byId[id].readOnly, byId[id].readOnlyWhy], ['shared', false, ''], id);
+      assert.match(byId[id].sharedNote, /Every agent reads it\. The Memory page does not change this kind, so change or delete it here\./);
+    }
+    // Negative control: a shared rule is still the Memory page's.
+    assert.deepEqual([byId['r-shared'].readOnly, byId['r-shared'].sharedNote], [true, '']);
+
+    const client = knowledgeClient(rows, { memory_delete: { data: { ok: true } } });
+    const panel = openConsole(client);
+    await panel.handler({ type: 'load', tab: 'knowledge' });
+    await panel.handler({ type: 'memedit', id: 'c-old', domain: '_command:weekly-report' });
+    assert.equal(calls.opened.at(-1).path, `/memory/${ACCOUNT}/c-old/_command__weekly-report.md`, 'opens editable');
+    vscodeStub.window.showWarningMessage = (...a) => { calls.warnings.push(a); return Promise.resolve('Delete'); };
+    vscodeStub.window.showInputBox = () => Promise.resolve('Placeholder from 0.86');
+    await panel.handler({ type: 'memdel', id: 'c-old', domain: '_command:weekly-report', version: 1 });
+    const del = client.seen.find((c) => c.name === 'memory_delete');
+    assert.deepEqual(del.args, { memory_id: 'c-old', reason: 'Placeholder from 0.86', expected_version: 1 });
   });
 
   test('Open in Memory opens only this account\'s Memory page', async () => {

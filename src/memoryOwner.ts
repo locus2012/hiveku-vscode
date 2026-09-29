@@ -31,10 +31,12 @@
  * filed for the chief of staff, or an owner no agent has) stays visible here
  * as `other`, so nothing the Knowledge tab listed before goes missing.
  *
- * WHAT IS READ-ONLY HERE. Rows shared with every agent and `_account:*` rows
- * (the chief of staff's own memory, Voice and pronunciation) are changed only
- * on the Memory page, by owners and admins. VS Code shows them with "Open in
- * Memory" and refuses a save.
+ * WHAT IS READ-ONLY HERE. Rules and skills shared with every agent, and
+ * `_account:*` rows (the chief of staff's own memory, Voice and
+ * pronunciation), are changed on the Memory page, by owners and admins. VS
+ * Code shows them with "Open in Memory" and refuses a save. The Memory page
+ * does not change the other kinds when no agent owns them (a shortcut, a
+ * specialist, notes, a profile), so those still open, save and delete here.
  *
  * No `vscode` import, so node --test drives it.
  */
@@ -430,15 +432,37 @@ export function placeRow(row: OwnerInput): Placement {
 }
 
 /**
- * True when VS Code must not change the row: shared with every agent, an
- * `_account:*` row, or anything the page never draws. Those are changed on the
- * Memory page (owners and admins), or not by hand at all.
+ * The groups the Memory page changes when every agent shares them: its
+ * Shared with every agent editor takes rules and skills only (builder
+ * api/account/memory/shared/[id]: any other kind is a 404, and the page says
+ * "Only rules and skills are changed here").
+ */
+const SHARED_GROUPS_THE_PAGE_CHANGES: ReadonlySet<string> = new Set(['rules', 'skills']);
+
+/**
+ * True when VS Code must not change the row: a rule or skill shared with every
+ * agent, an `_account:*` row, or anything the page never draws. Those are
+ * changed on the Memory page (owners and admins), or not by hand at all.
  */
 export function isReadOnlyRow(row: OwnerInput, placement: Placement = placeRow(row)): boolean {
   const domain = typeof row.domain === 'string' ? row.domain.trim().toLowerCase() : '';
   if (domain.startsWith('_account:')) return true;
-  return placement.place === 'shared' || placement.place === 'business' || placement.place === 'hidden';
+  if (placement.place === 'shared') return SHARED_GROUPS_THE_PAGE_CHANGES.has(placement.group);
+  return placement.place === 'business' || placement.place === 'hidden';
 }
+
+/**
+ * True for a row every agent reads that only VS Code (or a connected tool)
+ * changes: shared with every agent, of a kind the Memory page does not change
+ * (a shortcut, a specialist, notes, a profile). Among them are the placeholder
+ * rows 0.86's "+ New entry" created.
+ */
+export function isSharedChangedHere(placement: Placement): boolean {
+  return placement.place === 'shared' && !SHARED_GROUPS_THE_PAGE_CHANGES.has(placement.group);
+}
+
+/** Said beside such a row: every agent reads it, and the Memory page does not change it. */
+export const SHARED_CHANGED_HERE_NOTE = 'Every agent reads it. The Memory page does not change this kind, so change or delete it here.';
 
 /** Why a row is read-only here, in one line (a save refusal and the tab both say it). */
 export function readOnlyReason(placement: Placement): string {
@@ -538,6 +562,42 @@ export function newEntryAgents(): NewEntryAgent[] {
 
 export function isNewEntryDepartment(value: unknown): value is string {
   return typeof value === 'string' && newEntryAgents().some((a) => a.key === value);
+}
+
+/**
+ * The owners whose rules, skills, shortcuts and specialists the website agent
+ * also follows, and the one it follows for skills only (builder team-keys.ts
+ * WEBSITE_AGENT_FOLLOWS; the website agent's CODER_RULE_OWNERS and
+ * CODER_SKILL_OWNERS).
+ */
+export const WEBSITE_AGENT_FOLLOWED_OWNERS: readonly string[] = [
+  'marketing',
+  'branding',
+  'content',
+  'website_design',
+  'customer_avatar',
+  'customer_journey',
+  'knowledge_base',
+  'before_after_grid',
+];
+export const WEBSITE_AGENT_FOLLOWED_SKILL_OWNERS: readonly string[] = ['seo'];
+
+/**
+ * Who follows an entry filed for `owner` besides that agent, in words, by the
+ * builder's follow rule (memory-ownership-cases.json follow_rule): every
+ * Marketing topic also follows the Marketing lead's entries, and the website
+ * agent also follows the Marketing lead's and the website topics' (SEO's
+ * skills only). Notes are their owner's own. Without a kind: what holds for a
+ * rule, a shortcut or a specialist.
+ */
+export function alsoFollowedBy(owner: string, kind?: NewEntryKind): string[] {
+  if (kind === 'memory') return [];
+  const others: string[] = [];
+  if (owner === 'marketing') others.push('every Marketing topic');
+  if (WEBSITE_AGENT_FOLLOWED_OWNERS.includes(owner) || (kind === 'skill' && WEBSITE_AGENT_FOLLOWED_SKILL_OWNERS.includes(owner))) {
+    others.push(`the ${AGENT_NAMES.coder} agent`);
+  }
+  return others;
 }
 
 export type NewEntryKind = 'rule' | 'skill' | 'command' | 'agent' | 'memory';

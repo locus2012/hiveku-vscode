@@ -347,8 +347,8 @@ Refresh the local data mirror$ARGUMENTS, then work from the files — not from r
    - \`node .hiveku/pull-data.mjs --dataset <dept>:<dataset>\` — re-pull ONE dataset (do this right after you write)
    - \`node .hiveku/pull-data.mjs account\` — refresh only the account memory copy
    Every run except --dataset also refreshes \`hiveku-data/account/ACCOUNT_MEMORY.md\`, a READ-ONLY copy of
-   the account memory. Owners and admins edit it on the Hiveku dashboard (the link is at the top of the
-   file); never edit or upload the file. To add a fact, suggest it with account_memory_append.
+   the account memory: About your business on the Memory page, where owners and admins change it (the link
+   is at the top of the file). Never edit or upload the file. To add a fact, suggest it with account_memory_append.
 2. Then analyze LOCALLY: grep/read \`hiveku-data/<dept>/*.json\` (each file is
    { dataset, count, fetched_at, rows } — check fetched_at before trusting it). Scoped rows carry
    \`_parent\` (which project/connection they came from).

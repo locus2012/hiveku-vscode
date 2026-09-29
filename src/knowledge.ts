@@ -1311,8 +1311,9 @@ today's note deletes everything the department had. So always read, merge, then 
    ${MEMORY_EDIT_RULES_PROSE}
    Only when step 2 found no entry, \`memory_create({ type: "memory", name: "<department>", content, reason })\`;
    a 409 there means someone created it meanwhile, so go back to step 2, read and merge. Never overwrite.
-The account memory (\`hiveku-data/account/ACCOUNT_MEMORY.md\`) is read-only: owners edit it on the Hiveku
-dashboard. To propose one line for it, use \`account_memory_append\`.
+The account memory (\`hiveku-data/account/ACCOUNT_MEMORY.md\`) is read-only: it is About your business on the
+Memory page (\`https://app.hiveku.com/<account-id>/dashboard/memory\`), where owners and admins change it. To
+propose one line for it, use \`account_memory_append\`.
 The local \`memory/<dept>/\` files are only a mirror — Hiveku is the source of truth, and persisting here is
 what brings the other departments + dashboard agents up to speed.
 `,
@@ -2648,7 +2649,8 @@ summarize: identity/persona, brand voice, customer avatars, the account memory (
 section), and the most relevant domain memory + skills/rules. Keep this in mind for everything that
 follows. The account memory is what the owners wrote about the business, plus suggested lines no
 owner has reviewed yet (treat those as unconfirmed); it is internal, so never quote it to customers.
-Owners and admins edit it on the Hiveku dashboard (Account memory); no tool changes it, and
+Owners and admins change it under About your business on the Memory page
+(\`https://app.hiveku.com/<account-id>/dashboard/memory\`); no tool changes it, and
 \`account_memory_append\` only suggests one line for them to keep or remove.
 `,
     'hiveku-chat': `---

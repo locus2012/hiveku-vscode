@@ -27,6 +27,9 @@
  *   - an owned path that differs from a remote path only in case is, on a
  *     case-insensitive disk, the same file: it keeps its ownership and is never
  *     deleted as gone upstream.
+ *
+ * A synced file never gives Claude Code a setting that runs or approves
+ * anything (PR #30 review, F1): see COMMAND_KEYS and inertShellPlaceholders.
  */
 
 import * as crypto from 'crypto';
@@ -104,42 +107,113 @@ function slugFromDomain(entry: KnowledgeEntry, prefix: '_command:' | '_agent:' |
  * an entry. Above front matter it hides it: a file that does not start with
  * `---` has no front matter to Claude Code.
  */
-const LEADING_MARKER_LINE = /^[ \t]*<!--[ \t]*department:[ \t]*[A-Za-z0-9_]+[ \t]*-->[ \t]*\r?\n/i;
-const FRONT_MATTER_BLOCK = /^---\n[\s\S]*?\n---(?:\n|$)/;
+const LEADING_MARKER_LINE = /^[ \t]*<!--[ \t]*department:[ \t]*[A-Za-z0-9_]+[ \t]*-->[ \t]*\n/i;
+/** Front matter at the very top of an entry; group 1 is its lines. */
+const FRONT_MATTER_BLOCK = /^---\n([\s\S]*?)\n---(?:\n|$)/;
+/** A top-level `key:` line of front matter, the way a YAML reader takes one. */
+const FRONT_MATTER_KEY = /^([A-Za-z][A-Za-z0-9_-]*)[ \t]*:(?=[ \t]|$)/;
 
 /**
- * The entry with its front matter first when one leading marker line sits
- * above it (the marker then follows the front matter), or null when there is
- * no such line and front matter.
+ * WHAT A SYNCED FILE MAY SAY TO CLAUDE CODE (PR #30 review, F1). A file under
+ * .claude/commands, .claude/agents or .claude/skills is configuration Claude
+ * Code acts on, and an account entry is text that anyone who can write account
+ * memory wrote: any connected key, a member with create permission, an agent
+ * server. So a synced file carries no front matter that runs or approves
+ * anything:
+ *   - `allowed-tools` pre-approves its tools, Bash included, for the turn that
+ *     runs the command or skill, whoever invoked it and in `claude -p` runs too
+ *     (this extension's scheduled briefs are such runs);
+ *   - `hooks` run shell commands; an agent's `permissionMode` and inline
+ *     `mcpServers` change what runs without asking; `shell`, `context`, `agent`
+ *     and every other key are left out too.
+ * A command keeps what describes it. An agent keeps what describes it or
+ * narrows it (`tools` and `disallowedTools` only ever take tools away from a
+ * subagent). A skill gets only the `name` and `description` written here, with
+ * the entry's own text below as plain text, the way the plugin's
+ * renderClaudeSkill writes it. `/hiveku-new-command` already tells authors to
+ * leave approvals explicit, so the commands it makes are written as before.
  */
-function frontMatterFirst(content: string): string | null {
+const COMMAND_KEYS: ReadonlySet<string> = new Set(['description', 'argument-hint', 'disable-model-invocation']);
+const AGENT_KEYS: ReadonlySet<string> = new Set(['name', 'description', 'model', 'tools', 'disallowedTools', 'color']);
+
+/**
+ * The lines of `header` that set a key in `keys`, each with the lines that
+ * continue it (indented, or a `- item` of its list). Every other line is
+ * dropped: another key with its value, and anything a YAML reader could take
+ * for a key some other way (a quoted key, `? key`, a `<<` merge) or for the end
+ * of the block.
+ */
+function keptFrontMatter(header: string, keys: ReadonlySet<string>): string[] {
+  const kept: string[] = [];
+  let keeping = false;
+  for (const line of header.split('\n')) {
+    const key = line.match(FRONT_MATTER_KEY)?.[1];
+    if (key !== undefined) {
+      keeping = keys.has(key);
+      if (keeping) kept.push(line);
+    } else if (/^(?:[ \t]+\S|-(?:[ \t]|$))/.test(line)) {
+      if (keeping && !/^[ \t]*(?:---|\.\.\.)[ \t]*$/.test(line)) kept.push(line);
+    } else if (line.trim()) {
+      keeping = false;
+    }
+  }
+  return kept;
+}
+
+/**
+ * Claude Code runs a `!`command`` placeholder in a command or skill (at the
+ * start of a line or after whitespace), and a code block fenced with ```!,
+ * before Claude reads the text, without asking, whenever the folder's
+ * permission rules allow that command. An account folder allows
+ * `Bash(node:*)` (knowledge.ts HIVEKU_ALLOW). So a synced entry's
+ * placeholders are written inert, a backslash before the `!`: Claude Code
+ * leaves a placeholder that follows another character as text. It never runs
+ * them in skills synced from a claude.ai account either.
+ */
+export function inertShellPlaceholders(text: string): string {
+  return text.replace(/(^|\s)!(?=`)/g, '$1\\!').replace(/^([ \t]*(?:`{3,}|~{3,})[ \t]*)!/gm, '$1\\!');
+}
+
+/**
+ * An entry's text in parts: the one leading marker line above its front
+ * matter (moved below it, where it no longer hides it), the front matter's
+ * lines (null when there is none), and the rest. Without front matter the
+ * rest is the whole text, marker line included.
+ */
+function entryParts(entry: KnowledgeEntry): { lead: string; header: string | null; body: string } {
+  const content = String(entry.content || '').replace(/\r\n?/g, '\n').trim();
   const lead = content.match(LEADING_MARKER_LINE);
-  if (!lead) return null;
-  const rest = content.slice(lead[0].length);
+  const rest = lead ? content.slice(lead[0].length) : content;
   const fm = rest.match(FRONT_MATTER_BLOCK);
-  if (!fm) return null;
-  const head = fm[0].endsWith('\n') ? fm[0] : `${fm[0]}\n`;
-  return `${head}${lead[0].trim()}\n${rest.slice(fm[0].length)}`.trimEnd();
+  if (!fm) return { lead: '', header: null, body: content };
+  return { lead: lead ? lead[0].trim() : '', header: fm[1], body: rest.slice(fm[0].length) };
 }
 
-/** Render a command entry: pass through existing frontmatter, else synthesize a description. */
+/** A file: front matter of `lines`, then the marker line (if any) and the text. */
+function withFrontMatter(lines: string[], lead: string, body: string): string {
+  return `${['---', ...lines, '---', ...(lead ? [lead] : [])].join('\n')}\n${body}`.trimEnd() + '\n';
+}
+
+/** A command file: the entry's own description and hints (COMMAND_KEYS), else a description from its name. */
 function renderCommand(entry: KnowledgeEntry): string {
-  const content = (entry.content || '').trim();
-  if (content.startsWith('---')) return content + '\n';
-  const reordered = frontMatterFirst(content);
-  if (reordered) return reordered + '\n';
-  const desc = String(entry.name || 'Account command').replace(/"/g, '\\"');
-  return `---\ndescription: "${desc}"\n---\n${content}\n`;
+  const { lead, header, body } = entryParts(entry);
+  const kept = header === null ? [] : keptFrontMatter(header, COMMAND_KEYS);
+  if (kept.length === 0) kept.push(`description: ${JSON.stringify(String(entry.name || 'Account command'))}`);
+  return withFrontMatter(kept, lead, inertShellPlaceholders(body));
 }
 
-/** Render an agent entry in Claude Code agent format (frontmatter + system prompt body). */
+/**
+ * An agent file in Claude Code's format (front matter, then the system prompt):
+ * the entry's own AGENT_KEYS, with the name and description Claude Code needs
+ * to load it added when the entry has none.
+ */
 function renderAgent(entry: KnowledgeEntry, slug: string): string {
-  const content = (entry.content || '').trim();
-  if (content.startsWith('---')) return content + '\n';
-  const reordered = frontMatterFirst(content);
-  if (reordered) return reordered + '\n';
-  const desc = String(entry.name || slug).replace(/"/g, '\\"');
-  return `---\nname: hiveku-${slug}\ndescription: "${desc}"\n---\n${content}\n`;
+  const { lead, header, body } = entryParts(entry);
+  const kept = header === null ? [] : keptFrontMatter(header, AGENT_KEYS);
+  const has = (key: string) => kept.some((line) => line.match(FRONT_MATTER_KEY)?.[1] === key);
+  if (!has('description')) kept.unshift(`description: ${JSON.stringify(String(entry.name || slug))}`);
+  if (!has('name')) kept.unshift(`name: hiveku-${slug}`);
+  return withFrontMatter(kept, lead, body);
 }
 
 /** Claude Code skill names: lowercase letters, digits and hyphens, at most 64 characters. */
@@ -178,41 +252,19 @@ function headerValue(header: string, key: string): string {
 
 /**
  * Render a skill entry as Claude Code's SKILL.md: `name` (the directory) and a
- * `description` Claude Code decides from, naming the agent it belongs to. The
- * entry's other front matter keys are kept; its own `name` and `description`
- * lines (and their continuation lines) are replaced.
+ * `description` Claude Code decides from, naming the agent it belongs to, and
+ * nothing else (see COMMAND_KEYS). The entry's text follows whole, its own
+ * front matter included, as text Claude Code does not act on.
  */
 function renderSkill(entry: KnowledgeEntry, name: string, dept: string, slug: string): string {
-  const content = (entry.content || '').trim();
-  const lead = content.match(LEADING_MARKER_LINE);
-  const rest = lead ? content.slice(lead[0].length) : content;
-  const fm = rest.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
-  const header = fm ? fm[1] : '';
-  const body = (fm ? rest.slice(fm[0].length) : rest).replace(/^\n+/, '');
-
-  const kept: string[] = [];
-  let skipping = false;
-  for (const line of header.split('\n')) {
-    if (/^(name|description)\s*:/i.test(line)) {
-      skipping = true;
-      continue;
-    }
-    // A continuation line (indented) belongs to the key above it.
-    if (skipping && /^\s+\S/.test(line)) continue;
-    skipping = false;
-    if (line.trim()) kept.push(line);
-  }
-
+  const content = String(entry.content || '').replace(/\r\n?/g, '\n').trim();
+  const { header, body } = entryParts(entry);
   const heading = body.match(/^#{1,6}\s+(.+)$/m)?.[1];
   const firstLine = body.split('\n').find((l) => l.trim() && !l.trim().startsWith('<!--'));
-  const what = oneLine(headerValue(header, 'description') || heading || firstLine || entry.name || slug);
+  const what = oneLine(headerValue(header ?? '', 'description') || heading || firstLine || entry.name || slug);
   const whose = dept === SHARED_FOLDER ? 'a skill every agent follows' : `${departmentLabel(dept)} skill`;
-  const description = `${what} (${whose}, from Hiveku)`;
-
-  const lines = ['---', `name: ${name}`, `description: ${JSON.stringify(description)}`, ...kept, '---'];
-  if (lead) lines.push(lead[0].trim());
-  lines.push(body);
-  return `${lines.join('\n').trimEnd()}\n`;
+  const description = inertShellPlaceholders(`${what} (${whose}, from Hiveku)`);
+  return withFrontMatter([`name: ${name}`, `description: ${JSON.stringify(description)}`], '', inertShellPlaceholders(content));
 }
 
 /**

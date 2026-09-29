@@ -7,9 +7,11 @@
  *     is for (`department`) and, for a rule, skill, shortcut or specialist, the
  *     `<!-- department: x -->` line the agents that read only the text follow.
  *     Later saves of the same tab update that entry; they never create another.
- *   - An entry shared with every agent, or an `_account:*` row, is changed on
- *     the Memory page: its tab is read-only (hiveku:/memory-view/...), and a
- *     save of it through any tab is refused with "Open in Memory".
+ *   - A rule or skill shared with every agent, or an `_account:*` row, is
+ *     changed on the Memory page: its tab is read-only (hiveku:/memory-view/...),
+ *     and a save of it through any tab is refused with "Open in Memory". The
+ *     other shared kinds (a shortcut, a specialist, notes, a profile) are not
+ *     changed there, so they save here.
  *   - A save puts back a marker line the edit dropped, and refuses an edit
  *     that would move the entry to another agent.
  *
@@ -176,6 +178,38 @@ describe('entries VS Code does not change', () => {
     await assert.rejects(provider.writeFile(uri, enc('changed')));
     assert.ok(!client.seen.some((c) => c.name === 'memory_update'));
     assert.match(calls.errors[0][0], /chief of staff's own memory/);
+  });
+
+  test('a shortcut or notes every agent reads saves here: the Memory page does not change those (review F2)', async () => {
+    // What 0.86's "+ New entry" left behind, and a notes document named for no agent.
+    for (const stored of [
+      { id: 'c-1', domain: '_command:weekly-report', department: null, version: 1, content: '# weekly-report\n\n(Write the command content here, then save.)\n' },
+      { id: 'n-1', domain: 'competitors', department: null, version: 5, content: 'Acme undercuts us.' },
+    ]) {
+      resetCalls();
+      const { provider, client } = makeFs({ memory_get: { data: stored }, memory_update: { data: { version: stored.version + 1 } } });
+      const uri = platformFs.memoryUri(ACCOUNT, stored.id, stored.domain);
+      await provider.readFile(uri);
+      await provider.writeFile(uri, enc('Pull the weekly numbers.'));
+      const update = client.seen.find((c) => c.name === 'memory_update');
+      assert.ok(update, `${stored.domain} was saved`);
+      assert.equal(update.args.content, 'Pull the weekly numbers.');
+      assert.equal(update.args.expected_version, stored.version);
+      assert.equal(calls.errors.length, 0, stored.domain);
+    }
+  });
+
+  test('giving such an entry to one agent by its text is refused, with what does work', async () => {
+    const stored = { id: 'c-1', domain: '_command:weekly-report', department: null, version: 1, content: 'x' };
+    const { provider, client } = makeFs({ memory_get: { data: stored }, memory_update: { data: { version: 2 } } });
+    const uri = platformFs.memoryUri(ACCOUNT, 'c-1', '_command:weekly-report');
+    await provider.readFile(uri);
+    await assert.rejects(provider.writeFile(uri, enc(`${marker('sales')}\nx`)), (err) => err.code === 'NoPermissions');
+    assert.ok(!client.seen.some((c) => c.name === 'memory_update'));
+    const [message] = calls.errors[0];
+    assert.match(message, /"_command:weekly-report" is shared with every agent\./);
+    assert.match(message, /The Memory page does not move this kind: to give it to Sales, add it for Sales with "\+ New entry"/);
+    assert.doesNotMatch(message, /move the entry to another agent on the Memory page/);
   });
 
   test('negative control: an entry an agent owns saves as before', async () => {

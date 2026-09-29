@@ -236,3 +236,27 @@ describe('G20: the Codex MCP config labels the client', () => {
     assert.match(tomlSection(toml, 'mcp_servers.hiveku'), /"X-Hiveku-Client" = "codex"/);
   });
 });
+
+describe('G15: what Claude Code and Codex read calls it About your business on the Memory page (review F5)', () => {
+  test('/hiveku-brief, /hiveku-pull-data, /hiveku-remember and AGENTS.md name the page and its address', async () => {
+    const { account, project } = await scaffoldBoth('seo');
+    const read = (dir, name) => fs.readFile(path.join(dir, '.claude', 'commands', name), 'utf8');
+    const brief = await read(account, 'hiveku-brief.md');
+    assert.match(brief, /About your business on the Memory page\s+\(`https:\/\/app\.hiveku\.com\/<account-id>\/dashboard\/memory`\)/);
+    assert.match(await read(account, 'hiveku-pull-data.md'), /About your business on the Memory page, where owners and admins change it/);
+    assert.match(await read(project, 'hiveku-remember.md'), /About your business on the\s+Memory page \(`https:\/\/app\.hiveku\.com\/<account-id>\/dashboard\/memory`\)/);
+    for (const dir of [account, project]) {
+      const agents = await fs.readFile(path.join(dir, 'AGENTS.md'), 'utf8');
+      assert.match(agents, /About your business on the Memory page\s+\(https:\/\/app\.hiveku\.com\/[0-9a-f-]+\/dashboard\/memory\)/);
+      assert.ok(agents.includes(`https://app.hiveku.com/${ACCOUNT}/dashboard/memory`), 'the real address, with this account');
+    }
+    // No text the extension writes names a section the dashboard no longer has.
+    const files = [...(await agentFacingFiles(account)), ...(await agentFacingFiles(project))];
+    assert.ok(files.length > 5);
+    for (const file of files) {
+      const text = await fs.readFile(file, 'utf8');
+      assert.doesNotMatch(text, /\(Account memory\)/, path.basename(file));
+      assert.doesNotMatch(text, /(?:owners|admins) edit it on the Hiveku\s+dashboard/i, path.basename(file));
+    }
+  });
+});
