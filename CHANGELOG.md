@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.87.0
+- **The Knowledge tab is grouped like the Memory page.** The account console's Knowledge tab now shows About your business first, then each agent in the Memory page's order (the chief of staff, Sales, Support, Marketing by topic, Production, Accounting, Website, Communications), then the rules, skills, shortcuts and specialists shared with every agent. Internal entries are no longer listed. Each agent and each entry has "Open in Memory", which opens the Memory page at that agent and entry.
+- **Entries shared with every agent, and the chief of staff's own memory, are read-only here.** They open read-only, and saving one is refused with "Open in Memory": owners and admins change them on the Memory page. This holds however the entry was opened, including from Activity.
+- **"+ New entry" asks who it is for first.** Pick the agent, then the kind (rule, skill, shortcut, specialist or notes), then a name, and an empty editor opens. Nothing is created until you save: the first save creates the entry for that agent. Before, it created a placeholder rule at once, and every agent read that placeholder until you saved. Rules for every agent, and the chief of staff's memory, are added on the Memory page.
+- **A save keeps an entry with its agent.** If an edit removes a rule's `<!-- department: ... -->` line, the save puts it back. An edit that would move a rule to another agent is refused: move entries on the Memory page.
+- **Delete checks for a newer version.** If an entry changed after the list loaded, Delete leaves it alone and reloads the list, so you see the change first.
+- **Account skills reach Claude Code.** "Sync Account Commands and Skills" and "Download Everything" now write the account's skills (its playbooks) to `.claude/skills/hiveku-<agent>-<name>/`, next to the commands and agents they already synced.
+- **Local copies file each entry under the agent that owns it,** by the same rule as the Memory page. Entries every agent follows are in `shared/` folders (they were in `general/`), and the Marketing starter rules sit under their topic. A copy left in its old folder is removed, unless you edited it. Account commands every agent follows are now named `/hiveku-shared-<name>`.
+- **"Train with Claude/Codex" says which agent a new rule is for,** and tells Claude to keep an entry's department line.
+- **New command: "Hiveku: Open Memory".** It opens the account's Memory page. It is also on each account's right-click menu in the console.
+- **The Memory page's words.** The console's "Account memory" is now "About your business", which owners and admins change on the Memory page.
+
 ## 0.86.4
 - **Google products connect on Hiveku's own app.** The department setup texts, the `/hiveku-connect` command, each account's CLAUDE.md and the "Copy setup prompt" texts no longer send anyone into Google Cloud or ask for a Google Ads developer token. Google Ads, Analytics and Tag Manager, Search Console, Business Profile and Calendar connect with one link on Hiveku's app, and a connection on the account's own app moves onto Hiveku's. Only Gmail keeps an app of the account's own. Microsoft Ads is unchanged. Account folders you already have pick this up on "Hiveku: Refresh Setup".
 - **The E911 count already leaves toll-free numbers out.** The vendored phone skills no longer tell Claude to subtract toll-free numbers from the count of numbers with no emergency address, which undercounted. They also describe the current rule for an account's default outgoing caller ID.
