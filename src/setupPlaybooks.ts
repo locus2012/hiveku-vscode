@@ -10,20 +10,26 @@ export const SEO_SETUP = `# Connecting SEO sources (GSC, Bing Webmaster) + first
 Check current state FIRST: \`seo_connections_list\` (connected data sources) + \`seo_list_projects\`
 (existing SEO projects). Only run the steps below for whatever is missing.
 
-## STEP 0 (once per account) — the Google OAuth app (BYOK)
-\`oauth_app_list({ provider: 'google' })\`; if none covers \`google_search_console\`, the user first sets up
-Google Cloud Console (project → enable the **Search Console API** → OAuth consent screen → Web-app client →
-Authorized redirect URI must include \`https://app.hiveku.com/api/oauth/google/callback\`), then:
-\`oauth_app_create({ provider: 'google', name, client_id, client_secret, products: ['google_search_console'] })\`.
-Missing app → \`integration_oauth_initiate\` returns **412 integration_not_configured**.
-
-## Google Search Console
-1. \`integration_oauth_initiate({ provider_slug: 'google_search_console' })\` → \`{ setup_url, setup_token, connection_id }\`.
-   Hand \`setup_url\` to the user (their browser, their consent).
-2. Poll \`integration_oauth_check({ setup_token })\` every ~5s until \`status: 'completed'\` (expires in 15 min).
+## Google Search Console — one link on Hiveku's own Google app
+Hiveku's policy: every Google product except Gmail runs on Hiveku's own Google app. So for Search Console never
+ask for a client id, client secret or refresh token, never register or name an OAuth app of the account's own, and
+never send anyone into a Google Cloud project of their own. The server refuses an own app with 400
+\`google_own_app_not_allowed\` (\`oauth_app_create\` for google_search_console, or \`oauth_app_update\` adding it; an own
+\`oauth_app_id\` on a connect link or on \`integration_oauth_initiate\`, where only a reconnect naming the app the row
+already uses passes; \`seo_connection_create\` for google_search_console).
+1. \`integration_connect_link_create({ connector: 'google_search_console', source: 'vscode' })\` → \`url\` (a Hiveku
+   page, valid 24h) and \`link_id\`. Hand the \`url\` to the user (their browser, their consent); they pick the Google
+   account that owns or has been added to the Search Console property.
+2. When they say they are through: \`integration_connect_link_status({ link_id, wait_seconds: 8 })\` until
+   \`status: 'completed'\` (\`connection_id\` is the new connection).
 3. \`seo_gsc_discover_sites({ id: connection_id })\` → the verified properties; \`seo_gsc_list_sites\` also lists them.
    Pick one (use \`sc-domain:<domain>\` if 0 URL-prefix sites are listed).
 4. \`seo_connection_update({ id: connection_id, site_url })\` → status flips to **connected**.
+A dead connection reconnects with the same call plus \`target_connection_id\` (its id). One that still runs on the
+account's own app (\`client_source: 'byok'\` in \`integration_connectors_list\`) moves onto Hiveku's app with
+\`target_connection_id\` and \`oauth_app_id: 'platform'\`; tell the owner first that it moves onto Hiveku's Google app
+and keeps its settings and history. Not \`ready\` in \`integration_connectors_list\` means Hiveku's app is not
+configured on this environment: report it with \`hiveku_report_issue\`, and never register an own Google app for it.
 
 ## Bing Webmaster (API key — fully connectable from here, no OAuth, no dashboard)
 Bing Webmaster is an SEO CONNECTION (same system as GSC/GBP), NOT a generic integration — the live
@@ -182,7 +188,9 @@ Back here, \`social_list_accounts\` shows each row. Presence is not health - cla
   shows the granted scopes. \`token_state\` \`expired\` or \`expiring_soon\` (under 7 days) means reconnect before
   scheduling; \`unknown\` is normal for Meta page tokens and GBP (no expiry is recorded, so it cannot be predicted).
 A platform the client wants that has no row: \`social_provider_list\` - \`hiveku_native: false\` means the client
-registers their own OAuth app (BYOK). When an X row exists the response carries \`quota.x\` (60 published X posts
+registers their own OAuth app (BYOK), except Google Business Profile, where it means Hiveku's Google app is not
+configured on this deployment (report it with \`hiveku_report_issue\`; an account's own Google app is Gmail only, so
+never a BYOK task for GBP). When an X row exists the response carries \`quota.x\` (60 published X posts
 per Hiveku account per calendar month on the required plan; a soft cap that fails open, so \`remaining\` is
 advisory).
 

@@ -2299,9 +2299,19 @@ clickable link to connect it, then continue with what IS connected. Which link:
   \`integration_connectors_list\` first (is it \`ready\`? which existing connection id to re-auth?), then
   \`integration_connect_link_create({ connector, target_connection_id?, source: 'vscode' })\` returns a
   \`url\` (https://app.hiveku.com/connect/oauth/..., valid 24h) the user clicks; confirm with
-  \`integration_connect_link_status({ link_id, wait_seconds: 8 })\`. It uses the account's own OAuth app
-  when one is tagged, else Hiveku's platform app — a missing app is only a dead end when the catalog says
-  \`ready: false\` (then read \`client.how_to_get_ready\`). Gmail/Outlook always need the account's own app.
+  \`integration_connect_link_status({ link_id, wait_seconds: 8 })\`. Every Google product except Gmail
+  (Google Ads, GA and the Tag Manager on it, GSC, GBP, Calendar) runs on Hiveku's own Google app, and Google
+  Ads also on Hiveku's developer token: for those never ask for a developer token, client id, client secret
+  or refresh token, never register or name an OAuth app of the account's own, and never send anyone into a
+  Google Cloud project of their own. The server refuses an own app (400 \`google_own_app_not_allowed\`) and a
+  Google Ads developer token (400 \`developer_token_not_allowed\`). A Google connection other than Gmail that
+  still runs on the account's own app (\`client_source: 'byok'\` in the catalog) MOVES: the same call with its
+  \`target_connection_id\` and \`oauth_app_id: 'platform'\` (tell the owner first that it moves onto Hiveku's
+  Google app and keeps its settings and history). Other providers use the account's own OAuth app when one
+  is tagged, else Hiveku's platform app — a missing app is only a dead end when the catalog says
+  \`ready: false\` (then read \`client.how_to_get_ready\`; for a Google product other than Gmail it means
+  Hiveku's app is not configured: report it with \`hiveku_report_issue\`). Gmail/Outlook always need the
+  account's own app.
 - **Not yet linkable** (\`linkable: false\` in the catalog): dashboard —
   \`https://app.hiveku.com/<accountId>/dashboard/marketing/social/accounts\` for social,
   \`https://app.hiveku.com/<accountId>/dashboard/marketing/ppc\` for ads. Meta Ads is a SEPARATE app
@@ -2309,16 +2319,17 @@ clickable link to connect it, then continue with what IS connected. Which link:
 Always the ACCOUNT-SCOPED \`/<accountId>/dashboard/...\` form — never a bare \`/dashboard\` link.
 \`/hiveku-connect [google-ads|meta-ads|amazon-ads|gsc|ga|gbp|bing|social|meta|linkedin|x|tiktok|all]\`
 runs the whole flow — diagnose what is dead, mint the connect link, hand it off, poll, sync, verify,
-re-pull. On Hiveku's platform apps the human's only job is one consent click; a bring-your-own client
-additionally needs the one-time cloud app (redirect URI \`https://app.hiveku.com/api/oauth/google/callback\`
-in *Authorized redirect URIs*, not JavaScript origins).
+re-pull. On Hiveku's own apps the human's only job is one consent click (for Google Ads, after Google's
+'unverified app' screen: Advanced, then continue; 'Access blocked' there means their Workspace admin blocks
+unverified apps). A bring-your-own client (Gmail's internal Google app, Outlook, Microsoft Ads) additionally
+needs the one-time cloud app (for Gmail, redirect URI \`https://app.hiveku.com/api/oauth/google/callback\` in
+*Authorized redirect URIs*, not JavaScript origins).
 The shared client lives in your agency's OAuth file — \`../.hiveku/agency-oauth.env\` (fleet root) or
-\`./.hiveku/agency-oauth.env\` (this folder) — keys:
-GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET / GOOGLE_ADS_DEVELOPER_TOKEN (from your agency MCC API
-Center, Google Ads only) / MICROSOFT_ADS_CLIENT_ID / MICROSOFT_ADS_CLIENT_SECRET.
+\`./.hiveku/agency-oauth.env\` (this folder) — keys: MICROSOFT_ADS_CLIENT_ID / MICROSOFT_ADS_CLIENT_SECRET
+(Microsoft Ads only; any Google Ads keys still in that file are no longer used).
 A dead connection ("Token refresh failed" / "Account has been deleted") = re-auth in place; it keeps the
-campaign/keyword history. #1 stumble is \`redirect_uri_mismatch\` — the redirect URI is not on the exact
-client in the setup_url (or landed in JavaScript origins, or was not Saved).
+campaign/keyword history. #1 stumble on an own app is \`redirect_uri_mismatch\` — the redirect URI is not on
+the exact client the account registered (or landed in JavaScript origins, or was not Saved).
 
 ### Creating images + video (ads, social, pages) — use \`/hiveku-media\`
 Generated media registers in the Media Library and attaches to posts/ads via its asset id.
@@ -2488,8 +2499,9 @@ workflows graphs, etc.) — grep/analyze it locally, act via the live tools. Eac
 names the source + CRUD tools.
 **Setting up integrations** (Google Ads, Microsoft/Bing Ads, Google Business Profile, Search Console,
 Bing Webmaster): download the **Ads (PPC)** or **Local SEO** department and read its \`SETUP.md\` —
-it has the exact step-by-step (Google Ads connects via \`integration_oauth_initiate\` end-to-end;
-Microsoft Ads via the dashboard; Bing Webmaster via \`integration_create\`).
+it has the exact step-by-step (Google Ads, Business Profile and Search Console connect with a connect link
+on Hiveku's own Google app, never an own Google app or developer token; Microsoft Ads via the dashboard;
+Bing Webmaster via \`integration_create\`).
 
 ## Coder projects — Hiveku VCS (git-like, no GitHub)
 Projects under \`sites/<slug>/\` are version-controlled IN HIVEKU (Supabase-backed):

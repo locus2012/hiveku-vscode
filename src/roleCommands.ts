@@ -141,35 +141,55 @@ description: Connect or re-connect this account's integrations end-to-end — Ad
 argument-hint: "[what to connect: google-ads | meta-ads | amazon-ads | gsc | ga | gbp | bing | social | meta | linkedin | x | tiktok | all]"
 ---
 Be the integration operator for THIS account$ARGUMENTS. You do the whole Hiveku side; the human does
-at most TWO things — a one-time cloud app (Google/Microsoft only), and one click in the browser.
+at most TWO things — a one-time cloud app (only where the account runs its own app: Microsoft Ads, or
+Gmail's internal Google app; never for any other Google product), and one click in the browser.
 Never ask them to run MCP tools. When a platform connects only in the dashboard, your job is to hand
 them the exact ACCOUNT-SCOPED link and verify afterward — that link IS the deliverable.
 
-SHARED CREDENTIALS (BYOK, reused across every account): read the agency OAuth client from
-\`../.hiveku/agency-oauth.env\` (fleet root) or \`./.hiveku/agency-oauth.env\` (this folder). It holds
-GOOGLE_ADS_CLIENT_ID / GOOGLE_ADS_CLIENT_SECRET / GOOGLE_ADS_DEVELOPER_TOKEN / MICROSOFT_ADS_CLIENT_ID /
-MICROSOFT_ADS_CLIENT_SECRET. If it is missing, tell the user to create it (format is in the account
-CLAUDE.md) — one client serves every account, so this is a one-time paste.
+HIVEKU'S GOOGLE POLICY (read before any Google step): every Google product except Gmail — Google Ads,
+Analytics (and the Tag Manager that rides on it), Search Console, Business Profile (listings and posting)
+and Calendar — runs on Hiveku's own Google app, and Google Ads also on Hiveku's developer token. For those,
+never ask for or pass a developer token, a client id, a client secret or a refresh token, never register or
+name an OAuth app of the account's own, and never send anyone into a Google Cloud project of their own. The
+server refuses an own app with 400 \`google_own_app_not_allowed\` and a Google Ads developer token with 400
+\`developer_token_not_allowed\`. The only Google app an account may own is its internal Gmail app.
 
-STEP 1 — DIAGNOSE (always first). Call \`ppc_connection_list\` (Google/Meta/Amazon/Bing/TikTok Ads),
-\`seo_connections_list\` (GSC, GBP, Bing Webmaster), \`social_list_accounts\` (Meta/IG, LinkedIn, X,
-TikTok, GBP posting — read \`connection_status\` + \`last_error\` per account) and \`integration_list\`.
+SHARED CREDENTIALS (BYOK, reused across every account; Microsoft only): read the agency OAuth client from
+\`../.hiveku/agency-oauth.env\` (fleet root) or \`./.hiveku/agency-oauth.env\` (this folder). It holds
+MICROSOFT_ADS_CLIENT_ID / MICROSOFT_ADS_CLIENT_SECRET. If a Microsoft step needs it and it is missing, tell
+the user to create it (format is in the account CLAUDE.md) — one client serves every account, so this is a
+one-time paste. Any Google Ads keys still in that file are no longer used: never register or pass them.
+
+STEP 1 — DIAGNOSE (always first). Call \`integration_connectors_list\` (per connector: \`ready\`, \`linkable\`,
+and the existing \`connections[]\` with their ids, statuses and \`client_source\`), \`ppc_connection_list\`
+(Google/Meta/Amazon/Bing/TikTok Ads), \`seo_connections_list\` (GSC, GBP, Bing Webmaster),
+\`social_list_accounts\` (Meta/IG, LinkedIn, X, TikTok, GBP posting — read \`connection_status\` +
+\`last_error\` per account) and \`integration_list\`.
 For each, report status + last_error:
 "Token refresh failed" / "Account has been deleted" = DEAD TOKEN → re-auth IN PLACE (keeps the
 connection's history + binding). "must have gbp_account_id/location" = a binding fix, not auth. Capture
-each connection's \`id\` (you need it as target_connection_id).
+each connection's \`id\` (you need it as target_connection_id). A Google connection other than Gmail whose
+\`client_source\` is 'byok' still runs on the account's own app: it MOVES (step 3A).
 
-STEP 2 — ENSURE AN OAUTH APP for the product. \`oauth_app_list\`. If none covers the product you need,
-\`oauth_app_create({ provider, name, client_id, client_secret, products:[<slug>] })\` with the shared
-client (provider "google" for google_* ; "microsoft" for microsoft_ads). One Google client can back
-google_ads + google_search_console + google_analytics — one app per product slug is fine.
+STEP 2 — OAUTH APPS, only where the account runs its own app. Google products other than Gmail never need
+one: \`oauth_app_create\` and \`oauth_app_update\` refuse them (400 \`google_own_app_not_allowed\`). Microsoft Ads:
+\`oauth_app_list\`; if none covers \`microsoft_ads\`, \`oauth_app_create({ provider: "microsoft", name, client_id,
+client_secret, products: ["microsoft_ads"] })\` with the shared client. Gmail (the CRM inbox) uses the
+account's own internal Gmail app, product \`crm_email_calendar\`, which the account owner registers once.
 
-STEP 3 — INITIATE. This SPLITS by provider — the paths are NOT the same:
-  A) GOOGLE (google_ads, google_search_console, google_analytics, google_business_profile, google_gmail,
-     google_calendar) — CLI OAuth works: \`integration_oauth_initiate({ provider_slug,
-     target_connection_id: <id>, oauth_app_id })\` (re-auth in place keeps data) → returns a \`setup_url\`
-     the human clicks. First Google Ads connect: add customer_id / manager_id / developer_token from the
-     shared file. This is the ONLY family where you can mint a clickable auth link yourself.
+STEP 3 — CONNECT. This SPLITS by provider — the paths are NOT the same:
+  A) GOOGLE, except Gmail (google_ads, google_search_console, google_analytics, google_business_profile,
+     gbp_social for GBP posting, google_calendar) — mint a connect link on Hiveku's own Google app:
+     \`integration_connect_link_create({ connector, source: 'vscode' })\` → a \`url\` (a Hiveku page, valid
+     24h) and a \`link_id\`. Re-auth a dead one IN PLACE with \`target_connection_id: <id>\` (keeps data). A
+     row whose \`client_source\` is 'byok' MOVES: \`target_connection_id: <id>\` plus \`oauth_app_id: 'platform'\`
+     (same id, bindings and history). Google Ads needs nothing up front (the customer is picked after
+     consent). google_calendar also takes \`owner_user_email\` (whose calendar). A connector that is not
+     \`ready\` means Hiveku's app is not configured on this environment: report it with \`hiveku_report_issue\`,
+     never register an own Google app for it. \`integration_oauth_initiate\` is the legacy lane: a new Google
+     connection there also goes out as a connect link, and it refuses an own \`oauth_app_id\` and a developer
+     token the same way. GMAIL is the exception: it runs on the account's own Gmail app (step 2); a \`gmail\`
+     link also takes \`owner_user_email\` (whose inbox).
   B) BING WEBMASTER (organic search — the GSC equivalent) — NO OAuth. It's an SEO connection with just an
      API key: \`seo_connection_create({ platform: "bing_webmaster", site_url, api_key })\` (key from
      bing.com/webmasters → Settings → API access; the site can be one-click "Import from Google Search
@@ -183,13 +203,15 @@ STEP 3 — INITIATE. This SPLITS by provider — the paths are NOT the same:
      \`https://app.hiveku.com/<accountId>/dashboard/marketing/ppc\` (the account-scoped URL — never a bare
      /dashboard/ path). After they connect, you pick it up with ppc_connection_list. Bing Ads writes are
      limited to pause/enable/budget (\`ppc_platform_*\`); no keyword/RSA/asset writes; ad-groups/ads don't sync.
-  D) SOCIAL (Meta/Instagram, LinkedIn, X, TikTok, GBP posting) — DASHBOARD ONLY. The OAuth start routes
+  D) SOCIAL (Meta/Instagram, LinkedIn, X, TikTok) — DASHBOARD ONLY. The OAuth start routes
      need the user's browser session, so you cannot mint a link. Hand them:
      \`https://app.hiveku.com/<accountId>/dashboard/marketing/social/accounts\` and say which platform to
      click Connect on. Platforms with a Hiveku-native app show a one-click "Quick connect" (no app setup
-     at all); others walk a guided bring-your-own-app wizard. TikTok connects as inbox-DRAFT posting
-     (the user publishes from the TikTok app); X posting is Premium-plan, usage-capped. Verify after with
-     \`social_list_accounts\` — the new row should be is_active with connection_status "connected".
+     at all); others walk a guided bring-your-own-app wizard. GBP posting is not one of them: it runs on
+     Hiveku's own Google app (A, \`gbp_social\`), never a bring-your-own-app wizard. TikTok connects as
+     inbox-DRAFT posting (the user publishes from the TikTok app); X posting is Premium-plan, usage-capped.
+     Verify after with \`social_list_accounts\` — the new row should be is_active with connection_status
+     "connected".
   E) META ADS / AMAZON ADS / TIKTOK ADS — DASHBOARD ONLY, same reason:
      \`https://app.hiveku.com/<accountId>/dashboard/marketing/ppc\` → Connect on the platform card.
      Meta Ads uses its OWN Meta app (separate from social Meta — a social connect does NOT grant ads).
@@ -197,33 +219,45 @@ STEP 3 — INITIATE. This SPLITS by provider — the paths are NOT the same:
      Amazon covers Sponsored Products/Brands/Display + Streaming TV under the one connection. Verify with
      \`ppc_connection_list\` + \`ppc_connection_test\`.
 
-STEP 4 — HAND THE HUMAN THE ONE CLICK. Print the setup_url and say: open it in the browser signed into
-the account that has access (the MCC login for Ads, the Search Console owner for GSC) and click Allow.
-Name the scope requested. It reuses the shared client + one redirect URI, so once the cloud app is set
-up right, every account is just this click.
+STEP 4 — HAND THE HUMAN THE ONE CLICK. Print the link's \`url\` on its own line and say: open it in the
+browser signed into the account that has access (the MCC login for Ads, the Search Console owner for GSC)
+and continue. Name the scope requested. For Google Ads, say first that Google shows an 'unverified app'
+screen (Advanced, then continue), and that 'Access blocked' instead means their Google Workspace admin
+blocks unverified apps: nothing connects until the admin allows Hiveku's app. On a MOVE, also say it moves
+onto Hiveku's Google app (same connection, settings and history) and that a Google Ads connection's own
+developer token is dropped (Hiveku's is used).
 
-STEP 5 — POLL. Every ~5s call \`integration_oauth_check({ setup_token })\` until status="completed"
-(integration_id present) or "error"/expired. Don't spin silently — tell the user you're waiting.
+STEP 5 — POLL. When they say they are through, call \`integration_connect_link_status({ link_id,
+wait_seconds: 8 })\` until status is "completed" (\`connection_id\`; \`needs_binding\` lists what is still to
+pick) or "failed" (read \`error\`; the same link can be retried until it expires). Only the legacy
+setup-token lane polls \`integration_oauth_check({ setup_token })\`. Don't spin silently — tell the user
+you're waiting.
 
-STEP 6 — SYNC + VERIFY + REPULL. On success: Ads → \`ppc_sync({ connection_id })\` then
-\`ppc_connection_test\`; SEO → \`seo_sync\` then \`seo_connections_list\`. Confirm status flips to connected
-and data returns, then refresh local files: \`node .hiveku/pull-data.mjs ppc\` (or seo / localseo).
+STEP 6 — BIND + SYNC + VERIFY + REPULL. Bind whatever \`needs_binding\` lists: Google Ads
+\`ppc_ads_discover_customers\` then \`ppc_connection_update({ id, customer_id, manager_id? })\` (never an MCC
+as customer_id); GSC \`seo_gsc_discover_sites\` then \`seo_connection_update({ id, site_url })\`; GBP
+\`seo_gbp_discover_locations\` then \`seo_connection_update({ id, gbp_account_id, gbp_location_id })\`. Then
+Ads → \`ppc_sync({ connection_id })\` then \`ppc_connection_test\`; SEO → \`seo_sync\` then
+\`seo_connections_list\`. Confirm status flips to connected and data returns, then refresh local files:
+\`node .hiveku/pull-data.mjs ppc\` (or seo / localseo).
 
 THE HUMAN'S ONLY TWO JOBS (state them, and that everything else is you):
-  1. ONE-TIME cloud app (per provider, reused for ALL accounts): a Google Cloud "Web application" OAuth
-     client (on Workspace, set it INTERNAL so tokens never expire), the Google Ads / Search Console API
-     enabled, with this EXACT Authorized redirect URI — in "Authorized redirect URIs", NOT "JavaScript
-     origins":
-       Google:    https://app.hiveku.com/api/oauth/google/callback
-       Microsoft: https://app.hiveku.com/api/oauth/microsoft/callback
-     Then paste the client id/secret into .hiveku/agency-oauth.env.
+  1. ONE-TIME cloud app, only where the account runs its own app — never for Google Ads, Analytics, Tag
+     Manager, Search Console, Business Profile or Calendar, which run on Hiveku's own Google app:
+       Microsoft Ads: an Azure app registration whose Web redirect URI is EXACTLY
+         https://app.hiveku.com/api/oauth/microsoft/callback. Then paste the client id/secret into
+         .hiveku/agency-oauth.env.
+       Gmail: the account's internal Gmail app (on Workspace, set it INTERNAL so tokens never expire), with
+         the Authorized redirect URI https://app.hiveku.com/api/oauth/google/callback, registered by the
+         account owner for product crm_email_calendar.
   2. ONE consent click per account (step 4).
 
-THE #1 FAILURE — "Error 400: redirect_uri_mismatch": the exact redirect URI above is NOT on the client's
-Authorized redirect URIs (added to the wrong client, or to JavaScript origins, or not Saved). Have the
-user add it to the SAME client whose id appears in the setup_url, Save, wait ~2 min, then re-run this
-command for a fresh link. If Ads already connected on this client, GSC/GA reuse it with no new URI.
-GOTCHA: Testing-mode external apps expire refresh tokens after 7 days (why connections silently die) —
+THE #1 FAILURE on an own app (Gmail, Microsoft) — "Error 400: redirect_uri_mismatch": the exact redirect URI
+above is NOT on the client's redirect URIs (added to the wrong client, to JavaScript origins or another
+platform, or not Saved). Have the user add it to the SAME client the account registered, Save, wait
+~2 min, then mint a fresh link. On Hiveku's own Google app there is no redirect URI or Cloud project for
+anyone to fix: a Google connector other than Gmail that is not \`ready\` is reported with \`hiveku_report_issue\`.
+GOTCHA: Testing-mode external apps expire refresh tokens after 7 days (why own-app connections silently die) —
 Internal (Workspace) apps do not. Bing WEBMASTER = seo_connection_create (API key, no OAuth); Bing ADS =
 Azure app + dashboard connect at /<accountId>/dashboard/marketing/ppc (CLI OAuth is Google-only).
 `;

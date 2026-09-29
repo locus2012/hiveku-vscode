@@ -5,8 +5,17 @@
  * (which has the hiveku MCP wired) and Claude walks them through the connection.
  *
  * The flows are the verified ones from each department's SETUP.md (traced against
- * the builder's integration/oauth code) — per-account BYOK OAuth app first, then
- * initiate + poll + bind + test + sync.
+ * the builder's integration/oauth code): a connect link, then poll + bind + test +
+ * sync.
+ *
+ * Hiveku's Google policy (2026-09-27): every Google product except Gmail runs on
+ * Hiveku's own Google app, and Google Ads on Hiveku's developer token. So the
+ * Google prompts never collect a developer token, a client id or a secret and
+ * never register an OAuth app of the account's own; the builder refuses both
+ * (400 google_own_app_not_allowed, 400 developer_token_not_allowed). A Google
+ * connection still on the account's own app is moved onto Hiveku's app with a
+ * reconnect link that names oauth_app_id 'platform'. Microsoft Ads may still use
+ * the account's own Azure app.
  */
 
 import type { AccountRecord } from './accounts';
@@ -27,10 +36,15 @@ First confirm scope: call get_account_info and verify it returns "${account.labe
 Then walk me through this EXACT flow, explaining each step and asking me for whatever you need:`;
 }
 
-const GOOGLE_OAUTH_APP = (product: string, apiName: string) =>
-  `1. Check readiness with integration_connectors_list. If the '${product}' connector is ready (client.would_use is 'hiveku' or 'byok'), skip to step 2 — no Google Cloud work is needed. Only if it is NOT ready, help me register our own Google OAuth client:
-   - In Google Cloud Console: create/pick a project, enable the ${apiName}, configure the OAuth consent screen (External; add me as a test user), then Credentials → Create OAuth client ID → Web application whose Authorized redirect URI INCLUDES https://app.hiveku.com/api/oauth/google/callback.
-   - Collect the Client ID + Client Secret from me, then call oauth_app_create({ provider: 'google', name: '${product} app', client_id, client_secret, products: ['${product}'] }).`;
+/**
+ * Step 1 of the Google prompts (Google Ads, Search Console, Business Profile).
+ * Checks the connector and says what the policy forbids; there is no Google
+ * Cloud step, because these products run on Hiveku's own Google app.
+ */
+const GOOGLE_HIVEKU_APP = (connector: string, label: string, moveNote = '') =>
+  `1. Check readiness with integration_connectors_list. ${label} runs on Hiveku's own Google app (Hiveku's policy: every Google product except Gmail does), so never ask me for a developer token, a client id, a client secret or a refresh token, never call oauth_app_create or pass an oauth_app_id of our own, and never send me into a Google Cloud project of my own: the server refuses an own app (400 google_own_app_not_allowed) and a Google Ads developer token (400 developer_token_not_allowed).
+   - If '${connector}' is not ready, Hiveku's ${label} app is not configured on this environment: report it with hiveku_report_issue and stop.
+   - If a ${label} connection already exists with client_source 'byok' (it still runs on our own app), step 2 MOVES it instead of creating one: pass its id as target_connection_id together with oauth_app_id: 'platform'. Before you send that link, tell me it moves onto Hiveku's Google app and keeps its settings and history${moveNote}.`;
 
 const CONNECT_LINK = (connector: string, extra = '') =>
   `Call integration_connect_link_create({ connector: '${connector}', source: 'vscode'${extra} }) and give me the returned url on its own line (it is a Hiveku page valid for 24 hours that sends me to the provider's consent screen when I press Continue). Tell me which account to pick. If a connection already exists and is dead or missing a scope, pass target_connection_id (its id from integration_connectors_list) to re-authenticate it in place instead of creating a second one.`;
@@ -42,19 +56,18 @@ export const SETUP_PROMPTS: SetupPrompt[] = [
   {
     id: 'google_ads',
     label: 'Google Ads',
-    blurb: 'OAuth + developer token, driven from Claude Code',
+    blurb: "OAuth on Hiveku's Google app, driven from Claude Code",
     build: (a) =>
       `${head(a, 'Google Ads')}
 
-${GOOGLE_OAUTH_APP('google_ads', 'Google Ads API')}
-2. Only if the connector uses our OWN Google app (client.would_use 'byok'): ask me for developer_token (from my Google Ads MCC → Tools & Settings → API Center), customer_id (the client ad account — 10 digits, no dashes), and manager_id (the MCC id — ONLY if the client account sits under an MCC). On Hiveku's app none of these are needed up front.
-3. ${CONNECT_LINK('google_ads', ", customer_id, manager_id, developer_token (only when collected)")}
-4. ${CONNECT_STATUS}
-5. ppc_connection_test({ id: connection_id }) to verify OAuth + permissions.
-6. ppc_sync({ connection_id }) to pull campaigns + metrics (use ppc_sync_async + job_status_get for a full 5-year backfill).
-7. Confirm it worked: ppc_account_settings_get({ connection_id }), ppc_campaign_list, and ppc_conversion_tracking_status({ connection_id }).
+${GOOGLE_HIVEKU_APP('google_ads', 'Google Ads', ", and that the connection's own developer token is dropped (Hiveku's is used)")}
+2. ${CONNECT_LINK('google_ads')} Nothing is needed up front: if I already know the client ad account's customer_id (its 10-digit id) and, when it sits under an MCC, the manager_id, you may pass them; otherwise they are picked after consent. Before I open the link, tell me that on the Google Ads consent Google first shows an 'unverified app' screen (Advanced, then continue), and that if Google says 'Access blocked' instead, my Google Workspace admin blocks unverified apps and nothing connects until the admin allows Hiveku's app.
+3. ${CONNECT_STATUS}
+4. ppc_connection_test({ id: connection_id }) to verify OAuth + permissions.
+5. ppc_sync({ connection_id }) to pull campaigns + metrics (use ppc_sync_async + job_status_get for a full 5-year backfill).
+6. Confirm it worked: ppc_account_settings_get({ connection_id }), ppc_campaign_list, and ppc_conversion_tracking_status({ connection_id }).
 
-If the status reports needs_binding: ['customer_id'] (or I don't know the customer_id): ppc_ads_discover_customers({ id: connection_id }) to list my accessible accounts, then ppc_connection_update({ id: connection_id, customer_id, manager_id (if any) }).`,
+If the status reports needs_binding: ['customer_id'] (or I don't know the customer_id): ppc_ads_discover_customers({ id: connection_id }) to list my accessible accounts (pass manager_customer_id to list the client accounts under an MCC; never bind an MCC as the customer_id), then ppc_connection_update({ id: connection_id, customer_id, manager_id (if any) }). A 412 developer_token_missing there means Hiveku's developer token is not configured on this environment: report it with hiveku_report_issue, and never ask me for a developer token.`,
   },
   {
     id: 'microsoft_ads',
@@ -75,7 +88,7 @@ If the status reports needs_binding: ['customer_id'] (or I don't know the custom
     build: (a) =>
       `${head(a, 'Google Search Console')}
 
-${GOOGLE_OAUTH_APP('google_search_console', 'Search Console API')}
+${GOOGLE_HIVEKU_APP('google_search_console', 'Search Console')}
 2. ${CONNECT_LINK('google_search_console')}
 3. ${CONNECT_STATUS}
 4. seo_gsc_discover_sites({ id: connection_id }) → show me the verified sites and let me pick one (use sc-domain:<domain> if none are listed).
@@ -89,7 +102,7 @@ ${GOOGLE_OAUTH_APP('google_search_console', 'Search Console API')}
     build: (a) =>
       `${head(a, 'Google Business Profile (Google My Business)')}
 
-${GOOGLE_OAUTH_APP('google_business_profile', 'Business Profile API')}
+${GOOGLE_HIVEKU_APP('google_business_profile', 'Business Profile')}
 2. ${CONNECT_LINK('google_business_profile')}
 3. ${CONNECT_STATUS}
 4. seo_gbp_discover_locations({ id: connection_id }) → show me the accounts + locations and let me pick the right location.

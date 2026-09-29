@@ -136,6 +136,10 @@ const KNOWN_NOT_TOOLS = new Set([
   // (2026-09-27): every create makes a workflow switched off and only
   // workflow_enable switches one on. The workflows crud names it.
   'workflow_enable_required',
+  // The builder's refusal of an own Google app for a Google product other than
+  // Gmail (2026-09-27). 'google' is a tool prefix (google_ads_search_volume),
+  // so the SEO, PPC and Local SEO setup texts that name the refusal need it here.
+  'google_own_app_not_allowed',
   // Enum values: shopify_admin's admin_action, shopify_connect_start's intent_type,
   // oauth_app provider/product slugs, social target_platforms.
   'create_product_draft',
