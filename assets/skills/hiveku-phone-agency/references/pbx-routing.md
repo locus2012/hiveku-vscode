@@ -122,9 +122,10 @@ Each rung sees something the previous one cannot.
 
 **Rung 1 - `voice_diagnose_setup`.** Counts Hiveku rows only: `tenant_provisioned`, active DIDs,
 DIDs missing E911, extension / ring group / IVR / verified-E911 counts, plus a `blocking_issues`
-array of human-readable problems. Surface `blocking_issues` close to verbatim - EXCEPT the E911
-string: `dids_without_e911` has no toll-free filter, so compliant toll-free numbers inflate it
-(the full correction lives in `numbers-and-e911.md`). This tool cannot see FusionPBX at all, so a
+array of human-readable problems. Surface `blocking_issues` close to verbatim, the E911 string
+included: `dids_without_e911` counts only local numbers with no address, and the toll-free ones
+are already left out (`toll_free_dids_exempt_from_e911`), so never subtract them again (what the
+count cannot see is in `numbers-and-e911.md`). This tool cannot see FusionPBX at all, so a
 green result here proves only that the rows exist.
 
 **Rung 2 - `voice_tenant_healthcheck`.** The per-tenant consistency battery, comparing Hiveku's
@@ -175,10 +176,15 @@ client-visible.
 **`voice_tenant_repair` - LAST RESORT, after `voice_tenant_healthcheck` names the
 problem.** This is the tenant-level big hammer. It collapses duplicate FusionPBX domain rows,
 repairs extensions missing their user context, REWRITES the tenant's outbound dialplan rule with
-one DID baked in as the tenant-wide fallback caller ID (the `main`-purpose DID, else the oldest
-active one), and RETARGETS EVERY active DID's inbound route to this tenant. Refusals: 409
-`not_provisioned` with no tenant; 409 `no_caller_id_did` when the account has no active DID -
-outbound would fail at the carrier anyway, so it refuses rather than half-repairing. It is
+one DID baked in as the tenant-wide fallback caller ID (an active local number with a verified
+E911 address - a `main` number in no pool and with no tracking source first, then any other such
+number, then one with a tracking source, then a pool member, oldest first - never a toll-free
+number; `caller_id_did_used` in the response is the number it used), and RETARGETS EVERY active
+DID's inbound route to this tenant. Refusals: 409 `not_provisioned` with no tenant; 409
+`no_caller_id_did` when the account has no active DID - outbound would fail at the carrier
+anyway, so it refuses rather than half-repairing; 409 `no_e911_caller_id` when the account has
+active numbers but none is a local number with a verified E911 address. The voice server also
+re-picks the fallback at other times (`caller-id-and-reputation.md` section 1 says when). It is
 idempotent and it does fix the classic red rows (duplicate domains, missing outbound rule), but
 it is a wholesale rewrite of live routing: run `voice_tenant_healthcheck` first, name the red
 rows to the human, and get an explicit yes before firing it. Never run it speculatively, and
@@ -843,7 +849,7 @@ a softphone that logged out or a device never provisioned - not routing.
 
 | Symptom | First move |
 |---|---|
-| "Is my phone system set up?" | `voice_diagnose_setup`, then `voice_tenant_healthcheck`. Surface `blocking_issues` near-verbatim, minus the toll-free E911 inflation (`numbers-and-e911.md`) |
+| "Is my phone system set up?" | `voice_diagnose_setup`, then `voice_tenant_healthcheck`. Surface `blocking_issues` near-verbatim - the E911 count already leaves toll-free numbers out, so do not subtract them again (`numbers-and-e911.md`) |
 | `voice_tenant_healthcheck` returns ONE check | Short-circuit, not one problem: `db_pools_open` or `tenant_config_present` failed and NOTHING ELSE was inspected. Never report the rest healthy (a 503 = the diagnostic service is down, not a broken tenant) |
 | "My phone never rings" | Unregistered endpoint first: `voice_extension_status({ q })`, then `voice_presence_get`, then up the ladder (Play 5) |
 | `voice_presence_get` returns `{ extensions: [], channels_ok: false }` | The silent failure shape: unprovisioned tenant, a swallowed error, or channel state down. NEVER "nobody is on a call" |

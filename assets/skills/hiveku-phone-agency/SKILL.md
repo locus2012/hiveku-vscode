@@ -137,9 +137,15 @@ vocabulary a rep picks in the CRM (`voice_call_disposition_set`), stored on the 
 never on the call row.
 
 **Toll-free NPAs.** The NANP toll-free set is 800, 833, 844, 855, 866, 877, 888 (822 is
-reserved but not in service - it is not part of the set). Toll-free is exempt from E911 end
-to end, cannot carry a geographic search filter, and 800 itself is unpurchasable through
-Hiveku (premium carrier pricing; the search tool will not even take the prefix).
+reserved but not in service - it is not part of the set). A toll-free number cannot carry an
+E911 address: purchase and update refuse one, `voice_diagnose_setup`'s `dids_without_e911` and
+the healthcheck's `active_dids_have_verified_e911` leave it out, and it cannot be a seat's
+caller ID (`422 toll_free_caller_id`). Hiveku's own pick for the tenant's fallback caller ID
+already skips it; the voice server's own re-pick can still land on one until voice #7 is
+deployed, and after voice #7 is deployed a toll-free number is never picked or written as the
+fallback caller ID (`references/caller-id-and-reputation.md`). Toll-free cannot carry a
+geographic search filter, and 800 itself is unpurchasable through Hiveku (premium carrier
+pricing; the search tool will not even take the prefix).
 
 **The NANP normalization trap.** `voice_blocked_numbers_add` rewrites any input with exactly
 10 digits to `+1` plus those digits EVEN IF you sent a leading `+`, so a 10-digit non-US
@@ -202,8 +208,10 @@ the authoring traps live in the automation skill:
   `audio_urls: 'false'` - you clear a human's badge or mint presigned audio you don't need.
 - Pasting a presigned recording or voicemail URL anywhere, ever.
 - Treating 402 `voice_not_enabled` as an empty inbox - it is a plan refusal.
-- Believing `voice_diagnose_setup`'s `dids_without_e911` before subtracting toll-free
-  numbers - toll-free is E911-exempt and inflates the count.
+- Subtracting toll-free numbers from `voice_diagnose_setup`'s `dids_without_e911` - the count
+  already leaves them out (`toll_free_dids_exempt_from_e911` says how many), so subtracting
+  undercounts. It also cannot see a local DID whose E911 address is still pending; name those
+  from `voice_e911_addresses_list`.
 - Releasing, deleting or unblocking by pattern instead of by a human-named id.
 - Retrying a 502 SMS send blind - the failed row is committed; a retry can double-send.
 - Reporting `sent` as delivered - `sent` means the carrier accepted; null `delivery_status`

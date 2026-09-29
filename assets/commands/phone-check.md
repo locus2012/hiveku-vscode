@@ -12,8 +12,10 @@ always a live call, and it is a cheap one.
 
 1. **`voice_diagnose_setup`** - no arguments. `tenant_provisioned: false` is the whole answer: stop.
    Non-empty `blocking_issues[]` outranks everything below - report those VERBATIM, then stop digging.
-   Before reporting `dids_without_e911`, subtract the toll-free DIDs: toll-free numbers take no E911
-   registration and inflate that count.
+   `dids_without_e911` already leaves toll-free DIDs out (they cannot carry an E911 address;
+   `toll_free_dids_exempt_from_e911` says how many were left out), so report it as it comes -
+   subtracting the toll-free DIDs again undercounts. It counts only local DIDs with NO address at
+   all: a DID whose address is still pending verification is not in it (step 7 finds those).
 2. **`voice_tenant_healthcheck`** - the only tool that can see the FusionPBX side (a DID perfect in
    the dashboard with no inbound dialplan rule, a ring-group DID with no no-answer fallback). A
    ONE-element `checks` result is a short-circuit, not a clean bill: report the healthcheck as
@@ -37,7 +39,8 @@ always a live call, and it is a cheap one.
 6. **DID inventory** - `voice_numbers_list({ is_active: 'true' })`. `is_active` is the STRING
    `'true'` / `'false'`, not a boolean. A number the client publishes that is not here is not ours to ring.
 7. **E911** (always, even when the complaint was something else) - `voice_e911_addresses_list`, joined
-   against the active DIDs from step 6. Pending verification is NOT registered: count pending
+   against the active LOCAL DIDs from step 6. A toll-free DID cannot carry an address, so a
+   toll-free DID without one is not exposure. Pending verification is NOT registered: count pending
    separately, and report the ACTUAL numbers with no verified address, not a count. This is Kari's
    Law / RAY BAUM'S Act exposure for the client.
 8. **When the account runs call tracking** - `voice_pools_list` for the pools and where each member

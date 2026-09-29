@@ -537,9 +537,10 @@ under Kari's Law and RAY BAUM'S Act, not a nice-to-have.
 1. `voice_diagnose_setup` - read `DIDs missing E911` and the verified-address count.
 2. `voice_e911_addresses_list` - registered plus pending-verification addresses. **Pending is not
    registered.** Count them separately.
-3. Cross-reference against `voice_numbers_list({ is_active: 'true' })` to name WHICH active DIDs have
-   no verified address. The tool does not do this join for you; you do it, and you report the actual
-   numbers, not a count.
+3. Cross-reference against `voice_numbers_list({ is_active: 'true' })` to name WHICH active local DIDs
+   have no verified address. The tool does not do this join for you; you do it, and you report the
+   actual numbers, not a count. Leave toll-free numbers out: they cannot carry an E911 address, and
+   the step 1 count already leaves them out too.
 4. File it: `pm_tasks_create` with the named DIDs, and raise it to the client as a risk item.
 
 Registration is `voice_e911_address_create` plus `voice_number_update`'s `e911_address_id` (both
