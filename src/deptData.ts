@@ -346,42 +346,55 @@ export function resolveDynArgs(dyn?: Record<string, number>): Record<string, str
 // ── Connection setup playbooks (written to <dept>/SETUP.md) ──────────────────
 const PPC_SETUP = `# Connecting Google Ads & Microsoft (Bing) Ads — exact, verified steps
 
-Connections live in \`ppc_connections\`. Check current state any time: \`ppc_connection_list\`.
-Prefer \`integration_connect_link_create({ connector: 'google_ads' })\` (one Hiveku link, valid 24h, uses the account's own OAuth app if tagged, else Hiveku's platform app; confirm with \`integration_connect_link_status\`). The steps below are the legacy setup-token lane.
+Connections live in \`ppc_connections\`. Check current state any time: \`ppc_connection_list\`, and
+\`integration_connectors_list\` (per connector: \`ready\`, and the existing \`connections[]\` with their ids and
+\`client_source\`).
 
-## STEP 0 (once per account) — the OAuth app
-Check for an existing app: \`oauth_app_list({ provider: 'google' })\`. If none is enabled for the product
-(\`google_ads\`), create one — first the user does this in **Google Cloud Console**:
-  1. Create/pick a Google Cloud project → enable the **Google Ads API**.
-  2. OAuth consent screen → External; add the user as a test user (or publish).
-  3. Credentials → Create OAuth client ID → **Web application** → Authorized redirect URI MUST include
-     \`https://app.hiveku.com/api/oauth/google/callback\`.
-  4. Copy the Client ID + Client Secret.
-Then: \`oauth_app_create({ provider: 'google', name: '<acct> Google Ads', client_id, client_secret, products: ['google_ads'] })\`.
-(Skipping this → \`integration_oauth_initiate\` returns **412 integration_not_configured**.)
+## Google Ads runs on Hiveku's own Google app
+Hiveku's policy: every Google product except Gmail runs on Hiveku's own Google app, and Google Ads also runs on
+Hiveku's developer token. So for Google Ads never ask for a developer token, a client id or a client secret, never
+register or name an OAuth app of the account's own, and never send anyone into a Google Cloud project of their own.
+The server refuses an own app with 400 \`google_own_app_not_allowed\` (\`oauth_app_create\` for \`google_ads\`, or
+\`oauth_app_update\` adding it; an own \`oauth_app_id\` on a connect link or on \`integration_oauth_initiate\`, where only
+a reconnect naming the app the row already uses passes; \`ppc_connection_create\` for google_ads; a client id, client
+secret or developer token written with \`ppc_connection_update\`), and a developer token with 400
+\`developer_token_not_allowed\`.
 
-## Google Ads — collect 3 fields, then run
-From the user: **developer_token** (their Google Ads MCC → Tools & Settings → API Center — required for EVERY
-Ads API call), **customer_id** (client account, 10 digits no dashes), **manager_id** (the MCC id — ONLY if the
-client account sits under a manager account; Google needs login-customer-id or sync fails).
+## Google Ads — connect with one link
+1. \`integration_connect_link_create({ connector: 'google_ads', source: 'vscode' })\` → \`url\` (a Hiveku page, valid
+   24h) and \`link_id\`. Nothing is needed up front. \`customer_id\` (the client account's 10-digit id) and
+   \`manager_id\` (the MCC id, ONLY if the client account sits under a manager account; Google needs it as
+   login-customer-id or sync fails) are optional here; otherwise they are picked after consent.
+2. Give the user the \`url\` on its own line. Tell them that on the Google Ads consent Google first shows an
+   'unverified app' screen (Advanced, then continue); if Google says 'Access blocked' instead, their Google
+   Workspace admin blocks unverified apps, and nothing connects until the admin allows Hiveku's app.
+3. When they say they are through: \`integration_connect_link_status({ link_id, wait_seconds: 8 })\` until
+   \`status: 'completed'\` (\`connection_id\` is the \`ppc_connections\` row) or \`failed\` (read \`error\`; the same link
+   can be retried until it expires).
+4. If \`needs_binding\` lists \`customer_id\`: \`ppc_ads_discover_customers({ id: connection_id })\` → the accessible
+   customer ids (pass \`manager_customer_id\` to list the client accounts under an MCC; never bind an MCC as
+   \`customer_id\`), then \`ppc_connection_update({ id: connection_id, customer_id, manager_id? })\` → status flips to
+   **connected**. A 412 \`developer_token_missing\` there means Hiveku's developer token is not configured on this
+   environment: report it with \`hiveku_report_issue\`, and never ask anyone for a developer token.
+5. \`ppc_connection_test({ id: connection_id })\` — live API check of OAuth + permissions.
+6. \`ppc_sync({ connection_id })\` (incremental, ≤60s; full 5-year backfill → \`ppc_sync_async\` then poll \`job_status_get\`).
+7. Verify: \`ppc_account_settings_get({ connection_id })\`, \`ppc_campaign_list\`, \`ppc_conversion_tracking_status({ connection_id })\`.
 
-Path A — you have the customer_id:
-1. \`integration_oauth_initiate({ provider_slug: 'google_ads', customer_id, manager_id?, developer_token })\`
-   → \`{ setup_url, setup_token, connection_id }\`. (It pre-creates the ppc_connections row, status 'pending'.)
-2. Give the user \`setup_url\`; they complete Google's consent screen.
-3. **Poll** \`integration_oauth_check({ setup_token })\` every ~5s until \`status: 'completed'\` (expired=15min → re-initiate).
-   OAuth writes the refresh_token; with customer_id set, status auto-promotes to **connected**.
-4. \`ppc_connection_test({ id: connection_id })\` — live API check of OAuth + permissions.
-5. \`ppc_sync({ connection_id })\` (incremental, ≤60s; full 5-year backfill → \`ppc_sync_async\` then poll \`job_status_get\`).
-6. Verify: \`ppc_account_settings_get({ connection_id })\`, \`ppc_campaign_list\`, \`ppc_conversion_tracking_status({ connection_id })\`.
+Re-auth a dead connection (refresh token died, or a permission is missing): the same call with
+\`target_connection_id\` (the row's id). It keeps the row's id, bindings and history; never delete and recreate.
 
-Path B — discover the customer_id (user doesn't know it):
-1. \`integration_oauth_initiate({ provider_slug: 'google_ads', developer_token })\` → connection_id; user authorizes; poll check.
-2. \`ppc_ads_discover_customers({ id: connection_id })\` → accessible customer IDs (needs developer_token set; 412 if missing).
-3. \`ppc_connection_update({ id: connection_id, customer_id, manager_id? })\` → status auto-flips to **connected**.
-4. test → sync → verify (Path A steps 4–6).
+Move a connection that still runs on the account's own app (\`client_source: 'byok'\` in
+\`integration_connectors_list\`: its own Google app, or a row that keeps a developer token of its own):
+\`integration_connect_link_create({ connector: 'google_ads', target_connection_id, oauth_app_id: 'platform', source: 'vscode' })\`.
+Before you send that link, tell the owner it moves onto Hiveku's Google app with the same id, bindings and
+history, that the connection's own developer token is dropped (Hiveku's is used), and about the Google Ads
+'unverified app' screen above. Nothing changes until the consent completes.
 
-Re-auth a dead connection (refresh_token died): \`integration_oauth_initiate({ provider_slug: 'google_ads', target_connection_id })\`.
+Google Ads not \`ready\` in \`integration_connectors_list\` means Hiveku's Google Ads app is not configured on this
+environment: report it with \`hiveku_report_issue\`, and never register an own Google app for it.
+\`integration_oauth_initiate\` is the legacy lane: a new Google Ads connection there also goes out as a connect link
+on Hiveku's app (\`connect_link: true\`, poll by \`link_id\`), and it refuses an own \`oauth_app_id\` and a developer
+token the same way.
 
 ## Microsoft / Bing Ads
 Microsoft Ads: mint a link with \`integration_connect_link_create({ connector: 'microsoft_ads' })\` and confirm with
@@ -400,26 +413,39 @@ Re-run "Download Department Data → Ads (PPC)" to refresh \`hiveku-data/ppc/*.j
 const LOCALSEO_SETUP = `# Connecting Local SEO sources (GBP, Search Console, Bing Webmaster) — verified
 
 Connected sources: \`seo_connections_list\`. Local rank/query data comes from synced GSC + Bing.
-Each Google source needs a per-account OAuth app (BYOK) — same pattern as Google Ads.
-
-## STEP 0 (once per product) — the OAuth app
-\`oauth_app_list({ provider: 'google' })\`; if none for the product, create it. The user first does Google Cloud
-Console setup (project → enable the product's API [Search Console API / Business Profile API] → OAuth consent
-screen → Web-app client → Authorized redirect URI must include \`https://app.hiveku.com/api/oauth/google/callback\`),
-then: \`oauth_app_create({ provider: 'google', name, client_id, client_secret, products: ['google_search_console'] })\`
-(or \`['google_business_profile']\`). Missing app → \`integration_oauth_initiate\` returns 412.
+Search Console and Business Profile run on Hiveku's own Google app (Hiveku's policy: every Google product except
+Gmail does), so each connects with one link. Never ask for a client id, client secret or refresh token for them,
+never register or name an OAuth app of the account's own for them, and never send anyone into a Google Cloud project
+of their own. The server refuses an own app with 400 \`google_own_app_not_allowed\` (\`oauth_app_create\` for either
+product, or \`oauth_app_update\` adding it; an own \`oauth_app_id\` on a connect link or on \`integration_oauth_initiate\`,
+where only a reconnect naming the app the row already uses passes; \`seo_connection_create\` for google_search_console
+or google_business_profile; a client id or client secret written with \`seo_connection_update\`).
 
 ## Google Business Profile (core of Local SEO)
-1. \`integration_oauth_initiate({ provider_slug: 'google_business_profile' })\` → \`{ setup_url, setup_token, connection_id }\`; user authorizes.
-2. Poll \`integration_oauth_check({ setup_token })\` until \`status: 'completed'\`.
+1. \`integration_connect_link_create({ connector: 'google_business_profile', source: 'vscode' })\` → \`url\` (a Hiveku
+   page, valid 24h) and \`link_id\`. Give the user the \`url\`; they pick the Google account that manages the listing.
+2. When they say they are through: \`integration_connect_link_status({ link_id, wait_seconds: 8 })\` until
+   \`status: 'completed'\` (\`connection_id\` is the new connection).
 3. \`seo_gbp_discover_locations({ id: connection_id })\` → accounts[].locations[] (location_id + title).
 4. \`seo_connection_update({ id: connection_id, gbp_account_id, gbp_location_id })\` → status flips to **connected** once BOTH set.
 5. Then \`seo_gbp_insights({ connection_id })\` (clicks/calls/directions) + \`seo_gbp_reviews({ connection_id })\` work.
 
 ## Google Search Console (organic + local queries)
-1. \`integration_oauth_initiate({ provider_slug: 'google_search_console' })\` → connection_id; user authorizes; poll \`integration_oauth_check\`.
+1. \`integration_connect_link_create({ connector: 'google_search_console', source: 'vscode' })\` → hand over the \`url\`;
+   when they are through, \`integration_connect_link_status({ link_id, wait_seconds: 8 })\` until \`status: 'completed'\`.
 2. \`seo_gsc_discover_sites({ id: connection_id })\` → pick a verified site (or use \`sc-domain:<domain>\` if 0 listed).
 3. \`seo_connection_update({ id: connection_id, site_url })\` → **connected**. Then \`seo_gsc_search_queries\`, \`seo_gsc_top_pages\`, etc.
+
+## Reconnect, move, or not ready (both Google sources)
+- A dead or under-scoped connection: the same call with \`target_connection_id\` (its id). It keeps its bindings and history.
+- A connection that still runs on the account's own app (\`client_source: 'byok'\` in \`integration_connectors_list\`)
+  moves with \`integration_connect_link_create({ connector, target_connection_id, oauth_app_id: 'platform', source: 'vscode' })\`.
+  Tell the owner first that it moves onto Hiveku's Google app and keeps its settings and history; nothing changes
+  until the consent completes. A GBP read refused with \`gbp_quota_not_approved\` (Google reports a zero Business Profile
+  API quota for the Cloud project behind the connection) is fixed by that move; never ask anyone to get their own
+  Cloud project reviewed.
+- Not \`ready\` in \`integration_connectors_list\`: Hiveku's app is not configured on this environment. Report it with
+  \`hiveku_report_issue\`, and never register an own Google app for it.
 
 ## Bing Webmaster (API key — fully connectable from here, no dashboard)
 \`integration_create({ provider_slug: 'bing_webmaster', credentials: { api_key } })\` (the user's Bing Webmaster
@@ -1125,8 +1151,10 @@ export const DEPARTMENTS: Department[] = [
       'GBP posts publish via `social_create_post` with platform google_business_profile. ' +
       'Citations: `seo_citations_get` (free stored snapshot) / `seo_citations_audit` (spends one DataForSEO Business Listings search, ' +
       '24h cooldown, audit only - it never submits to a directory). Local-pack rank tracking: `seo_track_keyword` with ranking_type local and business_name. ' +
-      'CONNECT a source: `seo_connection_create({ platform: "bing_webmaster"|"google_search_console"|"google_business_profile", site_url, ... })` ' +
-      '(Bing needs only { platform, site_url, api_key } - no OAuth), then `seo_connection_update` to bind + `seo_sync`. ' +
+      'CONNECT a source: Bing Webmaster with `seo_connection_create({ platform: "bing_webmaster", site_url, api_key })` (no OAuth); ' +
+      'Google Business Profile and Search Console with `integration_connect_link_create({ connector })`, which runs on Hiveku\'s own ' +
+      'Google app (never an own Google app, client id, client secret or refresh token: `seo_connection_create` refuses both ' +
+      'with 400 google_own_app_not_allowed). Then `seo_connection_update` to bind + `seo_sync`. ' +
       'Bing organic tools: `seo_bing_query_stats` / `seo_bing_pages` / `seo_bing_crawl_stats` / `seo_bing_backlinks` / `seo_bing_stats` / `seo_bing_period_comparison`. ' +
       'Submit sitemaps/URLs: `seo_gsc_submit_sitemap` / `seo_bing_submit_sitemap` / `seo_bing_submit_url`. Refresh: `seo_sync`. ' +
       'See SETUP.md to connect Google Business Profile / Search Console / Bing Webmaster.',

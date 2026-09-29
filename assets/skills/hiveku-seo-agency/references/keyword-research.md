@@ -64,8 +64,9 @@ accepted). A negative DataForSEO balance makes every metered call a 402; 503
    `seo_project_get` here: it reads a WEBSITE project's site-level SEO settings and takes the
    builder project id, a different id space entirely (see reporting-and-delivery.md, Play G).
    Nearly every tool below needs `project_id`. No project or no data sources: stop and run the
-   setup path (`seo_create_project` for the tracking project, `seo_connection_create` per the
-   BYOK arguments in `outcomes-and-measurement.md`, then `seo_sync`), never improvise it.
+   setup path (`seo_create_project` for the tracking project, a connect link for the Google
+   sources and `seo_connection_create` for Bing Webmaster, per `outcomes-and-measurement.md`, then
+   `seo_sync`), never improvise it.
    `get_account_info` gives the account-level domain and timezone for report framing.
 
 Alias note: several reads ship under two names (`seo_list_keywords` / `seo_keywords_list`,

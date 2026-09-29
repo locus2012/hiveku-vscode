@@ -270,8 +270,9 @@ revenue, not a client KPI.
 `ppc_ads_discover_customers({ id })` with no `manager_customer_id`, listing the customers the OAuth user
 can log in as with name and `is_manager`. Agency users typically see MCC managers there, and **campaigns
 never live on an MCC**, so never bind one as customer_id: pass `{ id, manager_customer_id }` to list the
-ENABLED client accounts under it. The call needs a developer_token and returns 412 with a hint without
-one. Binding is a connection update outside this tool set: follow `hiveku-data/ppc/SETUP.md`, using
+ENABLED client accounts under it. It runs on Hiveku's developer token: a 412 `developer_token_missing`
+means Hiveku's is not configured on this environment (report it to Hiveku support), never a token to
+collect from the client. Binding is a connection update outside this tool set: follow `hiveku-data/ppc/SETUP.md`, using
 customer_id = the client id and manager_id = the MCC id,
 since manager_id rides as login-customer-id on every sync and omitting it makes syncs fail. Read the name
 and customer_id back verbatim, get an explicit yes, then test, sync, and re-run Play 1.

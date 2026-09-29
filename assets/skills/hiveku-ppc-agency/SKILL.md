@@ -106,8 +106,12 @@ response ladder: `hiveku-orient/references/foundation-first.md`.
 Run in order; write up findings before proposing a single change:
 
 1. **Connections:** `ppc_connection_list`; `ppc_connection_test` on anything suspect. Nothing connected:
-   `ppc_connection_create` builds a BYOK connection from the client's own platform credentials
-   (per-platform requirements; a 400 returns the setup guide; idempotent on account+platform+customer_id).
+   Google Ads connects with `integration_connect_link_create({ connector: 'google_ads' })` on Hiveku's
+   own Google app and Hiveku's developer token - never collect a developer token, client id or secret
+   for it, and never name an own `oauth_app_id` (the server refuses both: `developer_token_not_allowed`,
+   `google_own_app_not_allowed`). `ppc_connection_create` builds a BYOK connection for the other
+   platforms from the client's own credentials (per-platform requirements; a 400 returns the setup
+   guide; idempotent on account+platform+customer_id; it refuses google_ads).
    Then `ppc_connection_test`, then `ppc_sync`. Repairs (rotate credentials, fix customer_id /
    manager_id, deactivate) go through `ppc_connection_update` - credential changes reset status to
    pending, so test again. Never delete-and-recreate a connection. A dead OAuth sign-in or a missing

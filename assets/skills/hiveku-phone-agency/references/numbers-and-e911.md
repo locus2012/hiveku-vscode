@@ -57,9 +57,10 @@ One `voice_numbers` row per DID the account owns. The fields that drive everythi
   A LOCAL number cannot activate without one (RAY BAUM's Act, enforced server-side on both create
   and update). Toll-free numbers never carry one - not E911-capable at the carrier.
 - **`purpose`** - `main | tracking | did_pool`. `main` is the business line and the account-default
-  caller ID and SMS sender; `tracking` and `did_pool` are attribution numbers that must never be
-  presented as caller ID or handed out as the business's number. Old rows may carry the legacy
-  spelling `pool` for `did_pool`.
+  SMS sender. The account-default caller ID prefers `main` too, but only a local number with a
+  verified E911 address qualifies (the full rule is in `caller-id-and-reputation.md` section 1).
+  `tracking` and `did_pool` are attribution numbers: never assign one as caller ID or hand it out
+  as the business's number. Old rows may carry the legacy spelling `pool` for `did_pool`.
 - **`provider_number_id`** - the carrier's own id for the number. NULL on a half-provisioned row
   and on some ported-in rows whose adoption has not completed (or that predate the porting-v1
   adopter). A NULL here blocks `voice_number_cnam_set` with a misleading error (section 7).
@@ -77,7 +78,7 @@ detail: routing, E911, CNAM mirror, greeting/whisper state, toll-free verificati
 |---|---|---|
 | E911 | HARD GATE - cannot activate without a registered address | Not E911-capable. The gate is SKIPPED, not failed - a TF number with no E911 address is fully compliant |
 | CNAM caller-ID name | `voice_number_cnam_set` works | Refused - `422 cnam_not_applicable_toll_free`. CNAM is a geographic-number registry |
-| Caller ID for calls | Allowed | Refused on extensions (`422 toll_free_caller_id`) - a 911 call would present a number with no dispatchable address |
+| Caller ID for calls | Allowed | Refused on extensions (`422 toll_free_caller_id`) - a 911 call would present a number with no dispatchable address. Hiveku's own pick for the tenant's fallback caller ID skips it; the voice server's own re-pick can still land on one until voice #7 is deployed, and after voice #7 is deployed a toll-free number is never picked or written as the fallback (`caller-id-and-reputation.md`) |
 | Inbound voice cost | Baseline | Roughly 4.7x the carrier cost. Platform pricing: 500 cents/month per TF DID plus a 3 cents/minute inbound surcharge from minute one |
 | SMS | Needs 10DLC registration (see `tendlc-and-toll-free.md`) | Needs TOLL-FREE VERIFICATION - carriers hard-block unverified TF senders industry-wide, and the platform's send paths refuse or skip unverified TF numbers |
 | 800 prefix | n/a | UNPURCHASABLE platform-wide, at every layer (premium carrier pricing, deliberately blocked). Do not promise a 1-800 number |
@@ -85,14 +86,21 @@ detail: routing, E911, CNAM mirror, greeting/whisper state, toll-free verificati
 
 The toll-free NPA set everywhere on this platform is exactly: 800, 833, 844, 855, 866, 877, 888.
 
-### The `dids_without_e911` count is inflated by toll-free
+### What `dids_without_e911` counts (toll-free is already left out)
 
-`voice_diagnose_setup` reports `dids_without_e911` and a matching `blocking_issues` string with NO
-toll-free filter. Every compliant toll-free number inflates the count and reads like a live
-compliance problem. Before reporting DIDs missing E911 as a blocker, cross-check with
-`voice_numbers_list` and subtract the +18xx set. If every number in the count is toll-free, there
-is no blocker - say so, and say the count is a known gap in the diagnostic. Report it only for the
-LOCAL numbers that remain.
+`voice_diagnose_setup` reports `dids_without_e911`: the ACTIVE LOCAL numbers with no E911 address
+at all. Toll-free numbers are left out of it and counted in `toll_free_dids_exempt_from_e911`, so
+`active_dids` minus that field is how many numbers E911 applies to. Report the count and the
+matching `blocking_issues` string as they come - subtracting the toll-free set again undercounts.
+An account whose active numbers are all toll-free gets no E911 blocker at all, correctly.
+
+What the count cannot see: a local number whose address is attached but still pending carrier
+verification, or points at an address row that is gone. Name those from
+`voice_e911_addresses_list` joined against `voice_numbers_list`, or read
+`voice_tenant_healthcheck`'s `active_dids_have_verified_e911`: it fails on any local number with no
+address, a missing address row, an address the carrier has not verified, or one with no carrier
+registration, names up to five of them, and leaves toll-free numbers out too (its detail says how
+many).
 
 ---
 
@@ -471,7 +479,9 @@ DIFFERENT column from the cap the toll-fraud guard enforces - quote `voice_setti
 - **Re-buying after a 202.** The order is committed at the carrier. A "retry" is a second number.
 - **Reading the 202 as an error.** It arrives as a SUCCESS payload with an `error` key - a proxy
   artifact. Route on the key, not the transport.
-- **Reporting `dids_without_e911` verbatim.** Subtract the toll-free set first.
+- **Subtracting toll-free numbers from `dids_without_e911`.** They are already left out
+  (`toll_free_dids_exempt_from_e911`); subtracting again undercounts. The count also misses a local
+  number whose address is still pending - name those from `voice_e911_addresses_list`.
 - **Treating `voice_e911_addresses_list` rows as all-registered.** Pending verification rows are
   in the same list.
 - **Trusting a `voice_number_update` 200.** The PBX push and the TTS render both fail silently.
@@ -494,8 +504,8 @@ DIFFERENT column from the cap the toll-fraud guard enforces - quote `voice_setti
 
 | Symptom | First move |
 |---|---|
-| "Is my phone system set up?" | `voice_diagnose_setup`, then read `blocking_issues` - but E911 counts need the toll-free subtraction |
-| "DIDs missing E911" reported | `voice_numbers_list`, subtract +1 800/833/844/855/866/877/888; report only the local remainder |
+| "Is my phone system set up?" | `voice_diagnose_setup`, then read `blocking_issues` as they come - the E911 count and blockers already leave toll-free numbers out |
+| "DIDs missing E911" reported | The count is local numbers only - do not subtract toll-free again. Name them: `voice_numbers_list` against `voice_e911_addresses_list`, local numbers only, pending counted separately |
 | Number bought but not active | Local: no registered E911 address (`422 e911_required` on activation). TF: check `voice_number_orders_list` - a 202 order may still be activating |
 | Toll-free search returns local-looking numbers, or 503 | `voice_server_update_pending` deploy-window guard. Retry later; never buy the local results as TF |
 | "That number is taken" on purchase | `409 number_unavailable` - history with another workspace, refused before money moves. Pick another number |

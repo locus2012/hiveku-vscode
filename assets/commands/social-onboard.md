@@ -39,8 +39,10 @@ first week of posts is `/hiveku:social-plan`, later.
    `eligible: false` is a plan conversation before any X post; the cap is soft and fails open,
    so `remaining` is advisory. `social_provider_list` for every platform the client wants that
    has no row: `hiveku_native: false` means the client registers their own app (a BYOK connect
-   task carrying the guide, the scopes and the `redirect_uri`); `true` means a connect task
-   pointing at `/hiveku:connect-integration`. Never tell a client a platform is unsupported
+   task carrying the guide, the scopes and the `redirect_uri`), except Google Business Profile,
+   where it means Hiveku's Google app is not configured (report it to Hiveku support; an account's
+   own Google app is Gmail only); `true` means a connect task pointing at
+   `/hiveku:connect-integration`. Never tell a client a platform is unsupported
    before reading it. A Page that is also active on another Hiveku account is a conflict you
    surface, not one you decide.
 2. Real history, both feeds. `social_list_posts({ limit: 100 })` (page past 100) is what Hiveku

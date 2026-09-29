@@ -110,7 +110,9 @@ target query serves. Check, criteria and ladder: `hiveku-orient/references/found
   `insufficient_evidence` - never zero, never from priors. `hiveku-data/seo/*.json` is orientation.
 - **Generative output** goes through `talk_to_department({ domain: 'seo', message })`, then persists
   with the direct tool. **Setup when nothing exists:** `seo_connections_list`, `seo_create_project`,
-  `seo_connection_create` (BYOK; args in `references/outcomes-and-measurement.md`), then `seo_sync`.
+  `integration_connect_link_create` for the Google sources (Hiveku's own Google app; never an own
+  Google app or credentials) or `seo_connection_create` for Bing Webmaster (args in
+  `references/outcomes-and-measurement.md`), then `seo_sync`.
 
 ## Hard stops - response contracts, not suggestions
 

@@ -34,31 +34,36 @@ is `reporting-and-delivery.md`.
 | `seo_gtm_tag_create`, `seo_gtm_tag_get`, `seo_gtm_tag_update`, `seo_gtm_tag_delete`, `seo_gtm_tag_revert` | LIVE | A | workspace drafts; delete and revert two-step |
 | `seo_gtm_trigger_get`, `seo_gtm_trigger_update`, `seo_gtm_trigger_delete`, `seo_gtm_trigger_revert` | LIVE | A | no standalone trigger-create tool: triggers are created through `create_trigger` on `seo_gtm_tag_create` |
 | `seo_gtm_variable_create`, `seo_gtm_variable_get`, `seo_gtm_variable_update`, `seo_gtm_variable_delete`, `seo_gtm_variable_revert` | LIVE | A | the conversion-value rail |
-| `seo_connection_create`, `seo_connection_update`, `seo_connection_delete`, `seo_connections_list`, `seo_sync` | LIVE | A | BYOK shapes below; delete is a soft-delete |
+| `seo_connection_create`, `seo_connection_update`, `seo_connection_delete`, `seo_connections_list`, `seo_sync` | LIVE | A | create is Bing Webmaster only (shapes below); delete is a soft-delete |
 | `seo_connection_get` | LIVE | A | one connection row by id; `seo_connections_list` remains the bulk read |
 | `seo_connection_test` | LIVE | A | ask-gated; WRITES connection_status: a transient failure pauses the 6h cron until a passing test, so never sweep it across connections |
 | `seo_connections_health` | LIVE | A | the one-call roll-up; `seo_connections_list` still shows connection_status and last sync per row |
 | `seo_analytics_discover_properties` | LIVE | A | lists the GA4 properties a connection can reach; re-point the row with `seo_connection_update` (`ga_property_id`) |
 | `seo_organic_leads` | LIVE | A | `from`, `to`, `project_id`; cross-check against `marketing_form_conversion_audit` with `channel: 'Organic Search'` plus GA4 key events from `seo_ga4_report`, side by side |
 
-Creating a google_analytics connection: `seo_connection_create` documents BYOK shapes for
-Bing Webmaster, Google Search Console and Google Business Profile; the GA4 connection is
-made through the dashboard's Google OAuth (GTM rides the same row). Unverified whether
-`seo_connection_create` accepts platform google_analytics; check its schema before trying.
+Creating a Google connection (Analytics, Search Console, Business Profile): every Google product
+except Gmail runs on Hiveku's own Google app, so mint
+`integration_connect_link_create({ connector: 'google_analytics' | 'google_search_console' | 'google_business_profile' })`
+(the `/hiveku:connect-integration` flow; GTM rides the Analytics row). `seo_connection_create`
+refuses Search Console and Business Profile (400 `google_own_app_not_allowed`) and does not take
+Google Analytics. Never collect a client id, client secret or refresh token for a Google source,
+and never send anyone into a Google Cloud project of their own. A Google row that still runs on the
+account's own app (`client_source: 'byok'` in `integration_connectors_list`) moves with
+`integration_connect_link_create({ connector, target_connection_id, oauth_app_id: 'platform' })`;
+tell the owner first that it moves onto Hiveku's Google app and keeps its settings and history.
 
 ## Ground truth
 
 ### Connections (create, verify, remove)
 
-`seo_connection_create` is BYOK, per platform:
-- bing_webmaster is the simplest: `{ platform: 'bing_webmaster', site_url, api_key }` (the
+`seo_connection_create` is Bing Webmaster only:
+- bing_webmaster: `{ platform: 'bing_webmaster', site_url, api_key }` (the
   key from bing.com/webmasters -> Settings -> API access; no OAuth). For a site not yet in
   Bing, the user can one-click "Import from Google Search Console" at bing.com/webmasters.
-- google_search_console: `{ platform, site_url, client_id, client_secret, refresh_token }`
-  with scope `https://www.googleapis.com/auth/webmasters` - the FULL scope, not `.readonly`,
-  or sitemap submit/delete will 403.
-- google_business_profile: `{ platform, client_id, client_secret, refresh_token }`, then set
-  gbp_account_id / gbp_location_id via `seo_connection_update`.
+- google_search_console and google_business_profile are refused (400
+  `google_own_app_not_allowed`): connect them with the connect link above, then bind
+  `site_url` / `gbp_account_id` + `gbp_location_id` with the discover tools and
+  `seo_connection_update`.
 
 After create, verify with `seo_sync`. `seo_connection_update` flips connection_status from
 pending to connected when the final identifier lands (site_url for GSC; both GBP ids), and

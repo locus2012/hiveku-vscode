@@ -22,8 +22,10 @@ GBP, or answering "can we post to <platform>".
 - Make the connect task actionable with `social_provider_list`: every platform Hiveku
   can connect, each with its required scopes, setup guide, and `hiveku_native` telling
   you whether a Hiveku app is configured on this deployment (false means the customer
-  must register their own app). Read it before telling someone a platform is
-  unsupported: usually the platform is fine and only the native app is unconfigured.
+  must register their own app, except Google Business Profile, where it means Hiveku's
+  Google app is not configured: report it, never an own Google app). Read it before telling
+  someone a platform is unsupported: usually the platform is fine and only the native app is
+  unconfigured.
 
 ## Cadence per platform (record it as a decision)
 

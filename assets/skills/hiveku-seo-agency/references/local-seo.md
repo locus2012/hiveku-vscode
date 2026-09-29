@@ -455,7 +455,10 @@ same category of visibility lever as attributes (Play L3), and just as commonly 
   Google's small per-minute quota was hit: wait a minute, retry, stop looping live tools.
   `gbp_quota_not_approved` means Google reports a quota of literally zero because the Cloud project behind
   the connection never passed Google's one-time Business Profile API access review; waiting cannot help,
-  the fix is reconnecting onto the approved app. Do not retry, and do not report it as an outage.
+  the fix is reconnecting onto the approved app: Hiveku's own Google app (a connection still on the
+  account's own app moves with `integration_connect_link_create({ connector: 'google_business_profile',
+  target_connection_id, oauth_app_id: 'platform' })`; never ask anyone to get their own Cloud project
+  reviewed). Do not retry, and do not report it as an outage.
 - **A connection reads as error.** Far more often unconfigured or stale-token than a broken API: check
   state and `last_error` first, and reconnect rather than escalate.
 - **Listing Score dropped with no edits.** Check whether an item flipped to `unknown` rather than absent:

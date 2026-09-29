@@ -49,8 +49,8 @@ drafting any greeting.
 **Steps:**
 
 1. Baseline: `voice_diagnose_setup` and `voice_settings_get`. Read back
-   `tenant_provisioned`, the counts, and `blocking_issues` (verbatim, minus the toll-free
-   E911 caveat - `references/numbers-and-e911.md`).
+   `tenant_provisioned`, the counts, and `blocking_issues` (verbatim - the E911 count already
+   leaves toll-free numbers out; `references/numbers-and-e911.md`).
 2. E911 BEFORE numbers - a local DID cannot activate without a verified address.
    `voice_e911_addresses_list`; if the office address is missing:
    `voice_e911_address_create` [CONFIRM - this registers the street address emergency
@@ -380,9 +380,10 @@ backlog. Read-heavy; every fix it proposes is its own confirmed write.
 1. The two diagnostics, side by side: `voice_diagnose_setup` (Hiveku's rows) and
    `voice_tenant_healthcheck` (the only PBX-side view; mind its one-element short-circuit -
    `references/pbx-routing.md`).
-2. E911 audit: `voice_numbers_list` against `voice_e911_addresses_list`, SUBTRACTING
-   toll-free numbers (800/833/844/855/866/877/888 - E911-exempt, and they inflate the
-   diagnostic's missing-E911 count). Report a blocker only for local numbers.
+2. E911 audit: `voice_numbers_list` against `voice_e911_addresses_list`, local numbers only -
+   toll-free numbers (800/833/844/855/866/877/888) cannot carry an E911 address, and the
+   diagnostic's `dids_without_e911` already leaves them out, so do not subtract them from it.
+   Report a blocker only for local numbers, with pending addresses counted separately.
 3. Routing rot: `voice_ivr_walk` per IVR - every `{ type: 'unknown' }` target is a menu
    option sending callers nowhere. `voice_ring_group_get` per group - null
    `fusionpbx_group_uuid` means it cannot ring; empty member list rings nobody.

@@ -52,9 +52,21 @@ did not:
    directly and picks the caller ID per call.
 3. **SMS** - a text composed by a person resolves the SENDER's assigned DID first (section 4).
 
-**The account default**, presented by every seat with no assignment: the oldest active
-`purpose: 'main'` DID. Two traps inside that sentence: an account with more than one `main` row
-resolves to the OLDEST, which can be somebody's personal line (the classic incident: eight
+**The account default** (the tenant's fallback caller ID), presented by every seat with no
+assignment. Hiveku picks it by one rule: an active LOCAL number with a
+verified E911 address - a `main` number in no pool and with no tracking source first, then any
+other such number, then one with a tracking source, then a pool member, oldest first - and never
+a toll-free number, which cannot carry an E911 address. The nightly repair, `voice_tenant_repair`
+and click-to-call all use that rule. The voice server also re-picks the default after a restart,
+a number purchase, a port adoption, and a repair run from Hiveku's staff console. Until voice #7
+is deployed that re-pick is simply the oldest active number, toll-free and pool numbers
+included, and it holds until the nightly repair puts the rule's pick back (an account with no
+eligible number keeps it). After voice #7 is deployed the voice server uses the same rule, so a
+toll-free number is never picked or written as the fallback caller ID; an account with no
+eligible number keeps whatever its outbound rule already presents, and when any seat can dial
+out, `voice_tenant_healthcheck` reports that red in the `outbound_fallback_caller_id_e911_capable`
+check voice #7 adds. Two traps inside the rule: an account with more than one eligible `main`
+row resolves to the OLDEST, which can be somebody's personal line (the classic incident: eight
 unassigned reps all presenting the owner's number); and nothing in the UI names the default -
 it honestly says "your account's default number". When only a few DIDs serve many reps, the real
 decision is WHICH number unassigned users present - a main company number, never a personal DID.
@@ -76,12 +88,13 @@ silently fails is worse than not offering it.
 
 ### Choosing the account default (what unassigned seats present)
 
-The default is not directly settable - it is DERIVED: the oldest active `purpose: 'main'` DID.
-So the way to control it is to control the `purpose` rows via `voice_number_update`:
+The default is not directly settable - it is DERIVED by the rule above. So the way to control it
+is to control the `purpose` rows via `voice_number_update`, and to make sure the number you want
+presented is local with a verified E911 address (a number that is not is skipped):
 
-- Exactly ONE number should carry `purpose: 'main'` per presented identity. Two `main` rows
-  make the default the OLDER one by creation date, which is how an owner's personal first-bought
-  number ends up presented by every unassigned rep.
+- Exactly ONE number should carry `purpose: 'main'` per presented identity. Two eligible `main`
+  rows make the default the OLDER one by creation date, which is how an owner's personal
+  first-bought number ends up presented by every unassigned rep.
 - Flipping a company number to `main` is refused with `422 number_in_pool` while it still
   rotates between website visitors - remove it from the pool first (see `call-tracking-dni.md`).
 - After changing `purpose` rows, re-verify with a test call from an unassigned seat: the default
@@ -150,9 +163,12 @@ Guardrails carried from its session twin:
   who explicitly chose to be withheld.
 - Caller-ID pick order: an explicit override (must be an active, owned DID) -> the extension's
   own assignment -> a local-presence match (an owned DID sharing the destination's NANP area
-  code, tracking and pool numbers excluded) -> the oldest `main` -> any active DID -> `409` with
-  no number to present. Tracking DIDs are never presented: a callback to one lands unrouted and
-  pollutes attribution.
+  code, tracking and pool numbers excluded, and none at all for a toll-free destination) -> the
+  account default by the rule in section 1 (local with a verified E911 address, never toll-free)
+  -> `409 no_caller_id` with no number to present. Local presence never picks a tracking or pool
+  DID: a callback to one lands unrouted and pollutes attribution. The account default can land
+  on a number with a tracking source or a pool member, but only when every local number that
+  qualifies has a tracking source or is in a pool.
 
 ## 3. What the callee sees: the full chain
 
@@ -221,9 +237,10 @@ read-back API for carrier analytics.
 1. `voice_extensions_list` - the full roster with both caller-ID columns. `voice_numbers_list`
    for the assignable DIDs (active, local; never tracking/pool numbers, never unverified TF).
 2. Build the map: rep -> DID. Fewer DIDs than reps is the NORMAL case - most seats will share,
-   so the plan must also name what UNASSIGNED seats present (the account default = the oldest
-   `main`; if that resolves to someone's personal line, fix the `purpose` rows first via
-   `voice_number_update` - see `numbers-and-e911.md`).
+   so the plan must also name what UNASSIGNED seats present (the account default by the rule in
+   section 1 - the oldest eligible `main` when there is one; if that resolves to someone's
+   personal line, fix the `purpose` rows first via `voice_number_update` - see
+   `numbers-and-e911.md`).
 3. Show the human the complete before/after table - every extension, current value, proposed
    value. Get an explicit yes on THAT table.
 4. One `voice_extension_update` per extension, `outbound_caller_id_number_id` only, reading
@@ -282,8 +299,11 @@ read-back API for carrier analytics.
   extension case adds no warning at all. Verify by list read plus a test call.
 - **Setting a toll-free DID as caller ID.** Refused for 911 reasons; and the check only knows
   NANP 8xx, so a non-US TF slips through - do not do it manually either.
-- **Assigning a tracking or pool DID.** Callbacks land unrouted and attribution corrupts. The
-  originate path refuses to auto-pick them; do not hand-pick one.
+- **Assigning a tracking or pool DID.** Callbacks land unrouted and attribution corrupts, and
+  `voice_extension_update` accepts one: do not hand-pick one. Click-to-call's local-presence step
+  skips numbers marked tracking or pool; the account default can still land on a number with a
+  tracking source or a pool member, but only when every local number that qualifies (section 1)
+  has a tracking source or is in a pool.
 - **"Fixing" an old SMS thread onto the rep's new number.** Threads are sticky by design; the
   customer texts the number they have.
 - **Promising Spam-Likely removal on a date.** Registration is the lever; propagation and label
@@ -297,7 +317,7 @@ read-back API for carrier analytics.
 
 | Symptom | First move |
 |---|---|
-| "The wrong number shows when I call out" | `voice_extensions_list` for the seat's assignment; unset = account default (oldest `main`). Then `voice_calls_list` `from_e164` to see what was actually presented |
+| "The wrong number shows when I call out" | `voice_extensions_list` for the seat's assignment; unset = the account default (section 1: the oldest eligible `main` first; until voice #7 is deployed, a voice server restart or a number purchase can put the oldest active number there instead). Then `voice_calls_list` `from_e164` to see what was actually presented |
 | Same rep presents two different numbers | Two paths disagree (softphone vs click-to-call). Report the divergence with the call-log evidence - platform-side sync, human chase |
 | Assignment saved but the phone still presents the old number | Read the update's `warning`; no warning + never-provisioned extension = the silent no-op. Check registration via `voice_extension_status`, re-save |
 | `422 invalid_caller_id` | The DID is not owned by this account or not active - `voice_numbers_list` |
