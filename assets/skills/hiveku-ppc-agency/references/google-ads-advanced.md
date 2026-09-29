@@ -121,8 +121,9 @@ looks like a different business.
 3. Match by name and currency against `account_context_get` and `get_account_info`, never by list position.
    Binding itself is a connection write outside this surface: hand the chosen `customer_id` (plus `manager_id`
    for an MCC child, sent as login-customer-id on every call) to the connection-update step in
-   `account-structure.md`, then persist it with `memory_create`. A `412` with a hint means no developer token:
-   see `hiveku-data/ppc/SETUP.md`.
+   `account-structure.md`, then persist it with `memory_create`. A `412` `developer_token_missing` means Hiveku's
+   developer token is not configured on this environment: report it to Hiveku support, and never ask the
+   client for a developer token (Google Ads runs on Hiveku's).
 
 ---
 

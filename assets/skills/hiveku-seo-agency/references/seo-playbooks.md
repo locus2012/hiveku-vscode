@@ -53,8 +53,9 @@ account; the client's competitor list and GSC property string in hand.
 1. `seo_list_projects` for the SEO tracking `project_id`; none means `seo_create_project({ domain,
    name, target_country, target_language })` [CONFIRM]; read back `seo_list_projects`.
 2. `seo_connections_list`: per platform, present, status, `last_error`; copy the GSC `site_url`
-   VERBATIM (sc-domain vs url-prefix differ). Missing sources: `seo_connection_create` per
-   `references/outcomes-and-measurement.md` [CONFIRM, BYOK], then `seo_sync`. The one-call health
+   VERBATIM (sc-domain vs url-prefix differ). Missing sources: a connect link for the Google sources
+   (`integration_connect_link_create`, Hiveku's own Google app) or `seo_connection_create` for Bing
+   Webmaster, per `references/outcomes-and-measurement.md` [CONFIRM], then `seo_sync`. The one-call health
    read is `seo_connections_health` (see that file).
 3. `seo_sync({ project_id, full: true })` [CONFIRM on a large account; it fans out]. Read back
    `seo_rankings_list({ domain, group_by_keyword: true, limit: 200 })`:

@@ -97,7 +97,7 @@ platform, whether a Hiveku-native app exists on this deployment (`hiveku_native`
 scopes the connect needs, the redirect URI to register and the setup guide.
 `hiveku_native: false` means BYOK is the only route: that is a connect task with a guide
 attached, not an unsupported platform. Never tell a client a platform is unavailable before
-reading it.
+reading it. Google Business Profile is the exception: an account's own Google app is Gmail only, so there `hiveku_native: false` means Hiveku's Google app is not configured on this deployment (report it to Hiveku support), never a BYOK task, and a GBP row with `byok: true` moves onto Hiveku's app (`/hiveku:connect-integration`, reconnect with `oauth_app_id: 'platform'`).
 
 ## The five syncs and their freshness contracts
 
@@ -163,7 +163,8 @@ Run in this order on a first session; `/hiveku:social-onboard` is the command fo
    `expired`). `social_account_get` on every broken row for `last_error` and scopes.
 3. Provider gaps: platforms the client wants that have no row, checked against
    `social_provider_list`; `hiveku_native: false` rows become BYOK connect tasks with the
-   guide, the others become connect tasks pointing at `/hiveku:connect-integration`.
+   guide (Google Business Profile aside: that is a report to Hiveku support, never a BYOK task),
+   the others become connect tasks pointing at `/hiveku:connect-integration`.
 4. X budget: `quota.x` from step 2 (`eligible`, `used`, `remaining`).
 5. Timezone: `timezone` from step 1 is `accounts.settings.timezone`. When it is null the
    account has no scheduling zone, `scheduled_at_local` without an explicit `timezone` is a

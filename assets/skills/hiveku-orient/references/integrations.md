@@ -43,7 +43,10 @@ Two things a session can never do, and should say plainly rather than pretending
   session in their own browser. You generate the URL; they click it.
 - **Anything in the Google Cloud Console.** Creating a project, enabling an API, editing the OAuth
   consent screen, adding a redirect URI, adding a test user, publishing the app. All of it needs
-  console access you do not have.
+  console access you do not have. And it is only ever needed for one thing: the account's own
+  internal Gmail app. Every other Google product runs on Hiveku's own Google app (Part 3, layer (a)),
+  so never send anyone into a Google Cloud project for Google Ads, Analytics, Tag Manager, Search
+  Console, Business Profile or Calendar.
 
 ---
 
@@ -145,29 +148,48 @@ Two kinds of client can front a consent. An account may bring its own `client_id
 `client_secret`, registered as an `oauth_apps` row whose `products` array says which Hiveku products
 it may drive (BYOK). And for Google Analytics, Search Console, Business Profile, Google Ads,
 Calendar and Microsoft Ads, Hiveku runs its own platform apps - the dashboard's Quick connect uses
-them, and so does `integration_connect_link_create` whenever the account has no tagged app. A
-connection made that way has `oauth_app_id: null`; that is normal, not broken, and it must be
-re-authenticated under the SAME platform app (a connect link with `target_connection_id` does
-this). Gmail and Outlook are BYOK only. `integration_connectors_list` says, per connector, which
-client would be used on this account (`client.would_use`) and what is missing when neither exists.
+them, and so does `integration_connect_link_create`. A connection made that way has
+`oauth_app_id: null`; that is normal, not broken. `integration_connectors_list` says, per connector,
+which client would be used on this account (`client.would_use`) and what is missing when neither
+exists.
 
-**A client registered for `google_search_console` and `google_ads` cannot serve `google_analytics`.**
-The product match is exact. This is the layer people miss, because from the outside "we already
-have a Google app" sounds like it should cover Google.
+**Hiveku's Google policy: the only Google app an account may own is its internal Gmail app.**
+Every other Google product (Google Ads, Analytics and the Tag Manager that rides on it, Search
+Console, Business Profile, Calendar) runs on Hiveku's own Google app and, for Google Ads, Hiveku's
+developer token - a NEW connection always, even when the account still has an old own app tagged
+for the product. So for those products:
+- never register or extend a Google app (`oauth_app_create` / `oauth_app_update` answer 400
+  `google_own_app_not_allowed`);
+- never pass an own `oauth_app_id` on a connect link or `integration_oauth_initiate` (the same 400;
+  only a reconnect naming the row's current app passes, as a plain re-auth);
+- never collect a Google Ads developer token (400 `developer_token_not_allowed`; Hiveku's is used);
+- a connection that still runs on the account's own app (`client_source: 'byok'` in
+  `integration_connectors_list`, which also marks a Google Ads row that keeps a developer token of
+  its own) is MOVED: `integration_connect_link_create({ connector, target_connection_id,
+  oauth_app_id: 'platform' })`. It keeps its id, bindings and history. Before sending that link,
+  tell the owner it moves onto Hiveku's Google app; for Google Ads, Google shows an 'unverified
+  app' screen (Advanced, then continue) and the connection's own developer token is dropped.
+
+Gmail, Outlook, Microsoft Ads, Meta, LinkedIn and TikTok keep their own apps where they have them.
+For those, **the product match is exact**: a Gmail app does not serve Outlook, and an app is used
+only for the products its `products` array lists.
 
 - **Reveals it:** `oauth_app_list` (per app: `id`, `provider`, `name`, `client_id`,
   `client_id_preview`, `products`, `created_at`). The `client_secret` is never returned by any read
   endpoint.
 - **Symptom:** `integration_connect_link_create` returns HTTP **412** `code: 'no_oauth_client'`
   with the exact prerequisite in `hint` (only when neither a tagged app nor a Hiveku platform app
-  exists). `integration_oauth_initiate` returns 412 `no_oauth_app_for_product` /
+  exists; for a Google product other than Gmail it means Hiveku's app is not configured on this
+  environment: report it to Hiveku support, never register an own Google app for it). `integration_oauth_initiate` returns 412 `no_oauth_app_for_product` /
   `integration_not_configured`; `email_connect_start` and `shopify_connect_start` return
   `code: 'no_oauth_app'`. No amount of retrying changes any of them.
-- **Fix without losing what exists:** `oauth_app_update({ oauth_app_id, add_products: [...] })`.
+- **Fix without losing what exists (Gmail, Microsoft, Meta and the other non-Google-product
+  apps):** `oauth_app_update({ oauth_app_id, add_products: [...] })`.
   `add_products` MERGES into the existing array. `products` REPLACES it, and replacing is how you
   silently break the products the app was already serving. Use `add_products` unless you mean to
   replace.
-- **Fix from nothing:** `oauth_app_create({ provider, name, client_id, client_secret, products })`,
+- **Fix from nothing (same providers; for Google, the Gmail app only):**
+  `oauth_app_create({ provider, name, client_id, client_secret, products })`,
   all five required, plus optional `notes`. The `name` must be unique per (account, provider).
   This needs credentials the user fetches from their console, and the console work itself is theirs
   (Part 4).
@@ -175,6 +197,8 @@ have a Google app" sounds like it should cover Google.
 The product slugs, exactly: `crm_email_calendar`, `google_calendar_meet`, `google_ads`,
 `google_search_console`, `google_business_profile`, `google_analytics`, `microsoft_ads`,
 `meta_ads`, `shopify_storefront`, `social_meta`, `social_linkedin`, `social_x`, `social_tiktok`.
+For provider `google` only `crm_email_calendar` (Gmail) is accepted; each other Google product is
+refused with 400 `google_own_app_not_allowed` (`refused_products`).
 
 One schema caveat worth knowing: `oauth_app_list` and `oauth_app_create` declare
 `provider` as an enum of `google | microsoft | meta`, while the route accepts
@@ -184,7 +208,9 @@ with no `provider` filter and filter the result yourself.** That works regardles
 
 `oauth_app_delete` is a HARD delete. Every `email_connections` / `ppc_connections` /
 `seo_connections` row that referenced it gets `oauth_app_id` set to null and loses its refresh
-path, so each of those connections then needs a fresh OAuth run. Prefer `oauth_app_update` for
+path. A Google app that still signs in an active Google connection other than Gmail is refused
+(409 `oauth_app_in_use`, with each connection's `move_call`): move those onto Hiveku's app first.
+Gmail inboxes on it need a reconnect on another Gmail app first. Prefer `oauth_app_update` for
 rotations.
 
 ### Layer (b): the CONNECTION row, existing and active
@@ -255,7 +281,12 @@ They fail independently, so the diagnosis is not a ladder you can short-circuit:
 
 ## 4. Connecting, by provider
 
-### Google Ads, Search Console, Business Profile, Analytics: `integration_oauth_initiate`
+### Google Ads, Search Console, Business Profile, Analytics: the connect link
+
+Connect these with `integration_connect_link_create({ connector })` (Part 5); they run on Hiveku's
+own Google app. `integration_oauth_initiate` below is the legacy lane: a new connection there also
+goes out as a connect link on Hiveku's app, and it refuses an own `oauth_app_id` and a Google Ads
+developer token the same way.
 
 `provider_slug` is required and its enum is exactly
 `google_ads | google_search_console | google_business_profile | google_analytics`.
@@ -275,7 +306,8 @@ Three paths through the same tool:
    completes the status promotes straight to `connected` with no second call.
    - `google_ads`: `customer_id` (10 digits, no dashes), `manager_id` (the MCC id, required
      whenever the client account sits under an MCC, because Google needs it as
-     login-customer-id on every call), `developer_token` (BYOK, from the MCC's API Center).
+     login-customer-id on every call). Never a `developer_token`: Hiveku's is used, and one is
+     refused (400 `developer_token_not_allowed`).
    - `google_search_console`: `site_url`, either `sc-domain:example.com` or `https://example.com/`.
    - `google_business_profile`: `gbp_account_id` (`accounts/<id>`) and `gbp_location_id`
      (`locations/<id>`).
@@ -300,9 +332,11 @@ Three paths through the same tool:
 or `google_calendar` returns 400 `code: 'wrong_tool_for_provider'`, because this route writes to
 `account_integrations` and the CRM inbox, calendar and triage tools read `email_connections`.
 
-**OAuth app resolution:** explicit `oauth_app_id` if you pass one (validated for account ownership
-AND product match), otherwise the first per-account `oauth_apps` row matching
-(provider `google`, product for that slug). Neither resolving is the 412 in layer (a).
+**OAuth app resolution:** Hiveku's own Google app for a new connection (the answer is a connect
+link with `link_id`), and the connection's own client on a re-auth. `oauth_app_id: 'platform'` on a
+re-auth is the move onto Hiveku's app; an own app id answers 400 `google_own_app_not_allowed`
+unless it is the one the connection already uses. A 412 means Hiveku's app is not configured on
+this environment: report it.
 
 **Poll with `integration_oauth_check({ setup_token })`.** Statuses: `pending`, `completed`,
 `failed` (read `error`), `expired` (15 minutes, call initiate again). Recommended interval 5
@@ -337,11 +371,9 @@ google_business_profile`. **`google_analytics` is not accepted here.**
 - **Bing Webmaster is the easy one and needs no OAuth at all:**
   `seo_connection_create({ platform: 'bing_webmaster', site_url, api_key })`. The key comes from
   bing.com/webmasters, Settings, API access.
-- **GSC as BYOK:** `client_id`, `client_secret`, `refresh_token`, `site_url`. The refresh token
-  must carry `https://www.googleapis.com/auth/webmasters`, the FULL scope. The `.readonly` variant
-  makes sitemap submit and delete 403.
-- **GBP as BYOK:** `client_id`, `client_secret`, `refresh_token`, then bind
-  `gbp_account_id` + `gbp_location_id` with `seo_connection_update`.
+- **GSC and GBP are refused here** (400 `google_own_app_not_allowed`, before any lookup): they
+  connect on Hiveku's own Google app with the connect link. Never collect a client id, client
+  secret or refresh token for them.
 - Idempotent on (account, platform, site_url): re-running returns the existing row with
   `existed: true` rather than a P2002.
 - Rows land `connection_status: 'pending'`. Verify with `seo_sync`, since there is no
@@ -362,7 +394,9 @@ dashboard URL. It is idempotent on provider and returns `existed: true`.
 `platform` enum: `google_ads | meta_ads | microsoft_ads | tiktok_ads | linkedin_ads |
 chatgpt_ads | vibe_ctv | amazon_ads`. Required credentials differ per platform:
 
-- `google_ads`: `developer_token` + `client_id` + `client_secret` + `refresh_token` + `customer_id`
+- `google_ads`: refused (400 `google_own_app_not_allowed`). It connects on Hiveku's own Google app
+  and Hiveku's developer token with the connect link; never collect a developer token, client id or
+  secret for it.
 - `microsoft_ads`: `client_id` + `client_secret` + `refresh_token` + `customer_id`, plus
   `manager_id` (the PARENT Bing customer id) for campaign calls
 - `meta_ads` / `tiktok_ads` / `linkedin_ads`: `access_token` + `ad_account_id`
@@ -371,8 +405,7 @@ Idempotent on (account, platform, customer_id), returning `existed: true`. A 400
 per-platform setup guide worth surfacing verbatim. After creating: `ppc_connection_test`, then
 `ppc_sync`.
 
-For Google Ads, prefer `integration_oauth_initiate` over BYOK whenever the user can click a
-consent screen. BYOK means they have to mint a refresh token themselves.
+For Google Ads there is no BYOK route: the connect link is the only way in.
 
 **Do not bind an MCC as `customer_id`.** Campaigns never live on a manager account.
 `ppc_ads_discover_customers({ id })` with no `manager_customer_id` lists what the OAuth user can
@@ -421,8 +454,9 @@ likewise connect at `/<accountId>/dashboard/marketing/ppc`.
 Microsoft Ads, and the social / commerce providers as they are ported), it returns
 `https://app.hiveku.com/connect/oauth/<token>` valid for hours (default 24) rather than a raw
 provider URL that dies in 5 minutes, it resolves the account + connector + OAuth client
-server-side when the human presses Continue (the account's own app if tagged, else Hiveku's
-platform app - so a missing `oauth_apps` row is no longer a dead end), and it has one status tool.
+server-side when the human presses Continue (Hiveku's own Google app for every Google product but
+Gmail; elsewhere the account's own app if tagged, else Hiveku's platform app - so a missing
+`oauth_apps` row is no longer a dead end), and it has one status tool.
 `integration_connectors_list` first tells you which connectors are `ready` on the account and the
 ids of the existing connections a reconnect targets.
 
@@ -432,7 +466,10 @@ click. Five things, every time (the `handoff` block in the create response carri
 1. **The URL itself**, on its own line, unmangled, at the END of the message.
 2. **What they will see.** A Hiveku page explaining the connection with a Continue button, then
    "Google's account chooser and consent screen", "your Shopify admin asking to approve the app",
-   "Microsoft's sign-in". Users abandon links whose destination they cannot predict.
+   "Microsoft's sign-in". Users abandon links whose destination they cannot predict. For Google
+   Ads, Google first shows an 'unverified app' screen (Advanced, then continue); if it says
+   'Access blocked' instead, their Google Workspace admin blocks unverified apps, and nothing
+   changes until the admin allows Hiveku's app.
 3. **What to click, and any choice they have to make.** Which account to pick on the chooser
    (`handoff.pick_hint`); why an alarming-sounding permission is needed (`handoff.permissions`).
 4. **The TTL, stated plainly.** The link is valid until `expires_at`; the provider's own consent
@@ -467,9 +504,9 @@ integration_connect_link_create({ connector, target_connection_id?, source: 'plu
 Do not poll in a tight loop while the user is mid-consent, and do not poll silently. Ask them to
 say when they are through, and poll then.
 
-**The legacy lanes still exist.** `integration_oauth_initiate` (four Google products, needs the
-account's own app or answers with `connect_link: true` and a `link_id` when Hiveku's app fronts
-the consent), `email_connect_start` (raw Google/Microsoft URL, 5 minutes, no status tool - poll
+**The legacy lanes still exist.** `integration_oauth_initiate` (four Google products; a new
+connection answers with `connect_link: true` and a `link_id`, because Hiveku's app fronts it; only
+a re-auth of a legacy own-app row still takes the setup-token lane), `email_connect_start` (raw Google/Microsoft URL, 5 minutes, no status tool - poll
 `crm_list_email_connections`) and `shopify_connect_start` (poll `shopify_connection_status`).
 Use them only when a caller already drives those loops.
 
@@ -489,16 +526,16 @@ Manager both. There is no separate GTM connection, no GTM credential, and no GTM
 
 Three independent things must all be true. Each failure looks different.
 
-### (a) The OAuth CLIENT must be registered for the `google_analytics` product
+### (a) The connection must run on Hiveku's own Google app
 
-A shared Google client registered for `google_search_console` and `google_ads` **cannot serve
-Google Analytics.** Check with `oauth_app_list` and read the `products` array. Extend with
-`oauth_app_update({ oauth_app_id, add_products: ['google_analytics'] })`, which merges. Do not
-pass `products`, which replaces and would drop GSC and Ads.
-
-Beyond registering the product in Hiveku, the customer's Google Cloud project must have the **Tag
-Manager API enabled** and the tagmanager scopes declared on its **OAuth consent screen**. Both are
-Google Cloud Console work. Neither can be done from a session. Say so and name the steps.
+Analytics, and the Tag Manager that rides on it, runs on Hiveku's own Google app: the Tag Manager
+API and the tagmanager scopes are Hiveku's to configure, not the customer's. Never extend an own
+Google app with `google_analytics` (`oauth_app_update` refuses it with 400
+`google_own_app_not_allowed`) and never send anyone into their own Cloud project for it. A
+`google_analytics` row that still runs on the account's own app (`client_source: 'byok'` in
+`integration_connectors_list`) moves with `integration_connect_link_create({ connector:
+'google_analytics', target_connection_id, oauth_app_id: 'platform' })`; tell the owner first that
+it moves onto Hiveku's Google app and keeps its settings and history.
 
 ### (b) A `google_analytics` connection row must exist and be active
 
@@ -523,11 +560,12 @@ valid consent flow. But on this specific slug it writes only to `account_integra
 - `seo_connection_update` has no `ga_property_id` parameter, so even the property cannot be bound
   from MCP.
 
-So there is **no MCP path that creates a `google_analytics` row in `seo_connections`.** That row
-is written by the dashboard connect card on the SEO connections page. When the account has no
-analytics connection, the honest handoff is: send the user to
-`/<accountId>/dashboard/marketing/seo`, have them use the Google Analytics connect card, and pick
-the GA4 property when the selector appears. Then re-read `seo_connections_list` and carry on.
+So the setup-token lane never creates a `google_analytics` row in `seo_connections`. The connect
+link does: `integration_connect_link_create({ connector: 'google_analytics' })` runs on Hiveku's own
+Google app and writes that row (the dashboard connect card at `/<accountId>/dashboard/marketing/seo`
+does the same). When the account has no analytics connection, hand over that link, have them pick
+the GA4 property when the status reports `needs_binding`, then re-read `seo_connections_list` and
+carry on.
 
 If a row exists but every one is `is_active: false`, that is the second branch of the 404 message
 and the fix is a reconnect, not a create.
@@ -576,9 +614,9 @@ GTM can work on a connection where `seo_ga4_admin_scopes` still 400s.
 ```
 1. seo_connections_list                  -> is there a platform 'google_analytics' row, is it active?
      none / all inactive                 -> layer (b). Dashboard handoff (see above), or reconnect.
-2. oauth_app_list                        -> does a google app list 'google_analytics' in products?
-     no                                  -> layer (a). oauth_app_update add_products, plus the
-                                            Google Cloud Console work the user must do.
+2. integration_connectors_list          -> is that google_analytics row's client_source 'byok'?
+     yes                                 -> layer (a). Move it: a connect link with
+                                            oauth_app_id 'platform' (never an own-app fix).
 3. seo_ga4_admin_scopes({ connection_id }) -> do granted_scopes hold all four tagmanager scopes?
      no (or 400: no property picked)     -> layer (c). Reconnect Google Analytics.
 4. seo_gtm_status({ connection_id })     -> containers, or the workspace/draft-vs-live split.
@@ -591,14 +629,14 @@ GTM can work on a connection where `seo_ga4_admin_scopes` still 400s.
 
 | Symptom or error | Layer | Confirm with | Hand the user |
 |---|---|---|---|
-| 412 `integration_not_configured` from `integration_oauth_initiate` | (a) | `oauth_app_list`, read `products` | Either you run `oauth_app_update({ add_products })`, or they register a client at `/<accountId>/dashboard/settings/oauth-apps` |
+| 412 `integration_not_configured` / `no_oauth_app_for_product` from `integration_oauth_initiate` | (a) | `integration_connectors_list` | For these four Google products it means Hiveku's own Google app is not configured on this environment: report it to Hiveku support. Never register or extend an own Google app for them (refused, `google_own_app_not_allowed`) |
 | `code: 'no_oauth_app'` from `email_connect_start` or `shopify_connect_start` | (a) | `oauth_app_list` | The account OWNER registers a client (`crm_email_calendar`, or `shopify_storefront`) at the oauth-apps page. Do not retry the connect call |
 | A department tool says no connection is configured, but `integration_test` refreshes cleanly | (b), mirror gap | `integration_list` vs `seo_connections_list` / `ppc_connection_list` | Re-read the department list once, which runs the backfill. If the slug is `google_analytics`, the backfill does not cover it: dashboard handoff |
 | `seo_gtm_status` returns 404 | (b) | `seo_connections_list` for platform `google_analytics` | Connect Google Analytics at `/<accountId>/dashboard/marketing/seo`, then pick the GA4 property |
 | `connection_status: 'pending'` and a tool returns nothing | (b), unbound | `seo_connections_list` / `ppc_connection_list` for the null binding field | Nothing. This is yours: run the discover tool, then `seo_connection_update` / `ppc_connection_update` |
 | Row absent from the department list, present in `connections_status` with `is_active: false` | (b), soft-deleted | `connections_status` | Nothing yet. Reactivate rather than recreate, so the bindings survive |
 | `connection_status: 'error'` while `is_active: true` | (b) | `seo_connections_list` / `ppc_connection_list` / `email_connections_list` for `last_error` | Depends on `last_error`. An OAuth error means re-auth with `target_connection_id` |
-| `integration_test` says the account has been deleted, or a sync starts failing with OAuth errors | (b), dead refresh token | `integration_test`, `ppc_connection_test` | Re-auth: `integration_oauth_initiate({ provider_slug, target_connection_id })`, which preserves the bindings |
+| `integration_test` says the account has been deleted, or a sync starts failing with OAuth errors | (b), dead refresh token | `integration_test`, `ppc_connection_test` | Re-auth: `integration_connect_link_create({ connector, target_connection_id })`, which preserves the bindings (add `oauth_app_id: 'platform'` for a Google row on the account's own app: the move) |
 | HTTP 403, "insufficient authentication scopes" | (c) | `seo_ga4_admin_scopes` for GA/GTM; nothing for GSC/GBP/PPC | A reconnect link for that provider. Say which capability the missing scope unlocks |
 | GTM 403 naming `tagmanager.edit.containerversions` and `tagmanager.publish` | (c) | The error text itself | Reconnect Google Analytics. The token predates 2026-08-23, when those scopes were added |
 | GTM 403 naming two container ids | Neither. Container pin | `seo_gtm_status` | Nothing. Use the pinned container, or clear the pin deliberately with `seo_connection_update({ gtm_container_path: null })` |
@@ -620,19 +658,22 @@ GTM can work on a connection where `seo_ga4_admin_scopes` still 400s.
   disabled row, and "deactivated" and "never existed" have different fixes.
 - **Reading `is_active` as health.** It is the enabled flag. `connection_status` and `last_error`
   carry health, and a row can be active and erroring at once.
-- **Treating "we have a Google app" as sufficient.** The `products` array is an exact match per
-  product. A GSC-and-Ads client cannot serve Analytics.
+- **Fixing a Google product other than Gmail through an own Google app.** It is refused
+  (`google_own_app_not_allowed`): those products run on Hiveku's own Google app, and a connection
+  still on an own app moves (`oauth_app_id: 'platform'`). Own apps are for Gmail, Outlook,
+  Microsoft, Meta, LinkedIn and TikTok, where the `products` array is an exact match per product.
 - **Passing `products` to `oauth_app_update` when you meant `add_products`.** `products` replaces
   the array and silently strips the products the app was already serving.
 - **Deleting an OAuth app to fix a credential.** `oauth_app_delete` is a hard delete that nulls
-  `oauth_app_id` on every connection referencing it, and each of those then needs a fresh OAuth
-  run. Rotate with `oauth_app_update`.
+  `oauth_app_id` on every connection referencing it, and each of those then stops refreshing (a
+  Google app still signing in a Google connection other than Gmail is refused with 409
+  `oauth_app_in_use` until those move). Rotate with `oauth_app_update`.
 - **Using `integration_oauth_initiate` for Gmail or Calendar.** 400
   `wrong_tool_for_provider`. Use `email_connect_start`, which writes the table the CRM reads.
 - **Reaching for `integration_oauth_initiate` when a human has to click.** Mint a connect link
-  instead (`integration_connect_link_create`). The initiate lane still hands out Google's raw URL,
-  covers four products, and 412s when the account has no tagged app unless Hiveku's platform app
-  can take over (then it answers with `connect_link: true` - poll by `link_id`). Its
+  instead (`integration_connect_link_create`). The initiate lane covers four products; a new
+  connection there answers with `connect_link: true` (poll by `link_id`), and only a re-auth of a
+  legacy own-app row still gets Google's raw URL. Its
   `google_analytics` consent now does refresh the `seo_connections` row the GA4/GTM tools read (it
   used to write `account_integrations` only).
 - **Passing the `integration_id` from `integration_oauth_check` to a department tool.** That is an
