@@ -20,7 +20,7 @@ invented `creative` domain is one no agent ever reads back.
 
 There is ONE `branding` memory document and `memory_update` REPLACES its content, so every write is
 read-merge-write: `memory_list({ domain: 'branding' })`, take the `content` of the row it returns, merge
-your additions in, then `memory_update({ memory_id, content })` with the whole merged body. A bare note
+your additions in, then `memory_update({ memory_id, content, reason, expected_version })` with the whole merged body (the two rules below). A bare note
 sent as the new content wipes the account's creative history - approved voices, spend ledger, storyboard
 ledger, all of it. `memory_create({ type: 'memory', name: 'branding', content })` is correct exactly
 ONCE per account, on the first run; a 409 means the document already exists and you were about to orphan

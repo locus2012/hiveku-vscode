@@ -52,11 +52,13 @@ ladder: `hiveku-orient/references/foundation-first.md`.
    rail for drafts, plans, and analysis, then make the writes yourself with the direct `crm_*`
    tools, exactly as the other departments work. Account gates carry through: 403
    `sales_agent_disabled` means the sales agent is switched off for the account (an account owner
-   or admin switches it on from the Sales agent's memory page: CRM, then the Agent menu) - do not
-   route around it through another domain; 402 `session_cost_cap_reached` is the per-session cost
-   cap (raised under Settings on that same memory page). The `talk_to_department` enum is 15
-   domains (seo, social, content, marketing, branding, outbound, ppc, analytics, customer_avatar,
-   customer_journey, before_after_grid, website_design, knowledge_base, workflow, sales);
+   or admin switches it on from the Memory page: Sales, then Switch on, at
+   `/dashboard/memory?agent=sales`, which CRM's Agent menu also opens) - do not route around it
+   through another domain; 402 `session_cost_cap_reached` is the per-chat spend limit (raised as
+   "Most you spend per chat" under CRM > Settings > Sales agent,
+   `/dashboard/crm/settings/sales-agent`). The `talk_to_department` enum is 16 domains (seo,
+   social, content, marketing, branding, outbound, ppc, analytics, customer_avatar,
+   customer_journey, before_after_grid, website_design, knowledge_base, workflow, sales, email);
    `list_departments` returns `sales` and shows which departments
    this account actually has enabled. `account_context_get({ domain: "sales" })` (every profile)
    and `agent_identity_get` (full-profile-only; see 0b) remain the no-streaming way to load the

@@ -371,8 +371,10 @@ judging an ad-group change on account-level metrics.
 ## 7. Persisting and reporting
 
 **Memory.** After any structural session, `memory_list({ domain: "ppc" })` to find the existing PPC memory,
-then `memory_update({ memory_id, content })` with its returned `content` plus your addition, because that
-call REPLACES the document (or `memory_create({ type: "memory", name: "ppc", content })` if none exists). In 10 to
+then (after `memory_log_list({ memory_id, since })` for any change since you read it)
+`memory_update({ memory_id, content, reason, expected_version })` with its returned `content` plus your addition and a one-line
+`reason`, because that call REPLACES the document (or `memory_create({ type: "memory", name: "ppc", content })`
+if none exists). In 10 to
 20 lines: connection inventory (UUID, platform, customer_id, manager_id, currency, timezone); the naming
 convention with an example; protected campaigns by name and id and why; approval thresholds and who
 approves; target CPA/ROAS per segment; structural decisions with rationale and a revisit date, because a

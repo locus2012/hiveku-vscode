@@ -595,8 +595,10 @@ loop `ppc_sync` hoping for a different outcome.
 
 **Memory** is what the next session inherits, and here it is unusually load-bearing because the facts are
 invisible in the data itself. After any material finding, `memory_create({ type: "memory", name:
-"ppc", content })` on the first run, then `memory_update({ memory_id, content })` after (only
-`memory_id` and `content`, and it REPLACES the document, so resend the merged body). Hold: which
+"ppc", content })` on the first run, then `memory_update({ memory_id, content, reason, expected_version })` after
+(`reason` and `expected_version` are optional and asked for; it REPLACES the document, so check
+`memory_log_list({ memory_id, since })` for any change since you read it and resend the merged body).
+Hold: which
 conversion actions are trusted and which are primary; counting and
 window settings plus the date of any change; reconciliation baseline gaps with the date measured; deal
 value, close rate and derived lead value with the derivation; the offline import conversion action id, last

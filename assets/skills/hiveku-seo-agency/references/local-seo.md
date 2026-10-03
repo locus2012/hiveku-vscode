@@ -507,7 +507,8 @@ same category of visibility lever as attributes (Play L3), and just as commonly 
 ## 7. Persistence and reporting
 
 **Memory** (`memory_create` on the first run, then `memory_list({ domain: "seo" })` and
-`memory_update({ memory_id, content })` with the merged body, because `memory_update` REPLACES the
+`memory_update({ memory_id, content, reason, expected_version })` with the merged body (after
+`memory_log_list({ memory_id, since })` for any change since you read it), because `memory_update` REPLACES the
 document): durable facts and decisions only. Per location: connection
 id and branch, canonical NAP exactly as published, categories, service area or storefront choice, agreed
 review voice and escalation contact, the approval rule for listing edits, and each month's Listing Score

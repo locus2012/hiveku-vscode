@@ -227,8 +227,10 @@ chart new and lost referring domains by week or month: DataForSEO's new/lost, wh
    and target pages. Outbound owns loading, sequencing and sending. **Do not send from here.**
 
 **Closes the loop:** `pm_tasks_create` for the campaign with segment counts and target link count;
-`memory_create` the angle and segments, or, if the note already exists, `memory_update({ memory_id,
-content })` with the existing link-strategy note plus your addition, since that call REPLACES it.
+`memory_create` the angle and segments, or, if the note already exists (after
+`memory_log_list({ memory_id, since })` for any change since you read it),
+`memory_update({ memory_id, content, reason, expected_version })` with the existing link-strategy note
+plus your addition, since that call REPLACES it.
 
 **Confirm before handoff:** segment counts, five sample prospects with why each qualifies, and the
 angle copy. Get a yes. Outreach is client-facing sending: never silent, never bulk-applied.
@@ -408,7 +410,8 @@ plumbing, not strategy.
 ## 6. Persistence and reporting
 
 **Memory (decisions, not data).** `memory_list({ domain: "seo" })` first to avoid duplicates, then
-`memory_create` only when nothing came back. To amend, send `memory_update({ memory_id, content })`
+`memory_create` only when nothing came back. To amend, check `memory_log_list({ memory_id, since })`
+for any change since you read it, then send `memory_update({ memory_id, content, reason, expected_version })`
 the whole document with your edit folded in: it REPLACES the entry, so a bare amendment erases every
 prior decision. In memory: the agreed competitor set and why; the
 authority baseline with its date; the link strategy (lanes, assets, anchors we will and will not

@@ -436,7 +436,8 @@ guessed arguments against a live account are how silent wrong-data failures star
 **Memory**, so the next session does not re-derive: `memory_create` after the first universe build
 (seeds by category, location and language codes, universe and qualified sizes, run date, rejected terms
 with reasons); after cluster commitment (head keyword, page type, adjusted score, ordering); and after
-any forecast shown to a client (inputs, factors, band, date). `memory_update({ memory_id, content })` at
+any forecast shown to a client (inputs, factors, band, date). `memory_update({ memory_id, content, reason, expected_version })`
+(after `memory_log_list({ memory_id, since })` for any change since you read it) at
 quarterly re-qualification, `memory_list({ domain: "seo" })` first to find the canonical record and to get
 the body you must resend: `memory_update` REPLACES the document, it does not append.
 

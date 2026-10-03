@@ -396,7 +396,8 @@ and retry tomorrow. Never retry in a loop, never report a refusal as a zero scor
 `location_code`, full `summary`); the brand profile as written, especially the exact `category`
 string and the date set; the brand-audit baseline (overallAvg, per-provider overalls, provider
 count); the Knowledge Graph `kg_id` and `resultScore`; the Play D citation incumbents; and every
-client decision on crawler access and licensing. `memory_update({ memory_id, content })` monthly numbers
+client decision on crawler access and licensing. `memory_update({ memory_id, content, reason, expected_version })` (after
+`memory_log_list({ memory_id, since })` for any change since you read it) monthly numbers
 so the record stays one entry, and `memory_list({ domain: "seo" })` first so you do not re-litigate a
 settled category and so you have the body to resend: `memory_update` REPLACES the document, so sending
 this month's numbers alone erases every earlier baseline.

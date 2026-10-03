@@ -90,8 +90,10 @@ target query serves. Check, criteria and ladder: `hiveku-orient/references/found
 - **Hiveku is the source of truth.** Durable findings go to the `seo` memory document; work items to
   `pm_tasks_create` / `pm_tasks_complete`; client-facing artifacts to `seo_deliverable_save`.
 - **Memory is read-merge-write.** ONE document per domain and `memory_update` REPLACES it:
-  `memory_list({ domain: 'seo' })`, append to the `content` it returns, then
-  `memory_update({ memory_id, content })` with the whole merged body; sending only the new note
+  `memory_list({ domain: 'seo' })`, append to the `content` it returns, check
+  `memory_log_list({ memory_id, since })` for any change since you read it and merge it, then
+  `memory_update({ memory_id, content, reason, expected_version })` with the whole merged body and a
+  one-line `reason`; sending only the new note
   destroys every prior entry. `memory_create({ type: 'memory', name: 'seo', content })` only on the
   first run (409 = one exists); `memory_list_versions` then `memory_restore_version` recovers a
   clobbered document. One catch on the read: `memory_list({ domain: 'seo' })` returns ACCOUNT-level

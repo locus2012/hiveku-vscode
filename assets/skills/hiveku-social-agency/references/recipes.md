@@ -13,7 +13,8 @@ references/repurpose.md and references/creative-handoff.md.
 - A `_command:<slug>` row in `account_ai_memory`, written with `memory_create({ type:
   'command', name: '<slug>', content })` (a 409 means it exists: `memory_list({ type:
   'command' })`, read it, compare it to this file, report the difference; replacing it is
-  its own STOP with `memory_update({ memory_id, content })`). The reseed does not write
+  its own STOP with `memory_update({ memory_id, content, reason, expected_version })`, after
+  `memory_log_list({ memory_id, since })` for any change since you read it). The reseed does not write
   recipes; the skill and the two rules are seeded, the recipes are written per account.
 - The department agent's hydration copies every `_command:` row into `commands/<slug>.md`
   in its workspace and lists it in the agent's CLAUDE.md, so the row is read by the social
@@ -26,7 +27,7 @@ references/repurpose.md and references/creative-handoff.md.
   (MCP: `social_create_post` / `social_update_post` / `social_list_posts`),
   `pm_task_create` / `pm_task_comment` / `pm_task_complete` (MCP: `pm_tasks_*`),
   `memory_list(entry_type, domain)` / `memory_create(entry_type, name, content)` /
-  `memory_update(domain, content)` (MCP: `memory_update({ memory_id, content })`),
+  `memory_update(domain, content)` (MCP: `memory_update({ memory_id, content, reason, expected_version })`),
   `media_library_list(limit, offset)` / `media_library_get(asset_id)` (the library is
   also mirrored as `data/media_library.json`), `design_to_post(design_id, content, platforms)`,
   `knowledge_search_query(query)` (MCP: `kb_search`), `content_list` / `content_get`,

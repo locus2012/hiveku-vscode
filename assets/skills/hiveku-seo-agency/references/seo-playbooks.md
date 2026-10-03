@@ -271,7 +271,8 @@ consolidate memory, without deleting history anyone reports on.
 7. `seo_ga4_conversion_audit({ connection_id, days: 90 })`; a key event silent for a quarter is a
    task; `seo_ga4_key_event_delete` never runs from a sweep.
 8. Memory consolidation: `memory_list({ domain: 'seo' })`, rewrite into one current state,
-   `memory_update({ memory_id, content })` with the WHOLE merged body [CONFIRM, it replaces];
+   `memory_log_list({ memory_id, since })` for any change since you read it, then
+   `memory_update({ memory_id, content, reason, expected_version })` with the WHOLE merged body [CONFIRM, it replaces];
    `memory_list_versions({ memory_id })` is the safety net.
 
 **Tell the client:** what was pruned and why, what the universe gained, next quarter's competitor

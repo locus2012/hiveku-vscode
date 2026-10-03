@@ -391,7 +391,8 @@ set, not an error. Still stuck: `hiveku_docs_search` then `hiveku_docs_get`.
 
 **Memory.** `memory_create` for: the GSC property string and its type, the Bing property, baseline
 totals, every cliff date with its cause and evidence chain, the brand-term regex, seasonal peak months,
-and the tracker's location and device convention. `memory_update({ memory_id, content })` when a fact
+and the tracker's location and device convention. `memory_update({ memory_id, content, reason, expected_version })`
+(after `memory_log_list({ memory_id, since })` for any change since you read it) when a fact
 changes rather than creating a second contradicting memory, and `memory_list({ domain: "seo" })` every
 session so you inherit these. `memory_update` REPLACES the document, so the body you send is the one
 `memory_list` returned with the fact edited in, never the edit on its own.
