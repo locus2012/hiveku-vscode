@@ -14,7 +14,12 @@
  *      and chooses Compare and merge, Save anyway, or Cancel;
  *   3. once the server checks expected_version (builder E2b), a change that
  *      lands between that read and the save is a 409 version_conflict carrying
- *      the newer text, and gets the same dialog.
+ *      the newer text, and gets the same dialog;
+ *   4. a tab with no record of its read (VS Code restored it with unsaved
+ *      text, for example after a restart, without reading it again) is a
+ *      local copy of unknown age. Memory is the source of truth (2026-10-03),
+ *      so its save stops the same way and shows the text on Hiveku now: it
+ *      used to save straight over whatever changed while VS Code was closed.
  */
 import { oneLine, shortWhen, appName, actionName, versionOf, type MemoryLogLine } from './memoryLog';
 
@@ -32,16 +37,20 @@ export interface CurrentMemory {
 
 export type SaveDecision =
   | { kind: 'save'; expectedVersion?: number }
-  | { kind: 'stale'; openedVersion?: number; current: CurrentMemory };
+  | { kind: 'stale'; openedVersion?: number; current: CurrentMemory; unknownOpen?: boolean };
 
 /**
  * Save straight away, or stop because the entry moved since it was opened.
- * With no record of the open (the extension restarted with the tab still
- * open), there is nothing to compare: save, guarding only the race from here.
+ * With no record of the open (VS Code restored the tab without reading it
+ * again), nothing says which version the text came from: stop and show the
+ * text on Hiveku now (`unknownOpen`), since memory wins over a local copy.
+ * A read that carried no version has nothing to compare: save, guarding only
+ * the race from here.
  */
 export function decideSave(opened: OpenedMemory | undefined, current: CurrentMemory): SaveDecision {
   const now = versionOf(current.version);
-  if (!opened || opened.version === undefined) return { kind: 'save', expectedVersion: now };
+  if (!opened) return { kind: 'stale', current: { version: now, content: current.content }, unknownOpen: true };
+  if (opened.version === undefined) return { kind: 'save', expectedVersion: now };
   if (now === undefined || now === opened.version) return { kind: 'save', expectedVersion: opened.version };
   return { kind: 'stale', openedVersion: opened.version, current: { version: now, content: current.content } };
 }
@@ -83,9 +92,24 @@ export function staleMessage(
   name: string,
   change: StaleChange | undefined,
   versions: { opened?: number; current?: number },
-  origin: 'check' | 'conflict' = 'check',
+  origin: 'check' | 'conflict' | 'unknown' = 'check',
 ): string {
   const entry = `"${oneLine(name, 60) || 'This memory entry'}"`;
+  if (origin === 'unknown') {
+    // No record of the read: say what is known about Hiveku's text, not a change "since you opened it".
+    let last = '';
+    if (change) {
+      last = ` Its text on Hiveku was last ${change.action} by ${change.who}${change.app ? ` (${change.app})` : ''}${change.when ? ` at ${change.when}` : ''}.`;
+    } else if (versions.current !== undefined) {
+      last = ` Hiveku has version ${versions.current}.`;
+    }
+    return (
+      `${entry} was restored in this tab without a fresh read from Hiveku (for example after VS Code restarted), ` +
+      `so VS Code cannot tell whether it changed on Hiveku since, and nothing was saved yet.${last} ` +
+      'Compare and merge shows the text on Hiveku now beside yours; Save anyway replaces it with your text ' +
+      '(it stays in version history).'
+    );
+  }
   const head =
     origin === 'conflict'
       ? `${entry} was changed on Hiveku while you were saving, so your save was not applied.`
@@ -111,3 +135,7 @@ export const SAVE_ANYWAY_ACTION = 'Save anyway';
 export const COMPARE_NOTE =
   'Not saved yet: the newer text from Hiveku is on the left, your edit on the right. Copy what you want to keep into your edit, then save again.';
 export const CANCELLED_NOTE = 'Not saved: this memory entry changed on Hiveku since you opened it. Your edit is still in the tab.';
+
+/** Shown when a restored tab's first save is cancelled: nothing says the entry changed, only that VS Code cannot tell. */
+export const CANCELLED_UNKNOWN_NOTE =
+  'Not saved: VS Code cannot tell whether this memory entry changed on Hiveku since this tab was restored. Your edit is still in the tab.';

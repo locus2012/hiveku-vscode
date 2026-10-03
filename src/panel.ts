@@ -15,6 +15,9 @@ import * as vscode from 'vscode';
 import { HivekuMcpClient } from './mcpClient';
 import { openDepartmentChat } from './chat';
 import type { AccountRecord } from './accounts';
+import { accountMemoryDashboardUrl } from './accountMemory';
+import { memoryWriteRefused } from './memoryLog';
+import { showMemoryWriteRefusal } from './platformFs';
 
 type Row = Record<string, unknown>;
 
@@ -517,6 +520,14 @@ export function openModulePanel(
         }
       }
     } catch (err) {
+      // A memory write Hiveku refused for this key (403 memory_write_refused, e.g. the
+      // Memory section's Delete): its own sentence and the Memory page link, never the
+      // raw tool error.
+      const refusal = memoryWriteRefused(err);
+      if (refusal) {
+        showMemoryWriteRefusal(refusal, accountMemoryDashboardUrl(appUrl(), account.accountId));
+        return;
+      }
       vscode.window.showErrorMessage(`Hiveku: ${err instanceof Error ? err.message : String(err)}`);
     }
   });

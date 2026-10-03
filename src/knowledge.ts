@@ -18,7 +18,7 @@ import { roleById } from './roles';
 import { writeDataRunner } from './dataRunner';
 import { writeAgencySkills } from './agencySkills';
 import { isAccountMemoryDomain, ACCOUNT_MEMORY_READONLY_GLOB } from './accountMemory';
-import { MEMORY_EDIT_RULES_PROSE } from './memoryLog';
+import { LOCAL_MIRROR_PROSE, MEMORY_EDIT_RULES_PROSE, MEMORY_WRITE_REFUSED_PROSE, SOURCE_OF_TRUTH_PROSE } from './memoryLog';
 import { ownerOf, type OwnerInput } from './memoryOwner';
 
 /** memory `type` → local folder (matches hiveku-sync TYPE_TO_FOLDER). */
@@ -1311,6 +1311,7 @@ today's note deletes everything the department had. So always read, merge, then 
    ${MEMORY_EDIT_RULES_PROSE}
    Only when step 2 found no entry, \`memory_create({ type: "memory", name: "<department>", content, reason })\`;
    a 409 there means someone created it meanwhile, so go back to step 2, read and merge. Never overwrite.
+   ${MEMORY_WRITE_REFUSED_PROSE}
 The account memory (\`hiveku-data/account/ACCOUNT_MEMORY.md\`) is read-only: it is About your business on the
 Memory page (\`https://app.hiveku.com/<account-id>/dashboard/memory\`), where owners and admins change it. To
 propose one line for it, use \`account_memory_append\`.
@@ -1868,6 +1869,7 @@ Manager), NOT in the code, and is injected into the deployed Lambdas + Fly previ
 
 
 ### Keep Hiveku in sync — it is the source of truth (memory + PM)
+${SOURCE_OF_TRUTH_PROSE} ${LOCAL_MIRROR_PROSE}
 Hiveku, NOT your local files, is the system of record. After meaningful work, write back so every
 department and the dashboard agents stay current — don't let what you learned or did live only on disk.
 - **Department memory:** capture what you learned / did / decided into the RIGHT department's memory.
@@ -1880,7 +1882,7 @@ department and the dashboard agents stay current — don't let what you learned 
   department such as \`seo\`, \`marketing\`, \`sales\` or \`coder\` (code and site work); \`dev\` is saved
   but never reaches any agent. The account memory is read-only: suggest a line with
   \`account_memory_append\`. The local \`memory/<dept>/*.md\` files are a MIRROR — persisting to Hiveku is
-  what keeps all departments up to speed. \`/hiveku-remember\` wraps this.
+  what keeps all departments up to speed. \`/hiveku-remember\` wraps this. ${MEMORY_WRITE_REFUSED_PROSE}
 ### Work tracking — PM tasks are REQUIRED, and attributed to YOU (the authenticated user)
 **If the work isn't documented in a PM task, it didn't happen.** This applies to EVERY department
 (SEO, PPC, content, CRM, email, social, helpdesk, dev, bookkeeping, voice — everything), not just code.
@@ -2328,9 +2330,9 @@ these local files.
 \`\`\`
 
 ## How to work here
-- **Local files = context.** \`memory/\`, \`skills/\`, \`rules/\` (and \`commands/\`,
-  \`agents/\`, \`identity/\`) are downloaded department knowledge. Read them FIRST —
-  they are the authoritative copy as of the last download.
+- **Hiveku Memory is the source of truth.** ${SOURCE_OF_TRUTH_PROSE}
+- **Local files = quick context, not the record.** \`memory/\`, \`skills/\`, \`rules/\` (and \`commands/\`,
+  \`agents/\`, \`identity/\`) are downloaded department knowledge. ${LOCAL_MIRROR_PROSE}
 - **Local-first data loop.** Operational data (contacts, campaigns, rankings,
   tickets, ...) lives in \`hiveku-data/<dept>/*.json\` — pull/refresh it YOURSELF with
   \`node .hiveku/pull-data.mjs <dept ...>\` (or \`--stale 12\`, \`--list\`; see
@@ -2351,6 +2353,7 @@ these local files.
   button in the Hiveku sidebar.
 - **Hiveku itself in your way?** A Hiveku tool still failing after one sensible retry → \`hiveku_report_issue\`;
   a capability no tool offers (search \`hiveku_docs_search\` first) → \`hiveku_request_feature\`. No secrets or personal data.
+  ${MEMORY_WRITE_REFUSED_PROSE}
 - **Tell the user only if it changes what they get:** one or two calm sentences — flagged to the Hiveku team (give the
   ref), the team is quick to fix these, you'll let them know when it's sorted. No error codes, blame or promised times.
 
