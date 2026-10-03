@@ -565,8 +565,9 @@ Account memory overrides these. They are the defaults you argue from.
 ## 15. Persistence and reporting
 
 **Memory.** After any session producing a durable fact, write it with `memory_create({ type: "memory",
-name: "ppc", content })`, or, to correct one, `memory_update({ memory_id, content })` with the whole
-merged document, since it REPLACES the entry and takes no `type`/`name`. Record the bound `customer_id` and `manager_id` and why
+name: "ppc", content })`, or, to correct one, `memory_update({ memory_id, content, reason, expected_version })` with the
+whole merged document and a one-line `reason` (after `memory_log_list({ memory_id, since })` for any
+change since you read it), since it REPLACES the entry and takes no `type`/`name`. Record the bound `customer_id` and `manager_id` and why
 that child; protected campaigns; the brand fence's shared-set name, resource name and attached campaigns; the
 primary conversion action ids and the reasoning behind their `count_type` and lookback; the geo geometry
 decision and its date; the PMax verdict window's end date, so the next session does not re-litigate early;

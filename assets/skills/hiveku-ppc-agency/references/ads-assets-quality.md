@@ -418,9 +418,10 @@ client first.
 ## 8. Persistence and reporting
 
 **Memory is your asset registry.** With no asset list tool, after every build write the inventory back with
-`memory_update({ memory_id, content })` on the `ppc` memory (`memory_create` if none exists). That call
-REPLACES the document, so send the body `memory_list({ domain: "ppc" })` returned with the new rows folded
-in, never the new rows alone. Record: asset type, the copy, the returned
+`memory_update({ memory_id, content, reason, expected_version })` on the `ppc` memory (`memory_create` if none exists). That
+call REPLACES the document, so send the body `memory_list({ domain: "ppc" })` returned with the new rows
+folded in, never the new rows alone, after `memory_log_list({ memory_id, since })` for any change since you
+read it, with a one-line `reason`. Record: asset type, the copy, the returned
 resource_name, the attach level, the campaign or ad group ids. Also persist prohibited phrases from
 disapprovals, concluded RSA tests with their numbers, the pins that are legally compelled, and the
 auction-insights competitor set by month.

@@ -417,7 +417,9 @@ Do not generate, render, or spend in the onboarding session beyond the one proof
 ## 9. Memory write-back (the three-line rule)
 
 1. Department memory is the `branding` document: `memory_list({ domain: 'branding' })` -> merge your
-   lines into the returned `content` -> `memory_update({ memory_id, content })`. `memory_create({ type:
+   lines into the returned `content` -> `memory_log_list({ memory_id, since })` for any change since you read it ->
+   `memory_update({ memory_id, content, reason, expected_version })` (the two rules are in
+   `references/memory-protocol.md`). `memory_create({ type:
    'memory', name: 'branding', content })` exactly once per account; 409 means it exists, so update.
 2. What goes in, dated, five to ten lines a session: storyboard ids submitted and their state, clips used
    of 20, voiceover seconds, generations, approved narrator `voice_id`s, palette and type decisions,

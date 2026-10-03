@@ -493,7 +493,8 @@ indexation") and get it connected. Never estimate the gap.
 ## 7. Persistence and reporting
 
 **Memory** (`memory_list({ domain: "seo" })` first, then `memory_create` only if nothing came back,
-otherwise `memory_update({ memory_id, content })` carrying the WHOLE merged document, because that
+otherwise `memory_update({ memory_id, content, reason, expected_version })` carrying the WHOLE merged document
+(after `memory_log_list({ memory_id, since })` for any change since you read it), because that
 call REPLACES the entry). Keep current: the exact GSC property string and Bing site_url; the last
 crawl task_id, page cap and date; the canonical and indexation strategy with intentional exclusions;
 the CWV baseline with date and field/lab label; the Play T8 stack line; protected templates and

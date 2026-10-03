@@ -249,24 +249,29 @@ into a recovery project.
 
 ## Department domains - one table, two different enums
 
-Both `account_context_get` and `talk_to_department` take a `domain`, and their accepted sets are NOT
-the same. An unlisted value is a server rejection (HTTP 400 `invalid_domain`, or
-`Unknown domain '<x>'`), not a soft fallback. This table is the only correct source; do not copy a
-domain list out of a skill file.
+`account_context_get`, `agent_identity_get` and `talk_to_department` all take a `domain`. The first
+two accept the same set; `talk_to_department` accepts a different one. An unlisted value is a
+server rejection (HTTP 400 `invalid_domain`, or `Unknown domain '<x>'`), not a soft fallback. This
+table is the only correct source (read from the MCP server's own enums); do not copy a domain list
+out of a skill file.
 
-| Domain | `account_context_get` | `talk_to_department` |
+| Domain | `account_context_get`, `agent_identity_get` | `talk_to_department` |
 |---|---|---|
-| content, marketing, seo, social, ppc, branding, outbound | yes | yes |
+| content, marketing, seo, social, ppc, branding, outbound, email | yes | yes |
 | customer_avatar, customer_journey, before_after_grid, website_design, knowledge_base, workflow | yes | yes |
 | sales | yes | YES - the sales department agent (Morgan, the account's `_identity:sales`), with the caveat below |
-| helpdesk | yes | NO - there is no helpdesk department agent |
+| helpdesk | yes | NO - there is no helpdesk department agent here |
 | analytics | NO - use `marketing` | yes |
 
-That is 15 values for `account_context_get` (default `content` when omitted) and 15 for
-`talk_to_department` - the same size, not the same set (`helpdesk` only on the first,
-`analytics` only on the second). There is no `web`, `commerce`, `email`, `pm`, `accounting`,
-`creative`, `voice` or `knowledge` domain on either tool. Map them: web -> `website_design`,
-commerce -> `sales` for context and `content` for customer-facing copy, email -> `marketing`,
+That is 16 values for `account_context_get` and `agent_identity_get` (`account_context_get`
+defaults to `content` when omitted) and 16 for `talk_to_department` - the same size, not the same
+set (`helpdesk` only on the first two, `analytics` only on the third). `email` is the Email
+Marketing department, on all three. There is no `web`, `commerce`, `pm`, `creative`, `voice` or
+`knowledge` domain on any of them. The Memory page also lists Communications, Production,
+Accounting, the chief of staff and the Website agent, but these tools do not reach them yet:
+there is no `comms`, `production`, `orchestrator` or `coder` domain, and `accounting` gets through
+only at the `agent_identity_get` route, not its schema (see `/hiveku:talk`). Map them: web ->
+`website_design`, commerce -> `sales` for context and `content` for customer-facing copy,
 knowledge -> `knowledge_base`.
 
 The `sales` caveat: `talk_to_department({ domain: 'sales', message })` runs the sales agent
@@ -276,9 +281,12 @@ click an approval card, so the agent's own gated writes (its `crm_email_send`,
 Use it for generative and strategic work (drafts, plans, analysis), then persist with the direct
 `crm_*` tools yourself, exactly as the other departments work. Two account gates carry through:
 403 `sales_agent_disabled` (the sales agent is switched off for the account - an account owner or
-admin switches it on from the Sales agent's memory page: CRM, then the Agent menu; do not route
-around it) and 402 `session_cost_cap_reached` (the per-session cost cap, raised under Settings on
-that same memory page).
+admin switches it on from the Memory page: Sales, then Switch on, at
+`https://app.hiveku.com/<account id>/dashboard/memory?agent=sales`, which CRM's Agent menu also
+opens; do not route around it) and 402 `session_cost_cap_reached` (the per-chat spend limit, which
+an owner or admin raises as "Most you spend per chat" under CRM > Settings > Sales agent,
+`https://app.hiveku.com/<account id>/dashboard/crm/settings/sales-agent`, where the sales agent's
+other settings live).
 
 For `helpdesk`, load `agent_identity_get({ domain: 'helpdesk' })` and act as that department
 yourself. Say that is what you are doing; do not silently route the ask to an unrelated
@@ -291,7 +299,7 @@ every scoped profile, including helpdesk itself - so hydrate from `memory_list({
 `agent_identity_get({ domain, include_cross_domain?, format? })` returns the FULL hydration bundle
 the live department agent runs with - identity persona, brand guide, account memory, every
 skill/rule/command/sub-agent tagged for that domain, avatars, journeys, KB index, recent published
-content, and cross-domain memory from related departments. It accepts the same 15 domains as
+content, and cross-domain memory from related departments. It accepts the same 16 domains as
 `account_context_get`.
 
 Use it when you want to act AS the department with no upstream call and no streaming wait - the
@@ -306,9 +314,9 @@ configured, so you stop guessing and getting 404s. Both tools are full-key surfa
 
 ## Memory is ONE document per department - read before you write
 
-Memory lives in `account_ai_memory`, one row per (domain, project_id). `memory_update({ memory_id,
-content })` REPLACES that row's whole content. Sending only today's note deletes everything the
-department had accumulated.
+Memory lives in `account_ai_memory`, one row per (domain, project_id). `memory_update` REPLACES
+that row's whole content. Sending only today's note deletes everything the department had
+accumulated.
 
 Always read-modify-write:
 
@@ -339,8 +347,17 @@ department.
 
 `memory_update`, `memory_delete`, `memory_restore_version`, `memory_bulk_create` and
 `account_memory_append` always ask the person first, even when their settings allow every Hiveku
-tool. Before the call, say in one line what will change so the prompt is easy to answer.
-`memory_create` and the reads do not ask.
+tool. For an update or a delete the prompt names the agent that follows the entry (from the last
+`/hiveku:knowledge` pull, when there was one), and for an update it also says when the new text
+moves the entry to another agent: a rule, skill, shortcut or specialist can be filed by the
+`<!-- department: x -->` line in its text, so keep that line when you rewrite one. A restore names
+only a version, so its prompt cannot name the entry or its agent: say which entry it is. Before the
+call, say in one line what will change so the prompt is easy to answer. `memory_create` asks only
+when it would make a rule, skill, shortcut (`command`) or specialist (`agent`) that is Shared with
+every agent, so every agent follows it. Name the agent it is for, with `department: "x"` or by
+starting its text with `<!-- department: x -->`, unless every agent really should follow it
+(`department: "shared"`). Hiveku stamps that line from the argument, so the two say the same
+thing. A note, a profile and the reads do not ask.
 
 If no entry exists, `memory_create({ type: 'memory', name: '<dept>', content })`; a 409 means one
 already exists, so go back to step 1 rather than duplicating.
@@ -451,11 +468,12 @@ Five distinct causes, and they need different responses:
   key.
 - **Sales account gates** (`domain: 'sales'` only). 403 `sales_agent_disabled` means the account
   has the sales agent switched off - an owner decision, so say so and stop, and tell the user an
-  account owner or admin switches it on from the Sales agent's memory page (CRM, then the Agent
-  menu); there is no "Settings → AI" page. Do not re-route the ask through `outbound` or another
-  domain to get the same effect. 402 `session_cost_cap_reached` is the per-session cost cap - a
-  smaller ask or a fresh session, not a retry loop; an owner or admin raises it under Settings on
-  the same memory page.
+  account owner or admin switches it on from the Memory page: Sales, then Switch on
+  (`/dashboard/memory?agent=sales`; CRM's Agent menu opens the same place). There is no
+  "Settings → AI" page. Do not re-route the ask through `outbound` or another domain to get the
+  same effect. 402 `session_cost_cap_reached` is the per-chat spend limit - a smaller ask or a
+  fresh session, not a retry loop; an owner or admin raises it as "Most you spend per chat" under
+  CRM > Settings > Sales agent (`/dashboard/crm/settings/sales-agent`).
 - **Transient.** "Department '<x>' did not respond within Ns... may be cold-starting or overloaded."
   Wait 30s and retry once, or break the request into a smaller ask. A mid-stream stall returns a
   partial answer in `response` alongside the message - salvage the partial rather than re-running
@@ -739,7 +757,8 @@ mechanism.
 - `/hiveku:remember` - persist a learning into the right department memory, read-merge-write.
 - `/hiveku:memory-changes` - what changed in this account's memory since a date, by department: who,
   from which app, when and why.
-- `/hiveku:knowledge` - mirror the account's memory, rules and skills locally (account-level only).
+- `/hiveku:knowledge` - mirror the account's memory, rules and skills locally, filed by the agent that
+  owns each one, with each skill also written as a Claude Code skill (account-level only).
 
 ## Deep reference
 

@@ -63,7 +63,7 @@ the page verbatim, with a name and a role the expert agreed to, or not at all.
    quote; a line that needs shortening is quoted in part. Say what is next: the draft (Play 3 step
    2) with the sources in the brief, then the gate.
 10. The memory line: `memory_list({ domain: "content" })`, append who was interviewed, for which
-    piece and on what date to the standing note, `memory_update({ memory_id, content })` with the
+    piece and on what date to the standing note, `memory_update({ memory_id, content, reason, expected_version })` with the
     WHOLE merged document (sending only the new note destroys everything else) and a one-line
     `reason`; if you read the note earlier in the session, check `memory_log_list({ memory_id,
     since })` first and merge any newer change. `memory_create` only when no content note exists. Hiveku, not this chat, is the source of truth.

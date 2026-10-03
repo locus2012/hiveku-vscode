@@ -448,8 +448,10 @@ credentials. Escalate with the exact change needed and `pm_tasks_create` so the 
 
 **Memory** holds the account's money doctrine and is what the next session inherits. After any material
 change, `memory_create({ type: "memory", name: "ppc", content })` on the first run, then
-`memory_update({ memory_id, content })` after (it takes ONLY `memory_id` and `content`, never
-`type`/`name`, and REPLACES the document, so resend the merged body), covering: the monthly
+`memory_update({ memory_id, content, reason, expected_version })` after (it takes `memory_id`, `content` and the
+optional `reason` and `expected_version`, never `type`/`name`, and REPLACES the document, so check
+`memory_log_list({ memory_id, since })` for any change since you read it and resend the merged body),
+covering: the monthly
 ceiling and its approval date; target CPA/ROAS per campaign with the Framework D derivation (the
 targets themselves are recorded with `ppc_goals_set`, which every later session reads; memory keeps
 the why); current bidding

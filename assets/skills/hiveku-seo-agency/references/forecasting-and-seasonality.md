@@ -222,8 +222,9 @@ estimate even when asked for one; give the band and the midpoint labeled midpoin
 - `memory_create` after any forecast shown to a client: inputs (MSV source, positions,
   feature factors, geo share, CVR source), the twelve index values with their source and
   years, the band, the date, the plan assumption. `memory_list({ domain: 'seo' })` first;
-  `memory_update({ memory_id, content })` REPLACES the document, so resend the whole note
-  with the addition folded in.
+  `memory_update({ memory_id, content, reason, expected_version })` REPLACES the document, so resend the
+  whole note with the addition folded in, after `memory_log_list({ memory_id, since })` for any change
+  since you read it.
 - A dated forecast tab per roadmap or report: `seo_sheet_create_tab` named
   `"2026-08 Forecast (nonbrand, US)"` with columns for cluster, MSV, target position, CTR,
   feature factor, geo share, index months, clicks band low, clicks band high, value band,

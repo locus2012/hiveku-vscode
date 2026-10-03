@@ -406,8 +406,9 @@ also errors in ways that look like audience problems, so verify it per SKILL.md 
 ## 11. Persistence and reporting
 
 **Memory** (`memory_create({ type: "memory", name: "ppc", content })` first run, then
-`memory_update({ memory_id, content })` after: it takes no `type`/`name` and REPLACES the document,
-so read it with `memory_list({ domain: "ppc" })` and resend the merged body). Carry the
+`memory_update({ memory_id, content, reason, expected_version })` after: it takes no `type`/`name` and REPLACES the
+document, so read it with `memory_list({ domain: "ppc" })`, check `memory_log_list({ memory_id, since })`
+for any change since, and resend the merged body with a one-line `reason`). Carry the
 list inventory with ids, types, sizes and states; each tier's DEFINITION in words; upload dates, record
 counts and match rates; the repurchase and exclusion windows agreed with the client; the consent basis on
 file; which campaigns carry observation layers and since when; the index readings behind each modifier;
