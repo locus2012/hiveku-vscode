@@ -53,6 +53,14 @@ every profile):
   ★ The same rule applies in miniature: do not call five list tools "to see what's there" before
   answering. Ask what the person is trying to achieve, then call the two or three tools that
   answer it.
+- **Re-check a tracking claim live before you act on it or repeat it.** A note in memory, a
+  file or an earlier session that says tracking is broken, a pixel or tag is missing, consent is
+  blocking conversions, or two systems' numbers disagree is a claim about a system that changes
+  under it. Check it with the live tools first (`ppc_conversion_tracking_status`,
+  `seo_gtm_status`, `marketing_form_conversion_audit`, `voice_call_tracking_diagnose`,
+  `ppc_meta_pages_pixels`, or the hiveku-tracking-auditor agent for the full pass), then tell the
+  user what you checked and when. A stale note once had an assistant blame consent for a Meta
+  undercount on a site that sends Meta no website data at all.
 - **Work in CHAINS, not surveys.** Real questions are answered by a short sequence where each call
   narrows the next - `ppc_connection_list` → `ppc_digest` → `campaign_list` → `conversion_tracking_status`
   tells you whether the ads are healthy. Calling forty tools tells you only that the endpoints

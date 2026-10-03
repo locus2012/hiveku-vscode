@@ -26,7 +26,8 @@ file says so rather than implying one.
 
 All writes governed here are LIVE. Cost classes: write = free, confirm rules per section 4; E =
 on_page instant per URL; F = crawl per page (`max_crawl_pages` default 50, clamp 500); G = LLM
-mentions, about $0.10 per keyword per engine; I = one Business Listings search, 24h cooldown.
+mentions, one live check per keyword per engine against the daily re-check limit; I = one Business
+Listings search, 24h cooldown.
 
 | Tool | Status | Cost | Note |
 |---|---|---|---|
@@ -307,10 +308,11 @@ UNDO:     none for the row history; re-track, then seo_tracked_keyword_update to
 ```
 
 On the add side the trap is the default: `tracking_frequency` defaults to daily on the tool and
-sets the worker's `check_frequency` to daily. An organic check is about $0.003; an AI lane is
-about $0.10 per keyword per engine per check, and the description warns about none of it. Twenty
-keywords on three AI engines daily is roughly $180 a month. Pass `'weekly'` unless the client is
-paying for daily, and treat every AI lane as a spend decision.
+sets the worker's `check_frequency` to daily. The bill does not change with it: rank tracking is
+billed per tracked keyword (25 or 100 included, then $1.50 a month each), not per lane, engine or
+check. What daily AI lanes do use is the account's daily re-check limit on live syncs. Pass
+`'weekly'` unless the client wants daily movement, and count every new keyword against the plan's
+included number before adding it.
 
 ### 2.8 GBP fields: public immediately
 
@@ -437,7 +439,7 @@ variable delete and revert tools also carry a confirm gate in their descriptions
 | `cms_write_entry` | A live upsert; a wrong `slug` creates a new entry instead of failing |
 | `project_redirects_deploy` | The live switch for every stored rule plus domain redirects; `tier` defaults to production |
 | `deploy_site` | Production is the live site; "never pick it just to test"; no confirm |
-| `seo_track_keyword` | AI lanes spend class G per check with no cost warning; daily default |
+| `seo_track_keyword` | AI lanes run class-G live checks against the daily re-check limit; daily default; billed per keyword, not per lane |
 | `seo_aeo_rankings_sync`, `seo_citations_audit` | Cost stated, no confirm ("no confirm step" in the citations description) |
 | `seo_gsc_submit_sitemap`, `seo_bing_submit_sitemap`, `seo_bing_submit_url` | Low risk, still client-visible; no confirm |
 

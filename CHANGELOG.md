@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.87.1
+- **Claude re-checks a tracking claim before acting on it.** The vendored orient skill now has Claude check a note that says tracking is broken, a pixel or tag is missing, consent is blocking conversions, or two systems disagree, with the live tools first, and tell you what it checked and when.
+- **Rank tracking cost, as it is billed.** The vendored SEO skill now says a tracked keyword is billed once, whatever its lanes, engines, devices or check frequency: 25 are included on Standard and 100 on Premium, then $1.50 a month each, and a keyword whose lanes are all paused is not billed. A live AI-engine check uses the account's daily re-check limit instead of a charge per check. `seo_rankings_list({ view: 'cost' })` gives the account's own numbers.
+- **The vendored skills match plugin 0.27.8.**
+
 ## 0.87.0
 - **The Knowledge tab is grouped like the Memory page.** The account console's Knowledge tab now shows About your business first, then each agent in the Memory page's order (the chief of staff, Sales, Support, Marketing by topic, Production, Accounting, Website, Communications), then the rules, skills, shortcuts and specialists shared with every agent. Internal entries are no longer listed. Each agent and each entry has "Open in Memory", which opens the Memory page at that agent and entry.
 - **Rules and skills shared with every agent, and the chief of staff's own memory, are read-only here.** They open read-only, and saving one is refused with "Open in Memory": owners and admins change them on the Memory page. This holds however the entry was opened, including from Activity. The Memory page does not change the other kinds every agent shares (shortcuts, specialists, notes and profiles, such as the placeholders earlier versions' "+ New entry" created), so those still open, save and delete here, marked "changed here".

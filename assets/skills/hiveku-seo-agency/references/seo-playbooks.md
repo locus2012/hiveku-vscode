@@ -16,7 +16,8 @@ family's mechanics, the write discipline behind one mutation
   plan, make the one write. One object per yes; a batch is confirmed as a reviewed list.
 - **[SPENDS]**: a metered DataForSEO call, tagged with cost class and request count (B Labs and
   keywords_data; C live SERP per location; D backlinks; E on_page per URL; F crawl per page; G LLM
-  mentions about $0.10 per keyword per engine; H LLM-scored, budget-gated; I the citations audit).
+  mentions, one live check per keyword per engine against the daily re-check limit; H LLM-scored,
+  budget-gated; I the citations audit).
   A 402 is a negative balance, a 503 `dataforseo_unconfigured` is no credentials: neither is clean.
 - **Read back after every write**: the read-back named in the step is the verification, not the
   200. **Hydrate first**: `account_context_get({ domain: 'seo' })` and `memory_list({ domain:
