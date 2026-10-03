@@ -35,7 +35,7 @@ accepted). A negative DataForSEO balance makes every metered call a 402; 503
 | `seo_entity_check` | LIVE | free | Knowledge Graph lookup |
 | `seo_keyword_clusters`, `seo_topic_clusters` | LIVE | A | STORED cluster rows; empty until something created them |
 | `seo_keyword_cluster_create`, `seo_topic_cluster_create` | LIVE | write | one confirmed cluster at a time |
-| `seo_track_keyword` | LIVE | write, then about $0.003 per scheduled organic check; AI lanes about $0.10 per keyword per engine | one keyword = up to nine lanes (Play 7) |
+| `seo_track_keyword` | LIVE | write; billed per tracked keyword, not per lane or check (25 or 100 included, then $1.50 a month each) | one keyword = up to nine lanes (Play 7) |
 | `seo_tracked_keywords_list`, `seo_rankings_list` (= `seo_list_rankings`) | LIVE | A | `group_by_keyword: true` pages by keyword; `total_groups` is the keyword count |
 | `seo_tracked_keyword_delete` - the row history dies, the lanes pause | LIVE | write | the config row and its `keyword_rank_history` are gone with no undo; the rank lanes are PAUSED (checks and billing stop, lane history kept) unless a sibling row keeps them running; resume takes re-track plus `seo_tracked_keyword_update` (seo-change-discipline.md 2.7); never a keyword that appeared in a delivered report |
 | `seo_list_keywords` (= `seo_keywords_list`) | LIVE | A | the domain's currently ranked keywords from domain analysis, not your research |
@@ -293,9 +293,9 @@ Tracking is a reporting decision: track what you will report on.
    Read them with `seo_rankings_list({ group_by_keyword: true })`: `pagination.total_groups` is the
    honest keyword count, `total` counts lanes. A keyword created before the AI engines existed has
    NO AI lanes: a blank AI column is "not tracked", never "not ranking". `previous_rank` advances only
-   on a new check day; `check_frequency` defaults to weekly. Cost: about $0.003 per scheduled organic
-   check, about $0.10 per keyword per engine per AI check (class G), so confirm the engine list and
-   the count before adding AI lanes (references/aeo.md Play H).
+   on a new check day; `check_frequency` defaults to weekly. Billing is per tracked keyword, not per
+   lane or check; a live AI sync uses the daily re-check limit (class G), so confirm the engine list
+   and the count before adding AI lanes (references/aeo.md Play H).
 5. Editing a tracked row (location, device, engine, target URL, frequency) is
    `seo_tracked_keyword_update`: it mirrors the edit onto the `website_rankings` lanes and returns
    `lanes_updated` - read it back. The one-call lane setter is `seo_rankings_platforms_set`

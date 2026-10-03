@@ -149,10 +149,11 @@ target query serves. Check, criteria and ladder: `hiveku-orient/references/found
 - **"Submit us to every directory."** Refuse: no submission tool exists;
   `seo_citations_audit` audits only (one Business Listings search, 24-hour cooldown). Offer: the NAP
   fix list from `seo_citations_get` and one claim-your-listing `pm_tasks_create` per missing directory.
-- **"Sync every keyword on every AI engine."** Refuse the loop. `seo_aeo_rankings_sync` costs about
-  $0.10 per keyword per engine with no confirm gate and no balance pre-check; 200 keywords on five
-  engines is about $100 per run, and a scheduled lane keeps paying. Offer: the 10-25 priority set on
-  `ai_overview` first, then one engine at a time with the number stated.
+- **"Sync every keyword on every AI engine."** Refuse the loop. `seo_aeo_rankings_sync` runs one live
+  check per keyword per engine with no confirm gate, and every one uses the account's daily re-check
+  limit (429 'Daily refresh limit reached' when it runs out); 200 keywords on five engines is 1,000
+  checks. Offer: the 10-25 priority set on `ai_overview` first, then one engine at a time with the
+  count stated.
 - **"Block the AI crawlers / noindex staging in robots.txt."** Refuse to do it through
   `seo_project_update` `robots_txt_content`: it is a deploy-time fallback, served only from the next
   `deploy_site` and only on a project whose code ships no robots source, so the stored write alone
@@ -171,11 +172,18 @@ target query serves. Check, criteria and ladder: `hiveku-orient/references/found
 
 **The nine rank lanes.** One tracked keyword = up to nine `website_rankings` rows.
 
-| Lane | How it is tracked | Cost |
+| Lane | How it is tracked | Billing |
 |---|---|---|
-| google, bing, mobile | organic and device lanes from `seo_track_keyword` (check its schema for the device argument), checked daily | about $0.003 per scheduled check |
-| local | `ranking_type: 'local'` with `business_name`; reads back as `local_pack_position` | organic rate |
-| ai_overview, chatgpt, claude, gemini, perplexity | `seo_aeo_rankings_sync`, or `seo_track_keyword` with the engine as `search_engine`; citations, not positions | about $0.10 per keyword per engine |
+| google, bing, mobile | organic and device lanes from `seo_track_keyword` (check its schema for the device argument), checked at the lane's check frequency | none per lane: the keyword is billed once |
+| local | `ranking_type: 'local'` with `business_name`; reads back as `local_pack_position` | none per lane |
+| ai_overview, chatgpt, claude, gemini, perplexity | `seo_aeo_rankings_sync`, or `seo_track_keyword` with the engine as `search_engine`; citations, not positions | none per lane; a live sync uses the daily re-check limit |
+
+**What rank tracking costs the account.** One tracked keyword (a keyword for one domain) is billed once,
+however many lanes, engines, devices or check frequencies it has: the plan includes 25 (Standard) or
+100 (Premium), and each keyword over that is $1.50 a month. A keyword whose every lane is paused is not
+billed. Per-check dollar figures are the data provider's cost to Hiveku, never the account's price, so
+dropping lanes from a keyword that stays tracked lowers nothing. `seo_rankings_list({ view: 'cost' })`
+returns the account's own numbers; quote those, not an estimate.
 
 `seo_rankings_list({ group_by_keyword: true })` pages by keyword; `pagination.total_groups` is the
 keyword count (`total` counts lanes). Keywords created before the AI engines have NO AI lanes:
@@ -220,7 +228,7 @@ check day. `check_frequency` defaults to weekly.
 | D per request | backlinks (`backlinks_bulk_*` for lists) | `backlinks_summary`, `backlinks_backlinks` |
 | E per URL | on-page instant | `on_page_instant_pages`, `on_page_content_parsing` |
 | F per page | crawl (`max_crawl_pages` default 50, clamp 500) | `seo_audit_start` |
-| G about $0.10 per keyword x engine | LLM mentions | `seo_aeo_rankings_sync`, the AI lanes |
+| G one live check per keyword x engine, against the daily re-check limit | LLM mentions | `seo_aeo_rankings_sync`, the AI lanes |
 | H LLM-scored, budget-gated | sweeps | `seo_eeat_scores`, `seo_aeo_brand_audit` daily budget |
 | I one search, 24h cooldown | listings footprint | `seo_citations_audit` |
 

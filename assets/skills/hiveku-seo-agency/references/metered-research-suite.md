@@ -57,15 +57,15 @@ class before you spend; batch to the documented maximum.
 | D | backlinks | per request; `backlinks_bulk_*` take 1,000 targets | `backlinks_*`, `seo_research` backlinks actions |
 | E | on-page instant | per URL | `on_page_instant_pages`, `on_page_content_parsing`, `seo_research` actions `instant-page`, `lighthouse` |
 | F | crawl | per page; `max_crawl_pages` default 50, clamped to 500 | `seo_audit_start`, `seo_run_audit` |
-| G | LLM mentions | about $0.10 per keyword per engine | `seo_aeo_rankings_sync`, the AI rank lanes |
+| G | LLM mentions | one live check per keyword per engine, against the daily re-check limit | `seo_aeo_rankings_sync`, the AI rank lanes |
 | H | LLM-scored, budget-gated | per page or per day | `seo_eeat_scores` sweep, `seo_aeo_brand_audit` (one per-UTC-day budget) |
 | I | citations | one Business Listings search, 24h cooldown | `seo_citations_audit` (429 returns the stored audit) |
 
-Rank checks sit outside the letters: a scheduled organic check is about $0.003 per keyword;
-an AI-engine lane about $0.10 per keyword per engine per check (class G).
-`seo_aeo_audit_run` spends one SERP call per keyword; cap near 25. A tracked keyword can
-carry up to nine lanes, so "sync every keyword on every engine" is up to five class-G
-charges per keyword per check day. Refuse it; scope it.
+Rank checks sit outside the letters: rank tracking is billed per tracked keyword (a keyword for
+one domain), not per lane or check, and a live AI check uses the account's daily re-check limit
+(class G). `seo_aeo_audit_run` spends one SERP call per keyword; cap near 25. A tracked keyword
+can carry up to nine lanes, so "sync every keyword on every engine" is up to five class-G checks
+per keyword. Refuse it; scope it.
 
 ### 2. The 402 and 503 symptoms
 

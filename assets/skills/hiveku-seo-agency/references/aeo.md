@@ -14,7 +14,8 @@ outside the Availability table is a handoff, named as such.
 ## Availability
 
 Cost classes: A = free DB read; write = free, confirm-gated; C = live SERP per keyword; G = LLM
-Mentions, about $0.10 per keyword per engine; H = LLM-scored against a shared per-UTC-day budget.
+Mentions, one live check per keyword per engine against the account's daily re-check limit (not
+billed per check); H = LLM-scored against a shared per-UTC-day budget.
 A negative DataForSEO balance turns every metered call into a 402 with no per-tool warning.
 
 | Tool | Status | Cost class | Note |
@@ -275,11 +276,12 @@ Argument that bites: `location_code` here is a **string** ("US") with a human-re
 `location_name` ("United States"), unlike `seo_aeo_audit_run` where it is the numeric code.
 `device_type` is 'desktop' or 'mobile'.
 
-**AI-lane tracking cost.** Every AI lane is about $0.10 per keyword per engine per check (class
-G), against $0.003 for a scheduled organic check. 20 keywords across 3 engines is 60 paid calls
-per sync, and a lane created with a recurring `check_frequency` keeps paying weekly. Confirm the
-keyword count, the engine list and the resulting call count out loud before every sync, and
-refuse "sync every keyword on every engine": a 200-keyword list on five engines is 1,000 calls.
+**AI-lane checks.** Every live AI check (one keyword on one engine, class G) uses the account's
+daily re-check limit. Rank tracking is billed per tracked keyword, not per lane or check, so AI
+lanes add nothing to the bill; the limit is the constraint. 20 keywords across 3 engines is 60
+checks per sync. Confirm the keyword count, the engine list and the resulting check count out loud
+before every sync, and refuse "sync every keyword on every engine": a 200-keyword list on five
+engines is 1,000 checks.
 
 **Read out:** per row, citation position, `ai_mentioned`, `mentions_count`, `ai_search_volume`.
 **Read-back:** the synced rows are ordinary tracker lanes.
