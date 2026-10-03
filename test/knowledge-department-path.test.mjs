@@ -69,12 +69,16 @@ function listingClient(listing) {
 
 describe('department names', () => {
   test('departmentOf keeps a plain department name', () => {
-    for (const name of ['seo', 'sales', 'knowledge_base', 'email', 'ppc', 'content-ops']) {
+    for (const name of ['seo', 'sales', 'knowledge_base', 'email', 'ppc', 'comms', 'production', 'accounting', 'coder', 'analytics']) {
       assert.equal(knowledge.departmentOf({ domain: name, content: '' }), name);
     }
     assert.equal(knowledge.departmentOf({ domain: '_command:x', content: '<!-- department: ppc -->' }), 'ppc');
-    assert.equal(knowledge.departmentOf({ domain: '_identity:x', content: '<!-- department: SEO -->' }), 'seo');
-    assert.equal(knowledge.departmentOf({ content: 'nothing' }), 'general');
+    // A profile is owned by what its front matter declares; a marker is no signal for one.
+    assert.equal(knowledge.departmentOf({ domain: '_identity:x', content: '---\ndepartment: SEO\n---\n' }), 'seo');
+    assert.equal(knowledge.departmentOf({ domain: '_identity:x', content: '<!-- department: SEO -->' }), 'shared');
+    // No owner anywhere: shared with every agent, as the Memory page files it.
+    assert.equal(knowledge.departmentOf({ content: 'nothing' }), 'shared');
+    assert.equal(knowledge.departmentOf({ domain: 'content-ops', content: '' }), 'shared');
   });
 
   test('departmentOf files a traversal name, an absolute name and other off-shape names under general', () => {
@@ -93,23 +97,39 @@ describe('department names', () => {
       'seo\n',
     ];
     offShape.forEach((domain, i) => {
-      assert.equal(knowledge.departmentOf({ domain, content: '' }), 'general', `domain #${i} must file under general`);
+      // A domain names no owner unless it IS a department: these are shared, never a folder of their own.
+      assert.equal(knowledge.departmentOf({ domain, content: '' }), 'shared', `domain #${i} must not become a folder`);
+      // The same names as a stored owner (the department column, or the builder's
+      // owner field) are trimmed and lowercased, as the builder does; whatever is
+      // then not a plain name files under general.
+      const normalized = domain.trim().toLowerCase();
+      const expected = knowledge.DEPARTMENT_NAME.test(normalized) ? normalized : 'general';
+      assert.equal(knowledge.departmentOf({ domain: '_rule:x', department: domain, content: '' }), expected, `column #${i}`);
+      assert.equal(knowledge.departmentOf({ domain: '_rule:x', owner: domain, content: '' }), expected, `owner #${i}`);
     });
-    assert.equal(knowledge.departmentOf({ domain: '_identity:x', content: `department: ${'t'.repeat(60)}` }), 'general');
+    // The hostile ones never become a folder, whichever field carries them.
+    for (const hostile of [climb(3, 'target'), SLASH + ['tmp', 'target'].join(SLASH), 'C:' + BACKSLASH + 'target', UP]) {
+      assert.equal(knowledge.departmentOf({ domain: '_rule:x', department: hostile, content: '' }), 'general');
+      assert.equal(knowledge.departmentOf({ domain: '_rule:x', owner: hostile, content: '' }), 'general');
+    }
+    assert.equal(knowledge.departmentOf({ domain: '_identity:x', content: `---\ndepartment: ${'t'.repeat(60)}\n---\n` }), 'general');
   });
 
   test('a name Windows keeps for a device files under general; near-names are kept', () => {
     const devices = ['con', 'prn', 'aux', 'nul', 'com0', 'com1', 'com9', 'lpt0', 'lpt1', 'lpt9'];
-    for (const domain of devices) {
-      assert.equal(knowledge.departmentOf({ domain, content: '' }), 'general', `${domain} must file under general`);
+    for (const name of devices) {
+      assert.equal(knowledge.departmentOf({ domain: '_rule:x', department: name, content: '' }), 'general', `${name} must file under general`);
+      assert.equal(knowledge.departmentOf({ domain: name, content: '' }), 'shared', `${name} as a domain names no owner`);
     }
-    // A content tag is lowercased first, so an uppercase device name is caught too.
-    assert.equal(knowledge.departmentOf({ domain: '_command:x', content: '<!-- department: NUL -->' }), 'general');
+    // A stored owner is lowercased first, so an uppercase device name is caught too.
+    assert.equal(knowledge.departmentOf({ domain: '_command:x', department: 'NUL', content: '' }), 'general');
+    // A marker naming no department is no owner at all.
+    assert.equal(knowledge.departmentOf({ domain: '_command:x', content: '<!-- department: NUL -->' }), 'shared');
     // With an extension it is still a device name on Windows.
     for (const name of ['nul.txt', 'CON', 'com1.md', 'lpt9.x.y']) assert.equal(knowledge.WINDOWS_DEVICE_NAME.test(name), true, name);
-    // Negative control: names that only start like one are ordinary departments.
+    // Negative control: names that only start like one are ordinary folder names.
     for (const name of ['console', 'null', 'auxiliary', 'com10', 'lpt', 'connect', 'prn-team']) {
-      assert.equal(knowledge.departmentOf({ domain: name, content: '' }), name);
+      assert.equal(knowledge.departmentOf({ domain: '_rule:x', department: name, content: '' }), name);
     }
   });
 
@@ -139,15 +159,15 @@ describe('knowledge download', () => {
     });
 
     const index = await knowledge.fetchKnowledge(client);
-    assert.deepEqual([...index.keys()].sort(), ['general', 'sales', 'seo']);
+    assert.deepEqual([...index.keys()].sort(), ['sales', 'seo', 'shared']);
 
     const n = await knowledge.writeEntries(rootDir, knowledge.selectEntries(index));
     assert.equal(n, 4);
     await assertNothingOutside(parent, rootDir);
     assert.equal(await exists(path.join(parent, 'outside')), false);
     assert.equal(await exists(absolute), false);
-    assert.match(await fs.readFile(path.join(rootDir, 'memory', 'general', 'planted-note.md'), 'utf8'), /department: "general"/);
-    await fs.access(path.join(rootDir, 'memory', 'general', 'absolute-note.md'));
+    assert.match(await fs.readFile(path.join(rootDir, 'memory', 'shared', 'planted-note.md'), 'utf8'), /department: "shared"/);
+    await fs.access(path.join(rootDir, 'memory', 'shared', 'absolute-note.md'));
     // Negative control: normal departments are untouched by the guard.
     assert.match(await fs.readFile(path.join(rootDir, 'memory', 'seo', 'keyword-strategy.md'), 'utf8'), /target long-tail/);
     await fs.access(path.join(rootDir, 'rules', 'sales', 'no-emojis.md'));
@@ -199,19 +219,19 @@ describe('knowledge download', () => {
     const failed = [];
     assert.equal(await knowledge.writeEntries(rootDir, knowledge.selectEntries(await knowledge.fetchKnowledge(client)), failed), 4);
     assert.deepEqual(failed, []);
-    const deviceFile = path.join(rootDir, 'memory', 'general', 'com1-entry.md');
-    const skillFile = path.join(rootDir, 'skills', 'general', 'nul-entry.md');
+    const deviceFile = path.join(rootDir, 'memory', 'shared', 'com1-entry.md');
+    const skillFile = path.join(rootDir, 'skills', 'shared', 'nul-entry.md');
     assert.match(await fs.readFile(deviceFile, 'utf8'), /device-named domain/);
     assert.match(await fs.readFile(skillFile, 'utf8'), /device-named skill/);
-    assert.match(await fs.readFile(path.join(rootDir, 'memory', 'console', 'console.md'), 'utf8'), /near-name/);
-    await fs.access(path.join(rootDir, 'memory', 'com10', 'com10.md'));
+    assert.match(await fs.readFile(path.join(rootDir, 'memory', 'shared', 'console.md'), 'utf8'), /near-name/);
+    await fs.access(path.join(rootDir, 'memory', 'shared', 'com10.md'));
     const filesAfterFirst = (await listFiles(rootDir)).sort();
     for (const file of filesAfterFirst) {
       assert.equal(knowledge.WINDOWS_DEVICE_NAME.test(path.basename(file)), false, `device-named file: ${path.relative(rootDir, file)}`);
     }
     const manifest = JSON.parse(await fs.readFile(path.join(rootDir, '.hiveku', 'knowledge-manifest.json'), 'utf8'));
-    assert.equal(manifest.entries.com1.file, 'memory/general/com1-entry.md');
-    assert.equal(manifest.entries['_skill:nul'].file, 'skills/general/nul-entry.md');
+    assert.equal(manifest.entries.com1.file, 'memory/shared/com1-entry.md');
+    assert.equal(manifest.entries['_skill:nul'].file, 'skills/shared/nul-entry.md');
 
     // The next download writes the same files: nothing added beside them.
     assert.equal(await knowledge.writeEntries(rootDir, knowledge.selectEntries(await knowledge.fetchKnowledge(client))), 4);

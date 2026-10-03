@@ -307,13 +307,22 @@ export async function memoryRestoreWithContext(client: ToolClient, versionId: st
   });
 }
 
+/**
+ * memory_create with the optional reason. `department` is the agent the entry
+ * is for (memory surfaces audit G7): without one a rule, skill, shortcut or
+ * specialist is shared with every agent. Sent only when set.
+ */
 export async function memoryCreateWithContext(
   client: ToolClient,
-  spec: { type?: string; name?: string; domain?: string; content: string; project_id?: string },
+  spec: { type?: string; name?: string; domain?: string; content: string; project_id?: string; department?: string },
   ctx: WriteContext = {},
-): Promise<{ id?: string; domain?: string } | undefined> {
-  const res = await client.callToolJson<unknown>('memory_create', { ...spec, ...defined({ reason: cleanReason(ctx.reason) }) });
-  return unwrapData(res) as { id?: string; domain?: string } | undefined;
+): Promise<{ id?: string; domain?: string; version?: unknown } | undefined> {
+  const { department, ...rest } = spec;
+  const res = await client.callToolJson<unknown>('memory_create', {
+    ...rest,
+    ...defined({ department, reason: cleanReason(ctx.reason) }),
+  });
+  return unwrapData(res) as { id?: string; domain?: string; version?: unknown } | undefined;
 }
 
 /** The version a write returned, when it says. */

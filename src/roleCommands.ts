@@ -347,8 +347,8 @@ Refresh the local data mirror$ARGUMENTS, then work from the files — not from r
    - \`node .hiveku/pull-data.mjs --dataset <dept>:<dataset>\` — re-pull ONE dataset (do this right after you write)
    - \`node .hiveku/pull-data.mjs account\` — refresh only the account memory copy
    Every run except --dataset also refreshes \`hiveku-data/account/ACCOUNT_MEMORY.md\`, a READ-ONLY copy of
-   the account memory. Owners and admins edit it on the Hiveku dashboard (the link is at the top of the
-   file); never edit or upload the file. To add a fact, suggest it with account_memory_append.
+   the account memory: About your business on the Memory page, where owners and admins change it (the link
+   is at the top of the file). Never edit or upload the file. To add a fact, suggest it with account_memory_append.
 2. Then analyze LOCALLY: grep/read \`hiveku-data/<dept>/*.json\` (each file is
    { dataset, count, fetched_at, rows } — check fetched_at before trusting it). Scoped rows carry
    \`_parent\` (which project/connection they came from).
@@ -376,10 +376,13 @@ its way of working gets codified once and shared with every operator AND the das
    - numbered steps with EXACT Hiveku tool names (verify via \`hiveku_docs_search\` if unsure),
    - "confirm before each write" notes where the process mutates data,
    - \`$ARGUMENTS\` where inputs vary per run,
-   - an HTML comment tag \`<!-- department: <dept> -->\` near the top (e.g. ppc, seo, sales, accounting).
+   - an HTML comment tag \`<!-- department: <dept> -->\` on the line right after the frontmatter: the
+     agent the command is for (e.g. ppc, seo, sales, accounting). Ask the user if it is not clear.
 3. Pick a kebab-case slug (e.g. \`ppc-weekly-tune\`). Save it BOTH places with IDENTICAL content:
    - locally: \`.claude/commands/hiveku-<dept>-<slug>.md\` (usable immediately as a slash command),
-   - to Hiveku: \`memory_create({ type: "command", name: "<slug>", content })\`. A 409 means a command
+   - to Hiveku: \`memory_create({ type: "command", name: "<slug>", content, department: "<dept>", reason })\`.
+     \`department\` files it under that agent on the Memory page; without one EVERY agent is given it
+     (Shared with every agent), so send "shared" only when the user says so. A 409 means a command
      with that slug already exists: read it (\`memory_list({ type: "command" })\`), then pick a new slug
      or, with the user's yes, send the whole revised command with
      \`memory_update({ memory_id, content, reason, expected_version })\`. ${MEMORY_EDIT_RULES_PROSE}
@@ -1095,6 +1098,7 @@ New site: \`/hiveku-new-site\` (template → site_create → inject sections). D
 When you repeat a process for this account — or the user describes THEIR way of doing something —
 promote it to an account command with \`/hiveku-new-command\`: it becomes a slash command for every
 operator of this account and teaches the dashboard agents. Account-defined commands sync in as
-\`/hiveku-<dept>-<slug>\`.
+\`/hiveku-<dept>-<slug>\`, and the account's skills (its playbooks) as \`.claude/skills/hiveku-<dept>-<slug>/\`
+(<dept> is the agent that follows it, or \`shared\` when every agent does).
 `;
 }

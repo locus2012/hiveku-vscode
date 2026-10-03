@@ -19,6 +19,7 @@ import { writeDataRunner } from './dataRunner';
 import { writeAgencySkills } from './agencySkills';
 import { isAccountMemoryDomain, ACCOUNT_MEMORY_READONLY_GLOB } from './accountMemory';
 import { MEMORY_EDIT_RULES_PROSE } from './memoryLog';
+import { ownerOf, type OwnerInput } from './memoryOwner';
 
 /** memory `type` → local folder (matches hiveku-sync TYPE_TO_FOLDER). */
 export const TYPE_TO_FOLDER: Record<string, string> = {
@@ -39,7 +40,12 @@ export const TYPE_LABEL: Record<string, string> = {
   identity: 'Identity',
 };
 
-/** Canonical departments (mirrors hiveku_builder src/lib/departments.ts). */
+/**
+ * Every department a memory entry can belong to: the builder's list
+ * (hiveku_builder src/lib/olympus/memory-types.ts), the Marketing team and its
+ * topics first (Analytics included, audit decision 6), then the agents that run
+ * their own servers. A test pins it to memoryOwner.ts MEMORY_DEPARTMENTS.
+ */
 export const DEPARTMENTS: Array<{ slug: string; label: string }> = [
   { slug: 'marketing', label: 'Marketing' },
   { slug: 'content', label: 'Content' },
@@ -48,15 +54,32 @@ export const DEPARTMENTS: Array<{ slug: string; label: string }> = [
   { slug: 'ppc', label: 'PPC' },
   { slug: 'outbound', label: 'Outbound' },
   { slug: 'branding', label: 'Branding' },
-  { slug: 'sales', label: 'Sales' },
-  { slug: 'email', label: 'Email Marketing' },
-  { slug: 'helpdesk', label: 'Helpdesk' },
+  { slug: 'customer_avatar', label: 'Ideal customers' },
+  { slug: 'customer_journey', label: 'Customer journey' },
+  { slug: 'website_design', label: 'Website design' },
   { slug: 'knowledge_base', label: 'Knowledge Base' },
   { slug: 'workflow', label: 'Workflow' },
+  { slug: 'before_after_grid', label: 'Before and after' },
+  { slug: 'email', label: 'Email Marketing' },
+  { slug: 'analytics', label: 'Analytics' },
+  { slug: 'sales', label: 'Sales' },
+  { slug: 'helpdesk', label: 'Support' },
+  { slug: 'production', label: 'Production' },
+  { slug: 'accounting', label: 'Accounting' },
+  { slug: 'comms', label: 'Communications' },
+  { slug: 'coder', label: 'Website' },
+  { slug: 'orchestrator', label: 'Chief of staff' },
 ];
+/** The folder for an entry whose owner cannot be a folder name (see DEPARTMENT_NAME). */
 const GENERAL = 'general';
+/**
+ * The folder for an entry no agent owns: the Memory page's "Shared with every
+ * agent". Every agent follows these (in chats).
+ */
+export const SHARED_FOLDER = 'shared';
 
 export function departmentLabel(slug: string): string {
+  if (slug === SHARED_FOLDER) return 'Shared with every agent';
   return DEPARTMENTS.find((d) => d.slug === slug)?.label ?? slug.replace(/_/g, ' ');
 }
 
@@ -69,20 +92,16 @@ export interface KnowledgeEntry {
   version?: number | string;
   updated_at?: string;
   type: string;
+  /**
+   * The FOLDER this entry files under (departmentOf): the agent that owns it,
+   * or SHARED_FOLDER. Not the stored `department` column, which departmentOf
+   * reads from the raw row.
+   */
   department: string;
 }
 
 /** dept -> type -> entries */
 export type KnowledgeIndex = Map<string, Map<string, KnowledgeEntry[]>>;
-
-function extractDepartmentTag(content?: string): string | null {
-  if (!content) return null;
-  const html = content.match(/<!--\s*department:\s*([a-z0-9_-]+)\s*-->/i);
-  if (html) return html[1];
-  const yaml = content.match(/^department:\s*["']?([a-z0-9_-]+)["']?\s*$/im);
-  if (yaml) return yaml[1];
-  return null;
-}
 
 /**
  * A department becomes a DIRECTORY under <type-folder>/ (and part of a
@@ -123,10 +142,18 @@ export function safeFileStem(stem: string): string {
   return WINDOWS_DEVICE_NAME.test(stem) ? stem.replace(/^[^.]*/, (head) => head + DEVICE_STEM_SUFFIX) : stem;
 }
 
-export function departmentOf(entry: { domain?: string; content?: string }): string {
-  if (entry.domain && !entry.domain.startsWith('_')) return asDepartment(entry.domain) ?? GENERAL;
-  // The tag match is case-insensitive; file it lowercased, as the plugin does.
-  return asDepartment(extractDepartmentTag(entry.content)?.toLowerCase()) ?? GENERAL;
+/**
+ * The folder an entry files under: the agent that owns it by THE ONE OWNER
+ * RULE (memoryOwner.ts ownerOf: the builder's `owner` when the row carries
+ * one, else the rule over the `department` column, the marker, the front
+ * matter and the domain), so the local copy agrees with the Memory page. An
+ * entry no agent owns files under SHARED_FOLDER; an owner that cannot be a
+ * folder name files under 'general'.
+ */
+export function departmentOf(entry: OwnerInput): string {
+  const owner = ownerOf(entry);
+  if (owner === null) return SHARED_FOLDER;
+  return asDepartment(owner) ?? GENERAL;
 }
 
 /**
@@ -274,12 +301,45 @@ function keyOf(entry: { domain?: string; type: string }): string {
   return entry.domain ?? `${entry.type}:unknown`;
 }
 
+/** True when both paths exist and name one file (two spellings on a case-insensitive disk). */
+async function sameFile(a: string, b: string): Promise<boolean> {
+  try {
+    const [sa, sb] = await Promise.all([fs.lstat(a, { bigint: true }), fs.lstat(b, { bigint: true })]);
+    return sa.dev === sb.dev && sa.ino === sb.ino;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * An entry that now files under another folder (its owner changed on Hiveku,
+ * or an older build filed it by a different rule) leaves its earlier copy
+ * behind. That copy is removed when it is still exactly what the last download
+ * wrote, so Claude Code does not read the entry twice under two agents. A copy
+ * edited since is left alone, and never anything outside the folder.
+ */
+async function removeMovedCopy(baseDir: string, before: ManifestRow, nowAbs: string): Promise<void> {
+  const abs = path.join(baseDir, ...before.file.split('/'));
+  if (!isInsideRoot(baseDir, abs) || (await sameFile(abs, nowAbs))) return;
+  let text: string;
+  try {
+    text = await fs.readFile(abs, 'utf8');
+  } catch {
+    return; // already gone
+  }
+  if (sha256(text) !== before.content_sha) return;
+  await fs.rm(abs, { force: true }).catch(() => undefined);
+  // The department folder it left, when that is now empty (rmdir refuses otherwise).
+  await fs.rmdir(path.dirname(abs)).catch(() => undefined);
+}
+
 /**
  * Write entries to <type-folder>/<department>/<name>.md and update the sync
  * manifest. Returns how many were written. A row the disk refuses (a folder or
  * file in the way, a permission error) is skipped and its key is pushed onto
  * `failed`; the other rows are still written, and the manifest keeps what the
  * last download recorded for that row, since its file on disk is the old one.
+ * An entry that moved folders has its old, unedited copy removed.
  */
 export async function writeEntries(baseDir: string, entries: KnowledgeEntry[], failed: string[] = []): Promise<number> {
   const manifest = (await readManifest(baseDir)) ?? { synced_at: '', entries: {} };
@@ -299,6 +359,10 @@ export async function writeEntries(baseDir: string, entries: KnowledgeEntry[], f
       // Download Everything, the command sync, sites and department data).
       failed.push(keyOf(entry));
       continue;
+    }
+    const before = manifest.entries[keyOf(entry)];
+    if (before && typeof before.file === 'string' && before.file !== rel.split(path.sep).join('/')) {
+      await removeMovedCopy(baseDir, before, path.join(baseDir, rel));
     }
     manifest.entries[keyOf(entry)] = {
       id: entry.id,
@@ -1247,8 +1311,9 @@ today's note deletes everything the department had. So always read, merge, then 
    ${MEMORY_EDIT_RULES_PROSE}
    Only when step 2 found no entry, \`memory_create({ type: "memory", name: "<department>", content, reason })\`;
    a 409 there means someone created it meanwhile, so go back to step 2, read and merge. Never overwrite.
-The account memory (\`hiveku-data/account/ACCOUNT_MEMORY.md\`) is read-only: owners edit it on the Hiveku
-dashboard. To propose one line for it, use \`account_memory_append\`.
+The account memory (\`hiveku-data/account/ACCOUNT_MEMORY.md\`) is read-only: it is About your business on the
+Memory page (\`https://app.hiveku.com/<account-id>/dashboard/memory\`), where owners and admins change it. To
+propose one line for it, use \`account_memory_append\`.
 The local \`memory/<dept>/\` files are only a mirror — Hiveku is the source of truth, and persisting here is
 what brings the other departments + dashboard agents up to speed.
 `,
@@ -2430,7 +2495,8 @@ sessions. Put every temporary file (downloads, intermediate output, generated sc
 directory, or the folder root; never touch another account's folder.
 
 ## Folder layout
-- \`memory/<dept>/\` \`skills/<dept>/\` \`rules/<dept>/\` — department knowledge (.md)
+- \`memory/<dept>/\` \`skills/<dept>/\` \`rules/<dept>/\` — department knowledge (.md), filed under the
+  agent that owns each entry as the Memory page shows it; \`<folder>/shared/\` is what every agent follows
 - \`commands/\` \`agents/\` \`identity/\` — other knowledge types
 - \`sites/<slug>/\` — coder project source (each its own Hiveku VCS checkout; see below)
 - \`.hiveku/knowledge-manifest.json\` / \`knowledge-status.json\` — sync state
@@ -2583,7 +2649,8 @@ summarize: identity/persona, brand voice, customer avatars, the account memory (
 section), and the most relevant domain memory + skills/rules. Keep this in mind for everything that
 follows. The account memory is what the owners wrote about the business, plus suggested lines no
 owner has reviewed yet (treat those as unconfirmed); it is internal, so never quote it to customers.
-Owners and admins edit it on the Hiveku dashboard (Account memory); no tool changes it, and
+Owners and admins change it under About your business on the Memory page
+(\`https://app.hiveku.com/<account-id>/dashboard/memory\`); no tool changes it, and
 \`account_memory_append\` only suggests one line for them to keep or remove.
 `,
     'hiveku-chat': `---

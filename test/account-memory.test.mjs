@@ -222,7 +222,8 @@ describe('hiveku:/account-memory document', () => {
     assert.equal(clientRequests(), 0);
     assert.equal(calls.errors.length, 1, 'the person is told, not left with a silent no-op');
     assert.match(calls.errors[0][0], /nothing was saved/);
-    assert.equal(calls.errors[0][1], 'Edit on the dashboard');
+    assert.equal(calls.errors[0][1], 'Open in Memory');
+    assert.match(calls.errors[0][0], /^About your business cannot be changed from VS Code/, 'named as the Memory page names it (G15)');
     assert.equal(calls.infos.length, 0, 'never a success message');
   });
 
@@ -237,7 +238,7 @@ describe('hiveku:/account-memory document', () => {
   });
 });
 
-describe('Account Console tree: Account memory node', () => {
+describe('Account Console tree: About your business node', () => {
   const record = { accountId: ACCOUNT, label: 'Western Stairlifts' };
   const accounts = {
     list: () => [record],
@@ -250,7 +251,7 @@ describe('Account Console tree: Account memory node', () => {
     return { tree, client };
   };
 
-  test('each account shows an Account memory node, without fetching it until expanded', async () => {
+  test('each account shows an About your business node, without fetching it until expanded', async () => {
     const { tree, client } = makeTree({ account_memory_get: PAYLOAD });
     const [accountNode] = await tree.getChildren();
     const children = await tree.getChildren(accountNode);
@@ -258,19 +259,20 @@ describe('Account Console tree: Account memory node', () => {
     assert.deepEqual(kinds.slice(0, 3), ['section', 'section', 'accountMemory']);
     assert.equal(client.seen.filter((c) => c.name === 'account_memory_get').length, 0);
     const item = tree.getTreeItem(children[2]);
-    assert.equal(item.label, 'Account memory');
+    assert.equal(item.label, 'About your business');
     assert.equal(item.contextValue, 'hivekuConsoleAccountMemory');
     assert.equal(item.command.command, 'hiveku.accountMemoryOpen');
-    assert.match(String(item.tooltip), /Read-only here: owners and admins edit it on the Hiveku dashboard/);
+    assert.match(String(item.tooltip), /Read-only here: owners and admins change it on the Memory page/);
+    assert.doesNotMatch(String(item.tooltip), /dashboard|Account memory/, 'the retired words are gone (G15)');
   });
 
-  test('expanding it lists Edit on the dashboard, then the suggestions with who and when', async () => {
+  test('expanding it lists Edit on the Memory page, then the suggestions with who and when', async () => {
     const { tree, client } = makeTree({ account_memory_get: PAYLOAD });
     const node = { kind: 'accountMemory', record };
     const children = await tree.getChildren(node);
     assert.equal(children.length, 3);
     const edit = tree.getTreeItem(children[0]);
-    assert.equal(edit.label, 'Edit on the dashboard');
+    assert.equal(edit.label, 'Edit on the Memory page');
     assert.equal(edit.command.command, 'hiveku.accountMemoryEditOnDashboard');
     assert.deepEqual(edit.command.arguments, [{ record }]);
     const first = tree.getTreeItem(children[1]);
@@ -286,14 +288,14 @@ describe('Account Console tree: Account memory node', () => {
   test('no suggestions: says so plainly', async () => {
     const { tree } = makeTree({ account_memory_get: { data: { content: 'x', version: 1, suggestions: [] } } });
     const children = await tree.getChildren({ kind: 'accountMemory', record });
-    assert.deepEqual(children.map((c) => c.label ?? c.kind), ['Edit on the dashboard', 'No suggestions from agents are waiting']);
+    assert.deepEqual(children.map((c) => c.label ?? c.kind), ['Edit on the Memory page', 'No suggestions from agents are waiting']);
   });
 
   test('a failed load keeps the dashboard link and names the failure, never throws', async () => {
     const { tree } = makeTree({ account_memory_get: new Error('Tool account_memory_get errored: unknown tool') });
     const children = await tree.getChildren({ kind: 'accountMemory', record });
-    assert.equal(children[0].label, 'Edit on the dashboard');
-    assert.equal(children[1].label, 'Could not load the account memory');
+    assert.equal(children[0].label, 'Edit on the Memory page');
+    assert.equal(children[1].label, 'Could not load About your business');
     assert.match(children[1].tooltip, /unknown tool/);
   });
 

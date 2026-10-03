@@ -6,9 +6,21 @@
  *   hiveku:/env/<accountId>/<projectId>/<name>.env       project secrets (AWS SM)
  *   hiveku:/cms/<accountId>/<projectId>/<collection>/<slug>.json   CMS entry
  *   hiveku:/memory/<accountId>/<memoryId>/<name>.md      account AI memory entry
- *   hiveku:/account-memory/<accountId>/ACCOUNT_MEMORY.md  the account memory (READ-ONLY)
+ *   hiveku:/account-memory/<accountId>/ACCOUNT_MEMORY.md  About your business (READ-ONLY)
  *   hiveku:/memory-newer/<accountId>/<memoryId>/<name>.md  the newer Hiveku text of a memory
  *        entry that changed while it was open (READ-ONLY; the left side of Compare and merge)
+ *   hiveku:/memory-view/<accountId>/<memoryId>/<name>.md   a memory entry VS Code does not change
+ *        (a rule or skill shared with every agent, or an `_account:*` row): READ-ONLY, "Open in Memory"
+ *   hiveku:/memory-new/<accountId>/<department>/<name>.md  a new rule, skill, shortcut,
+ *        specialist or notes for one agent: empty until its FIRST SAVE creates the entry with
+ *        that department (audit G7; no placeholder entry is ever created)
+ *
+ * A memory save also keeps the one owner rule (memoryOwner.ts): a rule or
+ * skill shared with every agent, or an `_account:*` row, is refused with "Open
+ * in Memory" whichever way it was opened (the Memory page changes those; it
+ * does not change the other shared kinds, which save here), a
+ * `<!-- department: x -->` line an edit dropped is put back, and an edit that
+ * would move a rule to another agent is refused.
  *
  * Memory saves check for other writers (memory event log plan 14.3): the
  * provider remembers the version it served, and a save first reads the entry
@@ -37,11 +49,27 @@ import { quote as quoteEnvValue, parseEnvFile } from './env';
 import {
   cleanReason,
   listMemoryLog,
+  memoryCreateWithContext,
   memoryUpdateWithContext,
   versionConflict,
   versionFromWrite,
   versionOf,
 } from './memoryLog';
+import {
+  checkOwnerOnSave,
+  isReadOnlyRow,
+  isSharedChangedHere,
+  markerDepartment,
+  memoryLinkFor,
+  memoryPageUrl,
+  newEntryOf,
+  ownerName,
+  placeRow,
+  readOnlyReason,
+  withDepartmentMarker,
+  type OwnerInput,
+  type Placement,
+} from './memoryOwner';
 import {
   CANCELLED_NOTE,
   COMPARE_ACTION,
@@ -104,13 +132,31 @@ export function accountMemoryUri(accountId: string): vscode.Uri {
   return vscode.Uri.parse(`${HIVEKU_SCHEME}:/account-memory/${accountId}/${ACCOUNT_MEMORY_FILE}`);
 }
 
+/** A memory entry VS Code shows but does not change (see the header). */
+export function memoryViewUri(accountId: string, memoryId: string, domain: string): vscode.Uri {
+  const name = (domain || 'memory').replace(/[^A-Za-z0-9._:-]+/g, '-').replace(/:/g, '__');
+  return vscode.Uri.parse(`${HIVEKU_SCHEME}:/memory-view/${accountId}/${memoryId}/${name}.md`);
+}
+
+/**
+ * A new entry for `department`, stored as `domain` on its first save (see the
+ * header). `domain` is one "+ New entry" built (memoryOwner.ts newEntryDomain).
+ */
+export function memoryNewUri(accountId: string, department: string, domain: string): vscode.Uri {
+  const name = domain.replace(/[^A-Za-z0-9._:-]+/g, '-').replace(/:/g, '__');
+  return vscode.Uri.parse(`${HIVEKU_SCHEME}:/memory-new/${accountId}/${department}/${name}.md`);
+}
+
 interface ParsedUri {
-  kind: 'env' | 'cms' | 'memory' | 'memory-newer' | 'account-memory';
+  kind: 'env' | 'cms' | 'memory' | 'memory-newer' | 'memory-view' | 'memory-new' | 'account-memory';
   accountId: string;
   projectId?: string;
   collectionId?: string;
   slug?: string;
   memoryId?: string;
+  /** memory-new: the agent the entry is for, and the name it gets. */
+  department?: string;
+  domain?: string;
 }
 
 function parse(uri: vscode.Uri): ParsedUri {
@@ -130,8 +176,11 @@ function parse(uri: vscode.Uri): ParsedUri {
       slug: parts[4].replace(/\.json$/, ''),
     };
   }
-  if ((kind === 'memory' || kind === 'memory-newer') && parts.length >= 4) {
+  if ((kind === 'memory' || kind === 'memory-newer' || kind === 'memory-view') && parts.length >= 4) {
     return { kind, accountId: parts[1], memoryId: parts[2] };
+  }
+  if (kind === 'memory-new' && parts.length >= 4 && parts[2]) {
+    return { kind, accountId: parts[1], department: parts[2], domain: parts[3].replace(/\.md$/, '').replace(/__/g, ':') };
   }
   if (kind === 'account-memory' && parts.length >= 3 && parts[1]) {
     return { kind, accountId: parts[1] };
@@ -177,6 +226,14 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
   private readonly reasons = new Map<string, string>();
   /** `${accountId}/${memoryId}` → the newer Hiveku text shown by Compare and merge. */
   private readonly newer = new Map<string, string>();
+  /**
+   * memory-new uri → the id of the entry its first save created. Later saves of
+   * the same tab update that entry (with the stale-edit check), never create
+   * a second one. Kept while the tab is open (forget drops it).
+   */
+  private readonly created = new Map<string, string>();
+  /** memory-view uri → where the entry sits, from its read (the refusal names it without a request). */
+  private readonly viewed = new Map<string, { domain: string; placement: Placement }>();
 
   constructor(
     private readonly clientFor: ClientFor,
@@ -196,6 +253,24 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
     const key = uri.toString();
     this.reasons.delete(key);
     this.opened.delete(key);
+    this.created.delete(key);
+    this.viewed.delete(key);
+  }
+
+  /** The Memory page at a placed row (the "Open in Memory" button of every refusal). */
+  private memoryUrl(accountId: string, placement: Placement | null, domain: string): string {
+    return memoryPageUrl(this.appUrlFor(), accountId, placement ? memoryLinkFor(placement, domain) : {});
+  }
+
+  /**
+   * Refuse a save with `message` and an "Open in Memory" button, and stop the
+   * save without the generic failure message (SaveRefused).
+   */
+  private refuse(message: string, url: string): never {
+    void vscode.window.showErrorMessage(message, OPEN_IN_MEMORY).then((pick) => {
+      if (pick === OPEN_IN_MEMORY) void vscode.env.openExternal(vscode.Uri.parse(url));
+    });
+    throw new SaveRefused(message, true);
   }
 
   watch(): vscode.Disposable {
@@ -210,7 +285,7 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
       mtime: this.mtimes.get(uri.toString()) ?? 0,
       size: this.sizes.get(uri.toString()) ?? 0,
       // The editor opens it locked ("Cannot edit in read-only editor").
-      ...(p.kind === 'account-memory' || p.kind === 'memory-newer'
+      ...(p.kind === 'account-memory' || p.kind === 'memory-newer' || p.kind === 'memory-view'
         ? { permissions: vscode.FilePermission.Readonly }
         : {}),
     };
@@ -262,6 +337,24 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
         if (!entry) throw vscode.FileSystemError.FileNotFound(uri);
         text = entry.content ?? '';
       }
+    } else if (p.kind === 'memory-view') {
+      const entry = await api.memoryGet(client, p.memoryId!);
+      if (!entry) throw vscode.FileSystemError.FileNotFound(uri);
+      text = entry.content ?? '';
+      const row: OwnerInput = { ...entry, domain: entry.domain ?? memoryDocName(uri) };
+      this.viewed.set(uri.toString(), { domain: String(row.domain), placement: placeRow(row) });
+    } else if (p.kind === 'memory-new') {
+      const createdId = this.created.get(uri.toString());
+      if (createdId) {
+        // Saved once already: the tab shows the entry as Hiveku now has it.
+        const entry = await api.memoryGet(client, createdId);
+        if (!entry) throw vscode.FileSystemError.FileNotFound(uri);
+        text = entry.content ?? '';
+        this.opened.set(uri.toString(), { version: versionOf(entry.version), readAt: new Date().toISOString() });
+      } else {
+        // Nothing exists yet: an empty editor. The first save creates the entry.
+        text = '';
+      }
     } else {
       const entry = await api.memoryGet(client, p.memoryId!);
       if (!entry) throw vscode.FileSystemError.FileNotFound(uri);
@@ -311,15 +404,33 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
       // and a save that returned quietly would look like it had worked.
       const url = this.dashboardUrl(p.accountId);
       const message = accountMemoryReadOnlyMessage(url);
-      void vscode.window.showErrorMessage(message, 'Edit on the dashboard').then((pick) => {
-        if (pick === 'Edit on the dashboard') void vscode.env.openExternal(vscode.Uri.parse(url));
+      void vscode.window.showErrorMessage(message, OPEN_IN_MEMORY).then((pick) => {
+        if (pick === OPEN_IN_MEMORY) void vscode.env.openExternal(vscode.Uri.parse(url));
+      });
+      throw vscode.FileSystemError.NoPermissions(message);
+    }
+    if (p.kind === 'memory-view') {
+      // Refused before any request too: this tab was opened read-only because
+      // the entry is changed on the Memory page (its read said where it sits).
+      const seen = this.viewed.get(uri.toString());
+      const name = memoryDocName(uri);
+      const message =
+        `"${name}" is read-only here, so nothing was saved. ` +
+        `${seen ? readOnlyReason(seen.placement) : 'It is changed on the Memory page.'}`;
+      void vscode.window.showErrorMessage(message, OPEN_IN_MEMORY).then((pick) => {
+        if (pick === OPEN_IN_MEMORY) {
+          void vscode.env.openExternal(vscode.Uri.parse(this.memoryUrl(p.accountId, seen?.placement ?? null, seen?.domain ?? name)));
+        }
       });
       throw vscode.FileSystemError.NoPermissions(message);
     }
     const client = await this.clientFor(p.accountId);
     const text = dec.decode(content);
     try {
-      if (p.kind === 'env') {
+      if (p.kind === 'memory-new') {
+        const note = await this.writeNewMemory(client, uri, p, text);
+        vscode.window.showInformationMessage(note);
+      } else if (p.kind === 'env') {
         await this.writeEnv(client, p.projectId!, text);
       } else if (p.kind === 'cms') {
         let doc: { status?: string; publish_at?: string; fields?: Record<string, unknown> };
@@ -334,8 +445,10 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
         });
         vscode.window.showInformationMessage(`Saved CMS entry "${p.slug}" to Hiveku.`);
       } else {
-        await this.writeMemory(client, uri, p, text);
-        vscode.window.showInformationMessage('Memory entry saved (prior version snapshotted).');
+        const kept = await this.writeMemory(client, uri, p, text);
+        vscode.window.showInformationMessage(
+          `Memory entry saved (prior version snapshotted).${kept ? ` ${keptMarkerNote(kept)}` : ''}`,
+        );
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -343,6 +456,12 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
       if (err instanceof SaveNotApplied) {
         vscode.window.showInformationMessage(msg);
         throw vscode.FileSystemError.Unavailable(msg);
+      }
+      // A refusal is not a failure to reach Hiveku: it says why, once (with an
+      // "Open in Memory" button when the Memory page is where it is changed).
+      if (err instanceof SaveRefused) {
+        if (!err.shown) vscode.window.showErrorMessage(msg);
+        throw vscode.FileSystemError.NoPermissions(msg);
       }
       vscode.window.showErrorMessage(`Hiveku save failed: ${msg}`);
       throw err instanceof vscode.FileSystemError ? err : vscode.FileSystemError.Unavailable(msg);
@@ -354,9 +473,12 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
 
   /**
    * Save a memory entry without silently overwriting someone else's change
-   * (see the header). Throws SaveNotApplied when the person stops the save.
+   * (see the header). Throws SaveNotApplied when the person stops the save,
+   * and SaveRefused when the entry is not changed from VS Code (shared with
+   * every agent, an `_account:*` row) or the edit would move it to another
+   * agent. Returns the department whose marker line it put back, if any.
    */
-  private async writeMemory(client: HivekuMcpClient, uri: vscode.Uri, p: ParsedUri, text: string): Promise<void> {
+  private async writeMemory(client: HivekuMcpClient, uri: vscode.Uri, p: ParsedUri, edited: string): Promise<string | null> {
     const key = uri.toString();
     const memoryId = p.memoryId!;
     const name = memoryDocName(uri);
@@ -365,6 +487,30 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
     if (!entry) {
       throw new Error('this memory entry no longer exists on Hiveku (it may have been deleted). Copy your text before closing the tab.');
     }
+    // The one owner rule, on the entry as Hiveku has it now (an answer without
+    // a domain is named by the tab, as it was opened).
+    const row: OwnerInput = { ...entry, domain: entry.domain ?? name };
+    const domain = String(row.domain);
+    const placement = placeRow(row);
+    if (isReadOnlyRow(row, placement)) {
+      this.refuse(`"${name}" cannot be changed from VS Code, so nothing was saved. ${readOnlyReason(placement)}`, this.memoryUrl(p.accountId, placement, domain));
+    }
+    const owner = checkOwnerOnSave(row, edited);
+    if (!owner.ok) {
+      // The Memory page does not move a kind it does not change (a shared
+      // shortcut, specialist, notes or profile): say what does work.
+      const how = isSharedChangedHere(placement)
+        ? `Remove that line. The Memory page does not move this kind: to give it to ${ownerName(owner.to)}, add it for ` +
+          `${ownerName(owner.to)} with "+ New entry" in the Knowledge tab, then delete this one.`
+        : 'Remove that line, or move the entry to another agent on the Memory page.';
+      this.refuse(
+        `"${name}" ${owner.from ? `belongs to ${ownerName(owner.from)}` : 'is shared with every agent'}. The line ` +
+          `<!-- department: ${owner.to} --> would have the agents that read it follow it as ${ownerName(owner.to)}'s ` +
+          `instead, so nothing was saved. ${how}`,
+        this.memoryUrl(p.accountId, placement, domain),
+      );
+    }
+    const text = owner.text;
     const decision = decideSave(opened, { version: versionOf(entry.version), content: entry.content ?? '' });
     let expectedVersion: number | undefined;
     if (decision.kind === 'stale') {
@@ -395,6 +541,57 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
     // The saved text is now what this editor has seen.
     const saved = versionFromWrite(res);
     this.opened.set(key, { version: saved, readAt: new Date().toISOString() });
+    return owner.kept;
+  }
+
+  /**
+   * The first save of a memory-new tab creates the entry, with its department
+   * (audit G7): a rule, skill, shortcut or specialist also carries the
+   * `<!-- department: x -->` line the agents that read only the text follow.
+   * Every later save of the same tab updates that entry. Returns the message
+   * to show.
+   */
+  private async writeNewMemory(client: HivekuMcpClient, uri: vscode.Uri, p: ParsedUri, text: string): Promise<string> {
+    const key = uri.toString();
+    const department = p.department ?? '';
+    const createdId = this.created.get(key);
+    if (createdId) {
+      const kept = await this.writeMemory(client, uri, { ...p, kind: 'memory', memoryId: createdId }, text);
+      return `Memory entry saved (prior version snapshotted).${kept ? ` ${keptMarkerNote(kept)}` : ''}`;
+    }
+    const target = newEntryOf(p.domain ?? '', department);
+    if (!target) throw new Error('this is not a new entry VS Code can create, so nothing was saved. Start it again from "+ New entry".');
+    if (!text.trim()) throw new SaveNotApplied('Not created yet: write the entry first, then save. An empty entry is never created.');
+    let body = text;
+    if (target.kind !== 'memory') {
+      const named = markerDepartment(text);
+      if (named && named !== department) {
+        throw new SaveRefused(
+          `The line <!-- department: ${named} --> says this is ${ownerName(named)}'s, but it is a new entry for ` +
+            `${ownerName(department)}, so nothing was created. Remove that line, or start the entry for ${ownerName(named)} instead.`,
+        );
+      }
+      if (!named) body = withDepartmentMarker(text, department);
+    }
+    const reason = await this.askReason(key, 'Why are you adding it? (optional)');
+    let created: { id?: string; domain?: string; version?: unknown } | undefined;
+    try {
+      created = await memoryCreateWithContext(client, { type: target.kind, name: target.name, content: body, department }, { reason });
+    } catch (err) {
+      if (isStatus(err, 409)) {
+        throw new Error(
+          `an entry named "${p.domain}" already exists on Hiveku, so nothing was created. Your text is still in this tab: ` +
+            'open that entry from the Knowledge tab and add it there, or start a new entry with another name.',
+        );
+      }
+      throw err;
+    }
+    const id = created?.id ? String(created.id) : '';
+    if (!id) throw new Error('Hiveku did not say which entry it created. Check the Knowledge tab before saving again.');
+    this.created.set(key, id);
+    this.opened.set(key, { version: versionOf(created?.version), readAt: new Date().toISOString() });
+    const kind = target.kind === 'memory' ? 'notes' : NEW_KIND_WORDS[target.kind];
+    return `Created ${kind} "${target.name}" for ${ownerName(department)}. Saving this tab again updates it.`;
   }
 
   /**
@@ -440,12 +637,12 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
    * every few seconds would be unusable) and reuse the answer until that
    * document closes (forget).
    */
-  private async askReason(key: string): Promise<string | undefined> {
+  private async askReason(key: string, title = 'What changed? (optional)'): Promise<string | undefined> {
     const previous = this.reasons.get(key);
     const autoSave = vscode.workspace.getConfiguration('files').get<string>('autoSave', 'off');
     if (autoSave && autoSave !== 'off' && this.reasons.has(key)) return previous || undefined;
     const input = await vscode.window.showInputBox({
-      title: 'What changed? (optional)',
+      title,
       prompt: 'One line on why, shown to your team in the memory Activity view. Leave it empty to save without one.',
       placeHolder: 'For example: Clarified the refund wording',
       value: previous ?? '',
@@ -503,6 +700,42 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
 
 /** The person stopped a memory save (Cancel, or Compare and merge): not a failure. */
 export class SaveNotApplied extends Error {}
+
+/**
+ * A memory save VS Code does not make: the entry is changed on the Memory page,
+ * or the edit would move it to another agent. `shown`: the message (with its
+ * "Open in Memory" button) is already on screen.
+ */
+export class SaveRefused extends Error {
+  constructor(
+    message: string,
+    readonly shown = false,
+  ) {
+    super(message);
+  }
+}
+
+/** The button every read-only refusal offers. */
+export const OPEN_IN_MEMORY = 'Open in Memory';
+
+/** What "+ New entry" calls each kind in its messages. */
+const NEW_KIND_WORDS: Record<'rule' | 'skill' | 'command' | 'agent', string> = {
+  rule: 'rule',
+  skill: 'skill',
+  command: 'shortcut',
+  agent: 'specialist',
+};
+
+/** Said after a save that put back the entry's `<!-- department: x -->` line. */
+function keptMarkerNote(department: string): string {
+  return `Kept its <!-- department: ${department} --> line, which files it under ${ownerName(department)} for the agents.`;
+}
+
+/** True when a tool call failed with this HTTP status (the MCP client's McpToolError payload). */
+function isStatus(err: unknown, status: number): boolean {
+  const payload = err && typeof err === 'object' ? (err as { payload?: unknown }).payload : undefined;
+  return !!payload && typeof payload === 'object' && Number((payload as { status?: unknown }).status) === status;
+}
 
 /** The entry's name as its tab shows it ("_rule__pricing.md" → "_rule:pricing"). */
 function memoryDocName(uri: vscode.Uri): string {
