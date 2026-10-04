@@ -1316,7 +1316,7 @@ The account memory (\`hiveku-data/account/ACCOUNT_MEMORY.md\`) is read-only: it 
 Memory page (\`https://app.hiveku.com/<account-id>/dashboard/memory\`), where owners and admins change it. To
 propose one line for it, use \`account_memory_append\`.
 The local \`memory/<dept>/\` files are only a mirror — Hiveku is the source of truth, and persisting here is
-what brings the other departments + dashboard agents up to speed.
+what brings the other departments + dashboard agents up to speed. ${SOURCE_OF_TRUTH_PROSE}
 `,
     'hiveku-diagram': `---
 description: Draw a Mermaid diagram of a flow/architecture/steps and (optionally) save it.

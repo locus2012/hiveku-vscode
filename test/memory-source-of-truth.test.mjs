@@ -371,6 +371,7 @@ describe('the scaffolds say memory is the source of truth', () => {
     assertRule(await fsp.readFile(path.join(dir, 'CLAUDE.md'), 'utf8'), 'project CLAUDE.md');
     const remember = await fsp.readFile(path.join(dir, '.claude', 'commands', 'hiveku-remember.md'), 'utf8');
     assert.ok(flat(remember).includes(flat(log.MEMORY_WRITE_REFUSED_PROSE)), '/hiveku-remember says what a refusal means');
+    assert.ok(flat(remember).includes(flat(log.SOURCE_OF_TRUTH_PROSE)), '/hiveku-remember states the rule in the MCP server\'s words');
   });
 
   test('the Codex AGENTS.md region, inside its budget', async () => {

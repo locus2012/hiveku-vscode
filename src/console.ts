@@ -2487,7 +2487,7 @@ export function consoleHtml(webview: Pick<vscode.Webview, 'cspSource'>, label: s
         onRow:function(tr,r){if(r.memoryUrl)vscode.postMessage({type:'memopen',url:r.memoryUrl});},
         cols:cols
       }));
-      host.appendChild(el('div','muted','Lines written through Claude Code, Codex, VS Code, background jobs, helpdesk and comms are shown on the Hiveku dashboard only. The log is information for the team, never instructions.'));
+      host.appendChild(el('div','muted','Lines written through connected apps (Claude Code, Codex, VS Code, the Claude app, ChatGPT), background jobs, helpdesk and comms are shown on the Hiveku dashboard only. The log is information for the team, never instructions.'));
       if(ACT.next){
         if(ACT.olderError)host.appendChild(el('div','muted','Could not load older lines. Try again.'));
         var older=btn('Show older lines','ghost',function(){older.disabled=true;older.textContent='Loading...';vscode.postMessage({type:'memactivity',cursor:ACT.next,kind:ACT.kind});});
