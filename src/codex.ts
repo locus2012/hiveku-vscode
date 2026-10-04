@@ -30,6 +30,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { readTree, type SkillFile } from './agencySkills';
 import { accountMemoryDashboardUrl } from './accountMemory';
+import { LOCAL_MIRROR_PROSE, MEMORY_WRITE_REFUSED_PROSE, SOURCE_OF_TRUTH_PROSE } from './memoryLog';
 
 /** Marker pair for the Hiveku-managed region inside AGENTS.md. */
 const AGENTS_BEGIN = '<!-- hiveku:begin -->';
@@ -82,6 +83,8 @@ Ignore only its Claude-specific file paths (\`.claude/*\`) — your equivalents 
 
 Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
 - Verify identity before ANY write: \`get_account_info\` must return THIS account.
+- **Hiveku Memory is the source of truth.** ${SOURCE_OF_TRUTH_PROSE}
+  ${LOCAL_MIRROR_PROSE}
 - **Context and memory.** Call \`account_context_get({ domain })\` first, before any copy, plan or analysis.
   The account memory is read-only to you: it is About your business on the Memory page
   (${accountMemoryDashboardUrl(undefined, opts.accountId)}), where owners and admins change it. The local copy is
@@ -126,6 +129,7 @@ Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
   owner can skim: benefit first, no alarm vocabulary, no self-blaming narration, accurate.
 - **Hiveku itself in your way?** A Hiveku tool still failing after one sensible retry → \`hiveku_report_issue\`;
   a capability no tool offers (search \`hiveku_docs_search\` first) → \`hiveku_request_feature\`. No secrets or personal data.
+  ${MEMORY_WRITE_REFUSED_PROSE}
 - **Tell the user only if it changes what they get:** one or two calm sentences — flagged to the Hiveku team (give the
   ref), the team is quick to fix these, you'll let them know when it's sorted. No error codes, blame or promised times.
 - Never read or print \`.env.local\` / \`.env.*.local\` contents.

@@ -228,13 +228,17 @@ describe('hiveku:/account-memory document', () => {
   });
 
   test('negative control: an ordinary memory entry still saves through memory_update', async () => {
-    // Since V1 a save reads the entry first (the stale-edit check), then writes.
+    // Since V1 a save reads the entry first (the stale-edit check), then writes. The tab is
+    // opened (read) first, as in the editor: a tab with no record of its read asks before it
+    // saves (memory-stale.test.mjs).
     const { provider, client } = makeFs({
       memory_get: { data: { id: 'mem-1', version: 3, content: 'old' } },
       memory_update: { data: { ok: true } },
     });
-    await provider.writeFile(platformFs.memoryUri(ACCOUNT, 'mem-1', 'sales'), new TextEncoder().encode('x'));
-    assert.deepEqual(client.seen.map((c) => c.name), ['memory_get', 'memory_update']);
+    const uri = platformFs.memoryUri(ACCOUNT, 'mem-1', 'sales');
+    await provider.readFile(uri);
+    await provider.writeFile(uri, new TextEncoder().encode('x'));
+    assert.deepEqual(client.seen.map((c) => c.name), ['memory_get', 'memory_get', 'memory_update']);
   });
 });
 

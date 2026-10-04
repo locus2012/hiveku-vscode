@@ -29,6 +29,12 @@
  * save sends the version it was based on as expected_version, so once the
  * server checks it a change that lands mid-save is a 409 with the same dialog.
  * An optional "What changed?" line rides along as the reason (empty is fine).
+ * A tab with no record of its read (VS Code restored it without reading it
+ * again) gets the same dialog before its first save: memory wins over a local
+ * copy of unknown age.
+ *
+ * A write Hiveku refuses for this key (403 memory_write_refused, builder #486)
+ * shows Hiveku's own sentence with "Open in Memory", never the raw tool error.
  *
  * The account memory is the one family with no save: owners and admins edit it
  * on the Hiveku dashboard and there is no MCP tool that sets it. stat() marks
@@ -50,10 +56,13 @@ import {
   cleanReason,
   listMemoryLog,
   memoryCreateWithContext,
+  memoryPageLink,
   memoryUpdateWithContext,
+  memoryWriteRefused,
   versionConflict,
   versionFromWrite,
   versionOf,
+  type MemoryWriteRefusal,
 } from './memoryLog';
 import {
   checkOwnerOnSave,
@@ -72,6 +81,7 @@ import {
 } from './memoryOwner';
 import {
   CANCELLED_NOTE,
+  CANCELLED_UNKNOWN_NOTE,
   COMPARE_ACTION,
   COMPARE_NOTE,
   SAVE_ANYWAY_ACTION,
@@ -463,6 +473,14 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
         if (!err.shown) vscode.window.showErrorMessage(msg);
         throw vscode.FileSystemError.NoPermissions(msg);
       }
+      // Hiveku refused the write for this key (403 memory_write_refused): deliberate,
+      // not a failure to reach it. Its own sentence and the Memory page link, never
+      // the raw tool error.
+      const refusal = memoryWriteRefused(err);
+      if (refusal) {
+        showMemoryWriteRefusal(refusal, this.memoryUrl(p.accountId, null, ''));
+        throw vscode.FileSystemError.NoPermissions(refusal.message);
+      }
       vscode.window.showErrorMessage(`Hiveku save failed: ${msg}`);
       throw err instanceof vscode.FileSystemError ? err : vscode.FileSystemError.Unavailable(msg);
     }
@@ -514,7 +532,9 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
     const decision = decideSave(opened, { version: versionOf(entry.version), content: entry.content ?? '' });
     let expectedVersion: number | undefined;
     if (decision.kind === 'stale') {
-      expectedVersion = await this.resolveStale(client, uri, p, name, opened, decision.current, 'check');
+      // A tab with no record of its read is a local copy of unknown age: memory wins, so the
+      // person sees the text on Hiveku now before anything is saved over it.
+      expectedVersion = await this.resolveStale(client, uri, p, name, opened, decision.current, decision.unknownOpen ? 'unknown' : 'check');
     } else {
       expectedVersion = decision.expectedVersion;
     }
@@ -606,7 +626,7 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
     name: string,
     opened: OpenedMemory | undefined,
     current: CurrentMemory,
-    origin: 'check' | 'conflict',
+    origin: 'check' | 'conflict' | 'unknown',
   ): Promise<number | undefined> {
     let lines: Awaited<ReturnType<typeof listMemoryLog>>['lines'] = [];
     try {
@@ -628,7 +648,7 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
       await vscode.commands.executeCommand('vscode.diff', left, uri, `${name}: on Hiveku now (left) and your edit (right)`);
       throw new SaveNotApplied(COMPARE_NOTE);
     }
-    throw new SaveNotApplied(CANCELLED_NOTE);
+    throw new SaveNotApplied(origin === 'unknown' ? CANCELLED_UNKNOWN_NOTE : CANCELLED_NOTE);
   }
 
   /**
@@ -717,6 +737,19 @@ export class SaveRefused extends Error {
 
 /** The button every read-only refusal offers. */
 export const OPEN_IN_MEMORY = 'Open in Memory';
+
+/**
+ * A memory write Hiveku refused for this key (memoryLog.ts memoryWriteRefused): its own
+ * sentence, and "Open in Memory" for its link when that is this account's Memory page
+ * (`memoryPageBase`), else the page itself. The console, the module panels and the
+ * editor save all show it this way, never as the raw tool error.
+ */
+export function showMemoryWriteRefusal(refusal: MemoryWriteRefusal, memoryPageBase: string): void {
+  const target = memoryPageLink(refusal.url, memoryPageBase);
+  void vscode.window.showErrorMessage(refusal.message, OPEN_IN_MEMORY).then((pick) => {
+    if (pick === OPEN_IN_MEMORY) void vscode.env.openExternal(vscode.Uri.parse(target));
+  });
+}
 
 /** What "+ New entry" calls each kind in its messages. */
 const NEW_KIND_WORDS: Record<'rule' | 'skill' | 'command' | 'agent', string> = {

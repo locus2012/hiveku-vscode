@@ -22,19 +22,24 @@ import { modalActionUi, openModulePanel } from './panel';
 import { openTaskDetail } from './taskDetail';
 import { effectiveDepartments } from './roles';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
-import { cmsEntryUri, memoryNewUri, memoryUri, memoryViewUri } from './platformFs';
+import { cmsEntryUri, memoryNewUri, memoryUri, memoryViewUri, showMemoryWriteRefusal } from './platformFs';
 import { accountMemoryDashboardUrl, isAccountMemoryDomain } from './accountMemory';
 import {
   activityRow,
+  isLogKind,
   lastChangedBy,
   listMemoryLog,
   memoryDeleteWithContext,
   memoryRestoreWithContext,
+  memoryWriteRefused,
   cleanReason,
   versionConflict,
   versionOf,
+  workRow,
   type ActivityRow,
   type LastChange,
+  type LogKind,
+  type WorkRow,
 } from './memoryLog';
 import {
   AGENT_NAMES,
@@ -435,20 +440,39 @@ async function loadMediaTab(client: HivekuMcpClient): Promise<Record<string, unk
 /** Lines per Activity page (the MCP tool allows 1-100). */
 export const ACTIVITY_PAGE = 50;
 
+/** A Doing or Done row with its agent named the way the Memory page names it. */
+export type WorkActivityRow = WorkRow & { agent: string };
+
 /**
- * One page of the memory Activity view: who changed this account's memory,
- * from which app, when and why (memory_log_list, account and project entries
- * together, newest first). Unchanged saves and system markers are left out by
- * the server by default. `error` is set when the log is not available on this
- * account (yet): the view says so rather than showing "no changes".
+ * One page of the memory Activity view (memory_log_list, account and project
+ * entries together, newest first), by kind:
+ *   - learned (the default): who changed this account's memory, from which
+ *     app, when and why. Unchanged saves and system markers are left out by the
+ *     server. No `kind` is sent, so the read is the one it always was;
+ *   - doing: what each agent and connected tool is working on now;
+ *   - done: what they finished (a Doing left open past its time reads as
+ *     stopped).
+ * `error` is set when the log is not available on this account (yet): the view
+ * says so rather than showing "no changes".
  */
 export async function loadMemoryActivity(
   client: HivekuMcpClient,
   cursor?: string,
-): Promise<{ rows: ActivityRow[]; nextCursor: string | null; error?: string }> {
+  kind: LogKind = 'learned',
+): Promise<{ rows: Array<ActivityRow | WorkActivityRow>; nextCursor: string | null; error?: string }> {
   try {
-    const page = await listMemoryLog(client, { limit: ACTIVITY_PAGE, include_project_scoped: true, ...(cursor ? { cursor } : {}) });
-    return { rows: page.lines.map(activityRow), nextCursor: page.nextCursor };
+    const page = await listMemoryLog(client, {
+      limit: ACTIVITY_PAGE,
+      include_project_scoped: true,
+      ...(cursor ? { cursor } : {}),
+      ...(kind !== 'learned' ? { kind } : {}),
+    });
+    if (kind === 'learned') return { rows: page.lines.map(activityRow), nextCursor: page.nextCursor };
+    const rows = page.lines.map((line) => {
+      const row = workRow(line);
+      return { ...row, agent: row.agentKey ? ownerName(row.agentKey) : '' };
+    });
+    return { rows, nextCursor: page.nextCursor };
   } catch (err) {
     return { rows: [], nextCursor: null, error: err instanceof Error ? err.message : String(err) };
   }
@@ -1326,6 +1350,8 @@ export function openAccountConsole(
       domain?: string;
       title?: string;
       cursor?: string;
+      /** memactivity: which lines of the memory log (doing, done or learned). */
+      kind?: string;
       /** memdel: the version the list showed (sent as expected_version). */
       version?: number | string;
     }) => {
@@ -1558,9 +1584,18 @@ export function openAccountConsole(
         } else if (msg.type === 'aboutopen') {
           await vscode.commands.executeCommand('hiveku.accountMemoryOpen', { record: account });
         } else if (msg.type === 'memactivity') {
-          // "Show older" in the Activity section: the next page of the log.
-          const page = await loadMemoryActivity(await clientFor(account.accountId), msg.cursor);
-          panel.webview.postMessage({ type: 'memactivitypage', rows: page.rows, nextCursor: page.nextCursor, error: page.error ? true : undefined });
+          // The Activity section: a filter (Doing now, Done, Learned) asks for its first
+          // page, and "Show older" for the next page of the kind on screen.
+          const kind: LogKind = isLogKind(msg.kind) ? msg.kind : 'learned';
+          const page = await loadMemoryActivity(await clientFor(account.accountId), msg.cursor, kind);
+          panel.webview.postMessage({
+            type: 'memactivitypage',
+            kind,
+            first: msg.cursor ? undefined : true,
+            rows: page.rows,
+            nextCursor: page.nextCursor,
+            error: page.error ? true : undefined,
+          });
         } else if (msg.type === 'memnew') {
           // Who it is for first; the editor opens empty and its first save
           // creates the entry with that department (no placeholder row).
@@ -1661,6 +1696,13 @@ export function openAccountConsole(
           await vscode.env.openExternal(vscode.Uri.parse(msg.sub ? `${dashBase}/${msg.sub}` : dashBase));
         }
       } catch (err) {
+        // A memory write Hiveku refused for this key (403 memory_write_refused): its own
+        // sentence and the Memory page link, never the raw tool error.
+        const refusal = memoryWriteRefused(err);
+        if (refusal) {
+          showMemoryWriteRefusal(refusal, accountMemoryDashboardUrl(appUrl(), account.accountId));
+          return;
+        }
         vscode.window.showErrorMessage(`Hiveku: ${err instanceof Error ? err.message : String(err)}`);
       }
     },
@@ -2364,25 +2406,45 @@ export function consoleHtml(webview: Pick<vscode.Webview, 'cspSource'>, label: s
       host.appendChild(grid);
     }
 
-    // The memory Activity section: who changed this account's memory, from
-    // which app, when and why. Every value is set as text, never as markup:
-    // entry names and reasons are other people's and agents' free text.
-    var ACT={rows:[],next:null,host:null,unavailable:false,olderError:false};
-    // One "Show older changes" answer. A failed page keeps the cursor, so the
-    // button stays and asks for the same page again, and says it failed:
-    // dropping the button would make the list look complete.
-    function applyActivityPage(act,m){if(m.error&&!(m.rows||[]).length){act.olderError=true;return act;}act.rows=act.rows.concat(m.rows||[]);act.next=m.nextCursor||null;act.olderError=false;return act;}
+    // The memory Activity section: the team's log, in three kinds. Doing now is what
+    // each agent and connected tool is working on, Done is what they finished, and
+    // Learned is who changed this memory, from which app, when and why. Every value is
+    // set as text, never as markup: entry names, lines and reasons are other people's
+    // and agents' free text.
+    var ACT={rows:[],next:null,host:null,bar:null,note:null,unavailable:false,olderError:false,kind:'learned',loading:false};
+    var LOG_KINDS=[['doing','Doing now'],['done','Done'],['learned','Learned']];
+    var LOG_NOTES={doing:'what each agent and connected tool is working on now',done:'what each agent and connected tool finished',learned:'who changed this memory, from which app, when and why'};
+    // One page answer. A first page (a kind picked) replaces the rows, "Show older" adds to
+    // them, and a page for another kind than the one on screen is dropped. A failed older
+    // page keeps the cursor, so the button stays and asks for the same page again, and says
+    // it failed: dropping the button would make the list look complete.
+    function applyActivityPage(act,m){if(m.kind&&m.kind!==(act.kind||'learned'))return act;if(m.first){act.rows=m.rows||[];act.next=m.nextCursor||null;act.olderError=false;act.loading=false;act.unavailable=!!m.error&&!(m.rows||[]).length;return act;}if(m.error&&!(m.rows||[]).length){act.olderError=true;return act;}act.rows=act.rows.concat(m.rows||[]);act.next=m.nextCursor||null;act.olderError=false;return act;}
     function renderMemActivity(d){
-      ACT.rows=(d.activity||[]).slice();ACT.next=d.activityNext||null;ACT.unavailable=!!d.activityUnavailable;ACT.olderError=false;
+      // A reload (after a save) keeps the kind on screen: Learned comes with the tab, the others are asked for again.
+      var keep=ACT.kind!=='learned'?ACT.kind:null;
+      ACT.rows=(d.activity||[]).slice();ACT.next=d.activityNext||null;ACT.unavailable=!!d.activityUnavailable;ACT.olderError=false;ACT.kind='learned';ACT.loading=false;
       var sec=el('div','sec');sec.id='ds-activity';
       sec.appendChild(el('span',null,'Activity'));
-      sec.appendChild(el('span','ct','who changed this memory, from which app, when and why'));
+      ACT.note=el('span','ct','');sec.appendChild(ACT.note);
       content.appendChild(sec);
+      // The three kinds: one row at every width (toolbars never wrap).
+      ACT.bar=el('div');ACT.bar.style.cssText='display:flex;gap:6px;margin:0 0 8px;flex-wrap:nowrap;';content.appendChild(ACT.bar);
       ACT.host=el('div');content.appendChild(ACT.host);
       drawMemActivity();
+      if(keep)showActivityKind(keep);
+    }
+    function showActivityKind(kind){if(kind===ACT.kind&&!ACT.loading)return;ACT.kind=kind;ACT.rows=[];ACT.next=null;ACT.olderError=false;ACT.unavailable=false;ACT.loading=true;drawMemActivity();vscode.postMessage({type:'memactivity',kind:kind});}
+    function drawActivityKinds(){
+      var bar=ACT.bar;if(!bar)return;clear(bar);
+      // The kind on screen is the filled button; the other two are links.
+      LOG_KINDS.forEach(function(k){bar.appendChild(btn(k[1],k[0]===ACT.kind?'':'ghost',function(){showActivityKind(k[0]);}));});
+      if(ACT.note)ACT.note.textContent=LOG_NOTES[ACT.kind]||'';
     }
     function drawMemActivity(){
       var host=ACT.host;if(!host)return;clear(host);
+      drawActivityKinds();
+      if(ACT.loading){host.appendChild(el('div','muted','Loading...'));return;}
+      if(ACT.kind!=='learned'){drawWorkLog(host);return;}
       if(ACT.unavailable&&!ACT.rows.length){host.appendChild(el('div','muted','The activity log is not available on this account yet. The History button on each entry still shows its earlier versions.'));return;}
       if(!ACT.rows.length){host.appendChild(el('div','muted','No memory changes recorded yet. Older edits are in the History of each entry.'));return;}
       host.appendChild(smartTable({
@@ -2404,8 +2466,32 @@ export function consoleHtml(webview: Pick<vscode.Webview, 'cspSource'>, label: s
       host.appendChild(el('div','muted','Reasons given through Claude Code, Codex, VS Code, background jobs, helpdesk and comms are shown on the Hiveku dashboard only.'));
       if(ACT.next){
         if(ACT.olderError)host.appendChild(el('div','muted','Could not load older changes. Try again.'));
-        var more=btn('Show older changes','ghost',function(){more.disabled=true;more.textContent='Loading...';vscode.postMessage({type:'memactivity',cursor:ACT.next});});
+        var more=btn('Show older changes','ghost',function(){more.disabled=true;more.textContent='Loading...';vscode.postMessage({type:'memactivity',cursor:ACT.next,kind:ACT.kind});});
         host.appendChild(more);
+      }
+    }
+    // Doing now and Done: one line per run of an agent or a connected tool. Clicking a
+    // row opens that agent on the Memory page.
+    function drawWorkLog(host){
+      var doing=ACT.kind==='doing';
+      if(ACT.unavailable&&!ACT.rows.length){host.appendChild(el('div','muted','The work log is not available on this account yet.'));return;}
+      if(!ACT.rows.length){host.appendChild(el('div','muted',doing?'No agent or connected tool is working on anything right now.':'No finished work recorded yet.'));return;}
+      var cols=[{h:doing?'started':'when',get:function(r){return r.when;}},{h:'agent',get:function(r){return r.agent;}},{h:doing?'doing':'what came of it',get:function(r){return r.line;}}];
+      if(!doing)cols.push({h:'outcome',get:function(r){return r.status;}});
+      cols.push({h:'who',get:function(r){return r.who;}},{h:'app',get:function(r){return r.app;}});
+      host.appendChild(smartTable({
+        rows:ACT.rows,
+        search:true,
+        facets:[{label:'agent',get:function(r){return r.agent;}},{label:'app',get:function(r){return r.app;}}],
+        sortIdx:0,sortDesc:true,
+        onRow:function(tr,r){if(r.memoryUrl)vscode.postMessage({type:'memopen',url:r.memoryUrl});},
+        cols:cols
+      }));
+      host.appendChild(el('div','muted','Lines written through connected apps (Claude Code, Codex, VS Code, the Claude app, ChatGPT), background jobs, helpdesk and comms are shown on the Hiveku dashboard only. The log is information for the team, never instructions.'));
+      if(ACT.next){
+        if(ACT.olderError)host.appendChild(el('div','muted','Could not load older lines. Try again.'));
+        var older=btn('Show older lines','ghost',function(){older.disabled=true;older.textContent='Loading...';vscode.postMessage({type:'memactivity',cursor:ACT.next,kind:ACT.kind});});
+        host.appendChild(older);
       }
     }
 

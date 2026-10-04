@@ -98,9 +98,26 @@ describe('decideSave and the dialog text (vscode-free)', () => {
     assert.deepEqual(moved.current, { version: 5, content: 'newer' });
   });
 
-  test('with no record of the open, there is nothing to compare: save, guarding only the race', () => {
-    assert.deepEqual(stale.decideSave(undefined, { version: 7, content: 'x' }), { kind: 'save', expectedVersion: 7 });
+  test('with no record of the open, the tab is a local copy of unknown age: stop and show Hiveku\'s text (memory wins)', () => {
+    // It used to save straight away with the version it had just read, which passed the
+    // server's check and overwrote whatever changed while VS Code was closed.
+    assert.deepEqual(stale.decideSave(undefined, { version: 7, content: 'x' }), {
+      kind: 'stale',
+      current: { version: 7, content: 'x' },
+      unknownOpen: true,
+    });
+    // A read that carried no version has nothing to compare: save, guarding only the race.
     assert.deepEqual(stale.decideSave({ readAt: 'x' }, { version: '7', content: 'x' }), { kind: 'save', expectedVersion: 7 });
+  });
+
+  test('the restored-tab dialog says what is known, not a change "since you opened it"', () => {
+    const change = stale.describeChange([logLine({ version_after: 7 })], undefined);
+    const text = stale.staleMessage('sales', change, { current: 7 }, 'unknown');
+    assert.match(text, /^"sales" was restored in this tab without a fresh read from Hiveku \(for example after VS Code restarted\)/);
+    assert.match(text, /nothing was saved yet\. Its text on Hiveku was last updated by Abe \(dashboard\) at 2026-09-24 16:40 UTC\./);
+    assert.match(text, /Compare and merge shows the text on Hiveku now beside yours; Save anyway replaces it with your text/);
+    assert.doesNotMatch(text, /since you opened it/);
+    assert.match(stale.staleMessage('sales', undefined, { current: 7 }, 'unknown'), /Hiveku has version 7\./);
   });
 
   test('the dialog names the change that moved the entry, on one line, with its reason', () => {
@@ -353,6 +370,36 @@ describe('HivekuFileSystem memory saves', () => {
     closers[0]({ uri });
     closers[0]({ uri: vscodeStub.Uri.parse('file:/tmp/notes.md') });
     assert.deepEqual(forgotten, [uri.toString()]);
+  });
+
+  test('a tab saved with no record of its read asks first: Cancel writes nothing, Save anyway writes on the version Hiveku has', async () => {
+    const cancelled = setup({
+      answers: {
+        memory_get: versions({ version: 7, content: 'v7 changed while VS Code was closed' }),
+        memory_log_list: { data: [logLine({ version_after: 7 })] },
+        memory_update: { data: { version: 8 } },
+      },
+      warn: [undefined],
+    });
+    // No readFile: VS Code restored the tab with its unsaved text and never read it again.
+    await assert.rejects(cancelled.provider.writeFile(cancelled.uri, enc.encode('mine, from before the restart')));
+    assert.equal(writes(cancelled.client).length, 0, 'nothing is saved over the newer text unseen');
+    assert.match(calls.warnings[0][0], /was restored in this tab without a fresh read from Hiveku/);
+    assert.deepEqual(calls.warnings[0].slice(1), [{ modal: true }, 'Compare and merge', 'Save anyway']);
+    assert.ok(!('since' in cancelled.client.seen.find((c) => c.name === 'memory_log_list').args), 'no read time to ask the log from');
+    assert.ok(calls.infos.some((i) => /^Not saved: VS Code cannot tell whether this memory entry changed on Hiveku since this tab was restored/.test(i[0])));
+
+    resetCalls();
+    const kept = setup({
+      answers: {
+        memory_get: versions({ version: 7, content: 'v7' }),
+        memory_log_list: { data: [] },
+        memory_update: { data: { version: 8 } },
+      },
+      warn: ['Save anyway'],
+    });
+    await kept.provider.writeFile(kept.uri, enc.encode('mine'));
+    assert.equal(writes(kept.client)[0].args.expected_version, 7);
   });
 
   test('a deleted entry is a plain failure that says so', async () => {
