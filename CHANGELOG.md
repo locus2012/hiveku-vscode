@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
-- **Activity shows the team's work: Doing now, Done and Learned.** The Knowledge tab's Activity section has three buttons. Doing now lists what each agent and connected tool is working on, Done lists what they finished and how it ended, and Learned is the list of memory changes it showed before. Clicking a Doing or Done line opens that agent on the Memory page. A line written through Claude Code, Codex, VS Code, a background job, helpdesk or comms is shown on the Hiveku dashboard only.
+## 0.88.0
+- **Activity shows the team's work: Doing now, Done and Learned.** The Knowledge tab's Activity section has three buttons. Doing now lists what each agent and connected tool is working on, Done lists what they finished and how it ended, and Learned is the list of memory changes it showed before. Clicking a Doing or Done line opens that agent on the Memory page. A line written through a connected app (Claude Code, Codex, VS Code, the Claude app, ChatGPT), a background job, helpdesk or comms is shown on the Hiveku dashboard only.
 - **A refused memory change says why, in plain words.** When Hiveku refuses a memory save, new entry, delete or restore for this key (the person who made the key cannot make that change on the Memory page), VS Code shows Hiveku's own sentence with "Open in Memory", instead of the raw tool error.
 - **A restored tab is checked before it saves.** A memory tab that VS Code restored without reading it again (for example after a restart) used to save straight over any change made while VS Code was closed. Its first save now shows the text on Hiveku first, with Compare and merge, Save anyway or Cancel.
 - **Hiveku Memory is the source of truth, in every folder.** Each account's CLAUDE.md, a project's CLAUDE.md, AGENTS.md and `/hiveku-remember` now say it in the Hiveku MCP server's words: read memory before acting, follow it over assumptions, local files and earlier conversation, and record a Doing and a Done line for each piece of work. They also say the local memory files are a mirror to re-read before acting on one, and that a refused memory write is shown to the person, not retried or reported. Account folders you already have pick this up on "Hiveku: Refresh Setup".
+- **The vendored skills match plugin 0.27.9.**
 
 ## 0.87.1
 - **Claude re-checks a tracking claim before acting on it.** The vendored orient skill now has Claude check a note that says tracking is broken, a pixel or tag is missing, consent is blocking conversions, or two systems disagree, with the live tools first, and tell you what it checked and when.
