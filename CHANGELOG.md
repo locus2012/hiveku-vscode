@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.89.0
+- **Accounting downloads five more lists.** "Download Department Data" and the console's Accounting tab now include Products & services (the catalog that invoice and estimate lines pick from), Recurring bills, and Time off policies, balances and requests.
+- **Three Accounting columns that were always empty now show their numbers:** a payroll member's rate, the number of people in a payroll run, and whether a vendor is a 1099 vendor (in place of a vendor currency, which a vendor never had).
+- **Claude follows today's bookkeeping rules.** The Accounting notes and first-run guide written into each account folder now say what Hiveku does today:
+  - a bill is approved before it is paid, and a payment cannot be dated ahead;
+  - a mistyped bill payment is undone with a reversal (the old text said nothing could undo one);
+  - a pay run leaves out archived and inactive people, prorates fixed pay to the pay period, and refuses a period that overlaps another run;
+  - time off is checked against the year's balance, and a decision moves a request one way only;
+  - an invoice can be drafted and sent directly, with products picked from the account's own catalog;
+  - receipts are private, and a vendor's tax ID is only ever shown as its last four.
+- **Claude knows how a form's automatic reply works.** The vendored web skill now describes the reply a visitor gets after filling in a form: the owner's own reply when the account has a verified sending domain, Hiveku's standard thank-you when it does not, the limits on each, and when replies pause themselves. The tracking skill says each lead in the Forms tab shows who was told, address by address.
+- **Claude asks before linking a before/after grid to a persona.** Linking an active grid shows it on that persona's public journey pages, so the vendored creative and orient skills now have Claude ask which persona a grid is for instead of linking it on its own.
+- **Reading a client's CallRail setup.** The vendored phone skill lists `voice_callrail_setup_read`, which reads a client's CallRail companies, trackers, numbers and swap settings to plan a move, and changes nothing.
+- **The vendored skills match plugin 0.27.12.**
+
 ## 0.88.0
 - **Activity shows the team's work: Doing now, Done and Learned.** The Knowledge tab's Activity section has three buttons. Doing now lists what each agent and connected tool is working on, Done lists what they finished and how it ended, and Learned is the list of memory changes it showed before. Clicking a Doing or Done line opens that agent on the Memory page. A line written through a connected app (Claude Code, Codex, VS Code, the Claude app, ChatGPT), a background job, helpdesk or comms is shown on the Hiveku dashboard only.
 - **A refused memory change says why, in plain words.** When Hiveku refuses a memory save, new entry, delete or restore for this key (the person who made the key cannot make that change on the Memory page), VS Code shows Hiveku's own sentence with "Open in Memory", instead of the raw tool error.

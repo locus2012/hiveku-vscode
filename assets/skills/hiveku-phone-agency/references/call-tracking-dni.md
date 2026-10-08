@@ -48,6 +48,7 @@ invent a name.
 | `voice_phone_tracking_config_set` | LIVE | FULL REPLACE; read first and resend every field |
 | `voice_phone_tracking_config_delete` | LIVE | Turns tracking off for that environment |
 | `voice_swap_test` | LIVE | Holds a DID for the sticky window; run once |
+| `voice_callrail_setup_read` | LIVE | Reads a client's CallRail setup (companies, trackers, numbers, swap settings) to plan the move in section 6, with their own key from the project secret `CALLRAIL_API_KEY`; changes nothing in Hiveku or CallRail |
 
 Profile visibility: the **marketing-ads (PPC) profile sees the call-tracking family BY NAME** -
 `voice_call_tracking_diagnose`, `voice_call_tracking_trace`, `voice_call_tracking_live_probe`,
