@@ -335,10 +335,12 @@ For editable, layered design projects (the designer lane), follow the hiveku-cre
 `;
 
 const PULL_DATA_COMMAND = `---
-description: Pull/refresh this account's department data into hiveku-data/ so you can work on LOCAL files.
+description: Pull/refresh this account's department data into hiveku-data/ for a broad look on LOCAL files.
 argument-hint: "[departments, e.g. seo ppc — or --stale / --all]"
 ---
-Refresh the local data mirror$ARGUMENTS, then work from the files — not from repeated live list calls.
+Refresh the local data mirror$ARGUMENTS for a broad look across it, instead of repeated live list calls.
+The files are a copy of the last pull and may be out of date, and Hiveku is the source of truth: before
+you act on anything in them, read it again from Hiveku (step 3).
 
 1. Run the runner from this folder (deterministic bulk export; rows never pass through your context):
    - \`node .hiveku/pull-data.mjs --list\` — see departments + freshness
@@ -349,11 +351,14 @@ Refresh the local data mirror$ARGUMENTS, then work from the files — not from r
    Every run except --dataset also refreshes \`hiveku-data/account/ACCOUNT_MEMORY.md\`, a READ-ONLY copy of
    the account memory: About your business on the Memory page, where owners and admins change it (the link
    is at the top of the file). Never edit or upload the file. To add a fact, suggest it with account_memory_append.
+   It may be out of date: before you act on it, read it again with \`account_memory_get\` (memory_list and
+   memory_get leave it out).
 2. Then analyze LOCALLY: grep/read \`hiveku-data/<dept>/*.json\` (each file is
    { dataset, count, fetched_at, rows } — check fetched_at before trusting it). Scoped rows carry
    \`_parent\` (which project/connection they came from).
 3. The local-first loop:
-   - READ from hiveku-data/ (fast, free, greppable).
+   - LOOK across hiveku-data/ (fast, free, greppable).
+   - Before you act on a row, READ it again live with the tool its file names: the files are a copy.
    - WRITE via the live MCP tools (the write path is in each department's README.md + SETUP.md).
    - After a write that changes a dataset, re-pull just that dataset with --dataset so local stays true.
 4. If the runner errors on every dataset, this account's key is no longer valid — tell the user to

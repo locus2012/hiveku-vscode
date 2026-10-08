@@ -1019,6 +1019,11 @@
           }
         },
         {
+          "id": "team",
+          "label": "AI team (who is working now)",
+          "tool": "memory_team_get"
+        },
+        {
           "id": "kbs",
           "label": "Knowledge bases",
           "tool": "kb_list"

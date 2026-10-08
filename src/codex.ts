@@ -30,7 +30,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { readTree, type SkillFile } from './agencySkills';
 import { accountMemoryDashboardUrl } from './accountMemory';
-import { LOCAL_MIRROR_PROSE, MEMORY_WRITE_REFUSED_PROSE, SOURCE_OF_TRUTH_PROSE } from './memoryLog';
+import { LOCAL_MIRROR_PROSE, MEMORY_WRITE_REFUSED_PROSE, SOURCE_OF_TRUTH_PROSE, WORK_LOG_PROSE } from './memoryLog';
 
 /** Marker pair for the Hiveku-managed region inside AGENTS.md. */
 const AGENTS_BEGIN = '<!-- hiveku:begin -->';
@@ -84,6 +84,7 @@ Ignore only its Claude-specific file paths (\`.claude/*\`) — your equivalents 
 Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
 - Verify identity before ANY write: \`get_account_info\` must return THIS account.
 - **Hiveku Memory is the source of truth.** ${SOURCE_OF_TRUTH_PROSE}
+  ${WORK_LOG_PROSE}
   ${LOCAL_MIRROR_PROSE}
 - **Context and memory.** Call \`account_context_get({ domain })\` first, before any copy, plan or analysis.
   The account memory is read-only to you: it is About your business on the Memory page

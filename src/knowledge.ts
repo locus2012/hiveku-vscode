@@ -18,7 +18,7 @@ import { roleById } from './roles';
 import { writeDataRunner } from './dataRunner';
 import { writeAgencySkills } from './agencySkills';
 import { isAccountMemoryDomain, ACCOUNT_MEMORY_READONLY_GLOB } from './accountMemory';
-import { LOCAL_MIRROR_PROSE, MEMORY_EDIT_RULES_PROSE, MEMORY_WRITE_REFUSED_PROSE, SOURCE_OF_TRUTH_PROSE } from './memoryLog';
+import { LOCAL_MIRROR_PROSE, MEMORY_EDIT_RULES_PROSE, MEMORY_WRITE_REFUSED_PROSE, SOURCE_OF_TRUTH_PROSE, WORK_LOG_PROSE } from './memoryLog';
 import { ownerOf, type OwnerInput } from './memoryOwner';
 
 /** memory `type` → local folder (matches hiveku-sync TYPE_TO_FOLDER). */
@@ -588,6 +588,9 @@ const HIVEKU_ALLOW: string[] = [
   // named. The memory writes (memory_update / _delete / _restore_version /
   // _bulk_create) are not listed and keep prompting.
   'mcp__hiveku__memory_log_summary',
+  // Who is on the AI team and who is working now (MCP #174; GET, readOnlyHint). Already
+  // a read under '*_get'; named so the memory reads are explicit, like account_memory_get.
+  'mcp__hiveku__memory_team_get',
   'mcp__hiveku__project_files_search',
   'mcp__hiveku__project_files_bulk_get',
   'mcp__hiveku__project_deploy_preflight',
@@ -1316,7 +1319,7 @@ The account memory (\`hiveku-data/account/ACCOUNT_MEMORY.md\`) is read-only: it 
 Memory page (\`https://app.hiveku.com/<account-id>/dashboard/memory\`), where owners and admins change it. To
 propose one line for it, use \`account_memory_append\`.
 The local \`memory/<dept>/\` files are only a mirror — Hiveku is the source of truth, and persisting here is
-what brings the other departments + dashboard agents up to speed. ${SOURCE_OF_TRUTH_PROSE}
+what brings the other departments + dashboard agents up to speed. ${SOURCE_OF_TRUTH_PROSE} ${WORK_LOG_PROSE}
 `,
     'hiveku-diagram': `---
 description: Draw a Mermaid diagram of a flow/architecture/steps and (optionally) save it.
@@ -1869,7 +1872,7 @@ Manager), NOT in the code, and is injected into the deployed Lambdas + Fly previ
 
 
 ### Keep Hiveku in sync — it is the source of truth (memory + PM)
-${SOURCE_OF_TRUTH_PROSE} ${LOCAL_MIRROR_PROSE}
+${SOURCE_OF_TRUTH_PROSE} ${WORK_LOG_PROSE} ${LOCAL_MIRROR_PROSE}
 Hiveku, NOT your local files, is the system of record. After meaningful work, write back so every
 department and the dashboard agents stay current — don't let what you learned or did live only on disk.
 - **Department memory:** capture what you learned / did / decided into the RIGHT department's memory.
@@ -2330,15 +2333,18 @@ these local files.
 \`\`\`
 
 ## How to work here
-- **Hiveku Memory is the source of truth.** ${SOURCE_OF_TRUTH_PROSE}
+- **Hiveku Memory is the source of truth.** ${SOURCE_OF_TRUTH_PROSE} ${WORK_LOG_PROSE}
 - **Local files = quick context, not the record.** \`memory/\`, \`skills/\`, \`rules/\` (and \`commands/\`,
   \`agents/\`, \`identity/\`) are downloaded department knowledge. ${LOCAL_MIRROR_PROSE}
 - **Local-first data loop.** Operational data (contacts, campaigns, rankings,
   tickets, ...) lives in \`hiveku-data/<dept>/*.json\` — pull/refresh it YOURSELF with
   \`node .hiveku/pull-data.mjs <dept ...>\` (or \`--stale 12\`, \`--list\`; see
-  \`/hiveku-pull-data\`). READ from those files (fast, greppable, no tool calls);
-  WRITE via the live MCP tools; after a write, re-pull that one dataset with
-  \`--dataset <dept>:<id>\`. Check each file's \`fetched_at\` before trusting it.
+  \`/hiveku-pull-data\`). Look across those files for a broad view (fast, greppable,
+  no tool calls), but they are a copy of the last pull and may be out of date: before
+  you act on a row, read it again live with the tool its file names
+  (\`account_memory_get\` for About your business). WRITE via the live MCP tools;
+  after a write, re-pull that one dataset with \`--dataset <dept>:<id>\`. Check each
+  file's \`fetched_at\` before trusting it.
 - **MCP tools = actions + anything not exported.** Detail lookups, generative
   work (\`talk_to_department\`), and every mutation happen live.
 - **Dashboard links are ACCOUNT-SCOPED — never fabricate them.** Every Hiveku dashboard URL is

@@ -493,22 +493,38 @@ export function memoryPageLink(url: string | undefined, base: string): string {
 
 /**
  * The source-of-truth rule, in the same words as the MCP server's own instructions
- * (hiveku-mcp-api-server src/services/mcp-instructions.service.ts, MCP #100). Every
- * scaffold this extension writes for Claude Code and Codex carries it (Abe, 2026-10-03:
- * "This memory needs to be the source of truth and the agents know it and obey it").
+ * (hiveku-mcp-api-server src/services/mcp-instructions.service.ts, MCP #100, with the two
+ * sentences MCP #174 adds on About your business and a local copy). Every scaffold this
+ * extension writes for Claude Code and Codex carries it (Abe, 2026-10-03: "This memory
+ * needs to be the source of truth and the agents know it and obey it").
  */
 export const SOURCE_OF_TRUTH_PROSE =
   'Hiveku Memory is the source of truth for this business: read it before you act, and follow it ' +
   'over your own assumptions, local files or earlier conversation. When something disagrees with ' +
-  'memory, trust memory and say so. When `memory_log_add` is listed, record your work: a Doing line ' +
-  'when you start a task for the person and a Done line when it ends. Save what you learned with the ' +
-  'memory_* tools.';
+  'memory, trust memory and say so. About your business is read with `account_memory_get`; ' +
+  'memory_list and memory_get leave it out. A local copy (ACCOUNT_MEMORY.md and the like) may be out ' +
+  'of date: read it again from Hiveku before you act on it. When `memory_log_add` is listed, record ' +
+  'your work: a Doing line when you start a task for the person and a Done line when it ends. Save ' +
+  'what you learned with the memory_* tools.';
+
+/**
+ * What Hiveku now writes in the memory log itself (MCP #174): a connected app's session gets
+ * its Doing at its first change and its Done when it goes quiet or ends, both counting the
+ * changes; the model's own Done says more and closes the session's run with its line. Every
+ * scaffold puts it right after SOURCE_OF_TRUTH_PROSE. The same words as the Claude Code
+ * plugin's shim and hiveku-sync.
+ */
+export const WORK_LOG_PROSE =
+  "Hiveku records this session's Doing at its first change and its Done when the session goes quiet " +
+  'or ends. When the work ends, send a Done with `memory_log_add` and a one-line summary of what you ' +
+  'did, if you want the log to say more than the count of changes; leave `thread` out.';
 
 /** The local-copy half of the rule, for the folders this extension fills with memory files. */
 export const LOCAL_MIRROR_PROSE =
   'The memory files in this folder are a mirror of the last download, and memory wins: before you act ' +
   'on one, or change an entry starting from one, re-read the entry live (`memory_get({ memory_id })` with ' +
-  'the `id` in its front matter), follow what that read says, and send its `version` as `expected_version`.';
+  'the `id` in its front matter, and About your business, `hiveku-data/account/ACCOUNT_MEMORY.md`, with ' +
+  '`account_memory_get`), follow what that read says, and send its `version` as `expected_version`.';
 
 /** A refused memory write is an answer, not a Hiveku defect (scaffold prose, one place). */
 export const MEMORY_WRITE_REFUSED_PROSE =

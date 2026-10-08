@@ -25,6 +25,7 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 
 // The console writes a diagnostics line to ~/.hiveku-console-debug.log when it
 // opens: keep it in a temp home, set before the module is loaded.
@@ -50,15 +51,42 @@ const BIDI = String.fromCharCode(0x202e);
 
 /**
  * The MCP server's paragraph, as it stands in hiveku-mcp-api-server
- * src/services/mcp-instructions.service.ts (MCP #100, live 2026-10-03), line
- * breaks included. The extension says the same words: change both together.
+ * src/services/mcp-instructions.service.ts (MCP #100, live 2026-10-03, with
+ * the two sentences MCP #174 adds), line breaks included. The extension says
+ * the same words: change both together.
  */
 const MCP_PARAGRAPH = `Hiveku Memory is the source of truth for this business: read it
   before you act, and follow it over your own assumptions, local files
   or earlier conversation. When something disagrees with memory, trust
-  memory and say so. When \`memory_log_add\` is listed, record your
-  work: a Doing line when you start a task for the person and a Done
-  line when it ends. Save what you learned with the memory_* tools.`;
+  memory and say so. About your business is read with
+  \`account_memory_get\`; memory_list and memory_get leave it out. A
+  local copy (ACCOUNT_MEMORY.md and the like) may be out of date: read
+  it again from Hiveku before you act on it. When \`memory_log_add\` is
+  listed, record your work: a Doing line when you start a task for the
+  person and a Done line when it ends. Save what you learned with the
+  memory_* tools.`;
+
+/** The rule itself, and the two sentences MCP #174 puts right after it, word for word. */
+const SOURCE_OF_TRUTH =
+  'Hiveku Memory is the source of truth for this business: read it before you act, and follow it over your own assumptions, local files or earlier conversation. When something disagrees with memory, trust memory and say so.';
+const ABOUT_YOUR_BUSINESS =
+  'About your business is read with `account_memory_get`; memory_list and memory_get leave it out.';
+const LOCAL_COPY =
+  'A local copy (ACCOUNT_MEMORY.md and the like) may be out of date: read it again from Hiveku before you act on it.';
+
+/** The rule, then the two sentences, each once and in that order with nothing between. */
+function assertRuleThenSentences(text, where) {
+  const folded = flat(text);
+  assert.equal(folded.split(SOURCE_OF_TRUTH).length, 2, `${where}: the source-of-truth sentence, word for word, once`);
+  assert.ok(folded.includes(`${SOURCE_OF_TRUTH} ${ABOUT_YOUR_BUSINESS} ${LOCAL_COPY}`), `${where}: the two sentences right after it`);
+}
+
+/** What a scaffold says about the memory log since MCP #174: Hiveku records the run, the model's Done says more. */
+function assertWorkLog(text, where) {
+  const folded = flat(text);
+  assert.match(folded, /Hiveku records this session's Doing at its first change and its Done when the session goes quiet or ends\./, `${where}: Hiveku records the Doing and the Done`);
+  assert.match(folded, /send a Done with `memory_log_add` and a one-line summary of what you did, if you want the log to say more than the count of changes; leave `thread` out\./, `${where}: the model's Done`);
+}
 
 const SENTENCE = 'Only an owner or admin can change rules shared with every agent. Ask one of them on the Memory page.';
 const LINK = `${PAGE}?agent=sales&item=_rule%3Ano-discounts`;
@@ -343,15 +371,34 @@ describe('the scaffolds say memory is the source of truth', () => {
   }
   function assertRule(text, where) {
     assert.ok(flat(text).includes(flat(MCP_PARAGRAPH)), `${where}: the rule in the MCP server's words`);
+    assertRuleThenSentences(text, where);
+    assert.ok(
+      flat(text).includes(`${flat(log.SOURCE_OF_TRUTH_PROSE)} ${flat(log.WORK_LOG_PROSE)}`),
+      `${where}: what Hiveku records itself, right after the rule`,
+    );
     assert.ok(flat(text).includes(flat(log.LOCAL_MIRROR_PROSE)), `${where}: the local files are a mirror`);
     assert.ok(flat(text).includes(flat(log.MEMORY_WRITE_REFUSED_PROSE)), `${where}: a refused write is shown, not retried or reported`);
   }
 
   test('the shared prose is the MCP server\'s words, and says what to do with a local copy and a refusal', () => {
     assert.equal(flat(log.SOURCE_OF_TRUTH_PROSE), flat(MCP_PARAGRAPH));
+    assertRuleThenSentences(log.SOURCE_OF_TRUTH_PROSE, 'SOURCE_OF_TRUTH_PROSE');
+    assertWorkLog(log.WORK_LOG_PROSE, 'WORK_LOG_PROSE');
     assert.match(log.LOCAL_MIRROR_PROSE, /re-read the entry live \(`memory_get\(\{ memory_id \}\)`/);
+    assert.match(log.LOCAL_MIRROR_PROSE, /About your business, `hiveku-data\/account\/ACCOUNT_MEMORY\.md`, with `account_memory_get`/);
     assert.match(log.LOCAL_MIRROR_PROSE, /send its `version` as `expected_version`/);
     assert.match(log.MEMORY_WRITE_REFUSED_PROSE, /never retry it unchanged or report it/);
+  });
+
+  test('negative controls: a removed or reworded sentence, or the old Doing/Done words, fail the checks', () => {
+    const removed = log.SOURCE_OF_TRUTH_PROSE.replace(`${ABOUT_YOUR_BUSINESS} `, '');
+    assert.throws(() => assertRuleThenSentences(removed, 'without About your business'));
+    assert.throws(() => assertRuleThenSentences(log.SOURCE_OF_TRUTH_PROSE.replace('read it again from Hiveku', 'refresh it'), 'reworded'));
+    assert.throws(() => assert.equal(flat(removed), flat(MCP_PARAGRAPH)));
+    const oldDoingDone =
+      'When you start a piece of work, record `memory_log_add({ phase: "doing", department, line, thread })`, ' +
+      'and when it ends `memory_log_add({ phase: "done", department, line, thread, outcome })` with the same `thread`.';
+    assert.throws(() => assertWorkLog(oldDoingDone, 'the old Doing/Done words'));
   });
 
   test('an account folder\'s CLAUDE.md; no more "the authoritative copy"', async () => {
@@ -372,6 +419,10 @@ describe('the scaffolds say memory is the source of truth', () => {
     const remember = await fsp.readFile(path.join(dir, '.claude', 'commands', 'hiveku-remember.md'), 'utf8');
     assert.ok(flat(remember).includes(flat(log.MEMORY_WRITE_REFUSED_PROSE)), '/hiveku-remember says what a refusal means');
     assert.ok(flat(remember).includes(flat(log.SOURCE_OF_TRUTH_PROSE)), '/hiveku-remember states the rule in the MCP server\'s words');
+    assert.ok(
+      flat(remember).includes(`${flat(log.SOURCE_OF_TRUTH_PROSE)} ${flat(log.WORK_LOG_PROSE)}`),
+      '/hiveku-remember says what Hiveku records itself, right after the rule',
+    );
   });
 
   test('the Codex AGENTS.md region, inside its budget', async () => {
@@ -384,5 +435,123 @@ describe('the scaffolds say memory is the source of truth', () => {
 
   test('negative control: the check fails on a scaffold without the rule', () => {
     assert.throws(() => assertRule('Local files = context. Read them FIRST: they are the authoritative copy.', 'old text'));
+  });
+});
+
+/**
+ * A local copy is read again from Hiveku before it is acted on (MCP #174): the account
+ * folder's data loop, /hiveku-pull-data, the runner's closing line and the data README no
+ * longer say to work from the snapshot, and name account_memory_get for About your business.
+ */
+describe('a local copy is read again from Hiveku before acting on it', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const SNAPSHOT_AS_SOURCE = /work from these local files|then work from the files|READ from those files \(fast|READ from hiveku-data\/ \(fast/;
+
+  function assertRereads(text, where) {
+    const folded = flat(text);
+    assert.doesNotMatch(folded, SNAPSHOT_AS_SOURCE, `${where}: no longer says to work from the snapshot`);
+    assert.match(folded, /read (it|anything) again (live|from Hiveku)/, `${where}: read it again before acting`);
+  }
+
+  test('the account folder: its CLAUDE.md data loop, /hiveku-pull-data and the runner', async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'hk-sot-local-'));
+    await knowledge.writeScaffold({ baseDir: dir, accountLabel: 'Acme', apiKey: KEY, baseUrl: BASE, accountId: ACCOUNT });
+    const claude = await fsp.readFile(path.join(dir, 'CLAUDE.md'), 'utf8');
+    const loop = flat(claude).slice(flat(claude).indexOf('**Local-first data loop.**'), flat(claude).indexOf('**MCP tools = actions'));
+    assertRereads(loop, 'CLAUDE.md data loop');
+    assert.match(loop, /before you act on a row, read it again live with the tool its file names \(`account_memory_get` for About your business\)/);
+    const pull = await fsp.readFile(path.join(dir, '.claude', 'commands', 'hiveku-pull-data.md'), 'utf8');
+    assertRereads(pull, '/hiveku-pull-data');
+    assert.match(flat(pull), /before you act on it, read it again with `account_memory_get` \(memory_list and memory_get leave it out\)/);
+    assert.match(flat(pull), /node \.hiveku\/pull-data\.mjs --dataset <dept>:<dataset>/, 'it still pulls');
+    const runner = await fsp.readFile(path.join(dir, '.hiveku', 'pull-data.mjs'), 'utf8');
+    assert.doesNotMatch(runner, /work from these local files/);
+    assert.match(runner, /is a copy of this pull: read anything again from Hiveku before you act on it/);
+  });
+
+  test('the department data README says to read it again live before acting', () => {
+    const src = fs.readFileSync(path.join(root, 'out', 'dataExport.js'), 'utf8');
+    assert.match(src, /this is a snapshot and may be out of date: before you act on anything here, read\s+it again live/);
+    // A template literal in the compiled source: its backticks are escaped there.
+    assert.match(src, /\\`account_memory_get\\` for About your business\), and change it with the live/);
+  });
+
+  test('negative control: the check fails on the snapshot instructions as they were', () => {
+    assert.throws(() => assertRereads('Refresh the local data mirror, then work from the files — not from repeated live list calls.', 'old /hiveku-pull-data'));
+    assert.throws(() => assertRereads('Done. Data in hiveku-data/ — work from these local files; use live MCP tools for writes.', 'old runner line'));
+    assert.throws(() => assertRereads('READ from those files (fast, greppable, no tool calls); WRITE via the live MCP tools.', 'old data loop'));
+  });
+});
+
+/**
+ * The vendored orient skill and session closer (assets/, byte-identical to the plugin,
+ * scripts/check-agency-skills-drift.mjs) teach the Doing/Done lines as MCP #174 records them.
+ */
+describe('the vendored Doing/Done doctrine', () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const OLD_CALL = /line, thread(, outcome)? \}\)|the same `thread`/;
+
+  test('orient and every vendored closer send a Done without a thread; Hiveku records the run', () => {
+    const orient = flat(fs.readFileSync(path.join(root, 'assets', 'skills', 'hiveku-orient', 'SKILL.md'), 'utf8'));
+    assertRuleThenSentences(orient, 'vendored orient');
+    assert.match(orient, /Hiveku records this session's work in the memory log itself: its Doing at the session's first change for an agent, and its Done when the session goes quiet or ends\./);
+    assert.match(orient, /`memory_log_add\(\{ phase: "done", department, line, outcome \}\)`/);
+    assert.match(orient, /answers `already_open`, which is not an error/);
+    assert.doesNotMatch(orient, OLD_CALL);
+    const dir = path.join(root, 'assets', 'commands');
+    const closers = fs.readdirSync(dir).filter((f) => f.endsWith('.md'))
+      .map((f) => [f, fs.readFileSync(path.join(dir, f), 'utf8')])
+      .filter(([, t]) => t.includes('Finish every session of work the same way:'));
+    assert.ok(closers.length >= 25, `only ${closers.length} vendored closers`);
+    for (const [f, t] of closers) {
+      assert.match(t, /Hiveku records the session's Doing in the memory log at its first change/, f);
+      assert.match(t, /`memory_log_add\(\{ phase: "done", department: "<dept>", line, outcome \}\)`/, f);
+      assert.doesNotMatch(t, OLD_CALL, f);
+    }
+  });
+
+  test('negative control: the old orient bullet fails the check', () => {
+    const old = 'record `memory_log_add({ phase: "doing", department, line, thread })`, and when it ends, `memory_log_add({ phase: "done", department, line, thread, outcome })` with the same `thread`.';
+    assert.match(old, OLD_CALL);
+  });
+});
+
+/** memory_team_get (MCP #174): offered as a read, like the sibling memory reads. */
+describe('memory_team_get is offered', () => {
+  const dept = loadOut('deptData');
+
+  async function scaffoldAllow() {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'hk-team-'));
+    await knowledge.writeScaffold({ baseDir: dir, accountLabel: 'Acme', apiKey: KEY, baseUrl: BASE, accountId: ACCOUNT });
+    return JSON.parse(await fsp.readFile(path.join(dir, '.claude', 'settings.json'), 'utf8')).permissions;
+  }
+
+  test('the account folder allows it by name beside account_memory_get and memory_log_summary, and never asks for it', async () => {
+    const { allow, ask = [] } = await scaffoldAllow();
+    for (const name of ['mcp__hiveku__account_memory_get', 'mcp__hiveku__memory_log_summary', 'mcp__hiveku__memory_team_get']) {
+      assert.ok(allow.includes(name), `${name} is allowed by name`);
+    }
+    assert.ok(!ask.includes('mcp__hiveku__memory_team_get'));
+  });
+
+  test('the Knowledge & Memory department pulls it as the team dataset, beside AI memory', () => {
+    const knowledgeDept = dept.DEPARTMENTS.find((d) => d.id === 'knowledge');
+    const ids = knowledgeDept.datasets.map((d) => d.id);
+    const team = knowledgeDept.datasets.find((d) => d.id === 'team');
+    assert.equal(team?.tool, 'memory_team_get');
+    assert.equal(ids.indexOf('team'), ids.indexOf('memory') + 1);
+    assert.equal(team.args, undefined, 'it takes no arguments');
+    const manifest = JSON.parse(fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), 'src', 'dept-manifest.json'), 'utf8'));
+    const mTeam = manifest.departments.find((d) => d.id === 'knowledge').datasets.find((d) => d.id === 'team');
+    assert.deepEqual(mTeam, { id: 'team', label: team.label, tool: 'memory_team_get' }, 'the emitted manifest carries it');
+    // The rows are the agents: extractRows takes data.agents from { data: { agents, shared, last_changed_at } }.
+    const rows = dept.extractRows({ data: { agents: [{ key: 'sales', name: 'Sales' }], shared: { counts: {} }, last_changed_at: null }, note: 'x' });
+    assert.deepEqual(rows.map((r) => r.key), ['sales']);
+  });
+
+  test('negative control: an allow list without it fails the by-name check', async () => {
+    const { allow } = await scaffoldAllow();
+    const without = allow.filter((rule) => rule !== 'mcp__hiveku__memory_team_get');
+    assert.throws(() => assert.ok(without.includes('mcp__hiveku__memory_team_get'), 'memory_team_get is allowed by name'));
   });
 });
