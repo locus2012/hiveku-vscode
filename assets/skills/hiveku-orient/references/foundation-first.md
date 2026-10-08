@@ -44,7 +44,9 @@ Check for each of these, and treat a hit as a finding to raise, not a detail to 
   untouched but render as NOTHING, so an avatar can be rich in the database and blank on the
   screen for months.
 - **Unlinked.** A journey with no `customer_journey_avatar_link`, a grid with no
-  `target_avatar_id`. The object exists; it just aims at nobody.
+  `target_avatar_id`. The object exists; it just aims at nobody. An unlinked grid is often
+  deliberate (a draft, a test, one meant for everyone), so it is a question for the human, not
+  something to fix on your own: see the ladder.
 - **Empty-after-populate.** `populate_status` failed, or populated fields that are still
   null/empty. The populate tools refuse ungrounded input, which is correct - the fix is to
   gather grounding, not to route around the refusal.
@@ -64,9 +66,13 @@ fabricate a persona from nothing to unblock yourself.
 
 **Invalid -> FLAG, then UPDATE with a snapshot.** Say plainly what is wrong and why it
 matters, snapshot with `*_version_create`, then fix it - normalize the keys, rewrite the
-boilerplate against real grounding, link the unlinked. Retiring an avatar entirely is a
-deletion and needs the human's explicit yes, since it detaches journeys and grids and clears
-that persona's visitor matches.
+boilerplate against real grounding, link an unlinked journey. Never point an existing
+before/after grid at a persona on your own: an active grid with a `target_avatar_id` is shown
+on the public journey pages of every journey linked to that persona, so linking it publishes
+it. Ask the human which persona the grid is for, if any, and link it only when they say so.
+A grid you build for a persona in this same piece of work is linked as part of building it.
+Retiring an avatar entirely is a deletion and needs the human's explicit yes, since it
+detaches journeys and grids and clears that persona's visitor matches.
 
 **Valid -> REFERENCE it, visibly.** Name the persona and the journey stage the work serves,
 in the deliverable itself: "for Marcus (Problem Aware), this piece has to move him to

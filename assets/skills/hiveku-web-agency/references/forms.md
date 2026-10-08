@@ -152,7 +152,31 @@ The platform notifies on EVERY submission, and a user-built notification workflo
 - `website_projects.form_notify_email` is the per-project routing control.
 - Recipients resolve ONLY server-side. There is no client-side recipient in markup, so never put an email address in a form attribute expecting it to route anything.
 - Cap is 60 emails per account per hour, then a rollup.
-- Sender is `Hiveku Forms <no-reply@notifications.hiveku.com>`. The apex `hiveku.com` is NOT verified and silently rejects, so never tell an owner to expect mail from the apex.
+- Each recipient gets their own email, and Hiveku records what became of it: sent, delivered, bounced, marked as spam. Each lead in the Forms tab says who was told, address by address.
+- A bouncing address is left out of later lead emails and shows in red in Notifications, and the site's other recipients and the account's people get one warning a week about it. A lead whose every recipient bounces goes to the account's people instead (the billing email, else every member), saying why. Do not tell an owner a lead "was emailed" without checking its Who was told line.
+- The subject is a per-site template, set in Analytics > Forms > Notifications. The default is `New lead: {name}, {form} ({site})`; `{email}`, `{phone}`, `{page}` and `{source}` work too. The email names the site and says where the visitor came from ("Came from: Google Ads (Paid Search), campaign Spring"), read from the same attribution as every report.
+- "Open this lead" in the email, the Slack post and the phone push opens that one lead (`?submission=<id>`), not the Forms list. The Slack post carries what the email carries.
+- Account members whose address gets a site's leads also get a phone push and a bell notification for each lead. Tapping it switches the app to the lead's account first, since a person can belong to many.
+- "Send a test email" (Notifications) sends the saved settings to the site's recipients, at most 5 an hour per site. It is also how a fixed mailbox is checked again: a bouncing address gets the test too.
+- Sender is `Hiveku Forms <no-reply@notifications.hiveku.com>`, or `forms@<the account's verified domain>` when the site turned on "Send lead emails from forms@<domain>" (sent over SES, with the account's name in the email in place of Hiveku's). The switch is disabled until the account has a verified sending domain. If SES refuses a lead email (the domain paused or lapsed, the quota spent) or the account's email sending is suspended, that person gets it from Hiveku Forms instead, and the lead's notify_error says so. The apex `hiveku.com` is NOT verified and silently rejects, so never tell an owner to expect mail from the apex.
+- Reply goes to the no-reply sender unless the site's "Reply to the person who filled in the form" switch is on (Analytics > Forms > Notifications, `website_projects.form_notify_reply_to_submitter`, off by default). With it on, each notification's Reply-To is the email the visitor entered, when that is a well-formed address; From stays the no-reply sender. The summary email for leads held back by the hourly cap never carries a Reply-To. A notify workflow's Send Email step has its own Reply-To field.
+- **The automatic reply to the visitor** (Notifications > "Send an automatic reply to the visitor", off by default):
+  - **With a verified sending domain:** the owner's own reply, from `forms@<that domain>` over SES. It has an editable subject and text with only `{name}` and `{site}`. `{name}` is the visitor's first name when the whole name field looks like a name, else "there". Nothing else the visitor typed goes in, so it cannot carry a message to a stranger whose address a bot typed.
+  - **Without one:** Hiveku's standard thank-you, from `no-reply@notifications.hiveku.com` shown as "<site> via Hiveku". Its text is fixed, and the panel shows it in place of the subject and text fields. It reads: "Thanks for contacting <site>. Your message reached them, and they will get back to you soon." Its footer says Hiveku sent it for the site, and that someone who did not fill in the form can ignore it. The owner's own text is never sent from Hiveku's shared domain; to write their own, the owner verifies a sending domain.
+  - **Reply-To:** one optional address the owner chooses, never the list of people who get leads. It applies to both kinds of reply.
+  - **When it is not sent:**
+    - for spam, a muted form, or leads the hourly cap held;
+    - while the account's email sending is suspended;
+    - to an address on the suppression list (a bounce, a complaint, do-not-contact) or a reserved test domain;
+    - more than once per mailbox per site per day (a `+tag` or Gmail's dots are the same person);
+    - more than 20 times per site per hour, or 200 per account per day, from the account's own domain;
+    - more than 10 times per site per hour, or 50 per account per day, for Hiveku's standard thank-you, since every customer's lead emails share that domain;
+    - for Hiveku's standard thank-you, more than 3 times a day to one mailbox across every Hiveku site and account, so a bot cannot flood a stranger's inbox through many customers' forms. All of them also pause, Hiveku-wide, while 20 or more bounced or were marked as spam in a day and those are at least 1 in 20 of the ones sent.
+  - **It pauses itself** while a site's replies keep bouncing: 3 or more bounces or complaints, and at least 1 in 10 of the last week's replies. Bots typing other people's addresses would otherwise spend the client's sending reputation. The panel says so, and replies start again once those bounces are a week old.
+  - **A bounce or complaint on it** puts the address on the account's suppression list for good, and the team is not alerted.
+  - **Forms whose workflow tells the team** send no automatic reply: add a Send Email step to the workflow instead.
+  - **The test email** sends a sample of it to the site's recipients when it is on: the reply a visitor would get, whichever kind that is.
+- Every setting above is dashboard-only: no MCP tool manages notification settings.
 
 ## Part 3: Workflows behind a form
 

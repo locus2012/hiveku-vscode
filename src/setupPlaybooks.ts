@@ -266,11 +266,11 @@ One transport rule before anything else: the MCP proxy sends only the arguments 
 \`accounting_vendor_list\`, \`accounting_member_list\`, \`accounting_expense_category_list\`. Rows already present mean the account is partly set up, so fill gaps only. \`accounting_expense_category_list\` auto-seeds industry preset categories on its FIRST call, so call it before anything else reads categories.
 
 ## 2. Settings (before the first bill)
-\`accounting_settings_get\`, then \`accounting_settings_update({ bill_prefix?, default_currency?, default_payment_terms? })\`. All three are optional and they are the only fields the tool declares. No dashboard page reads or writes them, so this is the surface for them.
+\`accounting_settings_get\`, then \`accounting_settings_update({ bill_prefix?, default_currency?, default_payment_terms? })\`. All three are optional and they are the only fields the tool declares. No dashboard page writes them, so this is the surface for setting them.
 
 \`bill_prefix\` is baked into every generated bill number as \`{prefix}-{YYYY}-{padded6}\`, and existing bills are not renumbered, so set it before creating anything. \`next_bill_number\` is not writable through this tool.
 
-\`default_currency\` and \`default_payment_terms\` are stored labels with no consumer in the builder. Bill creation applies its own \`USD\` default for currency and never copies terms from settings. Set a bill's \`currency\` and \`terms\` on \`accounting_bill_create\` itself.
+\`default_payment_terms\` (text such as \`Net 30\`) is the account's fallback terms. A bill entered in the dashboard with no due date, and every recurring bill, falls due the bill date plus the days in the vendor's own terms, or in this setting when the vendor has none. \`accounting_bill_create\` applies neither: it stores exactly the \`terms\` and \`due_date\` you pass, and a bill created with no \`due_date\` has none, so pass both. \`default_currency\` is a stored label with no consumer: bill creation applies its own \`USD\` default, so set a bill's \`currency\` on \`accounting_bill_create\` itself.
 
 ## 3. Expense categories
 Custom categories: \`accounting_expense_category_create({ name, code?, sort_order? })\`. \`name\` is required and is unique per account; the constraint counts archived rows, so a reused name returns 409 and creates nothing.
@@ -280,8 +280,8 @@ Custom categories: \`accounting_expense_category_create({ name, code?, sort_orde
 ## 4. Vendors (accounts payable)
 \`accounting_vendor_create({ name, email?, phone?, default_payment_terms?, tax_id?, is_1099?, notes? })\`. \`name\` is the only required field, and those are all the fields the create tool declares.
 
-- The create tool also advertises \`target_currency\`, but \`accounting_vendors\` has no such column and the route drops it. Payout currency is a payroll MEMBER field, not a vendor field.
-- \`tax_id\` and \`is_1099\` are stored and rendered in the vendors table. No 1099 generator, report or export reads them, so do not tell a user that 1099 filing is handled.
+- A vendor has no payout currency. \`target_currency\` is a payroll MEMBER field (\`accounting_member_create\`), not a vendor field: \`accounting_vendors\` has no such column, the vendor tools do not declare it, and one sent anyway is dropped.
+- \`tax_id\` is write-only from here: every vendor read returns it as \`tax_id_masked\` (the last four), never in full, so do not expect to read back what you stored. \`is_1099\` marks the vendor for the dashboard's 1099 summary (linked from the Vendors page), which adds up the year's bill payments to each marked vendor and downloads as a CSV. That page is totals for the accountant, with no IRS threshold applied and no form produced, and no MCP tool reads it, so do not tell a user that 1099 filing is handled.
 - \`default_expense_category_id\` is NOT a create parameter. Set it afterwards with \`accounting_vendor_update({ vendor_id, default_expense_category_id })\`. A category id owned by another account 400s that whole call with \`Unknown default expense category\`.
 - To retire a vendor, prefer \`accounting_vendor_update({ vendor_id, is_archived: true })\`. That hides it from \`accounting_vendor_list\` and is reversible with \`is_archived: false\` as long as you kept the id. \`accounting_vendor_delete({ vendor_id })\` reads no body, takes no confirm field, does not check for open bills, and no Olympus tool undoes it.
 
@@ -292,21 +292,21 @@ Custom categories: \`accounting_expense_category_create({ name, code?, sort_orde
 
 \`source_currency\` is not a parameter of \`accounting_member_create\`. It is declared on \`accounting_member_update({ member_id, ... })\` and on \`accounting_payroll_run_create\`. \`bill_rate\` is also on \`accounting_member_update\` only, and it is DOLLARS as well.
 
-To take someone off payroll, use \`accounting_member_update({ member_id, status: 'inactive' })\`. Payroll run creation selects members on \`status: 'active'\` and never reads \`is_archived\`, so archiving alone leaves them being paid.
+To take someone off payroll, use \`accounting_member_update({ member_id, status: 'inactive' })\` or \`accounting_member_update({ member_id, is_archived: true })\`. Payroll run creation pays only members who are \`status: 'active'\` and not archived, so either one stops their pay. Archiving also hides the member from \`accounting_member_list\`, so keep the id if you may need to restore them with \`is_archived: false\`.
 
-Runs come later: \`accounting_payroll_run_create({ period_start, period_end })\`, both YYYY-MM-DD and both required.
+Runs come later: \`accounting_payroll_run_create({ period_start, period_end })\`, both YYYY-MM-DD and both required. A period that starts after it ends is refused with 400, and one that shares a day with an existing run is refused with 409 (the response names the run in \`overlapping_run_id\`), so the same time is never paid twice. Reading members and runs needs a key whose creator may read payroll in the dashboard; a key without it gets 403 on \`accounting_member_list\` and \`accounting_payroll_run_list\`.
 
 ## 6. Payment processors are not configured here
 Charging customers (Hiveku Payments, your own Stripe, Authorize.Net) is configured in the Hiveku dashboard under Commerce settings. No MCP tool registers a processor. On the A/P side, \`accounting_bill_record_payment\` records a payment in the books and does not transfer funds.
 
-## 7. Verify with one test bill, and clear it before any payment
+## 7. Verify with one test bill, and void it without paying it
 1. \`accounting_bill_create({ vendor_id, line_items: [{ description, quantity, unit_cents }] })\`. Both \`vendor_id\` and \`line_items\` are required. The bill is created as \`draft\` and its \`bill_number\` is generated for it. \`unit_cents\` is cents. \`tax_bps\`, if you pass it, is document tax in basis points (875 = 8.75%).
 2. \`accounting_bill_submit({ bill_id })\` moves draft to submitted. It has three refusals: 404 for an unknown or cross-account id, 409 \`Cannot submit a bill in status "..."\` for anything not draft (which is what a retry after a success hits), and 400 \`Add at least one line item before submitting\` when the total is 0 or less.
 3. \`accounting_ap_aging\` returns six scalar sums and nothing else (\`current_cents\`, \`d1_30_cents\`, \`d31_60_cents\`, \`d61_90_cents\`, \`d90_plus_cents\`, \`total_cents\`), so do not look for this bill in the response. Watch \`total_cents\` move, and only on an account quiet enough for the delta to mean something. It buckets bills in status submitted, approved, open and partially_paid, so a draft bill is not in it and reading aging before step 2 proves nothing.
 4. \`accounting_bill_void({ bill_id, reason? })\`, then \`accounting_ap_aging\` again and expect \`total_cents\` back where it started.
-5. \`accounting_pnl_summary({ period_start?, period_end? })\` returns \`revenue_cents\`, \`expenses_cents\`, \`profit_cents\` and \`margin_bps\`. It is cash basis and counts recorded bill PAYMENTS as expenses, not open bills, so an unpaid test bill should not move it in either direction.
+5. \`accounting_pnl_summary({ period_start?, period_end? })\` returns \`revenue_cents\`, \`expenses_cents\`, \`profit_cents\` and \`margin_bps\`, with \`open_bills_cents\` and \`payroll_paid_cents\` reported beside them. It is cash basis and counts recorded bill PAYMENTS as expenses, not open bills and not payroll, so an unpaid test bill should not move it in either direction.
 
-Do not record a payment against the test bill. Once \`amount_paid_cents\` is above 0, \`accounting_bill_void\` returns 409 with \`This bill has payments recorded and cannot be voided. Reverse the payments first.\`, and \`accounting_bill_delete\` refuses on the same condition. The tool registry has no payment reversal, refund or payment-delete tool, so that advice cannot be followed from MCP and the bill stays in the books.
+Do not record a payment against the test bill. A payment is refused outright while the bill is still \`draft\` or \`submitted\` (409 \`Approve this bill before recording a payment.\`), and on an approved bill it leaves a permanent pair of ledger rows to clean up: once \`amount_paid_cents\` is above 0, \`accounting_bill_void\` returns 409 with \`This bill has payments recorded and cannot be voided. Reverse the payments first.\`, and \`accounting_bill_delete\` refuses on the same condition. The way back is \`accounting_payment_reverse({ bill_id, payment_id, reason })\`, which writes an offsetting row (the original payment stays visible) and makes the bill voidable again once its paid total is back to zero.
 
 Then re-run "Download Department Data -> Accounting" to refresh \`hiveku-data/accounting/*.json\`.`;
 

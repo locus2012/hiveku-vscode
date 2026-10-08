@@ -851,9 +851,18 @@ export const DEPARTMENTS: Department[] = [
     datasets: [
       { id: 'bills', label: 'Bills (AP)', tool: 'accounting_bill_list', args: { status: 'all', limit: 200 }, detail: { detailTool: 'accounting_bill_get', argKey: 'bill_id', nameKey: 'bill_number', dir: 'bills-detail' }, columns: [{ key: 'bill_number', label: 'bill' }, { key: ['vendor.name', 'vendor_name'], label: 'vendor' }, { key: 'status' }, { key: ['total_cents', 'amount_cents'], label: 'total', money: true, cents: true }, { key: 'due_date', label: 'due', date: true }] },
       { id: 'invoices', label: 'Invoices (AR)', tool: 'accounting_invoice_list', args: { status: 'all', limit: 200 }, columns: [{ key: 'invoice_number', label: 'invoice' }, { key: 'status' }, { key: ['total_cents'], label: 'total', money: true, cents: true }, { key: 'due_date', label: 'due', date: true }] },
-      { id: 'vendors', label: 'Vendors', tool: 'accounting_vendor_list', args: { limit: 500 }, columns: [{ key: 'name' }, { key: 'email' }, { key: ['default_payment_terms', 'terms'], label: 'terms' }, { key: ['target_currency', 'currency'], label: 'currency' }] },
-      { id: 'members', label: 'Payroll members', tool: 'accounting_member_list', columns: [{ key: 'name' }, { key: 'pay_rate', label: 'rate' }, { key: 'pay_rate_type', label: 'type' }, { key: 'pay_period', label: 'period' }] },
-      { id: 'payroll_runs', label: 'Payroll runs', tool: 'accounting_payroll_run_list', columns: [{ key: ['label', 'period'], label: 'period' }, { key: 'status' }, { key: ['total_cents'], label: 'total', money: true, cents: true }, { key: 'member_count', label: 'members' }] },
+      { id: 'products_services', label: 'Products & services', tool: 'accounting_product_list', args: { limit: 200 }, columns: [{ key: 'name' }, { key: 'sku' }, { key: 'default_unit_price_cents', label: 'price', money: true, cents: true }, { key: 'unit_label', label: 'unit' }, { key: 'id' }] },
+      // A vendor has no currency column (payout currency is a payroll MEMBER field), so the list shows the 1099 flag instead.
+      { id: 'vendors', label: 'Vendors', tool: 'accounting_vendor_list', args: { limit: 500 }, columns: [{ key: 'name' }, { key: 'email' }, { key: ['default_payment_terms', 'terms'], label: 'terms' }, { key: 'is_1099', label: '1099' }] },
+      { id: 'bill_schedules', label: 'Recurring bills', tool: 'accounting_bill_schedules_list', columns: [{ key: 'name' }, { key: 'vendor.name', label: 'vendor' }, { key: 'interval_unit', label: 'every' }, { key: 'next_run_at', label: 'next bill', date: true }, { key: 'is_active', label: 'active' }] },
+      // Member rows carry the rate as pay_rate_cents (only the create/update ARGUMENT is pay_rate, in dollars), and a run's head count as _count.items.
+      { id: 'members', label: 'Payroll members', tool: 'accounting_member_list', columns: [{ key: 'name' }, { key: 'pay_rate_cents', label: 'rate', money: true, cents: true }, { key: 'pay_rate_type', label: 'type' }, { key: 'pay_period', label: 'period' }] },
+      { id: 'payroll_runs', label: 'Payroll runs', tool: 'accounting_payroll_run_list', columns: [{ key: ['label', 'period'], label: 'period' }, { key: 'status' }, { key: ['total_cents'], label: 'total', money: true, cents: true }, { key: ['_count.items', 'member_count'], label: 'members' }] },
+      { id: 'pto_policies', label: 'Time off policies', tool: 'accounting_pto_policies_list', columns: [{ key: 'name' }, { key: 'paid' }, { key: 'accrual_minutes_per_year', label: 'accrual min/yr' }, { key: 'is_active', label: 'active' }, { key: 'id' }] },
+      { id: 'pto_balances', label: 'Time off balances (this year)', tool: 'accounting_pto_balances_list', columns: [{ key: 'member_name', label: 'member' }, { key: 'policy_name', label: 'policy' }, { key: 'available_minutes', label: 'available min' }, { key: 'used_minutes', label: 'used min' }, { key: 'pending_minutes', label: 'pending min' }] },
+      // from/to are calendar days stored at UTC midnight. They are left as written (no `date: true`): the console's
+      // date format reads them in local time, which shows a leave day early west of UTC.
+      { id: 'pto_requests', label: 'Time off requests', tool: 'accounting_pto_requests_list', columns: [{ key: 'member.name', label: 'member' }, { key: 'policy.name', label: 'policy' }, { key: 'status' }, { key: 'start_date', label: 'from' }, { key: 'end_date', label: 'to' }, { key: 'minutes' }] },
       { id: 'expense_categories', label: 'Expense categories', tool: 'accounting_expense_category_list', columns: [{ key: 'name' }, { key: ['code', 'account_code'], label: 'code' }, { key: 'id' }] },
     ],
     references: [
@@ -865,15 +874,43 @@ export const DEPARTMENTS: Department[] = [
       'Bills (AP): `accounting_bill_create` (requires `vendor_id` and `line_items`) opens a bill in `draft`; ' +
       '`accounting_bill_submit` (requires `bill_id`) then `accounting_bill_approve` (requires `bill_id`) is the ' +
       'intended path, but approve accepts a bill in `draft` as well as `submitted`, so submit is optional ' +
-      'rather than a gate. Settle or kill it with `accounting_bill_record_payment` (requires `bill_id`, ' +
-      '`amount_cents`) or `accounting_bill_void` (requires `bill_id`). Vendors: `accounting_vendor_create` ' +
-      '(requires `name`). Payroll members: `accounting_member_create` (requires `name`); runs: ' +
-      '`accounting_payroll_run_create` (requires `period_start`, `period_end`), which computes hourly members ' +
-      'from tracked time times rate and gives fixed members the flat rate. AR payments: ' +
+      'rather than a gate, and `approve: false` on the same tool rejects the bill back to `draft`. Settle or ' +
+      'kill it with `accounting_bill_record_payment` (requires `bill_id`, `amount_cents`) or ' +
+      '`accounting_bill_void` (requires `bill_id`). APPROVAL COMES BEFORE PAYMENT: a payment on a bill still ' +
+      'in `draft` or `submitted` is refused with 409 `Approve this bill before recording a payment.`, and a ' +
+      '`paid_at` on a day after tomorrow (UTC) is refused with 400, so approve first and never post-date. Receipts: ' +
+      '`accounting_bill_attachment_create` (requires `bill_id`, `file_name`, `content`) stores the file ' +
+      'privately; reads return a `view_url` that opens for a signed-in person, never a public address. ' +
+      'Recurring bills: `accounting_bill_schedule_create` / `_update` / `_delete`, listed in ' +
+      '`bill_schedules.json`. Vendors: `accounting_vendor_create` (requires `name`); every vendor read returns ' +
+      'the tax ID as `tax_id_masked` (its last four), never in full. Payroll members: ' +
+      '`accounting_member_create` (requires `name`); runs: `accounting_payroll_run_create` (requires ' +
+      '`period_start`, `period_end`), which pays an hourly member for logged hours plus task time in the ' +
+      'included workspaces plus approved paid leave, times rate, and a fixed member the share of the fixed ' +
+      'amount the run covers of their pay period (not the flat amount). It leaves out anyone archived or not ' +
+      '`active`, refuses a period that starts after it ends (400), and refuses one that shares a day with ' +
+      'another run (409, with `overlapping_run_id`), so the same time is never paid twice. Pay is private: ' +
+      '`accounting_member_list` / `_get` and `accounting_payroll_run_list` / `_get` answer only for a key ' +
+      'whose creator may read payroll in the app, so a 403 there is a permission, not an outage. Time: ' +
+      '`accounting_time_entry_create` (requires `member_id`, `work_date`, and `hours` or `minutes`); a day ' +
+      'inside a finalized or paid run is locked, and creating, moving or deleting time on it returns 409. ' +
+      'Time off: `accounting_pto_policy_create` (requires `name`) defines a policy, and ' +
+      '`accounting_pto_balance_set` (requires `member_id`, `policy_id`, `granted_hours`) grants hours for one ' +
+      'calendar year (`year`: last year, this year or next; this year when omitted). A balance is per year: ' +
+      'carried in plus granted plus accrued, less approved leave. `accounting_pto_request_create` (requires ' +
+      '`member_id`, `policy_id`, `start_date`, `end_date`, `hours`) is checked against that balance and ' +
+      'refused when it is short, and `accounting_pto_request_review` (requires `request_id`, `action` of ' +
+      '`approve`, `deny` or `cancel`) moves a request only from pending, or cancels an approved one; the ' +
+      'person is told the decision. AR payments: ' +
       '`accounting_invoice_record_payment`, which requires `method` alongside `invoice_id` and `amount_cents` ' +
       'because the AR route has no default for it while the AP one defaults to check, and whose allowed methods ' +
-      'are NOT the same list as AP\'s; invoice AUTHORING is CRM-side via `crm_estimate_convert_to_invoice` ' +
-      '(requires `estimate_id`), which is the first of two hand-offs out of this department. MONEY UNITS ARE ' +
+      'are NOT the same list as AP\'s. Invoices: `accounting_invoice_create` (requires `line_items` and one of ' +
+      '`contact_id` or `company_id`) writes a DRAFT that the client cannot see, and `accounting_invoice_send` ' +
+      '(requires `invoice_id`) previews without `confirm: true` and sends with it, so never report an invoice ' +
+      'as sent from the create call. A line\'s `product_id` comes from the account\'s own catalog, ' +
+      '`accounting_product_list` (`products_services.json`), which is not the Shopify catalog. An accepted ' +
+      'estimate still becomes an invoice CRM-side via `crm_estimate_convert_to_invoice` (requires ' +
+      '`estimate_id`), which is the first of two hand-offs out of this department. MONEY UNITS ARE ' +
       'NOT UNIFORM: arguments named `*_cents` are cents, but `pay_rate` on `accounting_member_create` and ' +
       '`accounting_member_update`, and `bill_rate` on `accounting_member_update`, are DOLLARS and are ' +
       'multiplied by 100 at the route edge, so read the argument name before you convert. ' +
@@ -881,10 +918,14 @@ export const DEPARTMENTS: Department[] = [
       'not declare, so a bill rate passed at create time is silently discarded while the call still succeeds; ' +
       'set it with `accounting_member_update`, which does declare it. Aging and P&L are read-only summaries: ' +
       '`accounting_ap_aging`, `accounting_ar_aging`, `accounting_pnl_summary` (the `*.json` references). ' +
-      'Recording a payment is a ONE-WAY DOOR. No accounting tool deletes, voids or reverses a recorded payment; ' +
-      '`amount_cents` must be an integer of 1 or more, so no negative entry can undo one; and once a bill ' +
-      'carries any payment, both `accounting_bill_void` and `accounting_bill_delete` refuse it with 409, which ' +
-      'makes the delete error\'s advice to void it instead dead. Confirm the party, the document and the exact ' +
+      'No tool edits or deletes a recorded payment, and `amount_cents` must be an integer of 1 or more, so no ' +
+      'negative entry can undo one. A BILL payment has exactly one way back: `accounting_payment_reverse` ' +
+      '(requires `bill_id`, `payment_id`, `reason`) writes an offsetting row, restores the bill\'s balance and ' +
+      'status, and works once per payment (a second try is 409). While a bill carries any payment, both ' +
+      '`accounting_bill_void` and `accounting_bill_delete` refuse it with 409; reverse every payment first and ' +
+      'the bill can be voided again. An INVOICE payment has no reversal tool at all, so from here it is a ' +
+      'one-way door: only a person can correct or remove a hand-recorded one, on the dashboard\'s Payments ' +
+      'page. Confirm the party, the document and the exact ' +
       'cents integer before every payment call. Retries are already deduplicated: the MCP proxy sends an ' +
       'Idempotency-Key derived from the account, path and body, and the builder replays the first response for ' +
       'an hour, so a timed-out call that you repeat verbatim will not book twice. The corollary is the real ' +
@@ -892,9 +933,9 @@ export const DEPARTMENTS: Department[] = [
       'inside that hour hash to the same key, so the second silently returns the first one\'s success and is ' +
       'never recorded. Vary `reference` (or the amount or date) between real payments so they cannot collide. ' +
       'The second hand-off is payroll: `accounting_payroll_run_create` only ever creates a `draft` run, no ' +
-      'finalize tool is registered on this surface, and the Wise CSV export is a dashboard session route that ' +
-      'refuses a draft run with 409, so a run created from here cannot be paid out until a human finalizes it ' +
-      'in the dashboard. Never report payroll as done from here.',
+      'finalize tool is registered on this surface, and the payout files (Wise, plain CSV, Gusto, QuickBooks) ' +
+      'are dashboard session routes that refuse a draft run with 409, so a run created from here cannot be ' +
+      'paid out until a human finalizes it in the dashboard. Never report payroll as done from here.',
   },
   {
     id: 'creative',
