@@ -739,6 +739,33 @@ export interface PullRequest {
   created_at: string;
   merged_at: string | null;
   closed_at: string | null;
+  /** A draft can be reviewed but never merges until it is marked ready. Absent on older servers. */
+  is_draft?: boolean;
+  /** Who approved which version, and whether it may merge (pr_get / pr_list on newer servers). */
+  review_status?: ReviewStatus | null;
+  /** The source branch is archived now (its review merged); restorable until restorable_until. */
+  branch_archived?: boolean | null;
+  restorable_until?: string | null;
+}
+
+/**
+ * A pull request's approval state (builder pr-review-rules.ts). `required` is
+ * the site's "Require an approval" rule; with it on, a merge into Your site
+ * needs `ready`. Only a person in the dashboard approves: never an agent, and
+ * never the pull request's own author.
+ */
+export interface ReviewStatus {
+  required: boolean;
+  /** Null when the current changes were not read (a list). */
+  approved: boolean | null;
+  blocked: boolean;
+  /** Whether the rule lets it merge now; null when it cannot be told without reading the current changes. */
+  ready: boolean | null;
+  /** One entry per person who approved, newest first. */
+  approvals?: Array<{ by?: string | null; stale?: boolean }>;
+  changes_requested_by?: string[];
+  stale_approvals?: number | null;
+  source_fingerprint?: string | null;
 }
 
 /** pr_get returns the PR NESTED under `pr`, alongside a diff recomputed on
@@ -845,6 +872,9 @@ export async function vcsPrCreate(
 export interface PrMergeResult {
   pr: PullRequest;
   merge: MergeResult;
+  /** What the merge did with the source branch: archived (hidden, read-only,
+   *  restorable for 30 days) unless a keep rule applied. Absent on older servers. */
+  branch_archive?: BranchArchiveOutcome;
   /** The merge LANDED but the PR's open->merged relabel lost a status race
    *  (the server retries it). `pr` may still read `open`; a branch delete
    *  right now is refused as "open pull request", so callers must not offer
@@ -891,6 +921,82 @@ export async function vcsPrReopen(
     number: num,
   });
   return unwrap<PullRequest>(res);
+}
+
+/** A merged review's source branch: archived, or kept and why (builder branch-archive.ts). */
+export type BranchArchiveOutcome =
+  | { branch: string; archived: true; archived_at: string; restorable_until: string; archived_pr_number: number }
+  | { branch: string; archived: false; reason: string };
+
+/** One file a merge between a branch and the branch it was started from would refuse on. */
+export interface BranchConflict {
+  path: string;
+  /** conflict: both changed the same lines (`marked` holds the text with conflict markers);
+   *  binary, delete (one side deleted it) and too_large carry no marked text. */
+  kind: 'conflict' | 'binary' | 'delete' | 'too_large' | string;
+  marked: string | null;
+  /** The parent's version, as project_vcs_resolve takes it; null when the parent has no such file. */
+  parent_hash: string | null;
+  branch_hash: string | null;
+}
+
+export interface BranchConflicts {
+  branch: string;
+  /** The branch it was started from ('main': Your site). */
+  parent: string;
+  conflicts: BranchConflict[];
+}
+
+/** A branch's conflicts with the branch it was started from, as they stand now. Read-only. */
+export async function vcsConflicts(client: HivekuMcpClient, projectId: string, branch: string): Promise<BranchConflicts> {
+  const res = await client.callToolJson<unknown>('project_vcs_conflicts', { project_id: projectId, branch });
+  const data = unwrap<BranchConflicts>(res);
+  return { ...data, conflicts: Array.isArray(data?.conflicts) ? data.conflicts : [] };
+}
+
+/** One file's resolution: keep the branch's version, take the parent's, or write `content`. */
+export interface ConflictResolution {
+  path: string;
+  choice: 'branch' | 'parent' | 'content';
+  content?: string;
+  /** From project_vcs_conflicts; required for 'branch' and 'content', null when the parent has no such file. */
+  parent_hash: string | null;
+}
+
+export interface ResolveResult {
+  resolved: string[];
+  parent: string;
+  version: CommitSummary | null;
+  /** The conflicts with the parent still open after this resolve. */
+  remaining_conflicts: string[];
+  branch: { name: string; head_commit_id: string | null };
+}
+
+/**
+ * Resolve conflicts on `branch`, all or nothing: one version is saved on the
+ * branch, and the parent (Your site for most branches) changes only when the
+ * pull request merges. Refusals (409 parent_changed, not_a_conflict, ...)
+ * change nothing and are thrown.
+ */
+export async function vcsResolve(
+  client: HivekuMcpClient,
+  projectId: string,
+  branch: string,
+  files: ConflictResolution[],
+): Promise<ResolveResult> {
+  const res = await client.callToolJson<unknown>('project_vcs_resolve', { project_id: projectId, branch, files });
+  const data = unwrap<ResolveResult>(res);
+  return { ...data, remaining_conflicts: Array.isArray(data?.remaining_conflicts) ? data.remaining_conflicts : [] };
+}
+
+/** Bring back a branch archived when its review merged (within 30 days). Restoring one that is not archived changes nothing. */
+export async function vcsBranchRestore(
+  client: HivekuMcpClient,
+  projectId: string,
+  branch: string,
+): Promise<{ branch: string; restored: boolean; archived_at: string | null; archived_pr_number: number | null }> {
+  const res = await client.callToolJson<unknown>('project_vcs_branch_restore', { project_id: projectId, branch });
+  return unwrap(res);
 }
 
 /**

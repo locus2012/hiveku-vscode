@@ -73,8 +73,8 @@ const ADDED = [
 ];
 
 /** Every ask rule, as the scaffold must write them (the .mcp.json server is "hiveku"). */
-/** Versions Wave 2: a rollback apply always asks. */
-const VERSIONS = ['mcp__hiveku__project_vcs_rollback'];
+/** Versions Wave 2: a rollback apply always asks. 2026-10-08: so does settling merge conflicts. */
+const VERSIONS = ['mcp__hiveku__project_vcs_rollback', 'mcp__hiveku__project_vcs_resolve'];
 
 const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED, ...VERSIONS];
 const without = (...names) => EXPECTED_ASK.filter((name) => !names.includes(name));
@@ -344,7 +344,7 @@ describe('Permission gate: the ask array', () => {
     // line is only asserted when it printed. With one, every ask name must be a
     // real tool: a typo would gate nothing, silently.
     if (/allow rules/.test(run.stdout)) {
-      assert.match(run.stdout, /\b3 denied, 15 ask\b/);
+      assert.match(run.stdout, /\b3 denied, 16 ask\b/);
       assert.doesNotMatch(run.stderr, /naming no tool/);
     }
   });
@@ -418,12 +418,18 @@ describe('The ask list gates what the plugins gate', () => {
     const onAskList = new Set(critical.tools.map((tool) => tool.name));
     // hiveku_batch is the wrapper: the plugin does not list it, its hook asks on
     // any batch that carries one of the gated calls. Check that instead.
-    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch' && name !== 'project_vcs_rollback');
-    // project_vcs_rollback is gated on its arguments in the plugin hook (a dry run is
-    // allowed, an apply asks); an ask rule here cannot read dry_run, so it asks always.
+    const VERSION_TOOLS = ['project_vcs_rollback', 'project_vcs_resolve'];
+    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch' && !VERSION_TOOLS.includes(name));
+    // The version tools are judged by the plugin hook's version rules (lib/vcs-tool-rules.mjs),
+    // not its always-ask maps: a rollback dry run is allowed and an apply asks (an ask rule here
+    // cannot read dry_run, so it asks always), and a conflict resolve always asks.
     const applyDecision = decideForPayload({ tool_name: 'mcp__plugin_hiveku_hk__project_vcs_rollback', tool_input: { project_id: 'p', commit_id: 'c', dry_run: false } });
     assert.equal(applyDecision?.hookSpecificOutput?.permissionDecision, 'ask', 'the plugin hook does not ask on a rollback apply');
-    assert.ok(onAskList.has('project_vcs_rollback'), "project_vcs_rollback is not on the plugin's permission-critical ask list");
+    const resolveDecision = decideForPayload({ tool_name: 'mcp__plugin_hiveku_hk__project_vcs_resolve', tool_input: { project_id: 'p', branch: 'b', files: [{ path: 'a', choice: 'parent' }] } });
+    assert.equal(resolveDecision?.hookSpecificOutput?.permissionDecision, 'ask', 'the plugin hook does not ask on a conflict resolve');
+    for (const name of VERSION_TOOLS) {
+      assert.ok(onAskList.has(name), `${name} is not on the plugin's permission-critical ask list`);
+    }
     for (const member of gated) {
       const decision = decideForPayload({ tool_name: 'mcp__plugin_hiveku_hk__hiveku_batch', tool_input: { calls: [{ tool: member, args: {} }] } });
       assert.equal(decision?.hookSpecificOutput?.permissionDecision, 'ask', `the plugin hook does not ask on a batch carrying ${member}`);

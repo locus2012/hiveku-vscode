@@ -241,6 +241,8 @@ Then `npx @vscode/vsce publish patch` to update the live listing.
 | `project_vcs_history` | Commit history |
 | `project_vcs_merge` | 3-way merge a branch into any target (`into`, default main; conflict-flagging) |
 | `project_vcs_pr_create` / `_list` / `_get` / `_merge` / `_close` | native pull requests (PR merge is strict/atomic) |
+| `project_vcs_conflicts` / `project_vcs_resolve` | a refused PR merge's conflicts, and keeping one side per file ("Resolve here"; the dashboard also edits the final text) |
+| `project_vcs_branch_restore` | bring back a branch archived when its PR merged (offered on a 409 `branch_archived`) |
 | `project_vcs_env_bindings` / `project_vcs_env_bind` | which branch development/staging serve (production is locked to main) |
 | `project_vcs_stash` | move pending work to a branch (dry-run by default) |
 | `project_vcs_branch_delete` | delete a branch ref (confirm required) |
