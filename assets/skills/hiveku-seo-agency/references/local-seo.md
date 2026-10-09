@@ -86,10 +86,29 @@ tool (Google retired the write API in November 2025) - raise answers as a dashbo
 **Directory submission**: no submission tool exists anywhere, by design - `seo_citations_audit`
 audits and never writes to a directory. **Geo-GRID rank maps** (a lattice of positions across many
 points): none, do not imply otherwise; a single geo-located pack read at ONE location code is
-`seo_research({ action: 'maps-serp' })` (Play L5). **Review requests**: none in MCP.
-`marketing_testimonial_widget_create` and its siblings collect TESTIMONIALS for the client's own
-site, not Google reviews; a review ask goes out on the client's communications rail (email or SMS)
-with its own confirm - hand off, draft the ask if wanted, never send it from here.
+`seo_research({ action: 'maps-serp' })` (Play L5).
+
+**Review requests go through a review funnel.**
+1. `marketing_review_funnel_create` with template `google-review-only`, or a testimonial-first
+   template when the client also wants testimonials. Make ONE funnel per location, with that
+   location's Google write-review link as `review_url`:
+   `https://search.google.com/local/writereview?placeid=<place id>`, or the `g.page/r/<code>/review`
+   link from the profile's "Ask for reviews".
+2. It lands as a DRAFT, and its links serve nothing until
+   `survey_update({ survey_id, status: 'active' })`.
+3. `survey_send({ survey_id, contact_ids | emails, channel })` SENDS for real, by email or SMS. The
+   dashboard's throttle, dedupe and quiet hours apply, with up to 200 recipients a call. Show the user
+   who will receive it and get a yes first.
+
+Rules:
+- A standing ask after each job is a workflow: the `reviewRequest` / `reviewFunnelSend` steps, built in
+  the automation lane.
+- Every rater sees the review step. Hiding it from low raters is review gating, which Google's policy
+  forbids, and the funnel cannot be set up that way.
+- Ask only customers who expect to hear from the business.
+- `survey_create` cannot make a review funnel; it refuses the review type.
+- `marketing_testimonial_widget_create` and its siblings collect TESTIMONIALS for the client's own
+  site, not Google reviews.
 
 **Local files first.** `hiveku-data/localseo/*.json` exports exactly these datasets: `connections.json`,
 `top_queries.json` (90d, limit 200), `top_pages.json`, `rank_changes.json` (30d, min_drop 3),

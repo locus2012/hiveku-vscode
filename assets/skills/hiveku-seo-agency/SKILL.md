@@ -293,8 +293,12 @@ Field shapes, payloads and traps: `hiveku-automation-agency/references/node-rail
   **hiveku-commerce-agency** owns the Shopify catalog (not Hiveku-hosted: findings become tasks).
 - **hiveku-social-agency** publishes GBP posts: `social_create_post` with platform
   `google_business_profile`. There is no GBP post tool in this lane.
-- **Reputation:** Google review REQUESTS have no MCP tool; a review ask goes out on the client's
-  comms rail, with consent - never claim to have sent one from here.
+- **Reputation:** a Google review ask runs through a review funnel: `marketing_review_funnel_create`
+  (one per location; it lands as a draft), `survey_update` to `status: 'active'`, then `survey_send`,
+  which SENDS for real, so confirm the recipients with the user first. A standing ask after each job
+  is the `reviewRequest` / `reviewFunnelSend` workflow steps. Ask only customers who expect to hear
+  from the business, never gate the review step by rating, and never claim a send you did not make.
+  The play is in `references/local-seo.md`.
 - `/hiveku:research` is the generic web ladder for non-tool questions.
 
 ## Pitfalls
