@@ -746,6 +746,40 @@ export interface PullRequest {
   /** The source branch is archived now (its review merged); restorable until restorable_until. */
   branch_archived?: boolean | null;
   restorable_until?: string | null;
+  /** List rows only, from the last check of this state (a list never checks): about the target
+   *  alone; 'unknown' means no check yet, so pr_get (which checks) is the answer. */
+  mergeable_state?: MergeableState | null;
+  /** List rows only: other open pull requests into the same target this one would conflict with (advisory). */
+  conflicts_with?: number[] | null;
+}
+
+export type MergeableState = 'clean' | 'conflicts' | 'unknown';
+
+/** Another open pull request into the same target that shares files with this one. */
+export interface PrCollision {
+  number: number;
+  title?: string | null;
+  files?: Array<{ path: string; kind: string }>;
+  /** Which of the two lands first. */
+  order?: 'this_first' | 'other_first';
+}
+
+/**
+ * Whether a pull request merges cleanly (builder #955, pr-mergeability.ts).
+ * `state` is about the target only; the pull request pairs are advisory, and
+ * 'unknown' (see `reason`) is not a pass.
+ */
+export interface Mergeable {
+  state: MergeableState;
+  reason?: string | null;
+  conflicts_with_target?: Array<{ path: string; kind: string }>;
+  /** Would conflict once one of the two merges: the second needs a resolve. */
+  conflicts_with_prs?: PrCollision[];
+  /** Share files but are expected to merge cleanly. */
+  overlaps_with_prs?: PrCollision[];
+  checked_at?: string | null;
+  stale?: boolean;
+  truncated?: boolean;
 }
 
 /**
@@ -772,8 +806,16 @@ export interface ReviewStatus {
  *  every read (null when the source branch is gone). */
 export interface PullRequestDetail {
   pr: PullRequest;
+  /** Two-dot: the source against the target as it is now, so it also counts what the target
+   *  changed after the branch started. */
   diff: CompareResult | null;
   diff_error?: string | null;
+  /** The pull request's OWN changes since its merge base (newer servers): review from these. */
+  changes?: CompareResult | null;
+  changes_error?: string | null;
+  mergeable?: Mergeable | null;
+  /** pr_get answers it beside `pr`, not on it. */
+  review_status?: ReviewStatus | null;
 }
 
 export interface EnvBinding {

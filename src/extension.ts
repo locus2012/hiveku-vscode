@@ -89,9 +89,12 @@ import {
   branchWords,
   conflictRefusalMessage,
   directMergeRefusal,
+  mergeableNote,
   offerRestoreArchivedBranch,
   prMergeRefusal,
+  pullRequestListDetail,
   resolveConflictsHere,
+  reviewChanges,
   reviewPageUrl,
 } from './reviewFlows';
 
@@ -3392,7 +3395,9 @@ async function pullRequests(scm: HivekuScm): Promise<void> {
     ...open.map((pr) => ({
       label: `#${pr.number} ${pr.title}`,
       description: `${pr.source_branch} → ${pr.target_branch}`,
-      detail: pr.target_branch === 'main' ? 'Merging this changes the live project' : undefined,
+      // Live project, and what the last mergeability check said (conflicts with
+      // the target, or with other open pull requests by number).
+      detail: pullRequestListDetail(pr),
       pr,
     })),
     ...closed.map((pr) => ({
@@ -3447,13 +3452,15 @@ async function pullRequestActions(scm: HivekuScm, client: HivekuMcpClient, pr: a
     { location: vscode.ProgressLocation.Window, title: `Loading PR #${pr.number}…` },
     () => api.vcsPrGet(client, scm.link.project_id, pr.number),
   );
-  const d = detail.diff;
+  // The pull request's own changes since its merge base when the server sends
+  // them; the older two-dot diff also lists what the target changed since.
+  const d = reviewChanges(detail);
   // pr_get nests the PR under `pr`; prefer the server's fresh copy over the
   // list row we were called with.
   const fresh = detail.pr ?? pr;
   const summary = d
     ? `${d.added} added, ${d.modified} modified, ${d.removed} removed`
-    : `diff unavailable${detail.diff_error ? ` (${detail.diff_error})` : ''}`;
+    : `diff unavailable${(detail.changes_error ?? detail.diff_error) ? ` (${detail.changes_error ?? detail.diff_error})` : ''}`;
   type Act = 'review' | 'merge' | 'close' | 'reopen' | 'dashboard';
   const choices: Array<{ label: string; description: string; act: Act }> = [];
   if (d && d.entries.length > 0) {
@@ -3461,12 +3468,13 @@ async function pullRequestActions(scm: HivekuScm, client: HivekuMcpClient, pr: a
   }
   // What the site's "Require an approval" rule says about merging it now
   // (review_status, newer servers only). Approving is a person's act in the dashboard.
-  const rs = fresh.review_status;
+  // pr_get answers review_status beside `pr`; a list row carries it on the row.
+  const rs = detail.review_status ?? fresh.review_status;
   const mergeNote = fresh.is_draft
     ? 'a draft: mark it ready in the dashboard first'
     : rs?.required && rs.ready === false
       ? "needs a person's approval in the dashboard first"
-      : summary;
+      : (mergeableNote(detail.mergeable, fresh.target_branch) ?? summary);
   if (fresh.status === 'closed') {
     choices.push({ label: '$(git-pull-request) Reopen', description: 'make it mergeable again', act: 'reopen' });
   } else {

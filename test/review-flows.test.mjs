@@ -280,6 +280,59 @@ describe('archived branches', () => {
   });
 });
 
+describe('own changes and mergeability (builder #955, MCP #177)', () => {
+  test('a review reads the pull request\'s own changes, falling back to the two-dot diff on older servers', () => {
+    const own = { added: 0, removed: 0, modified: 1, entries: [{ path: 'index.html', status: 'modified' }] };
+    const twoDot = { added: 0, removed: 0, modified: 2, entries: [{ path: 'about.html', status: 'modified' }, { path: 'index.html', status: 'modified' }] };
+    // The live check of 2026-10-09: own changes ["index.html"] against a two-dot diff of ["about.html", "index.html"].
+    assert.deepEqual(flows.reviewChanges({ changes: own, diff: twoDot }), own);
+    assert.deepEqual(flows.reviewChanges({ diff: twoDot }), twoDot);
+    assert.equal(flows.reviewChanges({ changes: null, diff: null }), null);
+  });
+
+  test('the Pull Requests list says what the last check found, and nothing when it is unknown', () => {
+    const row = (extra) => ({ number: 7, title: 't', source_branch: 'feature/x', target_branch: 'main', status: 'open', ...extra });
+    assert.equal(
+      flows.pullRequestListDetail(row({ mergeable_state: 'conflicts', conflicts_with: [3, 5] })),
+      'Merging this changes the live project · Conflicts with Your site · conflicts with #3 and #5',
+    );
+    assert.equal(flows.pullRequestListDetail(row({ mergeable_state: 'clean', conflicts_with: [9] })), 'Merging this changes the live project · conflicts with #9');
+    assert.equal(flows.pullRequestListDetail(row({ mergeable_state: 'unknown', conflicts_with: [] })), 'Merging this changes the live project');
+    assert.equal(flows.pullRequestListDetail(row({ target_branch: 'release', mergeable_state: 'conflicts' })), 'Conflicts with "release"');
+    assert.equal(flows.pullRequestListDetail(row({ target_branch: 'release' })), undefined);
+  });
+
+  test('the Merge choice warns from mergeable: the target first, then other pull requests; unknown claims nothing', () => {
+    assert.equal(
+      flows.mergeableNote({ state: 'conflicts', conflicts_with_target: [{ path: 'a', kind: 'conflict' }, { path: 'b', kind: 'delete' }] }, 'main'),
+      '2 files conflict with Your site: resolve first',
+    );
+    assert.equal(
+      flows.mergeableNote({ state: 'clean', conflicts_with_target: [], conflicts_with_prs: [{ number: 4, order: 'other_first' }] }, 'main'),
+      'conflicts with #4 once one of them merges',
+    );
+    assert.equal(flows.mergeableNote({ state: 'clean', conflicts_with_target: [], conflicts_with_prs: [], overlaps_with_prs: [{ number: 2 }] }, 'main'), null);
+    assert.equal(flows.mergeableNote({ state: 'unknown', reason: 'busy' }, 'main'), null);
+    assert.equal(flows.mergeableNote(undefined, 'main'), null);
+  });
+
+  test('/hiveku-pr reviews from data.changes and reads data.mergeable before a merge', async () => {
+    const src = await fs.readFile(path.join(ROOT, 'src', 'knowledge.ts'), 'utf8');
+    const pr = src.slice(src.indexOf("'hiveku-pr': `"), src.indexOf("'hiveku-github': `"));
+    assert.match(pr, /Review from\s+\\`data\.changes\\`, the PR's OWN changes since its merge base/);
+    assert.match(pr, /path in \\`data\.changes\.entries\\` worth reading/);
+    const merge = pr.slice(pr.indexOf('- merge:'), pr.indexOf('- resolve'));
+    for (const field of ['data.mergeable', 'conflicts_with_target', 'conflicts_with_prs', 'overlaps_with_prs', 'this_first']) {
+      assert.ok(merge.includes(field), `/hiveku-pr merge must read ${field}`);
+    }
+    assert.match(merge, /the second will need a resolve after the first merges/);
+    assert.ok(merge.indexOf('data.mergeable') < merge.indexOf('CONFIRM with the user'), 'mergeable is read before the confirmation');
+    const list = pr.slice(pr.indexOf('- list:'), pr.indexOf('- open:'));
+    assert.match(list, /mergeable_state/);
+    assert.match(list, /conflicts_with/);
+  });
+});
+
 describe('what the extension writes and wires', () => {
   test('the scaffolded /hiveku-pr teaches the resolve step and never offers to delete a merged branch', async () => {
     const src = await fs.readFile(path.join(ROOT, 'src', 'knowledge.ts'), 'utf8');

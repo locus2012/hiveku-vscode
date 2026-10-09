@@ -200,6 +200,53 @@ export function archiveSentence(outcome: api.BranchArchiveOutcome | undefined): 
 }
 
 /**
+ * The files a review reads: the pull request's OWN changes since its merge
+ * base (`changes`, builder #955), else the older two-dot `diff`, which also
+ * lists what the target changed after the branch started.
+ */
+export function reviewChanges(detail: Pick<api.PullRequestDetail, 'changes' | 'diff'>): api.CompareResult | null {
+  return detail.changes ?? detail.diff ?? null;
+}
+
+/** "#3", "#3 and #5", "#3, #5 and #8". */
+function numbers(list: number[]): string {
+  const tags = list.map((n) => `#${n}`);
+  return tags.length <= 1 ? tags.join('') : `${tags.slice(0, -1).join(', ')} and ${tags[tags.length - 1]}`;
+}
+
+/**
+ * The detail line of an open pull request in the Pull Requests list, from the
+ * list's own fields (the last check; a list never runs one, so nothing is said
+ * when it is unknown). Undefined when there is nothing to say.
+ */
+export function pullRequestListDetail(pr: api.PullRequest): string | undefined {
+  const parts: string[] = [];
+  if (pr.target_branch === 'main') parts.push('Merging this changes the live project');
+  if (pr.mergeable_state === 'conflicts') parts.push(`Conflicts with ${branchWords(pr.target_branch)}`);
+  const others = Array.isArray(pr.conflicts_with) ? pr.conflicts_with.filter((n) => Number.isInteger(n)) : [];
+  if (others.length > 0) parts.push(`conflicts with ${numbers(others)}`);
+  return parts.length ? parts.join(' · ') : undefined;
+}
+
+/**
+ * What `mergeable` says before a merge, for the Merge choice (null when there
+ * is nothing to warn about). `state` is about the target only; the pull
+ * request pairs are advisory.
+ */
+export function mergeableNote(mergeable: api.Mergeable | null | undefined, target: string): string | null {
+  if (!mergeable) return null;
+  const files = Array.isArray(mergeable.conflicts_with_target) ? mergeable.conflicts_with_target.length : 0;
+  if (mergeable.state === 'conflicts') {
+    return files > 0
+      ? `${files} file${files === 1 ? '' : 's'} conflict with ${branchWords(target)}: resolve first`
+      : `conflicts with ${branchWords(target)}: resolve first`;
+  }
+  const prs = (mergeable.conflicts_with_prs ?? []).map((c) => c.number).filter((n) => Number.isInteger(n));
+  if (prs.length > 0) return `conflicts with ${numbers(prs)} once one of them merges`;
+  return null;
+}
+
+/**
  * Offer to restore an archived branch when `err` is a branch_archived refusal.
  * Returns true when it handled the error (the caller shows nothing else).
  */
