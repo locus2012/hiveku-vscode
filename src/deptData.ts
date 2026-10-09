@@ -852,6 +852,8 @@ export const DEPARTMENTS: Department[] = [
       { id: 'bills', label: 'Bills (AP)', tool: 'accounting_bill_list', args: { status: 'all', limit: 200 }, detail: { detailTool: 'accounting_bill_get', argKey: 'bill_id', nameKey: 'bill_number', dir: 'bills-detail' }, columns: [{ key: 'bill_number', label: 'bill' }, { key: ['vendor.name', 'vendor_name'], label: 'vendor' }, { key: 'status' }, { key: ['total_cents', 'amount_cents'], label: 'total', money: true, cents: true }, { key: 'due_date', label: 'due', date: true }] },
       { id: 'invoices', label: 'Invoices (AR)', tool: 'accounting_invoice_list', args: { status: 'all', limit: 200 }, columns: [{ key: 'invoice_number', label: 'invoice' }, { key: 'status' }, { key: ['total_cents'], label: 'total', money: true, cents: true }, { key: 'due_date', label: 'due', date: true }] },
       { id: 'products_services', label: 'Products & services', tool: 'accounting_product_list', args: { limit: 200 }, columns: [{ key: 'name' }, { key: 'sku' }, { key: 'default_unit_price_cents', label: 'price', money: true, cents: true }, { key: 'unit_label', label: 'unit' }, { key: 'id' }] },
+      // Commerce > Payment pages: public links a client pays by card. share_url is the link to hand out.
+      { id: 'payment_pages', label: 'Payment pages', tool: 'accounting_payment_page_list', columns: [{ key: 'title' }, { key: 'is_active', label: 'live' }, { key: 'payment_count', label: 'payments' }, { key: 'collected_cents', label: 'collected', money: true, cents: true }, { key: 'share_url', label: 'link' }, { key: 'id' }] },
       // A vendor has no currency column (payout currency is a payroll MEMBER field), so the list shows the 1099 flag instead.
       { id: 'vendors', label: 'Vendors', tool: 'accounting_vendor_list', args: { limit: 500 }, columns: [{ key: 'name' }, { key: 'email' }, { key: ['default_payment_terms', 'terms'], label: 'terms' }, { key: 'is_1099', label: '1099' }] },
       { id: 'bill_schedules', label: 'Recurring bills', tool: 'accounting_bill_schedules_list', columns: [{ key: 'name' }, { key: 'vendor.name', label: 'vendor' }, { key: 'interval_unit', label: 'every' }, { key: 'next_run_at', label: 'next bill', date: true }, { key: 'is_active', label: 'active' }] },
@@ -935,7 +937,21 @@ export const DEPARTMENTS: Department[] = [
       'The second hand-off is payroll: `accounting_payroll_run_create` only ever creates a `draft` run, no ' +
       'finalize tool is registered on this surface, and the payout files (Wise, plain CSV, Gusto, QuickBooks) ' +
       'are dashboard session routes that refuse a draft run with 409, so a run created from here cannot be ' +
-      'paid out until a human finalizes it in the dashboard. Never report payroll as done from here.',
+      'paid out until a human finalizes it in the dashboard. Never report payroll as done from here. ' +
+      'Payment pages (Commerce > Payment pages, `payment_pages.json`) are public links a client pays by card, ' +
+      'and every read returns the link to hand out as `share_url`. `accounting_payment_page_create` (requires ' +
+      '`title`; `kind` is `open`, `fixed` or `subscription`) starts a page that nobody could pay yet (a fixed ' +
+      'page with no price, any new subscription page) switched OFF; `accounting_payment_page_update` (requires ' +
+      '`payment_page_id`) refuses to leave a page live with nothing to pay (409 `not_ready`, with the reason), ' +
+      'so set the price or the plan before `is_active: true`. Prices and bounds are cents ' +
+      '(`preset_amounts_cents`, `min_amount_cents`, `max_amount_cents`), tax is `tax_bps`, and `currency` ' +
+      'locks once the page has taken a payment. `config` replaces the extended settings whole, so read the page ' +
+      'with `accounting_payment_page_get` first and send all of it back changed (a config missing a section is ' +
+      'refused with 400 `config_incomplete`). A subscription page, or a change to the plans it sells, also needs ' +
+      'the key creator\'s right to sell subscriptions (403 otherwise), and a key with no recorded owner cannot ' +
+      'set one up. A slug another page already uses is refused with 409. ' +
+      '`accounting_payment_page_delete` takes the link down at once and no tool restores it; to pause a page, ' +
+      'switch it off with `is_active: false`.',
   },
   {
     id: 'creative',
