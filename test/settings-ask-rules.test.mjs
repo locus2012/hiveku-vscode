@@ -73,8 +73,11 @@ const ADDED = [
 ];
 
 /** Every ask rule, as the scaffold must write them (the .mcp.json server is "hiveku"). */
-/** Versions Wave 2: a rollback apply always asks. 2026-10-08: so does settling merge conflicts. */
-const VERSIONS = ['mcp__hiveku__project_vcs_rollback', 'mcp__hiveku__project_vcs_resolve'];
+/**
+ * Version control: a rollback apply always asks (Versions Wave 2), so does settling merge conflicts
+ * (2026-10-08), and so does joining the merge line, which is the approval to merge (2026-10-09).
+ */
+const VERSIONS = ['mcp__hiveku__project_vcs_rollback', 'mcp__hiveku__project_vcs_resolve', 'mcp__hiveku__project_vcs_queue_add'];
 
 const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED, ...VERSIONS];
 const without = (...names) => EXPECTED_ASK.filter((name) => !names.includes(name));
@@ -344,7 +347,7 @@ describe('Permission gate: the ask array', () => {
     // line is only asserted when it printed. With one, every ask name must be a
     // real tool: a typo would gate nothing, silently.
     if (/allow rules/.test(run.stdout)) {
-      assert.match(run.stdout, /\b3 denied, 16 ask\b/);
+      assert.match(run.stdout, /\b3 denied, 17 ask\b/);
       assert.doesNotMatch(run.stderr, /naming no tool/);
     }
   });
