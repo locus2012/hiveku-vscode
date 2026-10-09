@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.91.0
+- **Payment pages in the Accounting data.** Pulling Accounting now also downloads your payment pages (Commerce > Payment pages) as `payment_pages.json`: each page's title, whether it is live, its payments and what it has collected, and the link to send a client.
+- **AI tools can manage payment pages.** With your own Hiveku key, Claude Code and Codex can list, read, create, change and remove payment pages, by the same rules as the page editor and with the same permissions you have in the app. The Accounting notes tell them those rules before they start:
+  - A page nobody could pay yet starts switched off and can't be switched on until it can be paid.
+  - A subscription page needs the right to sell subscriptions.
+  - The currency can't change after the first payment.
+  - A removed page can't be brought back, so to pause a page, switch it off.
+
 ## 0.90.0
 - **A pull request refused for conflicts can be settled.** Merging a pull request whose files conflict used to say "Resolve them on <branch>, save a version, then merge again", which never worked: the merge compares against where the branch started, so the file still conflicted. Now the message names the files and offers:
   - **Resolve in the dashboard** opens that pull request's review on the Hiveku dashboard, where each file can keep the branch's version, use Your site's, or get new text.
