@@ -622,6 +622,9 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__project_vcs_pr_reviews',
   'mcp__hiveku__project_vcs_pr_comments',
   'mcp__hiveku__project_vcs_settings',
+  // The merge line (2026-10-09, builder #977 / MCP #182): a GET with readOnlyHint. Its writes keep
+  // prompting: adding asks in every mode (HIVEKU_ASK); taking out and reordering only hold a merge back.
+  'mcp__hiveku__project_vcs_queue',
   // Version history + checkpoints — READ + DRY-RUN only (the actual restores
   // stay behind a confirm; creating a checkpoint is safe/additive).
   'mcp__hiveku__project_version_log',
@@ -798,6 +801,10 @@ const HIVEKU_ASK: string[] = [
   // hook asks on every resolve as well). The extension's own "Resolve here"
   // calls the tool directly after its own pickers and confirmation.
   'mcp__hiveku__project_vcs_resolve',
+  // Joining the merge line (2026-10-09, MCP #182) is the approval to merge: the line then merges the
+  // pull request into its target (main = Your site) with nobody asking again, so every call asks,
+  // in auto mode too (the plugin's hook asks on every add as well).
+  'mcp__hiveku__project_vcs_queue_add',
 ];
 
 /**
@@ -1588,8 +1595,8 @@ This folder's checked-out branch is \`branch\` in \`.hiveku/project.json\`; \`/h
 `,
     'hiveku-pr': `---
 description: Hiveku-native pull requests for this project — open, review file by file and comment, merge (strict), settle merge conflicts, close, reopen. No GitHub involved.
-argument-hint: "[list | open <source> [into <target>] | review <number> | merge <number> | resolve <number> | close <number> | reopen <number>]"
-allowed-tools: mcp__hiveku__project_vcs_pr_list, mcp__hiveku__project_vcs_pr_get, mcp__hiveku__project_vcs_pr_create, mcp__hiveku__project_vcs_pr_merge, mcp__hiveku__project_vcs_pr_close, mcp__hiveku__project_vcs_pr_reopen, mcp__hiveku__project_vcs_pr_reviews, mcp__hiveku__project_vcs_pr_comments, mcp__hiveku__project_vcs_pr_review, mcp__hiveku__project_vcs_pr_comment, mcp__hiveku__project_vcs_settings, mcp__hiveku__project_vcs_conflicts, mcp__hiveku__project_vcs_diff_file, mcp__hiveku__project_vcs_branches, mcp__hiveku__project_vcs_env_bindings, mcp__hiveku__project_vcs_env_bind, mcp__hiveku__project_vcs_branch_delete, Read
+argument-hint: "[list | open <source> [into <target>] | review <number> | merge <number> | queue <number> | resolve <number> | close <number> | reopen <number>]"
+allowed-tools: mcp__hiveku__project_vcs_pr_list, mcp__hiveku__project_vcs_queue, mcp__hiveku__project_vcs_pr_get, mcp__hiveku__project_vcs_pr_create, mcp__hiveku__project_vcs_pr_merge, mcp__hiveku__project_vcs_pr_close, mcp__hiveku__project_vcs_pr_reopen, mcp__hiveku__project_vcs_pr_reviews, mcp__hiveku__project_vcs_pr_comments, mcp__hiveku__project_vcs_pr_review, mcp__hiveku__project_vcs_pr_comment, mcp__hiveku__project_vcs_settings, mcp__hiveku__project_vcs_conflicts, mcp__hiveku__project_vcs_diff_file, mcp__hiveku__project_vcs_branches, mcp__hiveku__project_vcs_env_bindings, mcp__hiveku__project_vcs_env_bind, mcp__hiveku__project_vcs_branch_delete, Read
 ---
 Pull-request operations for THIS project: $ARGUMENTS. ${idLine}
 
@@ -1634,6 +1641,16 @@ open PR → review → merge → \`/hiveku-deploy production\`.
   path, then resolve. After a merge into main, offer \`/hiveku-deploy production\`. \`branch_archive.archived: true\`
   means the source branch is archived (hidden, read-only, restorable for 30 days with \`/hiveku-branch restore\`):
   do not offer to delete it.
+- queue (the merge line; prefer it when several PRs are open): JOINING THE LINE IS THE APPROVAL TO MERGE: the line
+  merges the PR into its target in order, in the background, with nobody asking again. CONFIRM with the user first,
+  naming the target and what is ahead, then \`project_vcs_queue_add({ project_id: "${pid}", number })\` (it always
+  asks). Report \`position\` (1 merges next), \`ahead\`, and any \`conflicts_with_ahead\` (a PR ahead it collides with:
+  it will be sent back after that one merges, then resolve and add it again). The line checks it still merges
+  cleanly, that it adds no secret keys to code, and, with the approval rule on, that a person approved it; it waits
+  for an approval without holding up the others (\`entry.waiting\`). Watch it with
+  \`project_vcs_queue({ project_id: "${pid}" })\`; take it out with \`project_vcs_queue_remove\` (the PR stays open).
+  Several agents on one site: read \`project_vcs_queue\` before starting. A direct merge answering 409
+  \`pr_merge_busy\` means another merge is running: wait the Retry-After seconds and call again.
 - resolve (after 409 \`merge_conflicts\`): editing the file on the branch and saving a version NEVER clears a
   conflict. The refusal's \`resolve\` names the branch to resolve on and the branch it was started from (main =
   Your site). \`project_vcs_conflicts({ project_id: "${pid}", branch: <resolve.branch> })\` lists \`{ path, kind, marked,

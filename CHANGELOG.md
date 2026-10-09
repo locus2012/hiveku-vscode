@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.1
+- **Claude Code can add pull requests to the merge line, and always asks first.** Hiveku now merges open pull requests in order through a merge line: joining it is the approval to merge, and the line then merges the pull request into its target with nobody asking again. In your project folders, `/hiveku-pr queue <number>` adds one after you confirm, reports its place and anything ahead it collides with, and `project_vcs_queue_add` asks in every permission mode. Reading the line never asks. Folders you already have get the ask rule when VS Code starts.
+
 ## 0.91.0
 - **Payment pages in the Accounting data.** Pulling Accounting now also downloads your payment pages (Commerce > Payment pages) as `payment_pages.json`: each page's title, whether it is live, its payments and what it has collected, and the link to send a client.
 - **AI tools can manage payment pages.** With your own Hiveku key, Claude Code and Codex can list, read, create, change and remove payment pages, by the same rules as the page editor and with the same permissions you have in the app. The Accounting notes tell them those rules before they start:
