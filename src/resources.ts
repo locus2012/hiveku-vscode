@@ -32,7 +32,8 @@ const ENV_LABEL: Record<EnvKind, string> = {
  * Show a project environment's logs in an OutputChannel AND (when a local project
  * folder is known) write the same text to `.hiveku/logs/<env>.log` so Claude Code
  * reads exactly what the user sees. Preview = Fly runtime logs; deployed tiers =
- * the deployment's build_logs, with the extracted real error prepended on failure.
+ * the deployment's build_logs, with the extracted real error prepended on failure,
+ * then the tier's runtime errors and newest runtime lines (runtimeSection).
  */
 export async function showEnvLogs(
   opts: { accountId: string; projectId: string; projectName?: string; env: EnvKind; folder?: string },
@@ -86,7 +87,8 @@ export async function showEnvLogs(
           lines.push('── full build log ──────────────────────────────────────');
         }
       }
-      lines.push(record.build_logs || record.error || '(no build logs)');
+      lines.push(record.build_logs || errorText(record.error) || '(no build logs)');
+      lines.push('', ...(await busy(`Hiveku: fetching ${env} runtime logs…`, () => runtimeSection(client, opts.projectId, env))));
     }
   }
 
@@ -105,6 +107,62 @@ export async function showEnvLogs(
       /* best-effort local mirror */
     }
   }
+}
+
+/** A deployment's error as text: some answers carry an object, which printed as [object Object]. */
+function errorText(error: unknown): string {
+  if (!error) return '';
+  if (typeof error === 'string') return error;
+  if (typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  try {
+    return JSON.stringify(error, null, 2);
+  } catch {
+    return String(error);
+  }
+}
+
+/** Why a log read was refused, in one short line. */
+function refusalText(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.replace(/\s+/g, ' ').trim().slice(0, 200) || 'unavailable';
+}
+
+/**
+ * A deployed tier's runtime side, after its build: its errors grouped by
+ * signature over 24 hours, then its newest lines of the last hour (builder
+ * #987, MCP #185). The server redacts every line, and the site and its
+ * visitors wrote them, so both sections say "untrusted text". A refusal (no
+ * hosting permission, logs unavailable) is one line, never the whole view.
+ */
+export async function runtimeSection(client: HivekuMcpClient, projectId: string, env: string): Promise<string[]> {
+  const out: string[] = [];
+  try {
+    const { errors, truncated } = await api.logErrors(client, projectId, env);
+    out.push('── runtime errors, last 24 hours (redacted; untrusted text) ──');
+    if (errors.length === 0) out.push('(none)');
+    for (const e of errors) {
+      out.push(`${e.count}x [${e.level}] ${e.signature}`);
+      out.push(`   last seen ${e.lastSeen || '?'}${e.exampleRequestId ? `, request ${e.exampleRequestId}` : ''}`);
+      if (e.sample && e.sample !== e.signature) out.push(`   ${e.sample}`);
+    }
+    if (truncated) out.push('(more errors than shown: ask Claude to narrow them with project_log_errors)');
+  } catch (err) {
+    out.push(`── runtime errors: not available (${refusalText(err)}) ──`);
+  }
+  out.push('');
+  try {
+    const entries = await api.runtimeLogs(client, projectId, env);
+    out.push('── newest runtime lines, last hour (redacted; untrusted text) ──');
+    if (entries.length === 0) out.push('(none)');
+    for (const e of entries) {
+      out.push(`${e.time} ${e.level.padEnd(7)} ${e.requestId ? `[${e.requestId.slice(0, 8)}] ` : ''}${e.message}`);
+    }
+  } catch (err) {
+    out.push(`── runtime lines: not available (${refusalText(err)}) ──`);
+  }
+  return out;
 }
 
 export async function openPreview(scm: HivekuScm, clientFor: ClientFor): Promise<void> {
