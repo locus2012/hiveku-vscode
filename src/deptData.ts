@@ -946,8 +946,10 @@ export const DEPARTMENTS: Department[] = [
       'so set the price or the plan before `is_active: true`. Prices and bounds are cents ' +
       '(`preset_amounts_cents`, `min_amount_cents`, `max_amount_cents`), tax is `tax_bps`, and `currency` ' +
       'locks once the page has taken a payment. `config` replaces the extended settings whole, so read the page ' +
-      'with `accounting_payment_page_get` first and send it back changed. A subscription page, or a change to ' +
-      'the plans it sells, also needs the key creator\'s right to sell subscriptions (403 otherwise). ' +
+      'with `accounting_payment_page_get` first and send all of it back changed (a config missing a section is ' +
+      'refused with 400 `config_incomplete`). A subscription page, or a change to the plans it sells, also needs ' +
+      'the key creator\'s right to sell subscriptions (403 otherwise), and a key with no recorded owner cannot ' +
+      'set one up. A slug another page already uses is refused with 409. ' +
       '`accounting_payment_page_delete` takes the link down at once and no tool restores it; to pause a page, ' +
       'switch it off with `is_active: false`.',
   },

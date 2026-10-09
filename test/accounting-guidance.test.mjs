@@ -101,7 +101,9 @@ describe('what the Accounting department teaches', () => {
     assert.match(crud, /`share_url`/);
     assert.match(crud, /409 `not_ready`/);
     assert.match(crud, /`config` replaces the extended settings whole/);
-    assert.match(crud, /right to sell subscriptions \(403 otherwise\)/);
+    assert.match(crud, /right to sell subscriptions \(403 otherwise\), and a key with no recorded owner cannot/);
+    assert.match(crud, /400 `config_incomplete`/);
+    assert.match(crud, /already uses is refused with 409/);
     assert.match(crud, /no tool restores it/);
   });
 
