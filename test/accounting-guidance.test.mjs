@@ -49,6 +49,16 @@ describe('the Accounting department lists', () => {
     assert.ok(!keysOf(dataset('vendors')).includes('target_currency'), 'a vendor has no currency');
   });
 
+  test('downloads the payment pages with their links (2026-10-09)', () => {
+    assert.equal(dataset('payment_pages').tool, 'accounting_payment_page_list');
+    // The list route answers every page at once: no limit to pass.
+    assert.equal(dataset('payment_pages').args, undefined);
+    const keys = keysOf(dataset('payment_pages'));
+    for (const key of ['title', 'is_active', 'collected_cents', 'share_url', 'id']) assert.ok(keys.includes(key), key);
+    const collected = dataset('payment_pages').columns.find((c) => c.key === 'collected_cents');
+    assert.ok(collected.money && collected.cents, 'collected_cents is cents');
+  });
+
   test('leaves leave dates as written, since the console reads a date in local time', () => {
     const dated = dataset('pto_requests').columns.filter((c) => c.date);
     assert.deepEqual(dated, []);
@@ -82,6 +92,17 @@ describe('what the Accounting department teaches', () => {
     assert.match(crud, /`accounting_pto_balance_set`/);
     assert.match(crud, /`accounting_product_list`/);
     assert.match(crud, /`accounting_invoice_create`/);
+  });
+
+  test('payment pages: the five tools and the rules an agent would otherwise learn by failing', () => {
+    for (const verb of ['create', 'update', 'delete']) assert.match(crud, new RegExp(`\`accounting_payment_page_${verb}\``));
+    assert.match(crud, /`accounting_payment_page_get`/);
+    assert.match(crud, /`payment_pages\.json`/);
+    assert.match(crud, /`share_url`/);
+    assert.match(crud, /409 `not_ready`/);
+    assert.match(crud, /`config` replaces the extended settings whole/);
+    assert.match(crud, /right to sell subscriptions \(403 otherwise\)/);
+    assert.match(crud, /no tool restores it/);
   });
 
   test('a vendor tax ID is never read back in full, and the 1099 page is totals only', () => {
