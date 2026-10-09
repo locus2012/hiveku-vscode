@@ -1544,7 +1544,7 @@ Manage custom domains for THIS project$ARGUMENTS. ${idLine}
 Confirm add/remove; a domain isn't live until its DNS records resolve + SSL provisions. Tell the user to add the returned records, then re-run list to watch status flip to verified.
 `,
     'hiveku-branch': `---
-description: Hiveku-native branches for this project — list, create, status, bind a tier to a branch, preview, delete. No GitHub involved.
+description: Hiveku-native branches for this project — list, create, status, bind a tier to a branch, preview, restore an archived branch, delete. No GitHub involved.
 argument-hint: "[list | create <name> | status | bind <development|staging> <branch|main> | preview | restore <name> | delete <name>]"
 allowed-tools: mcp__hiveku__project_vcs_branches, mcp__hiveku__project_vcs_branch_create, mcp__hiveku__project_vcs_checkout, mcp__hiveku__project_vcs_compare, mcp__hiveku__project_vcs_diff_file, mcp__hiveku__project_vcs_history, mcp__hiveku__project_vcs_env_bindings, mcp__hiveku__project_vcs_env_bind, mcp__hiveku__project_vcs_branch_preview, mcp__hiveku__project_vcs_branch_preview_status, mcp__hiveku__project_vcs_branch_preview_teardown, mcp__hiveku__project_vcs_branch_delete, mcp__hiveku__project_vcs_branch_restore, mcp__hiveku__project_vcs_revert, Read, Write
 ---
@@ -1587,7 +1587,7 @@ This folder's checked-out branch is \`branch\` in \`.hiveku/project.json\`; \`/h
   branch needs no delete: it is archived, and Hiveku deletes it after 30 days.
 `,
     'hiveku-pr': `---
-description: Hiveku-native pull requests for this project — open, review file by file, merge (strict), close, reopen. No GitHub involved.
+description: Hiveku-native pull requests for this project — open, review file by file and comment, merge (strict), settle merge conflicts, close, reopen. No GitHub involved.
 argument-hint: "[list | open <source> [into <target>] | review <number> | merge <number> | resolve <number> | close <number> | reopen <number>]"
 allowed-tools: mcp__hiveku__project_vcs_pr_list, mcp__hiveku__project_vcs_pr_get, mcp__hiveku__project_vcs_pr_create, mcp__hiveku__project_vcs_pr_merge, mcp__hiveku__project_vcs_pr_close, mcp__hiveku__project_vcs_pr_reopen, mcp__hiveku__project_vcs_pr_reviews, mcp__hiveku__project_vcs_pr_comments, mcp__hiveku__project_vcs_pr_review, mcp__hiveku__project_vcs_pr_comment, mcp__hiveku__project_vcs_settings, mcp__hiveku__project_vcs_conflicts, mcp__hiveku__project_vcs_diff_file, mcp__hiveku__project_vcs_branches, mcp__hiveku__project_vcs_env_bindings, mcp__hiveku__project_vcs_env_bind, mcp__hiveku__project_vcs_branch_delete, Read
 ---
