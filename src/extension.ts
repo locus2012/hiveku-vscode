@@ -78,6 +78,25 @@ import { openDatabasePanel } from './databasePanel';
 // Versions (Wave 2): new logic lives in these modules; the hooks below are small and named.
 import { goBackToVersion, versionBeforeDeploy, VersionIndicator } from './versionFlows';
 import { checkoutTree, deployVersionSentence, serverCaps, treeThatShips } from './versions';
+import {
+  MERGE_AGAIN,
+  OPEN_IN_DASHBOARD,
+  OPEN_PULL_REQUEST,
+  RESOLVE_HERE,
+  RESOLVE_IN_DASHBOARD,
+  archiveSentence,
+  archivedBranchOf,
+  branchWords,
+  conflictRefusalMessage,
+  directMergeRefusal,
+  mergeableNote,
+  offerRestoreArchivedBranch,
+  prMergeRefusal,
+  pullRequestListDetail,
+  resolveConflictsHere,
+  reviewChanges,
+  reviewPageUrl,
+} from './reviewFlows';
 
 let accounts: AccountStore;
 let log: vscode.OutputChannel;
@@ -961,6 +980,20 @@ async function withScm(fn: (scm: HivekuScm) => Promise<void>, mutating = false):
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.appendLine(`[error] ${msg}`);
+    // A save, version, merge or preview on a branch archived when its pull
+    // request merged answers 409 branch_archived: offer to bring it back.
+    // Only that refusal reaches for a client; a failure here falls back to
+    // the plain error below.
+    if (archivedBranchOf(err)) {
+      const handled = await (async () =>
+        offerRestoreArchivedBranch({
+          client: await clientForAccount(scm.link.account_id),
+          projectId: scm.link.project_id,
+          err,
+          log,
+        }))().catch(() => false);
+      if (handled) return;
+    }
     vscode.window.showErrorMessage(`Hiveku: ${msg}`);
   }
 }
@@ -3281,10 +3314,22 @@ async function merge(scm: HivekuScm): Promise<void> {
     'Merge',
   );
   if (confirm !== 'Merge') return;
-  const result = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Merging ${scm.branch} into ${into}…` },
-    () => api.vcsMerge(client, scm.link.project_id, scm.branch, undefined, intoMain ? undefined : into),
-  );
+  let result: api.MergeResult;
+  try {
+    result = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Merging ${scm.branch} into ${into}…` },
+      () => api.vcsMerge(client, scm.link.project_id, scm.branch, undefined, intoMain ? undefined : into),
+    );
+  } catch (err) {
+    // With the site's "Require an approval" rule on, only a pull request a
+    // person approved goes into Your site (409 pull_request_required).
+    const refusal = directMergeRefusal(err);
+    if (!refusal) throw err;
+    log.appendLine(`[merge] ${scm.branch}→${into} refused: pull_request_required`);
+    const choice = await vscode.window.showWarningMessage(refusal, OPEN_PULL_REQUEST);
+    if (choice === OPEN_PULL_REQUEST) await createPullRequest(scm, client);
+    return;
+  }
   // merged_into is the server's own answer; trust it over our request when present.
   const landed = result.merged_into || into;
   log.appendLine(
@@ -3337,34 +3382,6 @@ async function merge(scm: HivekuScm): Promise<void> {
 
 // ── Native pull requests ─────────────────────────────────────────────────────
 
-/** A thrown MCP error carries the route's JSON body inside its message; pull the
- *  conflict list back out so a refused strict merge can be shown properly. */
-function conflictsFromError(err: unknown): string[] {
-  const text = err instanceof Error ? err.message : String(err);
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) return [];
-  try {
-    // The proxy nests the route body under `details`, and the route itself
-    // puts the conflict list under `data` — so the list is two levels down
-    // (details.data.conflicts). Walk every level rather than guessing one.
-    const seen = new Set<unknown>();
-    const walk = (node: unknown, depth: number): string[] => {
-      if (!node || typeof node !== 'object' || depth > 4 || seen.has(node)) return [];
-      seen.add(node);
-      const obj = node as Record<string, unknown>;
-      if (Array.isArray(obj.conflicts)) return (obj.conflicts as unknown[]).map(String);
-      for (const key of ['details', 'data', 'result', 'merge']) {
-        const found = walk(obj[key], depth + 1);
-        if (found.length) return found;
-      }
-      return [];
-    };
-    return walk(JSON.parse(match[0]), 0);
-  } catch {
-    return [];
-  }
-}
-
 async function pullRequests(scm: HivekuScm): Promise<void> {
   const client = await clientForAccount(scm.link.account_id);
   const [open, closed] = await Promise.all([
@@ -3378,7 +3395,9 @@ async function pullRequests(scm: HivekuScm): Promise<void> {
     ...open.map((pr) => ({
       label: `#${pr.number} ${pr.title}`,
       description: `${pr.source_branch} → ${pr.target_branch}`,
-      detail: pr.target_branch === 'main' ? 'Merging this changes the live project' : undefined,
+      // Live project, and what the last mergeability check said (conflicts with
+      // the target, or with other open pull requests by number).
+      detail: pullRequestListDetail(pr),
       pr,
     })),
     ...closed.map((pr) => ({
@@ -3433,26 +3452,38 @@ async function pullRequestActions(scm: HivekuScm, client: HivekuMcpClient, pr: a
     { location: vscode.ProgressLocation.Window, title: `Loading PR #${pr.number}…` },
     () => api.vcsPrGet(client, scm.link.project_id, pr.number),
   );
-  const d = detail.diff;
+  // The pull request's own changes since its merge base when the server sends
+  // them; the older two-dot diff also lists what the target changed since.
+  const d = reviewChanges(detail);
   // pr_get nests the PR under `pr`; prefer the server's fresh copy over the
   // list row we were called with.
   const fresh = detail.pr ?? pr;
   const summary = d
     ? `${d.added} added, ${d.modified} modified, ${d.removed} removed`
-    : `diff unavailable${detail.diff_error ? ` (${detail.diff_error})` : ''}`;
-  type Act = 'review' | 'merge' | 'close' | 'reopen';
+    : `diff unavailable${(detail.changes_error ?? detail.diff_error) ? ` (${detail.changes_error ?? detail.diff_error})` : ''}`;
+  type Act = 'review' | 'merge' | 'close' | 'reopen' | 'dashboard';
   const choices: Array<{ label: string; description: string; act: Act }> = [];
   if (d && d.entries.length > 0) {
     choices.push({ label: '$(diff) Review files', description: `${d.entries.length} changed — open side-by-side diffs`, act: 'review' });
   }
+  // What the site's "Require an approval" rule says about merging it now
+  // (review_status, newer servers only). Approving is a person's act in the dashboard.
+  // pr_get answers review_status beside `pr`; a list row carries it on the row.
+  const rs = detail.review_status ?? fresh.review_status;
+  const mergeNote = fresh.is_draft
+    ? 'a draft: mark it ready in the dashboard first'
+    : rs?.required && rs.ready === false
+      ? "needs a person's approval in the dashboard first"
+      : (mergeableNote(detail.mergeable, fresh.target_branch) ?? summary);
   if (fresh.status === 'closed') {
     choices.push({ label: '$(git-pull-request) Reopen', description: 'make it mergeable again', act: 'reopen' });
   } else {
     choices.push(
-      { label: '$(git-merge) Merge', description: summary, act: 'merge' },
+      { label: '$(git-merge) Merge', description: mergeNote, act: 'merge' },
       { label: '$(x) Close without merging', description: 'the source branch is untouched', act: 'close' },
     );
   }
+  choices.push({ label: '$(link-external) Open in the dashboard', description: 'comments, reviews and approval', act: 'dashboard' });
   const action = await vscode.window.showQuickPick(choices, {
     placeHolder: `#${fresh.number} ${fresh.title} — ${fresh.source_branch} → ${fresh.target_branch}${fresh.status === 'closed' ? ' (closed)' : ''}`,
   });
@@ -3462,6 +3493,11 @@ async function pullRequestActions(scm: HivekuScm, client: HivekuMcpClient, pr: a
     await reviewPullRequestFiles(scm, fresh, d!);
     // Back to the action list so review flows straight into merge/close.
     return pullRequestActions(scm, client, fresh);
+  }
+
+  if (action.act === 'dashboard') {
+    await vscode.env.openExternal(vscode.Uri.parse(reviewPageUrl(appUrl(), scm.link.account_id, scm.link.project_id, fresh.number)));
+    return;
   }
 
   if (action.act === 'reopen') {
@@ -3476,6 +3512,16 @@ async function pullRequestActions(scm: HivekuScm, client: HivekuMcpClient, pr: a
     return;
   }
 
+  return mergePullRequest(scm, client, fresh);
+}
+
+/**
+ * Merge one pull request, all or nothing, after the person's yes. A refusal
+ * changes nothing; the ones people act on are explained with the way forward:
+ * conflicts (resolve them in the dashboard, or keep one side per file here),
+ * the "Require an approval" rule (people approve in the dashboard), and a draft.
+ */
+async function mergePullRequest(scm: HivekuScm, client: HivekuMcpClient, fresh: api.PullRequest): Promise<void> {
   const intoMain = fresh.target_branch === 'main';
   const confirm = await vscode.window.showWarningMessage(
     `Merge pull request #${fresh.number}: "${fresh.source_branch}" into "${fresh.target_branch}"?`,
@@ -3490,39 +3536,132 @@ async function pullRequestActions(scm: HivekuScm, client: HivekuMcpClient, pr: a
     'Merge',
   );
   if (confirm !== 'Merge') return;
+  const reviewUrl = reviewPageUrl(appUrl(), scm.link.account_id, scm.link.project_id, fresh.number);
   try {
-    const { merge: result, relabel_failed: relabelFailed } = await vscode.window.withProgress(
+    const {
+      merge: result,
+      relabel_failed: relabelFailed,
+      branch_archive: archive,
+    } = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Merging #${fresh.number}…` },
       () => api.vcsPrMerge(client, scm.link.project_id, fresh.number),
     );
     const applied = result?.applied?.length ?? 0;
+    const archived = archive?.archived === true;
     log.appendLine(
-      `[pr-merge] #${fresh.number} ${fresh.source_branch}→${fresh.target_branch} applied=${applied}${relabelFailed ? ' relabel_failed' : ''}`,
+      `[pr-merge] #${fresh.number} ${fresh.source_branch}→${fresh.target_branch} applied=${applied}` +
+        `${relabelFailed ? ' relabel_failed' : ''}${archived ? ' archived' : ''}`,
     );
     // relabel_failed: the files merged, but the PR's open->merged label lost a
     // race and the server is still settling it. A branch delete right now is
     // refused ("open pull request"), so that offer is withheld; deploying
-    // main is unaffected.
+    // main is unaffected. An archived branch needs no delete at all: Hiveku
+    // deletes it after its 30 days, and it can be restored until then.
+    const onArchived = archived && scm.branch === fresh.source_branch;
+    const switchLabel = `Switch to ${fresh.target_branch}`;
+    const deleteLabel = `Delete branch ${fresh.source_branch}`;
     const next = await vscode.window.showInformationMessage(
       `Merged #${fresh.number} — ${applied} file(s) applied.` +
         (relabelFailed ? ' The merge landed; the pull request label is still updating.' : '') +
+        archiveSentence(archive) +
         (intoMain ? ' Deploy production to put it live.' : ''),
       ...(intoMain ? ['Deploy production'] : []),
-      ...(relabelFailed ? [] : [`Delete branch ${fresh.source_branch}`]),
+      ...(onArchived ? [switchLabel] : []),
+      ...(relabelFailed || archived ? [] : [deleteLabel]),
     );
     if (next === 'Deploy production') await deploy(scm, 'production');
-    else if (next === `Delete branch ${fresh.source_branch}`) await deleteMergedBranch(scm, client, fresh.source_branch);
+    else if (next === switchLabel) await scm.switchBranch(fresh.target_branch);
+    else if (next === deleteLabel) await deleteMergedBranch(scm, client, fresh.source_branch);
   } catch (err) {
-    // A strict merge refuses atomically: surface the conflict list rather than
-    // withScm's generic "Hiveku: <json>" so the user knows nothing was applied.
-    const conflicts = conflictsFromError(err);
-    if (conflicts.length === 0) throw err;
-    log.appendLine(`[pr-merge] #${fresh.number} refused, conflicts: ${conflicts.join(', ')}`);
-    vscode.window.showWarningMessage(
-      `Nothing was merged — ${conflicts.length} file(s) conflict: ` +
-        `${conflicts.slice(0, 4).join(', ')}${conflicts.length > 4 ? '…' : ''}. ` +
-        `Resolve them on "${fresh.source_branch}", save a version, then merge again.`,
+    // A strict merge refuses atomically: say why and what to do, rather than
+    // withScm's generic "Hiveku: <json>", so the user knows nothing was applied.
+    const refusal = prMergeRefusal(err);
+    if (!refusal) throw err;
+    if (refusal.kind !== 'conflicts') {
+      log.appendLine(`[pr-merge] #${fresh.number} refused: ${refusal.kind}`);
+      // Approving is a person's act in the dashboard, never the extension's.
+      const choice = await vscode.window.showWarningMessage(
+        /nothing was merged/i.test(refusal.message) ? refusal.message : `Nothing was merged. ${refusal.message}`,
+        OPEN_IN_DASHBOARD,
+      );
+      if (choice === OPEN_IN_DASHBOARD) await vscode.env.openExternal(vscode.Uri.parse(reviewUrl));
+      return;
+    }
+    log.appendLine(
+      `[pr-merge] #${fresh.number} refused, conflicts: ${refusal.paths.join(', ')}` +
+        (refusal.resolve ? ` (resolve on ${refusal.resolve.branch} against ${refusal.resolve.parent})` : ' (no resolve target)'),
     );
+    const choice = await vscode.window.showWarningMessage(
+      conflictRefusalMessage(refusal),
+      RESOLVE_IN_DASHBOARD,
+      ...(refusal.resolve ? [RESOLVE_HERE] : []),
+    );
+    if (choice === RESOLVE_IN_DASHBOARD) {
+      await vscode.env.openExternal(vscode.Uri.parse(reviewUrl));
+      return;
+    }
+    if (choice !== RESOLVE_HERE || !refusal.resolve) return;
+    await resolvePullRequestHere(scm, client, fresh, refusal.resolve, reviewUrl);
+  }
+}
+
+/** Keep one side per conflicting file here, then offer to merge again. Editing the final text stays in the dashboard. */
+async function resolvePullRequestHere(
+  scm: HivekuScm,
+  client: HivekuMcpClient,
+  pr: api.PullRequest,
+  target: { branch: string; parent: string },
+  reviewUrl: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const outcome = await resolveConflictsHere({
+      client,
+      projectId: scm.link.project_id,
+      target,
+      // Both sides of one file: the branch it was started from on the left, the branch on the right.
+      compare: (filePath) => openVcsDiff(scm, target.parent, target.branch, { path: filePath, status: 'modified' }),
+      log,
+    });
+    if (outcome.kind === 'cancelled') return;
+    if (outcome.kind === 'left_for_dashboard') {
+      const choice = await vscode.window.showInformationMessage(
+        'Nothing was resolved here. Decide the files in the dashboard, where you can also edit the final text.',
+        RESOLVE_IN_DASHBOARD,
+      );
+      if (choice === RESOLVE_IN_DASHBOARD) await vscode.env.openExternal(vscode.Uri.parse(reviewUrl));
+      return;
+    }
+    if (outcome.kind === 'refused') {
+      const retry = 'Read the conflicts again';
+      const choice = await vscode.window.showWarningMessage(
+        outcome.message,
+        ...(outcome.again ? [retry] : []),
+        RESOLVE_IN_DASHBOARD,
+      );
+      if (choice === RESOLVE_IN_DASHBOARD) await vscode.env.openExternal(vscode.Uri.parse(reviewUrl));
+      if (choice === retry) continue;
+      return;
+    }
+    if (outcome.kind === 'resolved' && outcome.remaining.length > 0) {
+      const n = outcome.remaining.length;
+      const choice = await vscode.window.showWarningMessage(
+        `Resolved ${outcome.resolved.length} file(s) on "${target.branch}". ${n} file(s) still conflict ` +
+          `(${outcome.remaining.slice(0, 4).join(', ')}${n > 4 ? ', …' : ''}): decide them in the dashboard, then merge.`,
+        RESOLVE_IN_DASHBOARD,
+      );
+      if (choice === RESOLVE_IN_DASHBOARD) await vscode.env.openExternal(vscode.Uri.parse(reviewUrl));
+      return;
+    }
+    const done =
+      outcome.kind === 'none'
+        ? `No conflicts are left between "${target.branch}" and ${branchWords(target.parent)}.`
+        : `Resolved ${outcome.resolved.length} file(s) on "${target.branch}" and saved a version there. ` +
+          `${branchWords(target.parent)} changes only when the pull request merges.` +
+          // The resolve saved on Hiveku; this folder's copy of the branch is now behind it.
+          (scm.branch === target.branch ? ' Pull to bring the resolved files into this folder.' : '');
+    const choice = await vscode.window.showInformationMessage(`${done} Merge #${pr.number} now?`, MERGE_AGAIN);
+    if (choice === MERGE_AGAIN) await mergePullRequest(scm, client, pr);
+    return;
   }
 }
 

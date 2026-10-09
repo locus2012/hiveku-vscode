@@ -268,7 +268,13 @@ rollbacks, checkpoints, or ANY restore. The invariants that cannot wait for the 
   afterwards is a separate `deploy_site` with its own yes.
   Database, CMS entries and shared media-library images are not versioned.
 - Branch for real work (`feature/`, `fix/`, `task-<id>/`); version green states; merged
-  `conflicts` are NOT overwritten - resolve and merge again.
+  `conflicts` are NOT overwritten. Settle them with `project_vcs_conflicts` and
+  `project_vcs_resolve` on the branch the answer's `resolve` names, deciding each file with
+  the person, then merge again: editing the file on the branch alone never clears a
+  conflict. Agents comment on and ask for changes in pull requests (the dashboard's reviews)
+  but never approve: a person approves in the dashboard, and with the site's "Require an
+  approval" rule on, a merge into Your site waits for that. A merged branch is archived
+  (writes answer 409 `branch_archived`; `project_vcs_branch_restore` within 30 days).
 - The working branch is a PARAMETER, not a switch: `project_vcs_checkout` is a read (it
   pages: `limit` up to 2000, then `cursor`) that changes nothing server-side, and no tool
   switches the project. Pass `branch` on every file,
@@ -553,7 +559,7 @@ incidents behind every rule. Read the relevant one BEFORE writing code, not afte
 | `references/cms-and-database.md` | Any CMS collection or entry; publish scheduling; deletion preflights and bulk purge; the project database, RLS, Supabase extras. |
 | `references/conventions.md` | Writing a page or section: the stack, server/client boundary, images, metadata/SEO, accessibility, design tokens, client-facing voice. |
 | `references/site-scaffolding.md` | Creating or cloning a site, laying in pages, or injecting prebuilt sections - modes, caps, and arg shapes. |
-| `references/vcs-checkpoints-branch-previews.md` | Working on a branch (the `branch` parameter model, promote, etag, per-file diff, revert), environment bindings, PRs, branch previews, merges/conflicts, checkpoints, checkpoint/point-in-time/single-file restores, the GitHub source-of-truth axis. |
+| `references/vcs-checkpoints-branch-previews.md` | Working on a branch (the `branch` parameter model, promote, etag, per-file diff, revert), environment bindings, PRs (reviews, comments, the approval rule), branch previews, merges and resolving conflicts, archived branches, checkpoints, checkpoint/point-in-time/single-file restores, the GitHub source-of-truth axis. |
 | `references/domains-dns-redirects.md` | Attaching, verifying, migrating, or removing a domain; apex/CAA/cert issues; creating or deploying redirects. |
 | `references/custom-code-cdn-secrets.md` | Injected scripts and GTM tags, CDN invalidation or config, scheduled functions (crons), project secrets. |
 | `references/framework-conversion-cdn-repair.md` | Any framework conversion; a live site 403ing/404ing on some routes while the app works; behavior sweep/prune; `project_site_orphan_sweep`. |
