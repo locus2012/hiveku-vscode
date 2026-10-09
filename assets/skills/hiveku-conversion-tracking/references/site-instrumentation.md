@@ -113,8 +113,12 @@ not-denied. Deliberate: a vendor renaming a field cannot silently switch off tra
 - A "tracking" verdict is not proof the banner integration is wired right. It may only mean nothing
   explicitly denied.
 - The expensive finding is the reverse. A channel that records **only** when the banner was already
-  accepted is a direct multiplier on every number, since most visitors never touch the banner.
-  `analytics_diagnose_tracking` reports it as `consent-changes-outcome` (CRITICAL);
+  accepted is a direct multiplier on every number wherever first-time visitors are held, since most
+  visitors never touch the banner. On the default setting (`geo_hybrid`) that is visitors from the
+  EU, the UK and unlocated visitors; a US visitor is opt-out and is not held by the banner at all.
+  `analytics_diagnose_tracking` reports it as `consent-changes-outcome`: CRITICAL where everyone is
+  held, a WARNING where the hosted test browser was held on a site that does not hold US visitors
+  (not evidence that US conversions are lost).
   `analytics_probe_page` shows it by loading one URL twice and returning `as_first_time_visitor` and
   `as_visitor_who_accepted` - compare the two `observed` arrays. Only a `conversion`-role signal
   makes a channel "tracking"; container, tag, and pageview signals prove nothing about conversions.

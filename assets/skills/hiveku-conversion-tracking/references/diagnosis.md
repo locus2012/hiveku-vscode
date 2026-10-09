@@ -100,9 +100,23 @@ Runtime findings (nothing emitted if no probe succeeded):
   but unattributable, and **this is the one that looks completely fine in a network trace**.
 - `spa-no-history-change-observed` - route changes never produced a trigger.
 - `consent-default-after-container` - GTM boots before Consent Mode defaults are set.
-- **`consent-changes-outcome` CRITICAL** - the channel records only when the banner was already
-  accepted, and most visitors never touch the banner, so this is a direct multiplier, not an edge
-  case.
+- **`consent-changes-outcome`** - the channel recorded a conversion only in the already-accepted
+  load. **Read its severity and its own words before you repeat it: who it is true for depends on
+  the site's consent setting.** CRITICAL where every first-time visitor is held until they answer
+  the banner (the opt-in-for-everyone setting): there it is a direct multiplier, because most
+  visitors never touch the banner. A WARNING where the test visit was held as an opt-in visitor on
+  a site that does not hold US visitors (the default setting, `geo_hybrid`): it describes visitors
+  from the EU, the UK and unlocated visitors, and **it is not evidence that US conversions are
+  being lost**.
+
+**Never name the cookie banner as the cause from the page source.** Every Hiveku page sets consent
+to denied in `<head>`. That is the starting state, not a block. On the default setting
+(`geo_hybrid`) a visitor in the United States is opt-out: analytics and advertising are allowed for
+them shortly after the page loads without the banner being touched, unless they decline, use Do Not
+Sell, or their browser sends a Global Privacy Control signal. Visitors in the EU or the UK, and
+visitors whose country the site cannot read, are opt-in. The test browser is a hosted one and is
+treated by where IT sits, which is not where the client's customers are. Blame consent only on a
+finding, in its own words, and say which visitors it applies to.
 
 Channels held to account: connections with status `connected` OR `error` (`error` on purpose - a
 connection that broke last week is still being spent on); `pending` excluded. Cannot see the ad
@@ -114,9 +128,11 @@ account's configuration (rungs 4-6) or leads captured but not counted (rung 7).
 
 Loads the URL TWICE, returning `as_first_time_visitor` and `as_visitor_who_accepted`, and
 **comparing their `observed` arrays is the entire point**. Signal in both: fine on this axis. Only
-in `as_visitor_who_accepted`: `consent-changes-outcome` in the concrete, and the client is losing
-every visitor who ignores the banner. In neither: it does not fire here at all, so do not blame
-consent.
+in `as_visitor_who_accepted`: `consent-changes-outcome` in the concrete. The first-time load was
+held until the banner was answered, which loses the client every visitor who ignores the banner
+ONLY where first-time visitors are held: on the default setting that is EU, UK and unlocated
+visitors, not US ones (the rule in section 2). In neither: it does not fire here at all, so do not
+blame consent.
 
 **Star: only a `conversion`-role signal makes a channel "tracking"** - container, tag-present and
 pageview do NOT count, so seeing `gtm` or a pixel in `observed` and reporting "tracking works" is
@@ -345,8 +361,9 @@ gates whether tracking fires while editing; `seo_gtm_install` installs a contain
   send. Not an incident by itself.
 
 **Consent modes**
-- *Conversions uniformly 60-80 percent below sessions* - `consent-changes-outcome`; confirm with
-  `analytics_probe_page`. *Fires in the network trace, absent on the platform* -
+- *Conversions uniformly 60-80 percent below sessions* - `consent-changes-outcome` at CRITICAL
+  (every first-time visitor is held); confirm with `analytics_probe_page`. The WARNING form does
+  not explain a shortfall in US conversions. *Fires in the network trace, absent on the platform* -
   `conversion-fires-denied`. *Click ids lost across navigation* - `consent-no-url-passthrough` or
   `consent-default-after-container`.
 - *"Consent is suppressing everything fleet-wide"* - unlikely by design, because **consent FAILS

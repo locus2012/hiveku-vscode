@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.89.1
+- **Hiveku logs your session's work by itself.** Each account's CLAUDE.md, a project's CLAUDE.md, AGENTS.md and `/hiveku-remember` now say that Hiveku records the session's Doing at its first change and its Done when the session goes quiet or ends. Claude only sends a Done with a one-line summary when the log should say more than the count of changes.
+- **About your business is read with its own tool.** The same files say that About your business is read with `account_memory_get` (memory_list and memory_get leave it out), and that a local copy such as `ACCOUNT_MEMORY.md` is read again from Hiveku before Claude acts on it. "Download Department Data" and its notes say the same of every pulled file.
+- **See who on the AI team is working now.** Knowledge & Memory has a new "AI team (who is working now)" list, and Claude may use `memory_team_get` to ask.
+- **The vendored skills match plugin 0.27.15.**
+
 ## 0.89.0
 - **Accounting downloads five more lists.** "Download Department Data" and the console's Accounting tab now include Products & services (the catalog that invoice and estimate lines pick from), Recurring bills, and Time off policies, balances and requests.
 - **Three Accounting columns that were always empty now show their numbers:** a payroll member's rate, the number of people in a payroll run, and whether a vendor is a 1099 vendor (in place of a vendor currency, which a vendor never had).
