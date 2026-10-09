@@ -719,7 +719,7 @@ async function main() {
   if (targets.length && okDepts === 0) { console.error('Every dataset failed — check the account key in .mcp.json.'); process.exit(1); }
   // Only the account memory was asked for: its one read is the whole run.
   if (!targets.length && accountMemory && !accountMemory.ok) { console.error('The account memory could not be read; the previous copy (if any) was kept.'); process.exit(1); }
-  console.log('Done. Data in hiveku-data/ — work from these local files; use live MCP tools for writes.');
+  console.log('Done. Data in hiveku-data/ is a copy of this pull: read anything again from Hiveku before you act on it, and use live MCP tools for writes.');
 }
 main().catch((err) => { console.error(err && err.message ? err.message : err); process.exit(1); });
 `;

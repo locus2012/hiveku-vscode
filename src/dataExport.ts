@@ -320,8 +320,9 @@ ${blocks.join('\n\n')}
 ## Working with this data
 - **Read/analyze** — grep these JSON files directly (e.g. find keywords ranking 4–10
   to target, backlinks below an authority threshold, deals stuck in a stage).
-- **Act** — this is a snapshot; to change anything, call the live \`hiveku\` MCP tools
-  (the source tool for each dataset is named in its folder's README).
+- **Act** — this is a snapshot and may be out of date: before you act on anything here, read
+  it again live (the source tool for each dataset is named in its folder's README;
+  \`account_memory_get\` for About your business), and change it with the live \`hiveku\` MCP tools.
 - **Refresh** — re-run "Download data" in the Account Console, or the command
   "Hiveku: Download Department Data". Snapshots can go stale.
 `;

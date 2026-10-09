@@ -1117,6 +1117,9 @@ export const DEPARTMENTS: Department[] = [
     gate: 'marketing_knowledge_base',
     datasets: [
       { id: 'memory', label: 'AI memory (skills/rules/facts)', tool: 'memory_list', detail: { detailTool: 'memory_get', argKey: 'memory_id', nameKey: 'domain', dir: 'memory-detail' }, columns: [{ key: 'domain' }, { key: 'type' }, { key: 'version' }] },
+      // Who is on the AI team and who is working now (MCP #174, read-only): one row per agent,
+      // counts and names only, never an entry's text. working_until is set while it has work going.
+      { id: 'team', label: 'AI team (who is working now)', tool: 'memory_team_get', columns: [{ key: 'name' }, { key: 'job' }, { key: ['status_label', 'status'], label: 'status' }, { key: 'working_until', label: 'working until', date: true }, { key: 'last_changed_at', label: 'changed', date: true }] },
       { id: 'kbs', label: 'Knowledge bases', tool: 'kb_list', columns: [{ key: 'name' }, { key: 'context_type', label: 'type' }, { key: 'is_default', label: 'default' }, { key: 'tags' }] },
       { id: 'kb_documents', label: 'KB documents', tool: 'kb_documents_list', scope: { parentTool: 'kb_list', parentIdKey: 'id', parentLabelKey: 'name', argKey: 'kb_id' }, columns: [{ key: '_parent', label: 'kb' }, { key: 'title' }, { key: 'source_url', label: 'source' }, { key: 'tags' }] },
     ],
