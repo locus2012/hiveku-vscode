@@ -20,6 +20,7 @@ import { writeAgencySkills } from './agencySkills';
 import { isAccountMemoryDomain, ACCOUNT_MEMORY_READONLY_GLOB } from './accountMemory';
 import { LOCAL_MIRROR_PROSE, MEMORY_EDIT_RULES_PROSE, MEMORY_WRITE_REFUSED_PROSE, SOURCE_OF_TRUTH_PROSE, WORK_LOG_PROSE } from './memoryLog';
 import { ownerOf, type OwnerInput } from './memoryOwner';
+import { extensionVersion } from './hivekuUserAgent';
 
 /** memory `type` → local folder (matches hiveku-sync TYPE_TO_FOLDER). */
 export const TYPE_TO_FOLDER: Record<string, string> = {
@@ -1316,19 +1317,24 @@ NOT in the code — real app keys (AWS, database URLs, Stripe, …) are here, in
 Lambdas + Fly preview.
 
 **See which secrets exist (names only — keeps values OUT of your context):**
-\`project_secrets_list({ project_id: "${pid}", metadata_only: true })\` → { keys, count }. Do this to
-learn what the app expects; do NOT fetch values you don't need.
+\`project_secrets_list({ project_id: "${pid}", metadata_only: true })\` → { keys, count, sensitive_keys }.
+Do this to learn what the app expects. \`metadata_only: true\` is required: values come only from
+\`project_secrets_reveal\`, which a person approves.
 
 **Get the site RUNNING locally:** the app reads \`.env.local\`; you don't need to read the values, just
 have the file. Tell the user to run **"Hiveku: Pull Env to .env.local"** (Command Palette or the Source
-Control menu) — it writes the dev-appropriate secrets to \`.env.local\` (gitignored, skips _PROD/_STAGING,
-applies _DEV overrides). Then \`npm install\` + \`npm run dev\` and the app has its config. \`.env.local\` is
+Control menu) — it opens an approval page (anyone in the account who can see the site's variables
+approves, the user included), then writes the site's development values to \`.env.local\` (gitignored,
+readable by the user only; sensitive variables and platform credentials are listed as comments, never
+written). Then \`npm install\` + \`npm run dev\` and the app has its config. \`.env.local\` is
 READ-DENIED to you on purpose — you can run the server without seeing the secret values.
 
 **Add or change a secret ("$ARGUMENTS"):** either edit \`.env.local\` and have the user run **"Hiveku:
-Push Env"**, or call \`project_secrets_set({ project_id: "${pid}", secrets: { KEY: value } })\` (this
-CONFIRMS — it updates Hiveku + auto-syncs the deployed Lambdas). Naming: a plain \`KEY\` applies
-everywhere; \`KEY_DEV\` overrides for local, \`KEY_PROD\` / \`KEY_STAGING\` scope to those tiers.
+Push Env"** (it saves them as development values only), or call
+\`project_secrets_set({ project_id: "${pid}", secrets: { KEY: value }, tier: "development" })\` (this
+CONFIRMS — it updates Hiveku + auto-syncs the deployed Lambdas). Without \`tier\` a plain \`KEY\` reaches
+EVERY tier, production included; \`tier\` "development", "staging" or "production" scopes it (KEY_DEV,
+KEY_STAGING, KEY_PROD). Several keys: one call with all of them.
 
 NEVER paste a secret value into code, a commit, memory, or a chat reply; never commit \`.env.local\`.
 `,
@@ -1721,6 +1727,23 @@ Drive the redesign pipeline for THIS project$ARGUMENTS. ${idLine} Follow the ord
 }
 
 /**
+ * X-Hiveku-Client for the `.mcp.json` this extension writes for Claude Code:
+ * `vscode-extension/<version>`, the declaration that Claude Code in this folder
+ * asks a person before project_secrets_reveal (plan "Server-side approval").
+ * The folder's .claude/settings.json carries HIVEKU_ASK, which asks on every
+ * project_secrets_reveal and every hiveku_batch in every permission mode, and
+ * the same scaffold writes both. The MCP server forwards the declaration to
+ * the builder, which lets a release at or above its listed minimum skip the
+ * dashboard approval, and still reads the caller as Claude Code for its
+ * memory-log label and rate-limit bucket. Set here, never by the model. The
+ * extension's own calls (mcpClient.ts, Pull Env included) and the Codex config
+ * (codex.ts, which writes no prompts) do not declare.
+ */
+export function declaredClaudeCodeClient(): string {
+  return `vscode-extension/${extensionVersion()}`;
+}
+
+/**
  * The `hiveku` MCP server entry for `.mcp.json`. The key is INLINED (not
  * `${OLYMPUS_API_KEY}`): Claude Code only expands `${VAR}` from the shell
  * environment — it does NOT auto-load a `.env` — so a placeholder would never
@@ -1730,9 +1753,10 @@ export function hivekuMcpServer(apiKey: string, baseUrl: string): { type: string
   return {
     type: 'http',
     url: `${baseUrl.replace(/\/+$/, '')}/mcp`,
-    // X-Hiveku-Client labels the app in the memory log and gives Claude Code its own
-    // rate-limit bucket; Codex sends "codex" the same way (codex.ts). A label, never auth.
-    headers: { Authorization: `Bearer ${apiKey}`, 'X-Hiveku-Client': 'claude-code' },
+    // X-Hiveku-Client is the declaration above, which the MCP server reads as Claude
+    // Code for the memory log and Claude Code's own rate-limit bucket; Codex sends
+    // "codex" (codex.ts). A label and a declaration, never auth.
+    headers: { Authorization: `Bearer ${apiKey}`, 'X-Hiveku-Client': declaredClaudeCodeClient() },
   };
 }
 
@@ -1943,16 +1967,16 @@ operate EVERY department — not just edit code — and combine them in one task
 The app's real config — AWS keys, database URLs, Stripe, API tokens — lives in Hiveku (AWS Secrets
 Manager), NOT in the code, and is injected into the deployed Lambdas + Fly preview. \`/hiveku-env\` wraps this.
 - **See what the app expects (no values in your context):**
-  \`project_secrets_list({ project_id, metadata_only: true })\` → just the KEY names. Use this to learn
-  the shape; only fetch actual values when you truly must.
+  \`project_secrets_list({ project_id, metadata_only: true })\` → just the KEY names (\`metadata_only\`
+  is required). Values come only from \`project_secrets_reveal\`, which a person approves each time.
 - **Run it locally:** the app loads \`.env.local\`. Have the user run **"Hiveku: Pull Env to .env.local"**
-  — it writes the dev secrets (gitignored, skips _PROD/_STAGING, applies _DEV overrides). Then
+  — after a person approves on the page it opens, it writes the development values (gitignored). Then
   \`npm install\` && \`npm run dev\` and the app is configured. You do NOT need to read \`.env.local\` (it's
   read-denied to you on purpose) — \`npm run dev\` picks it up, so you can run + browser-test the site
   without ever seeing the secret values.
-- **Add / change a secret:** \`project_secrets_set({ project_id, secrets: { KEY: value } })\` (confirms;
-  auto-syncs deployed Lambdas), or edit \`.env.local\` and run **"Hiveku: Push Env"**. Naming: \`KEY\`
-  everywhere, \`KEY_DEV\` local override, \`KEY_PROD\`/\`KEY_STAGING\` per tier.
+- **Add / change a secret:** \`project_secrets_set({ project_id, secrets: { KEY: value }, tier })\` (confirms;
+  auto-syncs deployed Lambdas), or edit \`.env.local\` and run **"Hiveku: Push Env"** (development values
+  only). Without \`tier\` a plain \`KEY\` reaches every tier, production included.
 - **Never** paste a secret value into code, a commit, memory, or a reply; never commit \`.env.local\`.
 
 

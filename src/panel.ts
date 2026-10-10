@@ -165,7 +165,7 @@ export interface SectionSpec {
   gate?: string;
   titleKeys: string[];
   /** Custom raw-response → rows mapping, for tools that don't return a row array
-   *  (e.g. project_secrets_list returns `{ secrets: { KEY: value } }`). */
+   *  (e.g. project_secrets_list with metadata_only returns `{ keys, variables }`). */
   transform?: (raw: unknown) => Array<Record<string, unknown>>;
   fields?: FieldSpec[];
   rowActions?: ActionSpec[];

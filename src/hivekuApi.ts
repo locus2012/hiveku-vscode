@@ -1890,68 +1890,143 @@ export async function previewScreenshot(
   return (d.image_url as string) || (d.url as string) || undefined;
 }
 
-export interface SecretEntry {
+/**
+ * One of a site's variables by NAME: never a value, a hint or a mask
+ * (project_secrets_list with metadata_only, plan B2). `tiers` is where it
+ * reaches, `storedKeys` the keys it is stored under (FOO, FOO_DEV, ...).
+ */
+export interface SecretName {
   key: string;
-  preview: string;
+  sensitive: boolean;
+  managed: boolean;
+  tiers: string[];
+  storedKeys: string[];
 }
 
-/** Mask a secret value for display — never render plaintext in the UI. */
-export function maskSecret(v: string): string {
-  if (!v) return '(empty)';
-  return v.length <= 4 ? '••••' : `••••${v.slice(-4)}`;
-}
-
-/**
- * Raw KEY→value map from project_secrets_list. The tool returns
- * `{ secrets: { KEY: value }, metadata }` (values are real, from AWS Secrets
- * Manager) — NOT an array, so we read the `secrets` object directly.
- */
-export async function secretsMap(client: HivekuMcpClient, projectId: string): Promise<Record<string, string>> {
-  return (await secretsMapWithSensitive(client, projectId)).values;
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
 
 /**
- * Values plus the names of variables that are write-only on the platform.
- *
- * Sensitive keys are OMITTED from `secrets` server-side, never blanked, so they
- * simply do not appear in `values`. Without carrying `sensitiveKeys` alongside, a
- * hidden variable would be indistinguishable from one that was never set, and the
- * user would go debugging a phantom.
+ * The site's variables by name (metadata_only). Values come only from
+ * secretsReveal, which a person approves: the list stops returning them at the
+ * cutover, and a call without metadata_only is then refused.
  */
-export async function secretsMapWithSensitive(
+export async function secretNames(client: HivekuMcpClient, projectId: string): Promise<{ names: SecretName[]; sensitiveKeys: string[] }> {
+  const res = await client.callToolJson<unknown>('project_secrets_list', { project_id: projectId, metadata_only: true });
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  const sensitiveKeys = strings(d.sensitive_keys);
+  let names: SecretName[];
+  if (Array.isArray(d.variables)) {
+    names = (d.variables as unknown[])
+      .filter((v): v is Record<string, unknown> => !!v && typeof v === 'object' && typeof (v as { key?: unknown }).key === 'string')
+      .map((v) => ({
+        key: v.key as string,
+        sensitive: v.sensitive === true || sensitiveKeys.includes(v.key as string),
+        managed: v.managed === true,
+        tiers: strings(v.tiers),
+        storedKeys: strings(v.stored_keys),
+      }));
+  } else {
+    names = [...new Set([...strings(d.keys), ...sensitiveKeys])].map((key) => ({
+      key,
+      sensitive: sensitiveKeys.includes(key),
+      managed: false,
+      tiers: [],
+      storedKeys: [key],
+    }));
+  }
+  names.sort((a, b) => a.key.localeCompare(b.key));
+  return { names, sensitiveKeys };
+}
+
+/** A name the reveal left out, with its reason in the server's words. */
+export interface WithheldSecret {
+  key: string;
+  reason: string;
+  why: string;
+}
+
+/** What one project_secrets_reveal call answered. */
+export type RevealAnswer =
+  | { kind: 'values'; values: Record<string, string>; withheld: WithheldSecret[]; notApproved: string[] }
+  | { kind: 'approval_required'; token: string; approveUrl: string; withheld: WithheldSecret[] }
+  | { kind: 'pending' }
+  | { kind: 'refused'; code: string; message: string };
+
+const APPROVAL_TOKEN_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// The approval page: an https link with no spaces or control characters, opened in the browser.
+const APPROVE_URL_RE = /^https:\/\/[^\s\u0000-\u001f\u007f]+$/;
+
+function withheldList(value: unknown): WithheldSecret[] {
+  return (Array.isArray(value) ? value : [])
+    .filter((w): w is Record<string, unknown> => !!w && typeof w === 'object' && typeof (w as { key?: unknown }).key === 'string')
+    .map((w) => ({ key: w.key as string, reason: String(w.reason ?? ''), why: String(w.why ?? w.reason ?? '') }));
+}
+
+/**
+ * One tier's values through project_secrets_reveal (plan B3). The extension's
+ * own client does not declare itself, so the first call answers
+ * approval_required with a dashboard link; repeat it with `approvalToken` once
+ * a person approved (approval_pending until then). Values never pass through
+ * anything but the caller that writes them to disk.
+ */
+export async function secretsReveal(
   client: HivekuMcpClient,
   projectId: string,
-): Promise<{ values: Record<string, string>; sensitiveKeys: string[] }> {
-  const res = await client.callToolJson<unknown>('project_secrets_list', { project_id: projectId });
-  const d = unwrap<Record<string, unknown>>(res) ?? {};
-  const secrets = (d.secrets && typeof d.secrets === 'object' ? d.secrets : {}) as Record<string, unknown>;
-  const values: Record<string, string> = {};
-  for (const [k, v] of Object.entries(secrets)) values[k] = v == null ? '' : String(v);
-  const sensitiveKeys = Array.isArray(d.sensitive_keys)
-    ? (d.sensitive_keys as unknown[]).map((k) => String(k))
-    : [];
-  return { values, sensitiveKeys };
+  tier: 'development' | 'staging' | 'production' | 'preview',
+  approvalToken?: string,
+): Promise<RevealAnswer> {
+  let raw: unknown;
+  try {
+    raw = await client.callToolJson<unknown>('project_secrets_reveal', {
+      project_id: projectId,
+      tier,
+      ...(approvalToken ? { approval_token: approvalToken } : {}),
+    });
+  } catch (err) {
+    if (!(err instanceof McpToolError)) throw err;
+    const payload = (err.payload && typeof err.payload === 'object' ? err.payload : {}) as Record<string, unknown>;
+    const details = (payload.details && typeof payload.details === 'object' ? payload.details : payload) as Record<string, unknown>;
+    const code = String(details.code ?? payload.code ?? details.error ?? payload.error ?? 'refused');
+    if (code === 'approval_pending') return { kind: 'pending' };
+    return { kind: 'refused', code, message: String(details.message ?? payload.message ?? err.message) };
+  }
+  const d = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  if (d.code === 'approval_required') {
+    const approval = (d.approval && typeof d.approval === 'object' ? d.approval : {}) as Record<string, unknown>;
+    const token = String(approval.token ?? '');
+    const approveUrl = String(approval.approve_url ?? '');
+    if (!APPROVAL_TOKEN_RE.test(token) || !APPROVE_URL_RE.test(approveUrl)) {
+      return { kind: 'refused', code: 'unexpected_answer', message: 'The reveal asked for an approval without a usable link.' };
+    }
+    return { kind: 'approval_required', token, approveUrl, withheld: withheldList(d.withheld) };
+  }
+  if (d.values && typeof d.values === 'object' && !Array.isArray(d.values)) {
+    const values: Record<string, string> = {};
+    for (const [key, value] of Object.entries(d.values as Record<string, unknown>)) if (typeof value === 'string') values[key] = value;
+    return { kind: 'values', values, withheld: withheldList(d.withheld), notApproved: strings(d.not_approved) };
+  }
+  return { kind: 'refused', code: 'unexpected_answer', message: 'The reveal answered in a shape this version does not read. Update the extension.' };
 }
 
-/** Display list: keys with masked values, sorted. */
-export async function secretsList(client: HivekuMcpClient, projectId: string): Promise<SecretEntry[]> {
-  const map = await secretsMap(client, projectId);
-  return Object.keys(map)
-    .sort()
-    .map((key) => ({ key, preview: maskSecret(map[key]) }));
-}
-
-/** Upsert one or more secrets. The tool requires a `{ secrets: {KEY:value} }` map. */
+/**
+ * Upsert one or more secrets. The tool requires a `{ secrets: {KEY:value} }`
+ * map. `tier` scopes the keys (the route suffixes them _DEV / _STAGING /
+ * _PROD); without it a bare key reaches EVERY tier, production included.
+ */
 export async function secretSet(
   client: HivekuMcpClient,
   projectId: string,
   secrets: Record<string, string>,
   applyToPreview = true,
+  tier?: 'development' | 'staging' | 'production' | 'all',
 ): Promise<unknown> {
   return client.callToolJson<unknown>('project_secrets_set', {
     project_id: projectId,
     secrets,
     apply_to_preview: applyToPreview,
+    ...(tier ? { tier } : {}),
   });
 }
 

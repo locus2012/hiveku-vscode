@@ -3,7 +3,7 @@
  * real editor tab; Cmd+S writes it back through the account's MCP tools. Three
  * document families:
  *
- *   hiveku:/env/<accountId>/<projectId>/<name>.env       project secrets (AWS SM)
+ *   hiveku:/env/<accountId>/<projectId>/<name>.env       project variables by NAME (READ-ONLY)
  *   hiveku:/cms/<accountId>/<projectId>/<collection>/<slug>.json   CMS entry
  *   hiveku:/memory/<accountId>/<memoryId>/<name>.md      account AI memory entry
  *   hiveku:/account-memory/<accountId>/ACCOUNT_MEMORY.md  About your business (READ-ONLY)
@@ -43,15 +43,20 @@
  *
  * The provider is deliberately stateless against the platform (every read is a
  * live fetch, every save a live write) — the platform is the source of truth,
- * VS Code is just an editor session. Saving `.env` DIFFS against the live map:
- * changed/new keys are upserted, removed lines are deleted (each delete is
- * confirmed by the save action itself — the user deleted the line).
+ * VS Code is just an editor session.
+ *
+ * The `.env` document lists a site's variables by NAME, read-only (plan B3,
+ * 2026-10-10). Values come only from project_secrets_reveal, which a person
+ * approves, and the list stops returning them at the cutover; a document that
+ * saved values back would also need every stored value to diff against. So it
+ * shows names, tiers and flags, and points at Pull Env (the values, after an
+ * approval, into .env.local), Manage Secrets (one key) and the dashboard. A
+ * save is refused before any request.
  */
 
 import * as vscode from 'vscode';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
-import { quote as quoteEnvValue, parseEnvFile } from './env';
 import {
   cleanReason,
   listMemoryLog,
@@ -198,24 +203,33 @@ function parse(uri: vscode.Uri): ParsedUri {
   throw vscode.FileSystemError.FileNotFound(uri);
 }
 
-// ── .env serialization ────────────────────────────────────────────────────────
+// ── .env: names only ──────────────────────────────────────────────────────────
 
-const ENV_HEADER = [
-  '# Hiveku project secrets — saving this file pushes changes to the platform.',
-  '# Edit or add KEY=value lines; DELETING a line deletes that secret on save.',
-  '# Values sync to deployed environments and restart the live preview (~11s).',
-  '',
-].join('\n');
+/** What a save of the env document says: it has nothing to save with. */
+const ENV_READ_ONLY =
+  'This list shows names only, so nothing was saved. To work with the values locally, run "Hiveku: Pull Env to .env.local" ' +
+  '(a person approves each pull). To add or change one value, use "Hiveku: Manage Secrets" or the dashboard.';
 
-function serializeEnv(map: Record<string, string>): string {
-  // quoteEnvValue guarantees one physical line per secret (escapes newlines,
-  // quotes, #) so the parse side round-trips PEM keys and JSON creds intact.
-  const keys = Object.keys(map).sort();
-  const body = keys.map((k) => `${k}=${quoteEnvValue(map[k])}`).join('\n');
-  return `${ENV_HEADER}${body}${body ? '\n' : ''}`;
+/** The env document's text: every variable by name, where it reaches, and its flags. Never a value. */
+export function envNamesDocument(names: api.SecretName[]): string {
+  const lines = [
+    "# Hiveku project variables: NAMES ONLY. Values are never shown here.",
+    '# Work locally: "Hiveku: Pull Env to .env.local" writes the development values there, after a person approves.',
+    '# Add or change a value: "Hiveku: Manage Secrets", or the Environment page in the dashboard.',
+    '',
+  ];
+  for (const n of names) {
+    const flags = [
+      n.tiers.length ? `reaches ${n.tiers.join(', ')}` : '',
+      n.storedKeys.length && (n.storedKeys.length > 1 || n.storedKeys[0] !== n.key) ? `stored as ${n.storedKeys.join(', ')}` : '',
+      n.sensitive ? 'sensitive: write-only' : '',
+      n.managed ? 'managed by Hiveku' : '',
+    ].filter(Boolean);
+    lines.push(`${n.key}${flags.length ? `    # ${flags.join('; ')}` : ''}`);
+  }
+  if (names.length === 0) lines.push('# (no variables yet)');
+  return `${lines.join('\n')}\n`;
 }
-
-const parseEnv = parseEnvFile;
 
 // ── The provider ──────────────────────────────────────────────────────────────
 
@@ -295,7 +309,7 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
       mtime: this.mtimes.get(uri.toString()) ?? 0,
       size: this.sizes.get(uri.toString()) ?? 0,
       // The editor opens it locked ("Cannot edit in read-only editor").
-      ...(p.kind === 'account-memory' || p.kind === 'memory-newer' || p.kind === 'memory-view'
+      ...(p.kind === 'account-memory' || p.kind === 'memory-newer' || p.kind === 'memory-view' || p.kind === 'env'
         ? { permissions: vscode.FilePermission.Readonly }
         : {}),
     };
@@ -314,21 +328,8 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
     const client = await this.clientFor(p.accountId);
     let text: string;
     if (p.kind === 'env') {
-      const { values, sensitiveKeys } = await api.secretsMapWithSensitive(client, p.projectId!);
-      // Hidden variables are listed as comments rather than dropped. If they simply
-      // vanished from this buffer, saving it would look like the user deleted them,
-      // and writeEnv's delete-diff would be computed against an incomplete picture.
-      // As comments they are visible, and parseEnv ignores them, so the diff below
-      // never proposes deleting a key the server refused to show.
-      text = serializeEnv(values);
-      if (sensitiveKeys.length > 0) {
-        const notes = sensitiveKeys
-          .slice()
-          .sort()
-          .map((key) => `# ${key}= (sensitive: write only, hidden by Hiveku)`)
-          .join('\n');
-        text = `${text}${text.endsWith('\n') || text === '' ? '' : '\n'}\n# The following are set but cannot be shown. Assign a value to replace one.\n${notes}\n`;
-      }
+      // Names only (metadata_only): the document never holds a value.
+      text = envNamesDocument((await api.secretNames(client, p.projectId!)).names);
     } else if (p.kind === 'cms') {
       text = await this.readCmsEntry(client, p);
     } else if (p.kind === 'account-memory') {
@@ -404,6 +405,11 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
 
   async writeFile(uri: vscode.Uri, content: Uint8Array): Promise<void> {
     const p = parse(uri);
+    if (p.kind === 'env') {
+      // Refused before any request: the document holds names only.
+      void vscode.window.showErrorMessage(ENV_READ_ONLY);
+      throw vscode.FileSystemError.NoPermissions(ENV_READ_ONLY);
+    }
     if (p.kind === 'memory-newer') {
       throw vscode.FileSystemError.NoPermissions(
         'This is the newer text from Hiveku, for comparing. Copy what you want into your own tab and save that.',
@@ -440,8 +446,6 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
       if (p.kind === 'memory-new') {
         const note = await this.writeNewMemory(client, uri, p, text);
         vscode.window.showInformationMessage(note);
-      } else if (p.kind === 'env') {
-        await this.writeEnv(client, p.projectId!, text);
       } else if (p.kind === 'cms') {
         let doc: { status?: string; publish_at?: string; fields?: Record<string, unknown> };
         try {
@@ -670,43 +674,6 @@ export class HivekuFileSystem implements vscode.FileSystemProvider {
     const reason = cleanReason(input);
     this.reasons.set(key, reason ?? '');
     return reason;
-  }
-
-  private async writeEnv(client: HivekuMcpClient, projectId: string, text: string): Promise<void> {
-    const desired = parseEnv(text);
-    const live = await api.secretsMap(client, projectId);
-    const changed: Record<string, string> = {};
-    for (const [k, v] of Object.entries(desired)) {
-      if (live[k] !== v) changed[k] = v;
-    }
-    const removed = Object.keys(live).filter((k) => !(k in desired));
-    // Delete guard: every delete is confirmed BY NAME. This catches accidental
-    // select-all-deletes AND stale buffers (a key added on the platform after
-    // this doc was opened is absent from the buffer — without the prompt, this
-    // save would silently delete it).
-    if (removed.length > 0) {
-      const label = removed.length === 1 ? `secret ${removed[0]}` : `${removed.length} secrets: ${removed.join(', ').slice(0, 200)}`;
-      const ok = await vscode.window.showWarningMessage(
-        `This save deletes ${label}. Continue?`,
-        { modal: true },
-        'Save and delete',
-      );
-      if (ok !== 'Save and delete') {
-        throw new Error('Save cancelled — no secrets were changed.');
-      }
-    }
-    if (Object.keys(changed).length === 0 && removed.length === 0) {
-      vscode.window.showInformationMessage('Secrets: no changes to push.');
-      return;
-    }
-    if (Object.keys(changed).length > 0) await api.secretSet(client, projectId, changed);
-    for (const key of removed) await api.secretDelete(client, projectId, key);
-    const bits: string[] = [];
-    if (Object.keys(changed).length) bits.push(`${Object.keys(changed).length} set`);
-    if (removed.length) bits.push(`${removed.length} deleted`);
-    vscode.window.showInformationMessage(
-      `Secrets pushed (${bits.join(', ')}) — deployed envs sync and the live preview restarts (~11s).`,
-    );
   }
 
   async delete(): Promise<void> {

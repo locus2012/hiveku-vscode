@@ -237,17 +237,20 @@ async function agentFacingFiles(dir) {
 }
 
 describe('Scaffolds: the client label and the two rules', () => {
-  test('the Claude .mcp.json labels the client as claude-code beside the key', async () => {
+  // Since 0.91.7 the header is the declaration vscode-extension/<version> (the folder's settings ask
+  // before every reveal); the MCP server still reads it as claude-code for the memory log.
+  test('the Claude .mcp.json sends the client declaration beside the key', async () => {
+    const declared = `vscode-extension/${JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version}`;
     const server = knowledge.hivekuMcpServer(KEY, `${BASE}/`);
     assert.deepEqual(server, {
       type: 'http',
       url: `${BASE}/mcp`,
-      headers: { Authorization: `Bearer ${KEY}`, 'X-Hiveku-Client': 'claude-code' },
+      headers: { Authorization: `Bearer ${KEY}`, 'X-Hiveku-Client': declared },
     });
     const dir = await tmp('hk-v1-mcp-');
     await knowledge.writeScaffold({ baseDir: dir, accountLabel: 'Acme', apiKey: KEY, baseUrl: BASE, accountId: ACCOUNT });
     const mcp = JSON.parse(await fs.readFile(path.join(dir, '.mcp.json'), 'utf8'));
-    assert.equal(mcp.mcpServers.hiveku.headers['X-Hiveku-Client'], 'claude-code');
+    assert.equal(mcp.mcpServers.hiveku.headers['X-Hiveku-Client'], declared);
     // The label is for the Hiveku server only.
     for (const [name, entry] of Object.entries(mcp.mcpServers)) {
       if (name !== 'hiveku') assert.ok(!JSON.stringify(entry).includes('X-Hiveku-Client'), `${name} got the Hiveku label`);
