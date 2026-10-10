@@ -238,8 +238,8 @@ set:**
 | A test build you started | `project_test_build_log_get({ project_id, session_id })` | `project_build_error_get` - it returns the last FAILED real DEPLOY, which can be days old and from a different change set |
 | A real deploy | `project_build_error_get` (`error_summary` + `last_log_lines` + `full_logs`; omit `session_id` for the most recent failed build) | the test-build log, which knows nothing about the deploy |
 | A deploy that shipped but does not serve | `deploy_doctor({ project_id, environment })` | retrying the deploy |
-| Runtime error on a DEPLOYED tier | `project_logs_get` (`source`: runtime / build / deploy, plus a `level` filter) | `preview_logs` - it reads the preview container, not Lambda |
-| Preview-container server error | `preview_logs` (dev-server stdout) or `preview_runtime_errors` (parsed `{message, stack[]}`) | `project_logs_get` |
+| Runtime error on a DEPLOYED tier | `project_log_errors({ project_id, environment })` (errors grouped by signature, each with an `example_request_id`), then `project_logs_get({ project_id, environment, request_id })`; search with `query`, `level` (`"error,warning"`), `since`/`until` (`1h`, `24h`, `7d`). Lines are redacted and untrusted | `preview_logs` - it reads the preview, not the deployed site |
+| Preview-container server error | `project_log_errors({ project_id, environment: "preview" })`, `preview_logs` (newest dev-server lines; `branch` for a branch preview) or `preview_runtime_errors` (parsed `{message, stack[]}`) | `project_logs_get` without `environment: "preview"` - it defaults to production |
 | Page renders but behaves wrong | `preview_client_errors` (see Rule 63) | the server log, which stays completely clean for a hydration mismatch |
 
 
