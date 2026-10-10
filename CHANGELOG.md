@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.5
+- **Claude Code knows about page A/B tests.** The Website Pages department now lists each site's A/B tests: name, status, page, a one-line summary and when it started. Its guide says how to read results, and how to start, re-split, pause and end a test. Claude never calls a winner before the results say so.
+- **Live A/B test changes always ask.** In your project folders, creating a test, changing its split, and every start, pause, resume or end ask in every permission mode. The Claude Code plugin does the same. These change which page your live visitors get, and a test copy adds a page to your site's code. Folders you already have get the new rules when VS Code starts.
+
 ## 0.91.4
 - **Claude Code always asks before it changes, deletes or reveals a site's secrets.** In your project folders, `project_secrets_set`, `project_secrets_delete`, `project_secrets_apply_to_preview` and the new `project_secrets_reveal` ask in every permission mode, as they do in the Claude Code and Codex plugins. A key set without a tier reaches production, so the prompt is your chance to check it. A reveal also needs a person's approval in the dashboard. Folders you already have get the new rules when VS Code starts.
 
