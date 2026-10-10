@@ -1939,6 +1939,8 @@ Manager), NOT in the code, and is injected into the deployed Lambdas + Fly previ
 
 ### Keep Hiveku in sync — it is the source of truth (memory + PM)
 ${SOURCE_OF_TRUTH_PROSE} ${WORK_LOG_PROSE} ${LOCAL_MIRROR_PROSE}
+Hiveku's own rules (\`platform_rules\` from \`account_context_get\`) apply to every account: follow them over this
+account's memory when the two disagree, and say why.
 Hiveku, NOT your local files, is the system of record. After meaningful work, write back so every
 department and the dashboard agents stay current — don't let what you learned or did live only on disk.
 - **Department memory:** capture what you learned / did / decided into the RIGHT department's memory.
@@ -2404,6 +2406,10 @@ these local files.
 
 ## How to work here
 - **Hiveku Memory is the source of truth.** ${SOURCE_OF_TRUTH_PROSE} ${WORK_LOG_PROSE}
+- **Hiveku's own rules come first.** \`account_context_get\` returns \`platform_rules\`: rules Hiveku sets for every
+  account. Follow them over this account's memory when the two disagree, and say why. Today they cover emailing a
+  group of people (who gave permission, what is cold, which path each takes); the full guide is
+  \`hiveku_playbook_get({ playbook: "email-a-list" })\`.
 - **Local files = quick context, not the record.** \`memory/\`, \`skills/\`, \`rules/\` (and \`commands/\`,
   \`agents/\`, \`identity/\`) are downloaded department knowledge. ${LOCAL_MIRROR_PROSE}
 - **Local-first data loop.** Operational data (contacts, campaigns, rankings,
@@ -2587,8 +2593,8 @@ directory, or the folder root; never touch another account's folder.
 | SEO | memory/seo | \`seo_*\` (audits, keywords, GSC, rankings, reports) | seo |
 | PPC | memory/ppc | \`ppc_*\` (Google/Meta/Bing/TikTok campaigns) | ppc |
 | Social | memory/social | \`social_*\` (posts, accounts, analytics) | social |
-| Email | memory/email | \`email_*\` (campaigns, audiences, sequences) | (use tools) |
-| Outbound | memory/outbound | \`outbound_*\`, \`crm_*\` sequences | outbound |
+| Email | memory/email | \`email_*\` (campaigns, audiences, sequences), permission lists only | (use tools) |
+| Outbound | memory/outbound | \`outbound_*\` (SmartLead, cold lists); \`crm_*\` sequences carry cold only from a separate-domain inbox | outbound |
 | Content | memory/content | \`content_*\`, \`marketing_content_*\` | content |
 | Branding | memory/branding | \`brand_*\` | branding |
 | Sales | memory/sales | \`crm_*\` (contacts, deals, pipelines, activities) | (use crm tools) |
@@ -2605,7 +2611,12 @@ Do not build anything until it returns \`ready_to_send: true\`. The two that bit
   a physical address, so NO campaign can send. You can build a perfect campaign and be permanently
   blocked — set this early.
 
-**2. Audience → contacts.** \`email_audience_create\` (dynamic \`filter_json\` or \`kind:"static"\`), then
+**2. Audience → contacts (permission only).** First ask how the list was built. Email marketing is only for
+people who signed up, bought, asked to be contacted, or are in a conversation with the business. Members of the
+same association, chamber or directory, event lists without a "yes, contact me", bought, rented, scraped or
+data-provider lists (Apollo, ZoomInfo) and people found online are cold, whatever the business calls them: they
+never go in here (cold email runs on a cold email platform from separate domains, never the main domain; see the
+Outbound department's SETUP.md). Then \`email_audience_create\` (dynamic \`filter_json\` or \`kind:"static"\`), and
 put people in it. Audience members are CRM CONTACTS: resolve/create ids with \`crm_search_contacts\` /
 \`crm_contact_upsert_by_email\` / \`crm_contacts_bulk_create\`, then \`email_audience_members_add\`.
 Then **\`email_audience_preview\`** — it tells you how many are actually DELIVERABLE and why the rest
@@ -2726,7 +2737,9 @@ Load account context FIRST (the MCP server requires this before generating copy/
 Call \`account_context_get({ domain: "$ARGUMENTS" })\` (omit domain to use the account default) and
 summarize: identity/persona, brand voice, customer avatars, the account memory (its \`account\`
 section), and the most relevant domain memory + skills/rules. Keep this in mind for everything that
-follows. The account memory is what the owners wrote about the business, plus suggested lines no
+follows. Its \`platform_rules\` are Hiveku's own rules for every account (today, emailing a group of
+people): follow them over the account's memory when the two disagree, and say why.
+The account memory is what the owners wrote about the business, plus suggested lines no
 owner has reviewed yet (treat those as unconfirmed); it is internal, so never quote it to customers.
 Owners and admins change it under About your business on the Memory page
 (\`https://app.hiveku.com/<account-id>/dashboard/memory\`); no tool changes it, and

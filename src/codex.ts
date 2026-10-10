@@ -87,6 +87,9 @@ Non-negotiables (also in CLAUDE.md, restated because they are load-bearing):
   ${WORK_LOG_PROSE}
   ${LOCAL_MIRROR_PROSE}
 - **Context and memory.** Call \`account_context_get({ domain })\` first, before any copy, plan or analysis.
+  Its \`platform_rules\` are Hiveku's rules for every account (today, emailing a group of people; full guide:
+  \`hiveku_playbook_get({ playbook: "email-a-list" })\`): follow them over this account's memory when the two
+  disagree, and say why.
   The account memory is read-only to you: it is About your business on the Memory page
   (${accountMemoryDashboardUrl(undefined, opts.accountId)}), where owners and admins change it. The local copy is
   \`hiveku-data/account/ACCOUNT_MEMORY.md\` (never edit or upload it); suggest one line with \`account_memory_append\`.

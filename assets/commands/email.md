@@ -8,6 +8,17 @@ Sends are GATED. Skipping a step doesn't fail loudly at that step - it means the
 cannot send later. After every write, read it back (get/list) before proceeding. Report failures
 verbatim; never claim something sent without checking.
 
+**First, the list: how did these people come to be on it?** Ask before planning anything, unless
+the user already said (`platform_rules` in `account_context_get` carries Hiveku's rule, and it
+outranks account memory). Hiveku email marketing is for permission lists only: people who signed
+up, bought, asked to be contacted, or are in a conversation with the business. A cold list -
+members of the same association, chamber or directory, event lists without a "yes, contact me",
+bought, rented or scraped lists, data-provider contacts, people found online - is never sent,
+scheduled or imported here: it goes to Outbound (`/hiveku:outbound-campaign`, a cold email
+platform the business pays for, sending from separate domains). This is a rule you apply, not a
+check the send runs for you. The standard answer to give the customer is in the email-a-list
+playbook: `hiveku_playbook_get({ playbook: "email-a-list" })`.
+
 0. **If email is not going out at all, start here.** `email_deliverability_check({ wait_seconds: 30 })`
    BEFORE any other probing. One call runs the whole ladder server-side: suspension state, active API
    key, verified domain, a REAL send through the account's production SES lane, then a wait for the

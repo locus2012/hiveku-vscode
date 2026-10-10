@@ -12,6 +12,26 @@ they get skipped.
 `crm_sequence_clone` takes `source_sequence_id`, and `crm_update_sequence_step` takes
 `sequence_id` + `step_id`.
 
+## Who a CRM sequence may email (Hiveku's rules, before any design)
+
+CRM sequences send from the account's connected Gmail or Outlook, at most 100 emails a day per
+inbox. They are for permission lists and one-to-one follow-up: people who signed up, bought, asked
+to be contacted, or are in a conversation with the business. Ask how the list was built before you
+design anything (SKILL.md principle 9; `platform_rules` in `account_context_get`).
+
+- **Cold contacts** (association, chamber or directory members, event lists without a "yes,
+  contact me", bought, rented or scraped lists, data-provider rows, people found online) ride a
+  CRM sequence only as small cold outreach - a few hand-written emails a day - and only from a
+  connected inbox on a separate domain. Never from the business's main domain or its everyday
+  inbox: a burned main domain sends its everyday email and invoices to spam.
+- **A bigger cold program** goes to a cold email platform the business pays for: SmartLead
+  through Hiveku's Outbound page, or Instantly, which is not connected to Hiveku and runs on its
+  own (`hiveku-outbound-agency`).
+- **Every cold email** follows CAN-SPAM in the US: an honest sender and subject, the business's
+  postal address, a clear opt-out honored within 10 business days. Canada and much of Europe need
+  permission first.
+- Nothing here checks the sending domain or the list for you: these are rules you apply.
+
 ## Design and build
 
 1. Context: `account_context_get({ domain: "sales" })` - ICP, voice, objection notes
@@ -51,7 +71,9 @@ they get skipped.
   while drafting). Score 0-100, lower is better; bands: clean / review / likely_filtered. Nothing
   activates until every step is "clean" - rewrite anything else.
 - `crm_list_email_suppressions` - know the suppression list before enrolling anyone.
-- Confirm the sending inbox is live: `crm_inbox_connections` shows is_active: true.
+- Confirm the sending inbox is live: `crm_inbox_connections` shows is_active: true. If any
+  enrollee is cold, confirm the inbox is on a separate domain, not the business's main domain
+  (no tool checks this).
 - Activate only with user approval: `crm_update_sequence({ id, is_active: true })`. Activation
   IS a send decision - live enrollments start receiving mail with no further gate.
 
@@ -152,9 +174,9 @@ Mind which tool carries which metric: reply and booking rates come from
 opens/clicks/bounces/unsubscribes per step and no reply figure at all. Do not quote a
 per-step reply rate - it does not exist.
 
-- Cold outbound reply rate below 2% (`crm_sequences_compare`) → pause and rewrite before enrolling
-  anyone else.
-- Warm/re-engagement reply rate below 5% (`crm_sequences_compare`) → rewrite.
+- Cold outreach reply rate below 2% (`crm_sequences_compare`; a small cold sequence from a
+  connected inbox on a separate domain) → pause and rewrite before enrolling anyone else.
+- Permission-list or re-engagement reply rate below 5% (`crm_sequences_compare`) → rewrite.
 - Open rate below 40% (`crm_sequence_analytics`, per step) → subject line or deliverability problem:
   re-run `crm_sequence_spam_check`, check `crm_inbox_connections` health, before touching body copy.
 - Rising bounces on a step (`crm_sequence_analytics`) → list quality or domain reputation, not copy.

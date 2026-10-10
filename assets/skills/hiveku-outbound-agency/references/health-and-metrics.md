@@ -73,9 +73,11 @@ incomparable windows.
 
 ## Open-rate honesty
 
-Open tracking pixels themselves hurt deliverability and inflate/deflate numbers. Prefer reply
-rate as the north-star metric; if open tracking is on, treat 40-60% as healthy and anything
-under ~30% as a placement problem.
+Open tracking pixels themselves hurt deliverability and inflate/deflate numbers, so open tracking
+stays off on cold campaigns (Hiveku's email-a-list guide; `outbound_list_campaigns` shows each
+campaign's `tracking`). Prefer reply rate as the north-star metric; if a campaign still tracks
+opens, treat 40-60% as healthy and anything under ~30% as a placement problem, and recommend
+turning the tracking off in SmartLead.
 
 ## Reporting windows - the monthly report's accounting rules
 

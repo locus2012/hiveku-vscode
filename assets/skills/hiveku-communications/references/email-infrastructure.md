@@ -99,6 +99,10 @@ Omit `scheduled_for` and you get a draft, which is the safe default while you re
 
 The order that avoids embarrassment:
 
+0. Know how the audience was built: a campaign goes to a permission list only (signed up,
+   customers, asked to be contacted, in a conversation). A cold list never goes through Hiveku
+   email marketing - SKILL.md "Before any email to a group". The pre-flight below does not check
+   this for you.
 1. `email_audience_preview` to size the audience. Do this before every send, not just the first.
    An audience built on a filter changes as contacts change.
 2. `email_campaign_test_send` to yourself or the client. Read the rendered result, especially

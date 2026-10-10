@@ -23,6 +23,12 @@ prevent has moved: it is no longer inventing a rate, it is quoting one before an
    (`marketing_frequency_cap_get`); skipped_suppressed / skipped_unsubscribed mean list health.
    Cross-check the account's sending health with `email_service_status` (read `sending_enabled` first
  - a suspension blocks everything) and list hygiene with `email_suppression_list({ type })`.
+   Read `engagement.bounced` and `engagement.complained` against `delivered` too: Hiveku email
+   marketing pauses a sender at 3% bounces or 0.08% spam complaints, and a spike on one campaign
+   usually means its audience was not a permission list. Before recommending another send to that
+   audience, ask how it was built: permission (signed up, customers, asked to be contacted, in a
+   conversation) stays here; a cold list goes to Outbound (`/hiveku:outbound-campaign`), never back
+   through a campaign (`platform_rules` in `account_context_get`).
 3. **Engagement.** `engagement` from step 1 is the campaign read: open_rate and click_rate
    against `delivered`, at any list size - name the winner by CLICKS (Apple MPP inflates opens)
    and quote `delivered` as the N. A `null` block means nothing has delivered yet: say so, do not

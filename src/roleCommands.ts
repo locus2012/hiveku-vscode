@@ -708,7 +708,11 @@ Pipeline pass. Context: \`account_context_get({ domain: "sales" })\`.
         'hiveku-followups': `---
 description: Re-engage gone-cold contacts with brand-aligned drafts. Nothing sends without approval.
 ---
-Follow-ups. 1. \`crm_contacts_gone_cold\` → prioritize by lead_score/deal value.
+Follow-ups. 1. \`crm_contacts_gone_cold\` → prioritize by lead_score/deal value. Keep the people who gave
+   permission (they signed up, bought, asked to be contacted, or were in a conversation with the business).
+   A contact who came from a bought, scraped, data-provider or member list is cold: it goes to the cold email
+   platform, or in small numbers to a CRM sequence from a connected inbox on a separate domain, never from the
+   business's main domain (Hiveku's \`platform_rules\`).
 2. Draft re-engagement per contact via \`talk_to_department({ domain: "outbound", message })\`.
 3. Show drafts. Only on explicit approval: \`crm_enroll_sequence\` or send via the connected inbox.
 4. Update \`crm_update_contact\` stages + log activities. ${PERSIST_STEP}
@@ -735,7 +739,10 @@ description: Outbound program health — campaign stats, reply/bounce rates, lis
 ---
 Outbound health. 1. \`outbound_list_campaigns\` + per-campaign \`outbound_list_leads\` counts by
 \`internal_status\` / \`has_replied\` / \`is_interested\` → reply rate, positive rate, bounce signals.
-2. \`email_stats\` for the sending side; \`crm_contacts_gone_cold\` for the re-engagement pool.
+2. Sending side: \`outbound_health_status\` (mailbox health, warm-up, blockers) and
+   \`outbound_campaign_analytics_get({ campaign_id })\` (bounces, unsubscribes). \`email_stats\` counts Hiveku's own
+   sends only, not SmartLead's. Cold email must never go through them, so a bounce or complaint spike there can
+   mean a cold list went through Hiveku email marketing: raise it. \`crm_contacts_gone_cold\` for the re-engagement pool.
 3. Top 3 actions (kill/scale campaigns, list hygiene, copy tests) → PM tasks on approval.
 4. For continuous coverage, point the user at the local reply-triage automation
    (\`.claude/AUTOMATION.md\`, \`node automations/manage.mjs list\`). ${PERSIST_STEP}

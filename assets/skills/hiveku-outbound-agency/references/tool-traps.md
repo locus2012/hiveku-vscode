@@ -13,11 +13,13 @@ Required: `campaign_id`, `email` per lead. Know the real behavior before loading
 
 - **The one-call-per-lead loop is RETIRED.** `outbound_leads_bulk_create` enrolls up to 100
   leads per call (the SmartLead batch cap; 101+ is a 400 - chunk the list yourself). A 500-lead
-  list is 5 calls, not 500. Keep `outbound_create_lead` for one-off adds (a warm visitor, a
-  hand-vetted prospect), not lists. Emails are deduped case-insensitively WITHIN the batch.
-  `settings` supports `ignore_global_block_list`, `ignore_unsubscribe_list`,
-  `ignore_duplicate_leads_in_other_campaign` - every one of those widens who receives cold
-  email, so none is ever set unless the user asks for it by name and hears what it skips.
+  list is 5 calls, not 500. Keep `outbound_create_lead` for one-off adds (an ICP-matched website
+  visitor, a hand-vetted prospect), not lists. Emails are deduped case-insensitively WITHIN the batch.
+  `settings` supports `ignore_global_block_list`, `ignore_unsubscribe_list` and
+  `ignore_duplicate_leads_in_other_campaign`. The first two are never set, even on request:
+  Hiveku's rule is never to skip the block list or the unsubscribe list, and an opt-out holds for
+  good (say why). `ignore_duplicate_leads_in_other_campaign` widens who receives cold email, so it
+  is set only when the user asks for it by name and hears what it skips.
 - **Bulk results are COUNTS-ONLY - carry that honestly.** SmartLead returns
   `{ uploaded, not_uploaded }` with no per-lead outcomes: WHICH leads were rejected
   (duplicates, block list) is unknowable until the next stats sync reconciles the
@@ -78,19 +80,28 @@ not run one. Instead:
   tool name, sanitized args, and status. Use it when you are not sure a write landed, or to
   audit what another key did (`{ tool_contains: "outbound_", since: ... }`).
 
-## Creating campaigns (`outbound_create_campaign`) - then save the steps by tool, verify by GET
+## Creating campaigns (`outbound_create_campaign`) - steps on the create or by tool, verify by GET
 
 `{ name, integration_id, sequences? }` (required: `name`, `integration_id`; `integration_id`
 must be a UUID). Read what it actually does before you promise a client a built campaign:
 
-- It creates the SmartLead campaign. Any `sequences` you pass are mirrored as JSON on the Hiveku
-  row; whether that create-time argument also reaches the provider is not verified - treat the
-  upstream campaign as step-less until a steps save has run. A 201 is a campaign row, not a
-  built campaign.
-- **Save the steps by tool:** `outbound_campaign_sequences_save({ campaign_id, sequences,
-  confirm: true })` writes the steps to the provider - a FULL REPLACE, preview-gated (the shape,
-  the preview, and the warnings are in "Campaign controls and the reply send" below). Preview
-  first, show the operator the exact normalized payload, get the yes, then confirm.
+- It creates the SmartLead campaign, always as DRAFTED (a caller-supplied status is ignored), and
+  when you pass `sequences` it pushes them to the provider in the same call. They take the save
+  shape (`{ seq_number?, delay_in_days?, subject, body, variants? }`, plain-text bodies) and are
+  validated FIRST: a bad payload answers 400 `sequences_invalid` and creates nothing. After the
+  create they are saved upstream and read back, so the mirror holds what the provider stored,
+  never the raw request. There is no preview on this call: show the operator the exact steps
+  and get the yes before you make it. The 201 returns `{ id, external_id, name, status,
+  sequences_supplied, sequences_saved, steps_with_content, merge_tags_used, warnings }`.
+  `sequences_saved: false` = the campaign EXISTS but SmartLead refused the step save, so it has
+  NO steps: save them on that id (next bullet), never re-create. A read-back warning =
+  saved-but-unverified: run the GET below. A 201 is still not a built campaign until the GET
+  agrees.
+- **Save or change the steps by tool:** `outbound_campaign_sequences_save({ campaign_id,
+  sequences, confirm: true })` writes the steps to the provider - a FULL REPLACE, preview-gated
+  (the shape, the preview, and the warnings are in "Campaign controls and the reply send"
+  below). Preview first, show the operator the exact normalized payload, get the yes, then
+  confirm.
 - **Verify by GET before any go-live sign-off:** `outbound_campaign_sequences_get({ campaign_id })`
   returns the steps the PROVIDER actually holds (`source: 'provider'`, `step_count`,
   `steps_with_content`) and refreshes the local mirror. That read is the go-live evidence and
@@ -234,9 +245,10 @@ All three are read-only by-UUID lookups; their traps are about what the payload 
 - **`outbound_get_campaign({ campaign_id })`** - stats are the same LIFETIME counters as the
   list row. Its `sequences` are the local mirror, and that mirror is refreshed from the provider
   by every `outbound_campaign_sequences_get` and every confirmed
-  `outbound_campaign_sequences_save` (`mirrored_at` on the GET says when). It is still stale in
-  exactly one case: before the first such read or save on that campaign, when it is only the
-  JSON handed to `outbound_create_campaign`. So for go-live evidence run the sequences GET rather
+  `outbound_campaign_sequences_save` (`mirrored_at` on the GET says when). The create fills it
+  from the provider's read-back too, so it is stale in one case: the create's step save or
+  read-back failed (its `warnings` say which) and no read or save has run since - then it is
+  empty while the provider may hold steps. So for go-live evidence run the sequences GET rather
   than trusting this field. Its `status` is the local mirror too - a confirmed status change
   sets it, and the next stats sync re-reads the provider, whose value wins. Use this read for
   identity checks, the mirrored status, and counts (`_count` of leads / inbox threads / reply
@@ -362,7 +374,13 @@ confirmation. NEVER bulk-un-suppress, never as part of a list load, and never as
 ## The Hiveku CRM sequences rail (first-party follow-up)
 
 When follow-up runs through Hiveku's own CRM sequences instead of SmartLead (`crm_` prefix:
-sales/full keys only), the operating order is:
+sales/full keys only), first know who it may email. CRM sequences send from the connected Gmail
+or Outlook, at most 100 emails a day per inbox. They carry permission contacts (signed up,
+customers, asked to be contacted, in a conversation) and one-to-one follow-up. Cold outreach
+rides here only in small numbers and only from a connected inbox on a separate domain - never
+the business's main domain or everyday inbox; a bigger cold program goes to a cold email platform
+(SmartLead through Outbound, or Instantly on its own). Nothing
+checks the sending domain for you (SKILL.md 1a). Then the operating order is:
 
 - Discover: `crm_list_sequences` (id, name, is_active, step count) -> `crm_get_sequence` (steps +
   enrollment count) or `crm_sequence_status` (cheap snapshot with enrollment counts by status and

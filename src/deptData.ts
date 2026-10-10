@@ -646,7 +646,11 @@ export const DEPARTMENTS: Department[] = [
       'Deals: `crm_create_deal` (name + pipeline_id + stage_id from `pipelines.json`) / `crm_update_deal` (stage moves, ' +
       'status, value) / `crm_delete_deal` + `crm_link_deal_contact` (bulk: `crm_deals_bulk_create`). ' +
       'Activities: `crm_create_activity` / `crm_update_activity` / `crm_delete_activity`. ' +
-      'Sequences: enroll/leave with `crm_enroll_sequence` / `crm_unenroll_sequence` / `crm_pause_sequence_enrollment` / ' +
+      'Sequences: they send from the connected Gmail or Outlook (at most 100 emails a day per inbox), for people who ' +
+      'gave permission (signed up, bought, asked to be contacted, or in a conversation with the business) and ' +
+      'one-to-one follow-up. A cold list (an association\'s members, bought, scraped or data-provider lists) goes to a ' +
+      'cold email platform; a sequence carries small cold outreach only from an inbox on a separate domain, never the ' +
+      'main domain. Enroll/leave with `crm_enroll_sequence` / `crm_unenroll_sequence` / `crm_pause_sequence_enrollment` / ' +
       '`crm_resume_sequence_enrollment`; edit steps via `crm_update_sequence` / `crm_update_sequence_step`. ' +
       'Tags: `crm_attach_tag` / `crm_detach_tag`. Custom fields: `crm_create_custom_field` / `crm_set_custom_field_value` ' +
       '(keys in `custom_fields.json`). Lead options: `crm_add_lead_status_option` / `crm_add_lead_source_option`. ' +
@@ -833,6 +837,8 @@ export const DEPARTMENTS: Department[] = [
       { id: 'suppressions', label: 'Suppressions', tool: 'email_suppression_list', columns: [{ key: ['email_address', 'email'], label: 'email' }, { key: ['suppression_type', 'reason', 'type'], label: 'reason' }, { key: 'created_at', label: 'when', date: true }] },
     ],
     crud:
+      'Permission lists only (people who signed up, bought, asked to be contacted, or are in a conversation with the ' +
+      'business): a cold list never goes through `email_*`, whatever the business calls it; see the Outbound department. ' +
       'Campaigns: `email_campaign_create` / `_update` / `_schedule` / `_send_now` / `_pause` / `_resume` / `_cancel` / ' +
       '`_delete` / `_duplicate` / `_test_send` / `_resend_non_openers`; metrics: `email_campaign_metrics`. ' +
       'Audiences: `email_audience_create` / `_update` (edits filter_json) / `_archive` (soft-delete) + ' +

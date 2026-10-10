@@ -407,7 +407,7 @@ this tool exactly as it does to `voice_call_tracking_live_probe`. For a visual c
 tool, `?hkswaptest=<nonce>` on any page URL is the snippet's test mode (an on-page verdict banner,
 inert for real traffic; the dashboard's "Watch it swap" button drives it).
 
-### `voice_call_tracking_setup` (LIVE) - the idempotent orchestrator
+### `voice_call_tracking_setup` (LIVE) - the idempotent one-call setup
 
 One operation that wires the whole lane for a project: number pool, tracking DIDs, per-project
 phone-tracking config, the tenant conversion-upload policy, and the Google "Hiveku - Phone Call"

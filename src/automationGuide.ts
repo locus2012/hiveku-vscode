@@ -46,7 +46,7 @@ SCRIPT**, independent of any Claude session:
 
 The scheduled script (Node / Python / bash) does the deterministic work directly — call the
 Smartlead/HeyReach REST APIs + the **Hiveku Olympus REST API** (key in the script's env) to pull replies,
-push leads, write CRM, send a digest. **That spends ZERO Claude usage — it's just code.** When a step
+stage leads for the person to approve, write CRM, send a digest. **That spends ZERO Claude usage — it's just code.** When a step
 genuinely needs Claude's judgment (draft a nuanced reply, classify an ambiguous lead, summarize), have
 the script invoke Claude **headlessly**: \`claude -p "<prompt>"\` (one-shot, non-interactive) — Claude is
 used only on that call, only when run. So:
@@ -121,17 +121,33 @@ A **cloud routine runs a FRESH CLONE, headless, with NO interactive auth** — i
 - **Inbound lead watch (while working)**: \`/loop 20m\` → \`crm_lead_triage({query})\` to sweep the inbox for new leads → dedupe → \`crm_contact_upsert_by_email\`.
 
 ### Outbound BDR — Smartlead (email) + HeyReach (LinkedIn)
-Neither has an MCP server, so call their **REST APIs** with a key from project secrets/env (never in code/commits):
+Cold email only, under Hiveku's rules (\`platform_rules\` from \`account_context_get\`; the full guide is
+\`hiveku_playbook_get({ playbook: "email-a-list" })\`): a list of people who never asked to hear from the business
+(an association's or directory's members, people from events the business did not run, bought, scraped or
+data-provider lists) goes through the cold email platform the business pays for, from inboxes on separate domains.
+Never through Hiveku email marketing (campaigns, newsletters, drips), and never from the business's main domain.
+
+Hiveku's own \`outbound_*\` tools drive Smartlead (campaigns, leads, steps, start and pause, replies), and starting a
+campaign, replacing its steps and sending a reply each preview first and wait for \`confirm: true\`, so use them
+first. HeyReach has no Hiveku connector, and Smartlead's mailbox settings, warm-up, sending schedules
+and webhook settings are not in \`outbound_*\`: for those, call the **REST APIs** with a key from project
+secrets/env (never in code/commits):
 - **Smartlead**: \`https://server.smartlead.ai/api/v1/...?api_key=…\` — campaigns, leads, sequences, email-accounts, analytics, **webhooks** (fire on reply/bounce/unsubscribe).
 - **HeyReach**: \`https://api.heyreach.io/...\` with an \`X-API-KEY\` header — LinkedIn campaigns, accounts, lists, leads, webhooks.
 - A **native two-way Smartlead↔HeyReach sync** exists — prefer it to move leads between email and LinkedIn; use Claude Code for the orchestration, CRM sync, and reporting around it. Always check each platform's live API docs for exact endpoints before calling.
+- **Instantly** (the other platform Hiveku recommends) is not connected to Hiveku yet; it works on its own, so
+  mirror its replies into the CRM yourself (\`crm_contact_upsert_by_email\`, \`crm_create_activity\`).
 
 The cadence — run the scheduled pieces as **local cron / launchd worker scripts** (free + persistent;
 see the OS-cron section), capture replies via **webhooks**, and mirror everything into Hiveku so it's
 tracked + reportable. Call \`claude -p\` from a worker only for the judgment steps.
-- **Morning lead push** (cron worker, weekdays ~8:08am) → pull the day's target leads → add to the
-  Smartlead campaign + the HeyReach LinkedIn campaign → mirror each into Hiveku (\`outbound_create_lead\`
-  + \`crm_contact_upsert_by_email\`) → send yourself a digest. Pure API work — no Claude turn needed.
+- **Morning lead prep** (cron worker, weekdays ~8:08am) → pull the day's target leads → drop anyone on the
+  Do-Not-Contact list (\`crm_get_dnc_status\`) or already in a campaign → write the batch to a review file and
+  send yourself a digest. Pure API work, no Claude turn. The worker adds no one to a campaign: a lead added to a
+  running campaign starts getting email, so the batch goes in only after the person approves it, in a session or
+  a run they start by hand. Then add it with \`outbound_leads_bulk_create\` (up to 100 per call; it writes Smartlead
+  and Hiveku together, so never add the same leads through Smartlead's API as well) and HeyReach's API, then
+  \`crm_contact_upsert_by_email\`.
 - **Reply capture (event-driven)** → Smartlead/HeyReach **webhooks** → an \`/api/webhook\` route in your
   deployed Hiveku project writes the reply into CRM / a queue (\`crm_*\`, \`outbound_update_lead\`). Free,
   always-on, no Claude turn per event.
@@ -147,10 +163,12 @@ tracked + reportable. Call \`claude -p\` from a worker only for the judgment ste
 ---
 
 ## Safety (always)
-- **Idempotency**: a scheduled send/push must dedupe — check state (or use an idempotency key) so a lead is never double-enrolled or re-emailed on the next fire.
+- **Idempotency**: a scheduled job that writes must dedupe — check state (or use an idempotency key) so nothing is written twice on the next fire. Outbound workers never enroll or email anyone (see below).
 - **Rate limits**: Smartlead, HeyReach, and LinkedIn enforce strict daily caps — respect them; never blast. LinkedIn especially will restrict an account that over-sends.
 - **Secrets are headless-safe**: routines have no interactive login — API keys must live in the routine's env/secrets, never pasted in code or committed.
 - **Confirm the account**: \`get_account_info\` before acting; routines hit whatever account the key is pinned to.
-- **Don't auto-send the irreversible without sign-off** unless explicitly told — draft, then let a human approve emails/DMs.
+- **Don't auto-send the irreversible without sign-off** — draft, then let a human approve emails/DMs. For outbound, no instruction changes this (see below).
+- **Outbound workers never send or launch.** A scheduled worker drafts, stages and reports to the person. It never emails or messages a lead, never calls \`outbound_campaign_status_set\`, \`outbound_campaign_sequences_save\` or \`outbound_reply_draft_send\`, and adds no lead to a campaign: those happen in a session, after the person's yes.
+- **Cold stays on the cold platform.** A list of people who never asked to hear from the business never goes through Hiveku email marketing (campaigns, newsletters, drips) or the business's main domain.
 - **Cron hygiene**: off-minutes; remember \`/loop\` auto-expires after 7 days while \`/schedule\` routines persist indefinitely.
 `;
