@@ -312,7 +312,9 @@ underneath it.
 2. **Sources.**
  - Client CSVs: ALWAYS `crm_import_preflight({ entity: "contacts", rows })` first (catches
      bad rows at row 0, not row 3,000), then `crm_contacts_bulk_create` (max 5,000 rows/call;
-     emails lowercased; `on_duplicate: "skip"` default). Preflight is invisible on a marketing
+     emails lowercased; `on_duplicate: "skip"` default) with `list_source` saying how the list
+     was built (ask the client when you do not know; a cold source marks every new contact so
+     email marketing never mails it). Preflight is invisible on a marketing
      key while bulk_create works - keep skip-on-duplicate, batch small, and say the preflight
      was skipped for key-scope reasons.
  - **Warm before cold, always:** `crm_contacts_gone_cold` - engagement signals in the last
