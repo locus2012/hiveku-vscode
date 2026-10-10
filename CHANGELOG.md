@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.6
+- **Claude Code says where a list came from when it loads contacts.** Hiveku's CRM import now asks how a list was built. A cold list (a member or directory list, a bought list, a data provider, addresses found online, someone else's event) still imports for sales follow-up and your cold email platform, and every new contact is marked so Hiveku email marketing never emails it. The prospecting, outbound, backlink-outreach and CRM-migration guides pass that answer (`list_source`) and ask you when they don't know.
+- **The vendored skills match plugin 0.27.28.**
+
 ## 0.91.5
 - **Claude Code knows about page A/B tests.** The Website Pages department now lists each site's A/B tests: name, status, page, a one-line summary and when it started. Its guide says how to read results, and how to start, re-split, pause and end a test. Claude never calls a winner before the results say so.
 - **Live A/B test changes always ask.** In your project folders, creating a test, changing its split, and every start, pause, resume or end ask in every permission mode. The Claude Code plugin does the same. These change which page your live visitors get, and a test copy adds a page to your site's code. Folders you already have get the new rules when VS Code starts.

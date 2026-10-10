@@ -26,7 +26,8 @@ account's DataForSEO budget with no confirm step of their own.
   the exact page and why the asset fits. Generic link begging burns the domain. Source the
   hook the same way as sales personalization: `fetch_url` the target page, quote what is
   actually on it.
-- Load: `crm_contacts_bulk_create` tagged link-outreach + an
+- Load: `crm_contacts_bulk_create` tagged link-outreach, with `list_source: "scraped"` (or
+  the source the list really came from), + an
   `outbound_create_campaign` record; run sends from a Smartlead campaign on a
   SEPARATE domain/mailboxes from sales cold email (editorial reputation != sales reputation).
 - Cadence: 2 follow-ups max, 4-6 day gaps (editors hate long sequences); 20-50 deeply

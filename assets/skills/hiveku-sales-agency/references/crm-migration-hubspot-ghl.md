@@ -26,7 +26,10 @@ the pipeline you build should mirror how they actually sell, not a generic templ
    - `crm_companies_bulk_create` - up to 5,000 rows; dedup precedence external_id (if provided),
      then lowercase(name) within the account.
    - `crm_contacts_bulk_create` - up to 5,000 rows; emails normalized to lowercase, and the
-     (account_id, email) unique index blocks duplicates at the DB level. on_duplicate: 'skip'
+     (account_id, email) unique index blocks duplicates at the DB level. `list_source` is
+     required: for a CRM migration ask how the old CRM's contacts were gathered; a mixed export
+     is `other` with a description (`list_source_detail`), and a cold source marks every new
+     contact so Hiveku email marketing never mails it. on_duplicate: 'skip'
      (default - colliding rows are dropped and counted in results.skipped_duplicates) or 'error'
      (the whole batch fails with 409 so you can correct the source before retrying).
    - `crm_deals_bulk_create` - up to 5,000 rows; dedup by external_id ONLY (deals have no natural

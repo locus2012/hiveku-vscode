@@ -519,7 +519,8 @@ Running the outreach (cross-discipline with Outbound - this is a paid agency ser
    loading: list quality IS deliverability.
 3. Hand the list to the outbound program (the `hiveku-outbound-agency` skill has a
    dedicated "Backlink outreach campaigns" section): contacts loaded via
-   `crm_contacts_bulk_create` tagged link-outreach, a Smartlead campaign for the
+   `crm_contacts_bulk_create` tagged link-outreach with `list_source` naming how the list was
+   built (found online is `scraped`), a Smartlead campaign for the
    sends, pitch copy per segment via `talk_to_department({ domain: "outbound" })`.
 4. Track wins here: replies flow through the outbound triage loop; verify placements
    with `backlinks_backlinks` / `seo_new_lost_backlinks`; log each won link
