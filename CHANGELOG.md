@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.4
+- **Claude Code always asks before it changes, deletes or reveals a site's secrets.** In your project folders, `project_secrets_set`, `project_secrets_delete`, `project_secrets_apply_to_preview` and the new `project_secrets_reveal` ask in every permission mode, as they do in the Claude Code and Codex plugins. A key set without a tier reaches production, so the prompt is your chance to check it. A reveal also needs a person's approval in the dashboard. Folders you already have get the new rules when VS Code starts.
+
 ## 0.91.3
 - **Claude Code and Codex know cold email from email people asked for.** Before they plan or send email to a group, they ask how those people came to be on the list, unless they already know. People who signed up, bought, asked you to get in touch or are in a conversation with you gave permission. Everyone else is cold, even people who share your industry or association: member and directory lists, event lists without a "yes, contact me", bought, rented or scraped lists, and data providers.
 - **Cold email takes its own path.** It goes through a cold email platform you subscribe to (SmartLead, which Hiveku's Outbound page connects, or Instantly on its own), from inboxes you buy on separate domains. It never goes through Hiveku email marketing or from your main domain. CRM sequences carry only a few hand-written cold emails a day, from a connected inbox on a separate domain. The block list and the unsubscribe list are never skipped, even on request.

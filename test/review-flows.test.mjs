@@ -359,9 +359,10 @@ describe('what the extension writes and wires', () => {
     }
     const ask = src.slice(src.indexOf('const HIVEKU_ASK: string[] = ['), src.indexOf('\n];', src.indexOf('const HIVEKU_ASK: string[] = [')));
     // New ask rules are appended at the end, so a folder scaffolded earlier gets them in order:
-    // the resolve (2026-10-08), then joining the merge line (2026-10-09).
+    // the resolve (2026-10-08), joining the merge line (2026-10-09), then the secrets tools (2026-10-10).
     assert.ok(ask.includes("'mcp__hiveku__project_vcs_resolve',"), 'the resolve always asks');
-    assert.ok(ask.trimEnd().endsWith("'mcp__hiveku__project_vcs_queue_add',"), 'the newest ask rule, the merge line add, goes at the END');
+    assert.ok(ask.includes("'mcp__hiveku__project_vcs_queue_add',"), 'joining the merge line always asks');
+    assert.ok(ask.trimEnd().endsWith("'mcp__hiveku__project_secrets_reveal',"), 'the newest ask rule, the reveal, goes at the END');
   });
 
   test('the old dead-end sentence is gone from the extension', async () => {

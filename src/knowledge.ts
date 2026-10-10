@@ -805,6 +805,15 @@ const HIVEKU_ASK: string[] = [
   // pull request into its target (main = Your site) with nobody asking again, so every call asks,
   // in auto mode too (the plugin's hook asks on every add as well).
   'mcp__hiveku__project_vcs_queue_add',
+  // A site's secrets (2026-10-10, plan B3). A write reaches the running site through the live sync
+  // (a key without a tier reaches production), apply_to_preview copies the stored values into the
+  // preview where code an AI writes runs, and the reveal answers with plaintext values (a person
+  // also approves each reveal in the dashboard). Every call asks, in auto mode too, as in the plugin
+  // and Codex.
+  'mcp__hiveku__project_secrets_set',
+  'mcp__hiveku__project_secrets_delete',
+  'mcp__hiveku__project_secrets_apply_to_preview',
+  'mcp__hiveku__project_secrets_reveal',
 ];
 
 /**
