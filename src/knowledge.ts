@@ -821,6 +821,9 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__project_ab_test_create',
   'mcp__hiveku__project_ab_test_update',
   'mcp__hiveku__project_ab_test_action',
+  // Deleting a test (2026-10-10, MCP project_ab_test_delete): a draft, or an ended test with its results, gone
+  // for good. Appended last so a folder scaffolded earlier gets it in order.
+  'mcp__hiveku__project_ab_test_delete',
 ];
 
 /**

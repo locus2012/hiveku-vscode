@@ -87,11 +87,12 @@ const SECRETS = [
   'mcp__hiveku__project_secrets_reveal',
 ];
 
-/** Page A/B tests (2026-10-10): creating (a test copy commits code), re-splitting and every start, pause, resume or end always ask. */
+/** Page A/B tests (2026-10-10): creating (a test copy commits code), re-splitting, every start, pause, resume or end, and a delete always ask. */
 const AB_TESTS = [
   'mcp__hiveku__project_ab_test_create',
   'mcp__hiveku__project_ab_test_update',
   'mcp__hiveku__project_ab_test_action',
+  'mcp__hiveku__project_ab_test_delete',
 ];
 
 const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS];

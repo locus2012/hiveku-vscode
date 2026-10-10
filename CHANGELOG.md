@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.7
+- **Claude Code can delete a page A/B test.** The Website Pages guide names `project_ab_test_delete`. It removes a draft, or an ended test with its results, for good, and a running or paused test must end first. The test's pages stay on your site. In your project folders it always asks first, in every permission mode, like the other A/B test changes.
+
 ## 0.91.6
 - **Claude Code says where a list came from when it loads contacts.** Hiveku's CRM import now asks how a list was built. A cold list (a member or directory list, a bought list, a data provider, addresses found online, someone else's event) still imports for sales follow-up and your cold email platform, and every new contact is marked so Hiveku email marketing never emails it. The prospecting, outbound, backlink-outreach and CRM-migration guides pass that answer (`list_source`) and ask you when they don't know.
 - **The vendored skills match plugin 0.27.28.**
