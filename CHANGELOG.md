@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.2
+- **"Show logs" on a deployed site now shows what is happening at runtime, not only the build.** After the build log you see the site's errors from the last 24 hours, grouped by kind with how often each happened and an example request, then its newest lines from the last hour. Hiveku removes secret values, tokens and personal data from every line first. The same text goes to `.hiveku/logs/<environment>.log`, so Claude Code reads exactly what you see. If your role can't read a site's logs, that section says so in one line and the rest still shows.
+- A failed deployment's error now prints its message instead of `[object Object]`.
+
 ## 0.91.1
 - **Claude Code can add pull requests to the merge line, and always asks first.** Hiveku now merges open pull requests in order through a merge line: joining it is the approval to merge, and the line then merges the pull request into its target with nobody asking again. In your project folders, `/hiveku-pr queue <number>` adds one after you confirm, reports its place and anything ahead it collides with, and `project_vcs_queue_add` asks in every permission mode. Reading the line never asks. Folders you already have get the ask rule when VS Code starts.
 

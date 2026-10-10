@@ -1812,6 +1812,74 @@ export async function previewLogs(client: HivekuMcpClient, projectId: string, li
   return JSON.stringify(d, null, 2);
 }
 
+/** One group of a tier's runtime errors (project_log_errors). Text is redacted and untrusted. */
+export interface RuntimeErrorGroup {
+  signature: string;
+  level: string;
+  count: number;
+  firstSeen: string;
+  lastSeen: string;
+  sample: string;
+  exampleRequestId: string | null;
+}
+
+/** One runtime log line (project_logs_get, source runtime). Text is redacted and untrusted. */
+export interface RuntimeLogEntry {
+  time: string;
+  level: string;
+  requestId: string | null;
+  message: string;
+}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
+
+/** A deployed tier's runtime errors grouped by signature, the last 24 hours (builder #987, MCP #185). */
+export async function logErrors(
+  client: HivekuMcpClient,
+  projectId: string,
+  environment: string,
+): Promise<{ errors: RuntimeErrorGroup[]; truncated: boolean }> {
+  const res = await client.callToolJson<unknown>('project_log_errors', { project_id: projectId, environment });
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  const rows = Array.isArray(d.errors) ? (d.errors as Array<Record<string, unknown>>) : [];
+  return {
+    errors: rows.map((e) => ({
+      signature: str(e.signature),
+      level: str(e.level) || 'error',
+      count: typeof e.count === 'number' ? e.count : 0,
+      firstSeen: str(e.first_seen),
+      lastSeen: str(e.last_seen),
+      sample: str(e.sample),
+      exampleRequestId: typeof e.example_request_id === 'string' ? e.example_request_id : null,
+    })),
+    truncated: d.truncated === true,
+  };
+}
+
+/** A deployed tier's newest runtime lines, newest first. */
+export async function runtimeLogs(
+  client: HivekuMcpClient,
+  projectId: string,
+  environment: string,
+  opts: { since?: string; limit?: number } = {},
+): Promise<RuntimeLogEntry[]> {
+  const res = await client.callToolJson<unknown>('project_logs_get', {
+    project_id: projectId,
+    source: 'runtime',
+    environment,
+    since: opts.since ?? '1h',
+    limit: opts.limit ?? 50,
+  });
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  const rows = Array.isArray(d.entries) ? (d.entries as Array<Record<string, unknown>>) : [];
+  return rows.map((e) => ({
+    time: str(e.time),
+    level: str(e.level) || 'info',
+    requestId: typeof e.request_id === 'string' ? e.request_id : null,
+    message: str(e.message),
+  }));
+}
+
 export async function previewScreenshot(
   client: HivekuMcpClient,
   projectId: string,
