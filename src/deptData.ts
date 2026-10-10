@@ -1277,12 +1277,20 @@ export const DEPARTMENTS: Department[] = [
     gate: 'websites',
     datasets: [
       { id: 'pages', label: 'Pages', tool: 'pages_list', scope: siteScope, columns: [{ key: '_parent', label: 'site' }, { key: 'name' }, { key: 'slug' }, { key: ['page_type', 'type'], label: 'type' }, { key: 'is_published', label: 'published' }] },
+      { id: 'ab_tests', label: 'Page A/B tests', tool: 'project_ab_tests_list', scope: siteScope, columns: [{ key: '_parent', label: 'site' }, { key: 'name' }, { key: 'status' }, { key: 'pagePath', label: 'page' }, { key: 'summary' }, { key: 'startedAt', label: 'started', date: true }] },
     ],
     crud:
       'Pages are per website project (project_id from sites_list). Create: `pages_create({project_id, name, slug, page_type})`; ' +
       'update/SEO/nav: `pages_update`; homepage: `pages_set_homepage`. Hard delete: `pages_delete({project_id, page_id})` ' +
       '(destructive — removes the row; prefer unpublishing via `pages_update` when you only want it off the live site). ' +
-      'For page CODE, download the project and edit files; for CMS-driven content use the Website Content (CMS) department.',
+      'For page CODE, download the project and edit files; for CMS-driven content use the Website Content (CMS) department.\n' +
+      'Page A/B tests split a page\'s visitors between the original and a second version and count conversions anywhere on ' +
+      'the site afterwards. Read: `project_ab_tests_list({project_id})`, then `project_ab_test_get({project_id, test_id})` for ' +
+      'results; never call a winner before its verdict says winning or won. `project_ab_test_create({project_id, page_path, ' +
+      'variant_path | make_copy})` saves a draft and changes nothing live (make_copy commits a copy of the page, so it needs ' +
+      'confirm). `project_ab_test_update` (a new split on a running test) and `project_ab_test_action({project_id, test_id, ' +
+      'action})` (start, pause, resume, end) change live traffic: send them without confirm first, show the person the ' +
+      'preview, and send `confirm: true` only after they say yes.',
   },
   {
     id: 'review',

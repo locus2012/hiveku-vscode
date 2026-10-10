@@ -814,6 +814,13 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__project_secrets_delete',
   'mcp__hiveku__project_secrets_apply_to_preview',
   'mcp__hiveku__project_secrets_reveal',
+  // Page A/B tests (2026-10-10, builder #1022, MCP #187). Starting, re-splitting, pausing and ending
+  // a test change which page a site's live visitors get, and a test copy commits a new page to the
+  // site's code. The tools return a preview until confirm: true; the ask makes sure that yes is the
+  // person's, in auto mode too, as in the plugin.
+  'mcp__hiveku__project_ab_test_create',
+  'mcp__hiveku__project_ab_test_update',
+  'mcp__hiveku__project_ab_test_action',
 ];
 
 /**
