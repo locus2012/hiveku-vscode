@@ -363,7 +363,7 @@ describe('Permission gate: the ask array', () => {
     // line is only asserted when it printed. With one, every ask name must be a
     // real tool: a typo would gate nothing, silently.
     if (/allow rules/.test(run.stdout)) {
-      assert.match(run.stdout, /\b3 denied, 24 ask\b/);
+      assert.match(run.stdout, /\b3 denied, 25 ask\b/);
       assert.doesNotMatch(run.stderr, /naming no tool/);
     }
   });
