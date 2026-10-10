@@ -1290,7 +1290,9 @@ export const DEPARTMENTS: Department[] = [
       'variant_path | make_copy})` saves a draft and changes nothing live (make_copy commits a copy of the page, so it needs ' +
       'confirm). `project_ab_test_update` (a new split on a running test) and `project_ab_test_action({project_id, test_id, ' +
       'action})` (start, pause, resume, end) change live traffic: send them without confirm first, show the person the ' +
-      'preview, and send `confirm: true` only after they say yes.',
+      'preview, and send `confirm: true` only after they say yes. `project_ab_test_delete({project_id, test_id})` removes a ' +
+      'draft, or an ended test with its results, for good (same preview, then confirm); a running or paused test must end first. ' +
+      'Its pages stay on the site.',
   },
   {
     id: 'review',
