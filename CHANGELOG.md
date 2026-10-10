@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.91.3
+- **Claude Code and Codex know cold email from email people asked for.** Before they plan or send email to a group, they ask how those people came to be on the list, unless they already know. People who signed up, bought, asked you to get in touch or are in a conversation with you gave permission. Everyone else is cold, even people who share your industry or association: member and directory lists, event lists without a "yes, contact me", bought, rented or scraped lists, and data providers.
+- **Cold email takes its own path.** It goes through a cold email platform you subscribe to (SmartLead, which Hiveku's Outbound page connects, or Instantly on its own), from inboxes you buy on separate domains. It never goes through Hiveku email marketing or from your main domain. CRM sequences carry only a few hand-written cold emails a day, from a connected inbox on a separate domain. The block list and the unsubscribe list are never skipped, even on request.
+- **Hiveku's own rules come before an account's notes.** `account_context_get` now returns `platform_rules`, rules Hiveku sets for every account (today, emailing a group of people). Each account's CLAUDE.md, a project's CLAUDE.md and AGENTS.md say to follow them over the account's memory when the two disagree, and to say why. The full guide is the `email-a-list` playbook. Account folders you already have pick this up on "Hiveku: Refresh Setup".
+- The department setup guides, the automation guide and the "chase this visitor" prompt say the same: a website visit is not permission.
+- **The vendored skills match plugin 0.27.23.**
+
 ## 0.91.2
 - **"Show logs" on a deployed site now shows what is happening at runtime, not only the build.** After the build log you see the site's errors from the last 24 hours, grouped by kind with how often each happened and an example request, then its newest lines from the last hour. Hiveku removes secret values, tokens and personal data from every line first. The same text goes to `.hiveku/logs/<environment>.log`, so Claude Code reads exactly what you see. If your role can't read a site's logs, that section says so in one line and the rest still shows.
 - A failed deployment's error now prints its message instead of `[object Object]`.

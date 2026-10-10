@@ -9,6 +9,12 @@ Sends are GATED, and the gates fail at SEND time, not at build time - a campaign
 a suspended account or an unverified domain is fully built before anything tells you it can never
 go out.
 
+0. How the list was built - no gate checks this for you. Hiveku email marketing is for permission
+   lists only: people who signed up, bought, asked to be contacted, or are in a conversation with
+   the business. A cold list (association or directory members, event lists without a "yes,
+   contact me", bought, rented or scraped rows) never goes through a campaign or newsletter; it
+   belongs to the outbound program (`/hiveku:prospect`). `platform_rules` in
+   `account_context_get` carries the rule.
 1. `marketing_setup_status` - do not build until `ready_to_send: true`. One call listing every
    condition that silently blocks a campaign send (marketing enabled, not paused/suspended, SES
    tenant, VERIFIED sending domain, CAN-SPAM mailing address), each failing check carrying a `fix`.
@@ -80,8 +86,9 @@ the ladder.
 
 ## Health floors
 
-Click rate 1-3 percent is normal, unsubscribes under 0.3 percent, spam complaints under 0.1
-percent. Click rate comes from `email_campaign_metrics` `engagement.click_rate` (and per variant
+Click rate 1-3 percent is normal, unsubscribes under 0.3 percent, spam complaints under 0.08
+percent - Hiveku email marketing pauses a sender at 0.08 percent complaints or 3 percent bounces.
+Click rate comes from `email_campaign_metrics` `engagement.click_rate` (and per variant
 from by_variant); the complaint side from `engagement.complained` against `delivered`, or per
 message from `email_logs_list({ campaign_id })` (complained_at, 500-row cap); the unsubscribe
 floor is dashboard-only - no tool returns unsubscribe counts, say so rather than estimate.

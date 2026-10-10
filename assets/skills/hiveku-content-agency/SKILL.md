@@ -745,7 +745,10 @@ approval-gated); 1 supporting post -> 2-3 social posts + the next digest. Nothin
 with zero derivatives; distribution is planned at brief time as `settings.distribution_plan`, not after.
 
 **Email health floors:** click 1-3 percent, unsubscribes under 0.3 percent, complaints under
-0.1 percent - sources and breach playbook in `references/email-distribution.md`.
+0.08 percent (Hiveku email marketing pauses a sender at 0.08 percent complaints or 3 percent
+bounces) - sources and breach playbook in `references/email-distribution.md`. Email goes to
+permission lists only; a cold list never goes through a campaign (`platform_rules` in
+`account_context_get`).
 
 ## Hard stops (response contracts, not suggestions)
 

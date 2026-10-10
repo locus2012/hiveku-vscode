@@ -18,10 +18,12 @@ email-accounts, analytics, webhooks (fire on reply/bounce/unsubscribe). Example 
 the worker template: `GET /api/v1/campaigns/{id}/leads?api_key=...&reply_received=true`.
 Any endpoint beyond these: (verify against current provider docs) - do not invent paths.
 
-**SmartLead is the ONLY Hiveku cold-email provider.** The dashboard connect form hardcodes
-`provider: 'smartlead'`, and `cold_email_integrations` is unique on (account, provider) with
-SmartLead the only writer. Provider-gate census - which tools 412 `unsupported_provider` on
-anything else:
+**SmartLead is the ONLY cold email platform Hiveku's Outbound page connects.** The dashboard
+connect form hardcodes `provider: 'smartlead'`, and `cold_email_integrations` is unique on
+(account, provider) with SmartLead the only writer. Instantly, which Hiveku also recommends, is
+not connected to Hiveku yet: it works on its own, and none of these tools reach it. Either way the
+business subscribes to the platform itself: Hiveku's Outbound page connects SmartLead, it does not
+replace it. Provider-gate census - which tools 412 `unsupported_provider` on anything else:
 
 - The CREATE tools: `outbound_create_campaign` and `outbound_create_lead` carry the gate
   (verified); `outbound_leads_bulk_create` is likewise SmartLead-only by design (its 100-lead
@@ -71,9 +73,14 @@ anything else:
 
 ## Infrastructure
 
-Never send cold from the client's primary domain. Use 2-3 lookalike secondary domains, 2-3
-mailboxes each, SPF + DKIM + DMARC on every one, and a custom tracking domain per sending domain
-(shared tracking domains inherit other senders' reputations).
+Never send cold from the client's primary domain or its everyday inbox: a burned main domain
+sends the business's everyday email and invoices to spam. Use 2-3 lookalike secondary domains,
+2-3 mailboxes each, SPF + DKIM + DMARC on every one, and a custom tracking domain per sending domain
+(shared tracking domains inherit other senders' reputations); keep open tracking off, the pixel
+hurts delivery. The business buys the domains and mailboxes separately (mailboxes through the
+platform, or Google Workspace or Microsoft 365); Outbound includes neither. Replies are read over IMAP, so any
+mailbox with SMTP and IMAP works, but on a separate domain, never the business's own address or an
+alias of it.
 
 ### Verifying DNS instead of asserting it (Hiveku-side sending domains)
 
@@ -95,11 +102,14 @@ tool read, not an operator claim:
   invent your own test addresses.** Verdict `sent_but_no_delivery_event` means the send path
   works but the event pipeline is broken. Rate-limited to 3 checks per 10 min.
 
-Scope honesty: these three verify HIVEKU's sending lane. SmartLead cold-email domains are
-configured and warmed inside SmartLead - for those, `email_domain_check_dns` can still confirm
-the public SPF/DKIM/DMARC records resolve (DNS is DNS), but warmup and placement live in
-SmartLead's own dashboard/analytics. Record the check output (all_valid, action_items) as the
-evidence artifact for the pre-launch gate; a checkbox with no tool output behind it is an
+Scope honesty: these three verify HIVEKU's sending lane only, and none of them can vet a cold
+sending domain. `email_domain_check_dns` takes the id of a domain registered in Hiveku email
+marketing (`email_domain_list`) and checks the records Hiveku asked for there; a SmartLead domain
+is not one of them, and adding a cold domain to Hiveku email marketing to make the tool reach it
+is the wrong move (Hiveku email marketing never carries cold mail). Check a cold domain's SPF,
+DKIM and DMARC in SmartLead's own domain and mailbox health, where warmup and placement live too
+(`outbound_list_email_accounts` mirrors per-mailbox status and warmup), and record what it showed
+as the evidence for the pre-launch gate; a checkbox with nothing checked behind it is an
 assertion, not a check. All `email_*` tools are visible on marketing / marketing-email / full
 keys, NOT on a sales key.
 
@@ -111,9 +121,10 @@ provider docs).
 
 ## Volume ramp
 
-New domain/mailbox starts at 10-20 cold sends/day/mailbox. Increase 10-20% per week.
-Steady-state ceiling ~50/day/mailbox. Total campaign volume = mailboxes x per-box cap; scale by
-adding mailboxes/domains, never by cranking per-box volume.
+After its 2-3 weeks of warm-up, a mailbox sends about 30-50 cold emails a day (Hiveku's
+email-a-list guide). Start a new mailbox at the low end and raise it gradually; ~50/day/mailbox
+is the ceiling. Total campaign volume = mailboxes x per-box cap; scale by adding
+mailboxes/domains, never by cranking per-box volume.
 
 If the client has declared their own caps in account memory, those win when lower. Absent any
 declared ceiling, these defaults ARE the ceiling - "no configured cap" never means uncapped.

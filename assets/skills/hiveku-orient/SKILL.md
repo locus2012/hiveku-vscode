@@ -50,6 +50,20 @@ again from Hiveku before you act on it. When `memory_log_add` is listed, record 
 line when you start a task for the person and a Done line when it ends. Save what you learned with
 the memory_* tools.
 
+- **Hiveku's own rules come before memory.** `account_context_get` returns `platform_rules` on
+  every domain: Hiveku's rules, the same for every account, beside the memory that says how this
+  business works. Where the two disagree, follow the rule and tell the person why. Today they cover
+  emailing a group of people. Before you plan, write or send email to a group, find out how the
+  people came to be on the list: permission (signed up, customers, asked to be contacted, in a
+  conversation) can use Hiveku email marketing and CRM sequences; a cold list (members of the same
+  association, chamber or directory, people from events the business did not run, bought, rented or
+  scraped lists, data providers, people found online) goes through a cold email platform the
+  business pays for, never Hiveku email marketing and never from the business's main domain (a CRM
+  sequence carries only small cold outreach, a few hand-written emails a day, from a connected
+  inbox on a separate domain). The full guide - the paths, the
+  costs, the law in brief and the standard answer to give a customer - is the `email-a-list`
+  playbook: `hiveku_playbook_get({ playbook: "email-a-list" })` (on a scoped key that cannot see
+  it, `platform_rules` alone carries the rules). Cold email work: `hiveku-outbound-agency`.
 - **A local copy is a mirror, and memory wins.** The files `/hiveku:knowledge` and `/hiveku:pull`
   write here, and the copies the VS Code extension and hiveku-sync keep, hold what Hiveku said at
   their last pull. Before you act on one, or change an entry starting from one, re-read the entry
@@ -151,7 +165,8 @@ the memory_* tools.
   person, say "version" and "Your site", never "commit" or "main". A folder can turn the
   end-of-session reminder off with `"version_reminder": false` in `.hiveku/guardrails.json`.
 - **Start strategic work with `account_context_get({ domain })`.** It returns the persona, brand
-  voice, avatars, memory, skills and rules. Skipping it is the single most common cause of output
+  voice, avatars, memory, skills and rules, plus `platform_rules` (Hiveku's own rules, which
+  outrank memory where they disagree - see above). Skipping it is the single most common cause of output
   that sounds nothing like the client. The `domain` values are a fixed enum - see below. Full-key
   surface: on a scoped key, hydrate instead from `memory_list({ domain })` - every scoped profile
   grants `memory_` - plus `talk_to_department`, which is always available.
@@ -421,7 +436,7 @@ already exists, so go back to step 1 rather than duplicating.
 derived from the domain against this canonical list: `marketing`, `content`, `seo`, `social`, `ppc`,
 `outbound`, `branding`, `customer_avatar`, `customer_journey`, `website_design`, `knowledge_base`,
 `workflow`, `before_after_grid`, `email`, `sales`, `helpdesk`, `production`, `accounting`, `comms`,
-`coder`, `orchestrator`. Anything else - `dev`, `crm`, `pm`, `analytics`, `commerce`, `web` - lands
+`coder`, `orchestrator` (the chief of staff). Anything else - `dev`, `crm`, `pm`, `analytics`, `commerce`, `web` - lands
 with department NULL and is hydrated into nothing, and the MCP `memory_create` tool exposes no
 `department` parameter to fix it afterwards. `memory_create` also accepts only these types:
 `memory`, `skill`, `rule`, `command`, `agent`, `identity` - anything else is a 400.

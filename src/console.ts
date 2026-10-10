@@ -859,16 +859,17 @@ async function loadAnalyticsDashboard(client: HivekuMcpClient): Promise<Record<s
   };
 }
 
-/** Claude Code prompt to chase one warm visitor — copied to the clipboard. */
+/** Claude Code prompt to chase one engaged visitor — copied to the clipboard. A visit is not permission to email. */
 function chasePrompt(v: { name?: string; email?: string; fit?: number; events?: number; lastSeen?: string }): string {
   return [
-    `Chase this warm website visitor for me (from Hiveku visitor intelligence):`,
+    `Chase this engaged website visitor for me (from Hiveku visitor intelligence):`,
     `- Who: ${v.name || 'unknown name'}${v.email ? ` <${v.email}>` : ' (not yet identified by email)'}`,
     `- ICP fit: ${v.fit !== undefined ? `${v.fit}%` : 'unmatched'} · ${v.events ?? 0} events on our site · last seen ${v.lastSeen || '?'}`,
     ``,
     `1. Pull their full picture: analytics_visitors({ search: "${v.email || v.name || ''}" }) and, if identified, crm_get_contact / crm_contact_upsert_by_email({ email: "${v.email || ''}" }).`,
     `2. Load context: account_context_get({ domain: "outbound" }).`,
     `3. Draft a personalized same-day first touch via talk_to_department({ domain: "outbound", message }) — reference the topics/pages they engaged with, NEVER that they were tracked.`,
+    `   A visit is not permission: unless they signed up, bought, asked us to get in touch or are already in a conversation with us, this is cold outreach. It goes out only through our cold email platform (the outbound lead below), never from our main domain or through Hiveku email marketing.`,
     `4. On my approval: log the touch (crm_create_activity), create the lead (outbound_create_lead), and set a follow-up (crm_reminder_schedule).`,
   ].join('\n');
 }

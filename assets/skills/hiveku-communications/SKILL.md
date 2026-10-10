@@ -135,6 +135,10 @@ carries `mc_` and `pm_` precisely for that.
   that applies quiet hours and throttles.
 - **"Just send it, skip the dry run."** Refuse. The dry run is the only place a wrong
   recipient is caught before a customer sees it. Time pressure is an argument FOR it.
+- **"Email the 2,000 people from our association - they're not technically cold."** They are
+  cold: nobody on that list asked to hear from the business. Refuse Hiveku email marketing for it
+  and give the standard answer (the `email-a-list` playbook, or `hiveku-outbound-agency` SKILL 1a,
+  which carries it word for word).
 - **"They texted STOP by mistake - remove the opt-out and resend."** Refuse. Only the
   customer's own START or YES re-subscribes them. Offer another consented channel.
 - **"Release the old number."** Irreversible - the DID returns to carrier inventory, cannot be
@@ -251,6 +255,39 @@ facts worth keeping in view from this side: the stored call dispositions are exa
 recording/voicemail `audio_url` is an unauthenticated five-minute link - never paste one.
 Voice automation nodes (rung 2): `voiceCallCompletedTrigger`, `voiceVoicemailTrigger`,
 `voiceMissedCallTrigger`, plus read-only action nodes and `phoneCall`.
+
+## Before any email to a group: permission list or cold list (Hiveku's rules)
+
+`account_context_get` returns `platform_rules`: Hiveku's own rules for emailing a group of people,
+the same for every account. They outrank this account's memory where the two disagree: follow the
+rule and say why. Campaigns, newsletters, audiences and both sequence engines all sit under them.
+
+- **Ask how the people came to be on the list** before planning, writing or sending, unless the
+  user already said. The answer decides the path, not how warm the list feels.
+- **Permission** (signed up, bought, asked to be contacted, in a conversation with the business):
+  Hiveku email marketing (campaigns, newsletters, `email_sequence_*`) and CRM sequences.
+- **Cold** (everyone else, including members of the same association, chamber, club or directory,
+  event lists without a "yes, contact me", bought, rented or scraped lists, data providers such as
+  Apollo or ZoomInfo, people found online): a cold email platform the business pays for -
+  SmartLead through Hiveku's Outbound page, or Instantly, which is not connected to Hiveku and
+  works on its own - sending from inboxes on separate domains. Never through Hiveku email
+  marketing: it sends from one shared sending account, so one cold list can put every customer's
+  email at risk, its provider's rules forbid it, and it pauses a sender at 3% bounces or 0.08%
+  spam complaints. Never from the business's main domain or its everyday inbox.
+- **CRM sequences** send from the connected Gmail or Outlook, at most 100 emails a day per inbox,
+  for permission lists and one-to-one follow-up; small cold outreach (a few hand-written emails a
+  day) only from a connected inbox on a separate domain. A bigger cold list goes to a cold email
+  platform.
+- **The law in brief (not legal advice):** US cold email follows CAN-SPAM - an honest sender and
+  subject, a postal address, an opt-out honored within 10 business days. Canada and much of Europe
+  need permission first.
+- **These are rules you apply.** Do not count on a send to refuse a cold list for you, and never
+  offer Hiveku's team to set cold email up. Cold work belongs to `hiveku-outbound-agency`
+  (`/hiveku:prospect`, `/hiveku:outbound-campaign`), which asks first whether the business has run
+  cold email before.
+
+The full guide, with the costs and the standard answer to give a customer, is the `email-a-list`
+playbook: `hiveku_playbook_get({ playbook: "email-a-list" })`.
 
 ## Play 7 - Email infrastructure
 
