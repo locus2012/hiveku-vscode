@@ -85,6 +85,8 @@ const SECRETS = [
   'mcp__hiveku__project_secrets_delete',
   'mcp__hiveku__project_secrets_apply_to_preview',
   'mcp__hiveku__project_secrets_reveal',
+  'mcp__hiveku__project_secrets_replace',
+  'mcp__hiveku__project_secrets_mark_sensitive',
 ];
 
 /** Page A/B tests (2026-10-10): creating (a test copy commits code), re-splitting, every start, pause, resume or end, and a delete always ask. */
@@ -363,7 +365,7 @@ describe('Permission gate: the ask array', () => {
     // line is only asserted when it printed. With one, every ask name must be a
     // real tool: a typo would gate nothing, silently.
     if (/allow rules/.test(run.stdout)) {
-      assert.match(run.stdout, /\b3 denied, 24 ask\b/);
+      assert.match(run.stdout, /\b3 denied, 27 ask\b/);
       assert.doesNotMatch(run.stderr, /naming no tool/);
     }
   });

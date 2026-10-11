@@ -27,7 +27,7 @@ several accounts to manage multiple clients.
 **Code & VCS (Supabase-native, no GitHub):**
 - Download / pull, native **Source Control**: commit, branch, switch, **merge** (line-level 3-way), compare, **history**, **conflict detection** ("you're behind"), per-file **History** (diff + restore), deploy, and Fly **preview** (open / sync / logs / screenshot).
 - **Project Panel** — deploys, checkpoints, database, pages, CMS, crons, domains, redirects, secrets, analytics, Supabase (auth/storage/edge functions/migrations).
-- **Site env** — **Pull Env to `.env.local`** (real secret values, gitignored, `_DEV`/`_PROD` resolved like the Fly preview) and **Push `.env.local` to Hiveku**; or add / update / delete individual secrets from the Project Secrets picker.
+- **Site env** — **Pull Env to `.env.local`** (the site's development values, after a person approves on the page it opens; gitignored, readable by you only; sensitive variables listed by name) and **Push `.env.local` to Hiveku** (saved as development values only); or add / update / delete individual secrets, per tier, from the Project Secrets picker, which lists names, never values.
 
 **Always on:**
 - **Notifications** — the Hiveku icon badges overdue tasks + failed runs across all accounts; **What Needs Attention** lists them.

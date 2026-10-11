@@ -16,7 +16,6 @@ import {
   formCaptureRefusal,
   formCaptureSettingsGet,
   formCaptureSettingsUpdate,
-  maskSecret,
   workflowEnable,
   workflowRun,
 } from './hivekuApi';
@@ -1124,6 +1123,31 @@ const CAPTURE_STATUS_TEXT: Record<string, string> = { captured: 'captured', not_
 const statusText = (value: unknown): string => CAPTURE_STATUS_TEXT[asString(value)] ?? (asString(value) || 'unknown');
 const formLabel = (form: Record<string, unknown>): string => asString(form.name) || asString(form.form_key) || '(unnamed form)';
 
+/**
+ * The Secrets section's rows from project_secrets_list with metadata_only:
+ * one row per variable with where it reaches and its flags. Never a value, a
+ * hint or a mask. Reads `variables` when the server sends them, else `keys`
+ * and `sensitive_keys`.
+ */
+export function secretNameRows(raw: unknown): Array<Record<string, unknown>> {
+  const d = raw && typeof raw === 'object' && 'data' in (raw as Record<string, unknown>) ? (raw as { data: unknown }).data : raw;
+  const body = (d && typeof d === 'object' ? d : {}) as Record<string, unknown>;
+  const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  const sensitive = new Set(strings(body.sensitive_keys));
+  const rows: Array<Record<string, unknown>> = Array.isArray(body.variables)
+    ? (body.variables as unknown[])
+        .filter((v): v is Record<string, unknown> => !!v && typeof v === 'object' && typeof (v as { key?: unknown }).key === 'string')
+        .map((v) => ({
+          key: v.key,
+          tiers: strings(v.tiers).join(', '),
+          flags: [v.sensitive === true || sensitive.has(v.key as string) ? 'sensitive' : '', v.managed === true ? 'managed by Hiveku' : '']
+            .filter(Boolean)
+            .join(', '),
+        }))
+    : [...new Set([...strings(body.keys), ...sensitive])].map((key) => ({ key, tiers: '', flags: sensitive.has(key) ? 'sensitive' : '' }));
+  return rows.sort((a, b) => String(a.key).localeCompare(String(b.key)));
+}
+
 /** marketing_form_capture_list answers { settings, forms, totals, ... } under data; one row per form. */
 function captureFormRows(raw: unknown): Array<Record<string, unknown>> {
   const forms = dataOf(raw).forms;
@@ -1504,16 +1528,11 @@ export const PROJECT_MODULE: ModuleSpec = {
     { id: 'domains', label: 'Domains', tool: 'project_domains_list', titleKeys: ['domain'], fields: [{ keys: ['tier'] }, { keys: ['domain_status'], label: 'status' }, { keys: ['ssl_status'], label: 'ssl' }], empty: 'No domains.' },
     { id: 'redirects', label: 'Redirects', tool: 'project_redirects_list', titleKeys: ['from_path'], fields: [{ keys: ['to_path'], label: '→' }, { keys: ['status_code'], label: 'code' }, { keys: ['is_active'], label: 'active' }], empty: 'No redirects.' },
     {
-      id: 'secrets', label: 'Secrets', tool: 'project_secrets_list', titleKeys: ['key'],
-      fields: [{ keys: ['preview'], label: 'value' }],
-      // project_secrets_list returns { secrets: { KEY: value } } (an object map),
-      // not a row array — flatten it to masked rows.
-      transform: (raw) => {
-        const d = raw && typeof raw === 'object' && 'data' in (raw as Record<string, unknown>) ? (raw as { data: unknown }).data : raw;
-        const secrets = (d && typeof d === 'object' ? (d as Record<string, unknown>).secrets : null) as Record<string, unknown> | null;
-        if (!secrets || typeof secrets !== 'object') return [];
-        return Object.keys(secrets).sort().map((key) => ({ key, preview: maskSecret(String(secrets[key] ?? '')) }));
-      },
+      // Names only (metadata_only): never a value, a hint or a mask. Values come
+      // from Pull Env, after a person approves; the list stops returning them.
+      id: 'secrets', label: 'Secrets', tool: 'project_secrets_list', args: { metadata_only: true }, titleKeys: ['key'],
+      fields: [{ keys: ['tiers'], label: 'reaches' }, { keys: ['flags'], label: 'flags' }],
+      transform: secretNameRows,
       empty: 'No secrets.',
     },
     { id: 'apages', label: 'Top pages', tool: 'analytics_pages', titleKeys: ['page_path'], fields: [{ keys: ['views'], label: 'views' }, { keys: ['entries'], label: 'entries' }], empty: 'No analytics yet.' },

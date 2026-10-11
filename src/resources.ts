@@ -277,18 +277,45 @@ interface SecretPick extends vscode.QuickPickItem {
   key?: string;
 }
 
+interface TierPick extends vscode.QuickPickItem {
+  tier: 'development' | 'staging' | 'production' | 'all';
+}
+
+/**
+ * Which tier a value is saved for. A value without a tier reaches every tier,
+ * production included, so that is the last choice and says so.
+ */
+async function pickTier(key: string): Promise<TierPick['tier'] | undefined> {
+  const picks: TierPick[] = [
+    { label: 'Development', description: `${key}_DEV: the live preview and the development site`, tier: 'development' },
+    { label: 'Staging', description: `${key}_STAGING`, tier: 'staging' },
+    { label: 'Production', description: `${key}_PROD: the live site`, tier: 'production' },
+    { label: 'Every tier', description: `${key}: development, staging AND production`, tier: 'all' },
+  ];
+  const pick = await vscode.window.showQuickPick(picks, { placeHolder: `Which tier is ${key} for?` });
+  return pick?.tier;
+}
+
+/** A variable's line in the list: where it reaches and its flags. Never a value or a hint of one. */
+function secretDescription(n: api.SecretName): string {
+  return [n.tiers.length ? n.tiers.join(', ') : '', n.sensitive ? 'sensitive' : '', n.managed ? 'managed by Hiveku' : '']
+    .filter(Boolean)
+    .join(' · ');
+}
+
 export async function manageSecrets(scm: HivekuScm, clientFor: ClientFor): Promise<void> {
   const client = await clientFor(scm.link.account_id);
-  const secrets = await busy('Hiveku: loading secrets…', () => api.secretsList(client, scm.link.project_id));
+  // Names only (metadata_only): values come from Pull Env, after a person approves.
+  const { names } = await busy('Hiveku: loading secrets…', () => api.secretNames(client, scm.link.project_id));
 
   const items: SecretPick[] = [
     { label: '$(add) Add / update a secret', action: 'add' },
-    { label: '$(cloud-download) Pull all to .env.local', action: 'pull' },
-    { label: '$(cloud-upload) Push .env.local to Hiveku', action: 'push' },
-    ...secrets.map<SecretPick>((s) => ({ label: `$(key) ${s.key}`, description: s.preview, action: 'key', key: s.key })),
+    { label: '$(cloud-download) Pull development values to .env.local', action: 'pull' },
+    { label: '$(cloud-upload) Push .env.local to Hiveku (development)', action: 'push' },
+    ...names.map<SecretPick>((n) => ({ label: `$(key) ${n.key}`, description: secretDescription(n), action: 'key', key: n.key })),
   ];
   const pick = await vscode.window.showQuickPick(items, {
-    placeHolder: `${secrets.length} secret(s) — ${scm.link.project_name}`,
+    placeHolder: `${names.length} secret(s) — ${scm.link.project_name}`,
   });
   if (!pick) return;
 
@@ -298,10 +325,12 @@ export async function manageSecrets(scm: HivekuScm, clientFor: ClientFor): Promi
   if (pick.action === 'add') {
     const key = await vscode.window.showInputBox({ prompt: 'Secret key (e.g. STRIPE_SECRET_KEY)' });
     if (!key) return;
-    const value = await vscode.window.showInputBox({ prompt: `Value for ${key}`, password: true });
+    const tier = await pickTier(key);
+    if (!tier) return;
+    const value = await vscode.window.showInputBox({ prompt: `Value for ${key} (${tier})`, password: true });
     if (value === undefined) return;
-    await busy('Hiveku: saving secret…', () => api.secretSet(client, scm.link.project_id, { [key]: value }));
-    vscode.window.showInformationMessage(`Saved secret ${key} to Hiveku.`);
+    await busy('Hiveku: saving secret…', () => api.secretSet(client, scm.link.project_id, { [key]: value }, true, tier));
+    vscode.window.showInformationMessage(`Saved ${key} to Hiveku (${tier === 'all' ? 'every tier' : tier}).`);
     return;
   }
 
@@ -309,10 +338,12 @@ export async function manageSecrets(scm: HivekuScm, clientFor: ClientFor): Promi
   const keyName = pick.key!;
   const op = await vscode.window.showQuickPick(['Update value', 'Delete'], { placeHolder: keyName });
   if (op === 'Update value') {
-    const value = await vscode.window.showInputBox({ prompt: `New value for ${keyName}`, password: true });
+    const tier = await pickTier(keyName);
+    if (!tier) return;
+    const value = await vscode.window.showInputBox({ prompt: `New value for ${keyName} (${tier})`, password: true });
     if (value === undefined) return;
-    await busy('Hiveku: saving…', () => api.secretSet(client, scm.link.project_id, { [keyName]: value }));
-    vscode.window.showInformationMessage(`Updated ${keyName}.`);
+    await busy('Hiveku: saving…', () => api.secretSet(client, scm.link.project_id, { [keyName]: value }, true, tier));
+    vscode.window.showInformationMessage(`Updated ${keyName} (${tier === 'all' ? 'every tier' : tier}).`);
   } else if (op === 'Delete') {
     const ok = await vscode.window.showWarningMessage(`Delete secret ${keyName} from Hiveku?`, { modal: true }, 'Delete');
     if (ok !== 'Delete') return;
