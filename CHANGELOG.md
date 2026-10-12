@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.9
+- **Claude Code knows the fill tools run in the background.** The content guide now says `customer_avatar_populate`, `customer_journey_populate`, `before_after_grid_populate` and `entity_populate` start a fill that takes a few minutes. The call answers after about 15 seconds while the fill carries on, and the outcome shows on the ICP, journey or grid: `populate_status`, with the reason or a review note in `populate_error`. A second call while a fill runs is refused. The guide no longer promises a 10 to 60 second answer or a `_meta` block.
+- **The vendored skills match the plugin** (the same content guide text).
+
 ## 0.91.8
 - **Pull Env reads a site's values through the reveal, after a person approves.** "Hiveku: Pull Env to .env.local" now asks Hiveku for the development values the site runs with. Hiveku asks a person first: the extension opens the approval page (anyone in the account who can see the site's variables can approve, you included) and writes `.env.local` as soon as it lands, waiting up to 10 minutes. Sensitive variables and platform credentials are never written; their names are listed in the file as comments with the reason. The file is readable by you only, also when it replaces an older one, and nothing is written when no value came back.
 - **Values keep their exact text.** A multi-line value (a private key, a JSON credential), a `$`, quotes or a `#` are written so Next.js, Vite and Expo read them back exactly.
