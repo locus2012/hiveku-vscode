@@ -830,6 +830,14 @@ const HIVEKU_ASK: string[] = [
   // Deleting a test (2026-10-10, MCP project_ab_test_delete): a draft, or an ended test with its results, gone
   // for good. Appended last so a folder scaffolded earlier gets it in order.
   'mcp__hiveku__project_ab_test_delete',
+  // Mobile (Expo) app settings (2026-10-12, MCP #167, #170, #195). The SDK upgrade rewrites the app's package
+  // files, app config and untouched template files in one go (a checkpoint is saved first) and restarts its
+  // preview; the store identity (iOS bundle ID, Android package, link scheme) becomes permanent once a build is
+  // uploaded to a store; the Apple account decides which developer account builds and submits the app. Every call
+  // asks, in auto mode too, as in the plugin and Codex. Their reads stay unasked. Appended last, in this order.
+  'mcp__hiveku__mobile_app_sdk_upgrade',
+  'mcp__hiveku__mobile_app_identity_set',
+  'mcp__hiveku__mobile_app_apple_account_set',
 ];
 
 /**

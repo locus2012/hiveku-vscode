@@ -26,13 +26,19 @@ tools (`*_list` / `*_get`) need none of this.
   returns 400 `code: 'context_insufficient'` and never reaches the LLM. On a fresh account - exactly
   the case that sends you here - you MUST pass grounding: `urls_to_scrape` (max 5; the homepage plus
   /about plus key service pages are highest-signal), `search_queries` (max 3), `agent_notes` (max
-  8KB), `related_research` (max 16KB), `additional_instructions` (max 2KB). Expect ~10-60s per call
-  when scrapes or searches are requested.
-- **Surface `_meta` before treating the output as fact.** Every populate response carries
-  `{requires_human_review, fields_with_low_confidence[], sources_used[], notes}`. Show it to the
-  user on fresh or sparse accounts. The model is instructed to leave fields null and arrays empty
-  when the context does not ground a confident answer - a null field is the tool working correctly,
-  not something to fill in yourself.
+  8KB), `related_research` (max 16KB), `additional_instructions` (max 2KB).
+- **The fill runs in the background and takes a few minutes.** The call watches it for about 15
+  seconds, then answers 202 `status: 'populating'` while it carries on; a refusal for want of
+  grounding usually lands within those seconds, as the 400. Start each entity's fill, then read
+  the entities (`customer_avatar_get` and its siblings): `populate_status` reads 'populating'
+  until the fill ends, then 'populated', or 'failed' with the reason in `populate_error`. A second
+  call while a fill runs is refused with 409 `fill_in_progress`: wait for it rather than calling
+  again.
+- **Surface the review note before treating the output as fact.** A fill the model was unsure of
+  ends 'populated' with `populate_error` reading `requires_human_review: low confidence on
+  <fields>`. Show it to the user on fresh or sparse accounts. The model is instructed to leave
+  fields null and arrays empty when the context does not ground a confident answer - a null field
+  is the tool working correctly, not something to fill in yourself.
 - **Brand guide.** `brand_guide_create` REQUIRES `name` + `color_primary`, and every color field is
   format-validated as `#rgb` / `#rrggbb` / `#rrggbbaa` - a create without a valid hex primary is a
   400 naming the field. The voice rules the quality gate enforces have machine-readable homes on
