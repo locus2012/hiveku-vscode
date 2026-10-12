@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.10
+- **Changing a mobile app's settings always asks.** Claude Code in your project folders asks before `mobile_app_sdk_upgrade` (moves the app to a newer Expo SDK, rewriting its package files, app config and untouched template files in one go after saving a checkpoint, then restarts its preview), `mobile_app_identity_set` (the iOS bundle ID, Android package and link scheme, which become permanent once a build is uploaded to a store) and `mobile_app_apple_account_set` (which Apple developer account the app's builds and App Store submissions use), in every permission mode, as the Claude Code and Codex plugins do. Reading those settings does not ask. Hiveku folders open in VS Code get the new rules when the extension starts.
+
 ## 0.91.9
 - **Claude Code knows the fill tools run in the background.** The content guide now says `customer_avatar_populate`, `customer_journey_populate`, `before_after_grid_populate` and `entity_populate` start a fill that takes a few minutes. The call answers after about 15 seconds while the fill carries on, and the outcome shows on the ICP, journey or grid: `populate_status`, with the reason or a review note in `populate_error`. A second call while a fill runs is refused. The guide no longer promises a 10 to 60 second answer or a `_meta` block.
 - **The vendored skills match the plugin** (the same content guide text).
