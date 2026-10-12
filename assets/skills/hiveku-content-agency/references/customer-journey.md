@@ -159,8 +159,8 @@ For grids, the same tool takes `grid_id` plus `image_type` (`before` / `after` w
 `grid_item_index`, or `story_before` / `story_after`).
 
 Images and video bill against different meters: images against the account's
-image-generation allowance (429 when exhausted), video against a Premium plan gate plus a
-20-clip month (402). Check with a dry run before promising a client a video.
+image-generation allowance (429 when exhausted), video against a paid-plan gate plus the
+plan's clips a month (Starter 1, Standard 8, Premium 20; 402). Check with a dry run before promising a client a video.
 
 ## 8. Before you rewrite anything
 

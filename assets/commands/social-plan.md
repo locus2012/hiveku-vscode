@@ -18,8 +18,8 @@ is set and every schedule must carry `timezone` explicitly).
    a draft; `social_account_get({ social_account_id })` on every other row for the cause, and a broken
    platform is a task pointing at `/hiveku:connect-integration`, not a post. The response's top-level
    `quota.x` block (present when an X row exists: `{ plan, eligible, used, limit, remaining }`) is the
-   X budget: plan at most `remaining` X drafts (60 published X posts per account per calendar month on
-   Premium; over the cap only the X version fails, silently, at cron time), and `eligible: false`
+   X budget: plan at most `remaining` X drafts (published X posts per account per calendar month by plan:
+   Starter 5, Standard 30, Premium 60; over the cap only the X version fails, silently, at cron time), and `eligible: false`
    means no X post this week and a plan conversation with the client. Quote `used`/`limit` in the
    plan. Then `social_analytics_summary` (what worked; it always returns the trailing 7 days - the
    route ignores any date args), `social_pillar_list` (pillars with `target_percentage` and

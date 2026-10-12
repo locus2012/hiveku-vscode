@@ -198,8 +198,8 @@ Back here, \`social_list_accounts\` shows each row. Presence is not health - cla
 A platform the client wants that has no row: \`social_provider_list\` - \`hiveku_native: false\` means the client
 registers their own OAuth app (BYOK), except Google Business Profile, where it means Hiveku's Google app is not
 configured on this deployment (report it with \`hiveku_report_issue\`; an account's own Google app is Gmail only, so
-never a BYOK task for GBP). When an X row exists the response carries \`quota.x\` (60 published X posts
-per Hiveku account per calendar month on the required plan; a soft cap that fails open, so \`remaining\` is
+never a BYOK task for GBP). When an X row exists the response carries \`quota.x\` (published X posts
+per Hiveku account per calendar month by plan: Starter 5, Standard 30, Premium 60; a soft cap that fails open, so \`remaining\` is
 advisory).
 
 ## STEP 2 - content pillars (the recurring themes posts hang off)
