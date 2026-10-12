@@ -143,6 +143,6 @@ The video lane is approval-gated and paid - treat it accordingly.
 - **Single clip:** `marketing_generate_video` - one ~10s 720p clip from a prompt, optionally
   image-to-video from a Media Library image (pair with `generate_image` for a still -> "animate
   this" flow). The clip auto-registers in the Media Library. COSTS: each generation is PAID
-  (~$1/clip), Premium-plan only, capped at 20 clips/account/month. ALWAYS call with
+  (~$1/clip), on every paid plan (1, 8 or 20 clips a month on Starter, Standard and Premium). ALWAYS call with
   `dry_run: true` FIRST to check `{allowed, used, limit}` before promising a video, prefer
   reusing existing assets (`marketing_media_list`), and NEVER retry a generation that succeeded.

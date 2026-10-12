@@ -84,8 +84,8 @@ invalid, and name the persona each post serves. Check, criteria and ladder:
    schedules or two media sets - platforms that need different times or media are separate posts.
 7. ALWAYS pass `target_accounts` on create - a post without them fails only at publish time,
    after the client approved it.
-8. X is Premium-only and capped at 60 published posts per account per calendar month; over the
-   cap only the X version fails, silently. Check version rows.
+8. X is on every paid plan, capped at its published posts per account per calendar month (Starter 5,
+   Standard 30, Premium 60); over the cap only the X version fails, silently. Check version rows.
 9. A post at 'publishing' or 'published' is edit-locked (400). Revise through
    `social_post_duplicate` (a new unscheduled draft), then schedule the copy as its own confirm.
 10. Every number in a deliverable traces to a named tool call. Unknown or unsynced never

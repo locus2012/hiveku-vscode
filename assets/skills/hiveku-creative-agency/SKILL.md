@@ -438,7 +438,7 @@ Do not generate, render, or spend in the onboarding session beyond the one proof
   deletion: targets come only from explicit ids the client named. Offer a review list from
   `media_library_list` with `media_usage_get` per candidate, and `media_bulk_move` to an "archive"
   folder. A 409 `in_use` from `media_delete` is the system working - never pass `force=true` yourself.
-- "Skip the dry run, we know we want all 20 clips." -> No. Clips are about $1 on a 20-clip monthly cap;
+- "Skip the dry run, we know we want all 20 clips." -> No. Clips are about $1 on a monthly cap (20 on Premium, 8 on Standard, 1 on Starter);
   `design_video_capabilities_get` and `dry_run: true` cost nothing and are the only honest quota quote.
   The confirm covers prompt, aspect ratio, duration, cost, remaining quota - per spend, not per session.
   Images the same way: `media_image_quota` before a `generate_image_set`, and "just upscale the whole

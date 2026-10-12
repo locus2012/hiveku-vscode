@@ -85,7 +85,7 @@ references/creative-and-video.md, and in full in the creative skill
   clips to assemble the same video around the gate.
 - **One short shot** (~10s of something that cannot be drawn and does not exist in the
   library): `marketing_generate_video({ prompt, aspect_ratio })` - PAID (~$1 per
-  clip), Premium-plan only, 20 clips per account per month, blocks ~30-90s while it
+  clip), on every paid plan (1, 8 or 20 clips a month on Starter, Standard and Premium), blocks ~30-90s while it
   generates. ALWAYS call with `dry_run: true` first and quote the remaining quota
   before spending. `aspect_ratio` defaults to 9:16, which is the short-form frame; the
   clip auto-registers in the Media Library. Never retry a generation that succeeded.

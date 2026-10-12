@@ -2537,8 +2537,8 @@ Generated media registers in the Media Library and attaches to posts/ads via its
 - **Read the meter before a batch:** \`media_image_quota\` before any \`generate_image_set\` or \`media_upscale\`; a null \`remaining\` is unlimited or a failed read, never zero.
 - **Media ops make NEW rows, bytes are immutable:** \`media_import_url\` (copy bytes in), \`media_transform\` (free crop/resize), \`media_upscale\` (a slot plus fal dollars); \`media_update\` is metadata only.
 - **Video is EXPENSIVE — generate deliberately:** \`marketing_generate_video\` makes a ~10s AI clip
-  (9:16 or 16:9). **Always \`dry_run: true\` first** — it returns \`{ allowed, used, limit }\` (Premium
-  plan, 20 clips/month, ~$1/clip). Never re-generate a clip that succeeded. Image-to-video: pass a
+  (9:16 or 16:9). **Always \`dry_run: true\` first** — it returns \`{ allowed, used, limit }\` (every paid
+  plan: 1, 8 or 20 clips/month on Starter, Standard and Premium, ~$1/clip). Never re-generate a clip that succeeded. Image-to-video: pass a
   library still as \`reference_media_asset_id\` ("animate this"). Text-heavy/branded promo motion is the
   FREE lane instead: \`marketing_design_export_mp4\` renders an existing Creative Studio design.
 - The marketing Media Library and website-project assets (\`assets_upload\`) are SEPARATE stores —

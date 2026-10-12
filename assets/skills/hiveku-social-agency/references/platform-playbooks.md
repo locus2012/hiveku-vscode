@@ -32,11 +32,11 @@ GBP, or answering "can we post to <platform>".
 - LinkedIn and Instagram feed: three to five posts per week is a strong retainer cadence.
 - X (slug `twitter`): higher volume tolerated, five to fifteen posts per week, more
   conversational. HARD LIMIT: X is the one platform whose API bills Hiveku per post, so
-  it is gated to the Premium plan and capped at 60 successfully-published posts per
-  account per calendar month (resets on the 1st, UTC). Over the cap or off Premium, the
+  it is gated to a paid plan and capped at its successfully-published posts per account per
+  calendar month (Starter 5, Standard 30, Premium 60; resets on the 1st, UTC). Over the cap or off a paid plan, the
   X version of the post lands 'failed' with the reason on the version row while the
-  other platforms on the same post still publish. Fifteen a week IS the cap - plan
-  around 12-14 and check `social_get_post` versions for X failures. Read the count
+  other platforms on the same post still publish. On Premium fifteen a week IS the cap (Standard's
+  30 is about seven, Starter's 5 about one) - plan a little under it and check `social_get_post` versions for X failures. Read the count
   instead of estimating it: `social_list_accounts` returns a top-level `quota.x`
   (`{ plan, required_plan, eligible, used, limit, remaining, month_start_utc }`)
   whenever an X row exists, and `social_post_validate` returns `x_quota` whenever

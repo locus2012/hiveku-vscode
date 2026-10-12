@@ -209,7 +209,7 @@ STEP 3 — CONNECT. This SPLITS by provider — the paths are NOT the same:
      click Connect on. Platforms with a Hiveku-native app show a one-click "Quick connect" (no app setup
      at all); others walk a guided bring-your-own-app wizard. GBP posting is not one of them: it runs on
      Hiveku's own Google app (A, \`gbp_social\`), never a bring-your-own-app wizard. TikTok connects as
-     inbox-DRAFT posting (the user publishes from the TikTok app); X posting is Premium-plan, usage-capped.
+     inbox-DRAFT posting (the user publishes from the TikTok app); X posting is on every paid plan, capped per month.
      Verify after with \`social_list_accounts\` — the new row should be is_active with connection_status
      "connected".
   E) META ADS / AMAZON ADS / TIKTOK ADS — DASHBOARD ONLY, same reason:
@@ -303,7 +303,7 @@ IMAGES: cheap, iterate freely:
 
 VIDEO: EXPENSIVE, generate deliberately:
 - \`marketing_generate_video({ prompt, aspect_ratio })\`: a 2-10s clip, 720p. **ALWAYS call with
-  \`dry_run: true\` first**: it returns \`{ allowed, used, limit }\` (Premium plan, 20 clips/month). Tell
+  \`dry_run: true\` first**: it returns \`{ allowed, used, limit }\` (every paid plan: 1, 8 or 20 clips/month). Tell
   the user the remaining quota before spending. \`duration_seconds\` is a HINT the lane snaps (kling 5s or
   10s, the veo fal lanes 4/6/8s, omni-flash any 1-10s) and billing follows the rendered length: the
   response's \`duration_effective\` (null when unmeasured, never 0) and \`duration_note\` are the truth.

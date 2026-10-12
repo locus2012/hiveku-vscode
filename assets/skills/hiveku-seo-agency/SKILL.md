@@ -180,7 +180,8 @@ target query serves. Check, criteria and ladder: `hiveku-orient/references/found
 
 **What rank tracking costs the account.** One tracked keyword (a keyword for one domain) is billed once,
 however many lanes, engines, devices or check frequencies it has: the plan includes 25 (Standard) or
-100 (Premium), and each keyword over that is $1.50 a month. A keyword whose every lane is paused is not
+100 (Premium), and each keyword over that is $1.50 a month. Starter includes 10, checked weekly, and
+stops there: an 11th is refused (402 `plan_limit_reached`, code `tracked_keywords_limit`), never billed. A keyword whose every lane is paused is not
 billed. Per-check dollar figures are the data provider's cost to Hiveku, never the account's price, so
 dropping lanes from a keyword that stays tracked lowers nothing. `seo_rankings_list({ view: 'cost' })`
 returns the account's own numbers; quote those, not an estimate.

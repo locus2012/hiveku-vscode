@@ -34,8 +34,8 @@ first week of posts is `/hiveku:social-plan`, later.
    it is a full re-consent (Meta has no refresh path; nothing self-heals), a refused refresh
    (LinkedIn writes `expired`, X, TikTok and GBP write `error`, both with `last_error`) or a
    missing scope. When an X row exists the response carries a top-level `quota.x` = `{ plan,
-   required_plan, eligible, used, limit, remaining, month_start_utc }`: 60 published X posts per
-   Hiveku account per calendar month on Premium, aggregate across every X handle;
+   required_plan, eligible, used, limit, remaining, month_start_utc }`: published X posts per
+   Hiveku account per calendar month by plan (Starter 5, Standard 30, Premium 60), aggregate across every X handle;
    `eligible: false` is a plan conversation before any X post; the cap is soft and fails open,
    so `remaining` is advisory. `social_provider_list` for every platform the client wants that
    has no row: `hiveku_native: false` means the client registers their own app (a BYOK connect

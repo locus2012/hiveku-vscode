@@ -377,7 +377,7 @@ storyboard's own canvases included) live on `design_render_job_get` for the pipe
 `marketing_generate_video({ prompt, aspect_ratio })` produces one short clip at 720p. `duration_seconds`
 (2 to 10) sets the length, and cost scales with it at roughly $0.10 per second - the ten-second default
 is where the ~$1-per-clip figure comes from, and a 4-second cutdown is the cheap variant. PAID,
-Premium-plan only, capped at 20 clips per account per month.
+on every paid plan (1, 8 or 20 clips a month on Starter, Standard and Premium).
 
 **Duration is a hint, and the response tells you what you got.** Several lanes snap the hint to the
 lengths their provider bills in, and billing follows the RENDERED length: kling-2.5-turbo (what `auto`

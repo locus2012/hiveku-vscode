@@ -147,7 +147,7 @@ social key never sees them; the handoff is references/creative-handoff.md.)
   what the scene stores). A social key can search that footage but cannot build the
   scene that uses it; put the handles in the brief.
 - ONE CLIP: `marketing_generate_video({ prompt, aspect_ratio })` - ~10s, 720p, PAID
-  (~$1 each), Premium-plan only, 20 clips per account per month. ALWAYS call with
+  (~$1 each), on every paid plan (1, 8 or 20 clips a month on Starter, Standard and Premium). ALWAYS call with
   `dry_run: true` first and tell the user the remaining quota before spending. Animate
   an existing still by passing it as `reference_media_asset_id`. The clip
   auto-registers, so its asset id attaches through `media_asset_ids`.

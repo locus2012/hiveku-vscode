@@ -64,15 +64,15 @@ scopes. Neither ever returns a token.
 - A healthy-looking row can still die mid-week. The cron stamps the row when it happens;
   nothing tells the agent. The weekly cadence's health step exists for that reason.
 
-## X: Premium only, 60 published posts a month, and where the count lives
+## X: every paid plan, a number of published posts a month, and where the count lives
 
-X is the one platform whose API bills Hiveku per post, so it is gated to the Premium
-effective plan and capped at 60 successfully published X posts per Hiveku account per
-calendar month (UTC, resets on the 1st, aggregate across every connected X handle). Only
+X is the one platform whose API bills Hiveku per post, so it is gated to a paid effective
+plan (Starter only once it is paid for) and capped at the plan's successfully published X
+posts per Hiveku account per calendar month (Starter 5, Standard 30, Premium 60) (UTC, resets on the 1st, aggregate across every connected X handle). Only
 `status: published` versions count; failed attempts spend nothing. The gate runs inside the
 publisher, so over the cap only the X version of a post lands `failed` while the other
 platforms on it still publish. The cap is soft and fails open: a count error lets a post
-through, and two concurrent publishes near 60 can land a post over. Read it, do not
+through, and two concurrent publishes near the cap can land a post over. Read it, do not
 hard-code around it:
 - `social_list_accounts` returns a top-level `quota.x` whenever an X row exists:
   `{ plan, required_plan, eligible, used, limit, remaining, month_start_utc }`. Budget the
@@ -81,7 +81,7 @@ hard-code around it:
   with more X drafts than `remaining` is a plan that will fail on the last ones, silently,
   at cron time.
 - `eligible: false` is a plan conversation, not a content one: every X version fails with
-  `plan_upgrade_required` until the account is on Premium.
+  `plan_upgrade_required` until the account is on a paid plan (`required_plan` names the lowest).
 - For "how many did we ship to X this month" in a report, `social_list_posts({ platform:
   'twitter', status: 'published', from_date: <1st of month>, limit: 100 })` and
   `pagination.total` is the delivery count; `quota.x.used` is the cap count. They differ when
