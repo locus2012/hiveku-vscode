@@ -360,12 +360,18 @@ describe('what the extension writes and wires', () => {
     const ask = src.slice(src.indexOf('const HIVEKU_ASK: string[] = ['), src.indexOf('\n];', src.indexOf('const HIVEKU_ASK: string[] = [')));
     // New ask rules are appended at the end, so a folder scaffolded earlier gets them in order:
     // the resolve (2026-10-08), joining the merge line (2026-10-09), the secrets tools (2026-10-10),
-    // then the page A/B test writes and their delete (2026-10-10).
+    // the page A/B test writes and their delete (2026-10-10), then the mobile app settings writes (2026-10-12).
     assert.ok(ask.includes("'mcp__hiveku__project_vcs_resolve',"), 'the resolve always asks');
     assert.ok(ask.includes("'mcp__hiveku__project_vcs_queue_add',"), 'joining the merge line always asks');
     assert.ok(ask.includes("'mcp__hiveku__project_secrets_reveal',"), 'the reveal always asks');
     assert.ok(ask.includes("'mcp__hiveku__project_ab_test_action',"), 'every A/B test action asks');
-    assert.ok(ask.trimEnd().endsWith("'mcp__hiveku__project_ab_test_delete',"), 'the newest ask rule, the A/B test delete, goes at the END');
+    assert.ok(ask.includes("'mcp__hiveku__project_ab_test_delete',"), 'deleting an A/B test asks');
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "'mcp__hiveku__mobile_app_sdk_upgrade',\n  'mcp__hiveku__mobile_app_identity_set',\n  'mcp__hiveku__mobile_app_apple_account_set',",
+      ),
+      'the newest ask rules, the mobile app settings writes, go at the END in that order',
+    );
   });
 
   test('the old dead-end sentence is gone from the extension', async () => {
