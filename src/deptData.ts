@@ -1292,7 +1292,11 @@ export const DEPARTMENTS: Department[] = [
       'action})` (start, pause, resume, end) change live traffic: send them without confirm first, show the person the ' +
       'preview, and send `confirm: true` only after they say yes. `project_ab_test_delete({project_id, test_id})` removes a ' +
       'draft, or an ended test with its results, for good (same preview, then confirm); a running or paused test must end first. ' +
-      'Its pages stay on the site.',
+      'Its pages stay on the site. A route (`project_ab_test_create` with `kind: "source_route"`, an `audience` and ' +
+      '`variant_path`) sends the visitors who came from somewhere (an ad platform, a UTM campaign, a referring site, a device, ' +
+      'a country or region) to a page made for them; `holdout_percent` keeps 5 to 50% of them on the original to compare. ' +
+      'An `audience` also limits an ordinary test. A route or a test for some visitors ends only keeping the original. Tests ' +
+      'run on the live site, which is always built from Main.',
   },
   {
     id: 'review',
