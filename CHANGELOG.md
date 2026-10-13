@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.12
+- **When your role cannot add tasks, Claude Code says so instead of retrying.** A connection now adds project-management tasks only when the person who created it may add tasks in Hiveku (the same rule as the app); otherwise Hiveku refuses with a plain-words message. The orient skill tells Claude Code not to retry or try another task tool, to give its findings in the chat, and to say that an owner or admin can grant **PM Projects > Tasks: Create** under Settings > Team Members > Manage Roles. The default Marketing, Sales, Support and Finance roles have no project-management permissions.
+- **The vendored skills match the plugin** (0.27.44).
+
 ## 0.91.11
 - **A Hiveku update reaches you without its ticket number.** The orient skill now says what the Claude Code plugin, the MCP server and every Hiveku agent do: when a problem you reported is resolved, Claude Code tells you once, in plain words, unless the report says it did not affect you and there is nothing for you to do. It never puts the update's ref (HK-...) in a reply unless you ask for it.
 - **The vendored skills match the plugin** (0.27.43). This also brings the PPC skill's wording that `ppc_audience_attach` attaches an audience in observation mode, so reach is unchanged.
