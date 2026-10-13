@@ -213,6 +213,12 @@ the memory_* tools.
   `pm_projects_list` (or `pm_projects_create`) and `assigned_to_id` is a member `id` from
   `pm_project_team({ project_id })` - NOT `clerk_user_id`, which is a different id space and
   errors the whole write. The field is `title`, not `name`.
+  **When the person's role cannot add tasks.** A connection adds PM tasks only when the person
+  who created its key may add tasks in Hiveku; otherwise every task-adding tool answers 403
+  `key_creator_lacks_access`. The default Marketing, Sales, Support and Finance roles have no
+  PM permissions. Do not retry or try another task tool: give the findings in the chat instead,
+  and tell the person an owner or admin can grant **PM Projects > Tasks: Create** under
+  Settings > Team Members > Manage Roles, after which the same connection works.
   **Who can be assigned.** `pm_project_team` is the roster for PM assignment: the people on the
   project's own account and, when the project is shared, the other account's people too (each
   labelled by company; the other company's emails are hidden). It also returns the project's
