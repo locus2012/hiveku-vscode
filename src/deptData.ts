@@ -585,7 +585,9 @@ export const DEPARTMENTS: Department[] = [
       'Keywords/rankings/backlinks/audits are per SEO project (project_id from `seo_list_projects`). ' +
       'PAGE A/B TESTS: a test copy (an address like /pricing-b) is canonical to the original while its test runs and is kept ' +
       'out of the sitemap on purpose: do not index it, link to it, add it to the sitemap or "fix" it as duplicate content. ' +
-      'The A/B redirect is a temporary 302. Before blaming rankings, rule out a running or recently ended test or route ' +
+      'The canonical is sent in the page\'s HTTP headers, not in its HTML, so an audit that reads only the HTML reports it ' +
+      'missing. A route\'s page gets no canonical. The A/B redirect is a temporary 302. ' +
+      'Before blaming rankings, rule out a running or recently ended test or route ' +
       '(`project_ab_tests_list`, in Website Pages).',
   },
   {
