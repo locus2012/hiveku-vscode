@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.13
+- **Claude Code knows every task right a connection needs, not only adding.** Hiveku now asks the same task rights of a connection as the app asks of its person: **PM Projects > Tasks: Create** to add a task, a comment, a file, a time entry or a recurring schedule, **Tasks: Edit** to change, complete, claim or reassign one, and **Tasks: Delete** to delete one. When a change is refused, the orient skill tells Claude Code not to retry or try another task tool, to give its findings in the chat, and to name the right an owner or admin can grant under Settings > Team Members > Manage Roles.
+- **The vendored skills match the plugin** (0.27.45).
+
 ## 0.91.12
 - **When your role cannot add tasks, Claude Code says so instead of retrying.** A connection now adds project-management tasks only when the person who created it may add tasks in Hiveku (the same rule as the app); otherwise Hiveku refuses with a plain-words message. The orient skill tells Claude Code not to retry or try another task tool, to give its findings in the chat, and to say that an owner or admin can grant **PM Projects > Tasks: Create** under Settings > Team Members > Manage Roles. The default Marketing, Sales, Support and Finance roles have no project-management permissions.
 - **The vendored skills match the plugin** (0.27.44).
