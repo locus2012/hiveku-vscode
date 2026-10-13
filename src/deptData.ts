@@ -582,7 +582,11 @@ export const DEPARTMENTS: Department[] = [
       '(remove `seo_gsc_delete_sitemap`); Bing: `seo_bing_submit_sitemap` / `seo_bing_submit_url`. ' +
       'Deliverables/reports: `seo_deliverable_save` / `seo_deliverable_update` / `seo_deliverable_delete`; ' +
       'report sections `seo_report_add_section` / `seo_report_update_section` / `seo_report_clear`. Refresh data: `seo_sync`. ' +
-      'Keywords/rankings/backlinks/audits are per SEO project (project_id from `seo_list_projects`).',
+      'Keywords/rankings/backlinks/audits are per SEO project (project_id from `seo_list_projects`). ' +
+      'PAGE A/B TESTS: a test copy (an address like /pricing-b) is canonical to the original while its test runs and is kept ' +
+      'out of the sitemap on purpose: do not index it, link to it, add it to the sitemap or "fix" it as duplicate content. ' +
+      'The A/B redirect is a temporary 302. Before blaming rankings, rule out a running or recently ended test or route ' +
+      '(`project_ab_tests_list`, in Website Pages).',
   },
   {
     id: 'ppc',
@@ -617,7 +621,12 @@ export const DEPARTMENTS: Department[] = [
       'STATE (Google): `ppc_pause_resource` / `ppc_enable_resource` (campaign/ad_group/ad/keyword). ' +
       'CHEAP WINS: read `recommendations.json` then `ppc_recommendation_apply`. Bulk: `ppc_bulk_edit`. ' +
       'DIAGNOSE: `ppc_conversion_tracking_status`, `ppc_disapprovals_list`, `ppc_anomaly_check`, `ppc_pacing_summary`. ' +
-      'Most write tools take a `connection_id` + the resource id. Always `ppc_sync({ connection_id })` after big changes.',
+      'Most write tools take a `connection_id` + the resource id. Always `ppc_sync({ connection_id })` after big changes. ' +
+      'PAGE A/B TESTS: before a budget, bid, targeting, audience or final-URL change on a campaign that lands on a page with ' +
+      'a running test or route, list the site\'s tests (`project_ab_tests_list`, in Website Pages); hold the change or say ' +
+      'plainly that it skews the result. Keep ad final URLs on the original page: the split happens on the site and keeps ' +
+      'gclid and UTM tags. A route can send one ad platform\'s clicks to a page of its own without changing the ad. Page A/B ' +
+      'tests are not the ad platforms\' own campaign experiments.',
     setup: PPC_SETUP,
   },
   {
@@ -1288,7 +1297,11 @@ export const DEPARTMENTS: Department[] = [
       'the site afterwards. Read: `project_ab_tests_list({project_id})`, then `project_ab_test_get({project_id, test_id})` for ' +
       'results; never call a winner before its verdict says winning or won. `project_ab_test_create({project_id, page_path, ' +
       'variant_path | make_copy})` saves a draft and changes nothing live (make_copy commits a copy of the page, so it needs ' +
-      'confirm). `project_ab_test_update` (a new split on a running test) and `project_ab_test_action({project_id, test_id, ' +
+      'confirm). To change the second version, edit the copy\'s own files (never the original\'s), deploy to production, then ' +
+      'start the test: it cannot start until both pages answer on the live site. While a test runs or is paused, change ' +
+      'neither page, the original or the second version: a change mixes two versions into one result. If a page must ' +
+      'change, end the test (or end it and start a new one) and say why. ' +
+      '`project_ab_test_update` (a new split on a running test) and `project_ab_test_action({project_id, test_id, ' +
       'action})` (start, pause, resume, end) change live traffic: send them without confirm first, show the person the ' +
       'preview, and send `confirm: true` only after they say yes. `project_ab_test_delete({project_id, test_id})` removes a ' +
       'draft, or an ended test with its results, for good (same preview, then confirm); a running or paused test must end first. ' +

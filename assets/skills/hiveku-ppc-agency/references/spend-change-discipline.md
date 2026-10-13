@@ -286,9 +286,10 @@ because the operator diffed the field they were changing rather than the object 
 - **`ppc_audience_detach` deliberately does NOT change the entity's observation/targeting mode.**
   Detaching the last audience from a targeting-mode ad group makes it serve BROADLY. That is a reach
   expansion disguised as a removal. Decide it explicitly and put it in the `SCOPE` line.
-- **`ppc_audience_attach` is a TARGETING criterion**, so it RESTRICTS serving to that audience. If you
-  wanted observation plus a bid modifier, the tool is `ppc_bid_modifier_update` with
-  `target_type: "audience"` and `bid_modifier: 1.0`.
+- **`ppc_audience_attach` attaches in OBSERVATION mode**: reach is unchanged, and it can carry a
+  starting bid modifier. To change an attached audience's modifier later, the tool is
+  `ppc_bid_modifier_update` with `target_type: "audience"`; it adjusts only an audience already
+  attached, and never attaches one.
 - **Shared negative lists take effect immediately, everywhere.** `ppc_google_shared_negatives`
   operation `shared-set-keywords-add` starts blocking on every campaign the list is attached to the
   moment it lands, and a broad negative blocks any query containing all the words in any order. The

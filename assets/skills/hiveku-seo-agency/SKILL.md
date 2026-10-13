@@ -351,6 +351,11 @@ Field shapes, payloads and traps: `hiveku-automation-agency/references/node-rail
   `references/content-strategy.md`): empty means "not computed", never "no gaps". Compute, then
   read it back - or build the gap by hand with `dataforseo_labs_google_domain_intersection`,
   `dataforseo_labs_google_page_intersection` or `seo_research({ action: 'keyword-gap' })`.
+- **Page A/B tests and routes.** A test copy (an address like /pricing-b) is canonical to the
+  original while its test runs and is kept out of the sitemap on purpose: do not index it, link to
+  it, add it to the sitemap or "fix" it as duplicate content. The A/B redirect is a temporary 302
+  by design. Before blaming rankings or traffic on the world, rule out a running or recently ended
+  test or route on the page (`project_ab_tests_list`).
 - `seo_ga4_report` 429 is the hourly quota - do not retry; it is the ONLY GA4 numbers tool.
 - Position deltas are signed Google-style (negative = improved); never flip signs in a report.
 

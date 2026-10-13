@@ -238,6 +238,15 @@ account CPA is noise, not waste - never cut it on that alone. **Headroom:** `ppc
 Who you're losing to is NOT available: Auction Insights is a Google Ads UI-only report, `ppc_auction_insights`
 always refuses, and no tool can retrieve competitor domains. Lost-to-rank IS the answer to "am I being
 outranked". Pre-launch volume: `ppc_keyword_planner_forecast`.
+
+**A landing page under a page A/B test or route.** Before a budget, bid, targeting, audience or
+final-URL change on a campaign that lands on a Hiveku-hosted site, list the site's tests
+(`project_ab_tests_list`). When the landing page has a running or paused test or route, hold the
+change until it ends, or say plainly that it will skew the result: a shift in who clicks can look
+like a winner. Keep ad final URLs on the original page; the split happens on the site and keeps
+gclid and UTM tags. A route can send one ad platform's clicks to a page of its own without changing
+the ad. Quote the test's verdict (`project_ab_test_get`) as reported. Page A/B tests are not the ad
+platforms' own campaign experiments (`ppc_experiments_list`): those split a campaign, not a page.
 Depth: `references/bidding-budgets-pacing.md`.
 
 ## 4. Play: Quality + relevance (Quality Score program)
@@ -315,10 +324,10 @@ irreversible: prefer detach, owner yes first) follow the same preview-hash contr
 the owner's yes on the exact booleans first, then trust its `after` and re-read with
 `ppc_bing_campaign_ai_settings_get`.
 
-**Audiences (Google):** observation first - attach data-only via `ppc_bid_modifier_update` target_type
-"audience" at 1.0; read `ppc_audience_performance({ days: 30 })` and adjust (raise 1.1-1.3 on winners,
-demote 0.7-0.9 or drop losers). `ppc_audience_attach` RESTRICTS serving - confirm the reach tradeoff
-first. Exclusions (keep customers out of prospecting): `ppc_google_audience_exclusions_set`, preview-first.
+**Audiences (Google):** observation first - attach data-only with `ppc_audience_attach` (observation
+mode, reach unchanged, bid_modifier 1.0); read `ppc_audience_performance({ days: 30 })` and adjust with
+`ppc_bid_modifier_update` target_type "audience" (raise 1.1-1.3 on winners, demote 0.7-0.9 or drop
+losers). It adjusts only an audience already attached and never attaches one. Exclusions (keep customers out of prospecting): `ppc_google_audience_exclusions_set`, preview-first.
 Customer Match: `ppc_customer_match_upload` - members PRE-HASHED SHA256, NEVER raw PII; it uploads
 through Google's Data Manager API (reconnect rule in 6.1), `validate_only: true` proves the path and
 adds nobody; the user_list must already exist (`ppc_google_user_lists` user-lists-list is the source of
