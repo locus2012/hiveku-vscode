@@ -315,10 +315,10 @@ irreversible: prefer detach, owner yes first) follow the same preview-hash contr
 the owner's yes on the exact booleans first, then trust its `after` and re-read with
 `ppc_bing_campaign_ai_settings_get`.
 
-**Audiences (Google):** observation first - attach data-only via `ppc_bid_modifier_update` target_type
-"audience" at 1.0; read `ppc_audience_performance({ days: 30 })` and adjust (raise 1.1-1.3 on winners,
-demote 0.7-0.9 or drop losers). `ppc_audience_attach` RESTRICTS serving - confirm the reach tradeoff
-first. Exclusions (keep customers out of prospecting): `ppc_google_audience_exclusions_set`, preview-first.
+**Audiences (Google):** observation first - attach data-only with `ppc_audience_attach` (observation
+mode, reach unchanged, bid_modifier 1.0); read `ppc_audience_performance({ days: 30 })` and adjust with
+`ppc_bid_modifier_update` target_type "audience" (raise 1.1-1.3 on winners, demote 0.7-0.9 or drop
+losers). It adjusts only an audience already attached and never attaches one. Exclusions (keep customers out of prospecting): `ppc_google_audience_exclusions_set`, preview-first.
 Customer Match: `ppc_customer_match_upload` - members PRE-HASHED SHA256, NEVER raw PII; it uploads
 through Google's Data Manager API (reconnect rule in 6.1), `validate_only: true` proves the path and
 adds nobody; the user_list must already exist (`ppc_google_user_lists` user-lists-list is the source of
