@@ -44,7 +44,7 @@ const PERSIST_STEP =
 function dailyCommand(role: Role): string {
   const signals = role.briefTools;
   const domain = role.knowledgeDomains[0] ?? 'marketing';
-  const readTools = ['account_context_get', ...signals, 'mc_tasks_next', 'pm_tasks_list', 'memory_list', 'memory_create', 'memory_update', 'memory_get', 'memory_log_list'];
+  const readTools = ['account_context_get', ...signals, 'account_usage_get', 'mc_tasks_next', 'pm_tasks_list', 'memory_list', 'memory_create', 'memory_update', 'memory_get', 'memory_log_list'];
   return `---
 description: Morning brief for this account (role: ${role.label}) — context, signals, then today's tasks. Pass a department to focus this session elsewhere.
 argument-hint: "[department, optional — e.g. ppc, seo, sales]"
@@ -62,8 +62,11 @@ unmistakable. Otherwise proceed with the role below.
    **If the context comes back essentially EMPTY** (no brand guide, no avatars, no memory — a
    not-yet-onboarded account), STOP the brief and tell the user to run \`/hiveku-onboard\` — a
    brief with no foundation produces generic junk.
-2. Pull the signals (skip any tool that errors with an entitlement/plan message):
+2. Pull the signals:
 ${signals.map((t) => `   - \`${t}\``).join('\n')}
+   A tool that answers with \`limit_kind\` did nothing and is not a fault: never retry it; put one line in the
+   brief for it, what waits (its \`message\`) and, for plan_limit, not_on_plan or ai_credits, the next plan and
+   its number (\`account_usage_get\`).
 3. End with the task queue: \`mc_tasks_next\` then \`pm_tasks_list\` (open, due soon).
 4. Report: a 5-line summary, then the top 3 actions ranked by impact. Keep it tight.
 5. ${PERSIST_STEP} Offer (do not force) to create a PM task per recommended action.
@@ -326,7 +329,8 @@ USE THE RESULT:
   entry: "image/png", "image/jpeg", "video/mp4"); a finished creative goes onto an existing or scheduled
   post with \`social_update_post({ post_id, media_urls, media_types })\`, which replaces the post's whole
   media list (send every URL; a published or publishing post is edit-locked). Check the platform's media
-  rules first (TikTok posts land as inbox drafts; X posting is Premium-gated).
+  rules first (TikTok posts land as inbox drafts; X posting is on every paid plan, 5, 30 or 60 posts a month on
+  Starter, Standard and Premium, and a scheduled X post past the number moves to the 1st of next month).
 - Ads: image sets sized per placement; note ad platforms re-crop: keep the subject centered.
 - Site: for website projects use \`assets_upload\` (the S3/CDN lane): the marketing Media Library and
   website-project assets are SEPARATE stores; download + re-upload when moving between them.

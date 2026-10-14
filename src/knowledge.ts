@@ -18,7 +18,15 @@ import { roleById } from './roles';
 import { writeDataRunner } from './dataRunner';
 import { writeAgencySkills } from './agencySkills';
 import { isAccountMemoryDomain, ACCOUNT_MEMORY_READONLY_GLOB } from './accountMemory';
-import { LOCAL_MIRROR_PROSE, MEMORY_EDIT_RULES_PROSE, MEMORY_WRITE_REFUSED_PROSE, SOURCE_OF_TRUTH_PROSE, WORK_LOG_PROSE } from './memoryLog';
+import {
+  LOCAL_MIRROR_PROSE,
+  MEMORY_EDIT_RULES_PROSE,
+  MEMORY_WRITE_REFUSED_PROSE,
+  PLAN_LIMIT_PROSE,
+  PLAN_USAGE_PROSE,
+  SOURCE_OF_TRUTH_PROSE,
+  WORK_LOG_PROSE,
+} from './memoryLog';
 import { ownerOf, type OwnerInput } from './memoryOwner';
 import { extensionVersion } from './hivekuUserAgent';
 
@@ -2497,12 +2505,18 @@ these local files.
 - **Hiveku itself in your way?** A Hiveku tool still failing after one sensible retry → \`hiveku_report_issue\`;
   a capability no tool offers (search \`hiveku_docs_search\` first) → \`hiveku_request_feature\`. No secrets or personal data.
   ${MEMORY_WRITE_REFUSED_PROSE}
+  ${PLAN_LIMIT_PROSE}
 - **Tell the user only if it changes what they get:** one or two calm sentences — flagged to the Hiveku team (give the
   ref), the team is quick to fix these, you'll let them know when it's sorted. No error codes, blame or promised times.
 
+### Your plan and its limits
+${PLAN_USAGE_PROSE}
+
 ### Connecting integrations (Ads, Social, SEO) — use \`/hiveku-connect\`
 **Pre-flight rule: before ANY Paid Ads / Social / SEO / email work, check what's connected**
-(\`ppc_connection_list\`, \`social_list_accounts\`, \`seo_connections_list\`, \`email_connections_list\`).
+(\`ppc_connection_list\`, \`social_list_accounts\`, \`seo_connections_list\`, \`email_connections_list\`), and,
+when the work adds something the plan counts (an ad campaign, a social profile, a marketing send), where the
+plan stands (\`account_usage_get\`).
 If a platform the work needs is missing or dead, do NOT stall or improvise — give the user the exact
 clickable link to connect it, then continue with what IS connected. Which link:
 - **Any connector** (Google Ads, GSC, GA, GBP, Gmail, Calendar, Outlook, Bing Ads, and the social /

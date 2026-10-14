@@ -243,6 +243,7 @@ Cold email runs on SmartLead. The dashboard connect form posts a hardcoded \`pro
 
 ## Before Step 0. Cold or permission, and who pays
 Ask how the people on the list came to be there: the answer decides, not whether the business calls the list warm. Cold is anyone who never asked to hear from the business, including members of the same association, chamber, club or directory, event lists without a "yes, contact me", bought, rented or scraped lists, data providers (Apollo, ZoomInfo) and people found online. "Not technically cold" is cold. Permission (they signed up, bought, asked to be contacted, or are in a conversation with the business) belongs in Hiveku email marketing or CRM sequences, not here.
+- Outbound is a paid add-on at $125 a month, by request (hello@hiveku.com), and no plan includes it. Without it, outbound tools answer 402 \`outbound_not_enabled\` (limit_kind add_on): nothing was done, so tell the person its message, which says how to ask for it, and never retry it or report it.
 - The business subscribes to the cold email platform itself (Hiveku recommends SmartLead or Instantly) and buys its sending inboxes and separate sending domains separately; Outbound includes neither. Hiveku's Outbound page connects SmartLead only. Instantly is not connected to Hiveku yet; it works on its own.
 - Cold email never goes through Hiveku email marketing (campaigns, newsletters, drips) and never from the business's main domain or its everyday inbox. CRM sequences (\`crm_enroll_sequence\`, from the connected Gmail or Outlook, at most 100 emails a day per inbox) are for permission lists and one-to-one follow-up; they carry small cold outreach (a few hand-written emails a day) only from a connected inbox on a separate domain; a bigger cold list goes to a cold email platform.
 - Before the first campaign: separate sending domains, 2 to 3 inboxes per domain, 2 to 3 weeks of warm-up, then about 30 to 50 emails a day per inbox, plain text, open tracking off. US cold email follows CAN-SPAM: an honest sender and subject, a postal address, and a clear opt-out honored within 10 business days. Canada (CASL) and much of Europe need permission first.
@@ -383,10 +384,11 @@ Then re-run "Download Department Data → Brand & Creative" to refresh \`hiveku-
 
 export const VOICE_SETUP = `# Phone tracking (DNI) first-run: pool, config, proof, send-back - verified
 
-Check current state FIRST: \`voice_settings_get\` (no arguments). \`settings: null\` on a 200 means the account
-pays for the Voice add-on but the PBX tenant was never provisioned - that is a dashboard + billing step, stop
-and hand it back (\`voice_diagnose_setup\` reports the same as \`tenant_provisioned: false\`). A 402
-\`voice_not_enabled\` is the add-on being off for the account, not an empty account. Then \`voice_pools_list\`
+Check current state FIRST: \`voice_settings_get\` (no arguments). \`settings: null\` on a 200 means phones are
+set up on the account but the PBX tenant was never provisioned - that is a dashboard step, stop and hand it back
+(\`voice_diagnose_setup\` reports the same as \`tenant_provisioned: false\`). A 402 \`voice_not_enabled\` (limit_kind
+setup) means phones are not set up on the account yet, not an empty account: they come with every paid plan, and
+an owner or admin sets them up in Communications. Then \`voice_pools_list\`
 (every tracking pool with its members, their routing and the live \`occupancy\` block) and
 \`voice_phone_tracking_config_get({ project_id, env })\` for the project (\`config: null\` beside a production
 sibling means "off here, live there", not "never set up"). A pool with active members AND an enabled config for
