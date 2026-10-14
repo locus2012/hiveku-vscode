@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.91.14
+- **Going over someone else's recent PPC change always asks.** Claude Code in your project folders asks before `ppc_recent_change_override`, in every permission mode, as the Claude Code and Codex plugins do. That tool is a person's yes to changing a budget, bid or setting someone else changed recently, so the AI never gives it on its own. Hiveku only records these changes for now and refuses none, so it is not needed yet. Hiveku folders open in VS Code get the new rule when the extension starts.
+
+## 0.91.13
+- **Claude Code knows every task right a connection needs, not only adding.** Hiveku now asks the same task rights of a connection as the app asks of its person: **PM Projects > Tasks: Create** to add a task, a comment, a file, a time entry or a recurring schedule, **Tasks: Edit** to change, complete, claim or reassign one, and **Tasks: Delete** to delete one. When a change is refused, the orient skill tells Claude Code not to retry or try another task tool, to give its findings in the chat, and to name the right an owner or admin can grant under Settings > Team Members > Manage Roles.
+- **The vendored skills match the plugin** (0.27.45).
+
+## 0.91.12
+- **When your role cannot add tasks, Claude Code says so instead of retrying.** A connection now adds project-management tasks only when the person who created it may add tasks in Hiveku (the same rule as the app); otherwise Hiveku refuses with a plain-words message. The orient skill tells Claude Code not to retry or try another task tool, to give its findings in the chat, and to say that an owner or admin can grant **PM Projects > Tasks: Create** under Settings > Team Members > Manage Roles. The default Marketing, Sales, Support and Finance roles have no project-management permissions.
+- **The vendored skills match the plugin** (0.27.44).
+
+## 0.91.11
+- **A Hiveku update reaches you without its ticket number.** The orient skill now says what the Claude Code plugin, the MCP server and every Hiveku agent do: when a problem you reported is resolved, Claude Code tells you once, in plain words, unless the report says it did not affect you and there is nothing for you to do. It never puts the update's ref (HK-...) in a reply unless you ask for it.
+- **The vendored skills match the plugin** (0.27.43). This also brings the PPC skill's wording that `ppc_audience_attach` attaches an audience in observation mode, so reach is unchanged.
+
 ## 0.91.10
 - **Changing a mobile app's settings always asks.** Claude Code in your project folders asks before `mobile_app_sdk_upgrade` (moves the app to a newer Expo SDK, rewriting its package files, app config and untouched template files in one go after saving a checkpoint, then restarts its preview), `mobile_app_identity_set` (the iOS bundle ID, Android package and link scheme, which become permanent once a build is uploaded to a store) and `mobile_app_apple_account_set` (which Apple developer account the app's builds and App Store submissions use), in every permission mode, as the Claude Code and Codex plugins do. Reading those settings does not ask. Hiveku folders open in VS Code get the new rules when the extension starts.
 
