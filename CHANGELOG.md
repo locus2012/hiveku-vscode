@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.14
+- **Going over someone else's recent PPC change always asks.** Claude Code in your project folders asks before `ppc_recent_change_override`, in every permission mode, as the Claude Code and Codex plugins do. That tool is a person's yes to changing a budget, bid or setting someone else changed recently, so the AI never gives it on its own. Hiveku only records these changes for now and refuses none, so it is not needed yet. Hiveku folders open in VS Code get the new rule when the extension starts.
+
 ## 0.91.13
 - **Claude Code knows every task right a connection needs, not only adding.** Hiveku now asks the same task rights of a connection as the app asks of its person: **PM Projects > Tasks: Create** to add a task, a comment, a file, a time entry or a recurring schedule, **Tasks: Edit** to change, complete, claim or reassign one, and **Tasks: Delete** to delete one. When a change is refused, the orient skill tells Claude Code not to retry or try another task tool, to give its findings in the chat, and to name the right an owner or admin can grant under Settings > Team Members > Manage Roles.
 - **The vendored skills match the plugin** (0.27.45).

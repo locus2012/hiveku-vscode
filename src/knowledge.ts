@@ -838,6 +838,11 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__mobile_app_sdk_upgrade',
   'mcp__hiveku__mobile_app_identity_set',
   'mcp__hiveku__mobile_app_apple_account_set',
+  // The PPC change ledger's override (2026-10-13, MCP #211, builder #1246): its answer is a person's yes
+  // to going over someone else's recent change to the same budget, bid or setting, so the model must
+  // never give it on its own. Every call asks, in auto mode too, as in the plugin and Codex; the MCP
+  // server refuses it inside hiveku_batch. Appended last.
+  'mcp__hiveku__ppc_recent_change_override',
 ];
 
 /**
