@@ -238,6 +238,15 @@ account CPA is noise, not waste - never cut it on that alone. **Headroom:** `ppc
 Who you're losing to is NOT available: Auction Insights is a Google Ads UI-only report, `ppc_auction_insights`
 always refuses, and no tool can retrieve competitor domains. Lost-to-rank IS the answer to "am I being
 outranked". Pre-launch volume: `ppc_keyword_planner_forecast`.
+
+**A landing page under a page A/B test or route.** Before a budget, bid, targeting, audience or
+final-URL change on a campaign that lands on a Hiveku-hosted site, list the site's tests
+(`project_ab_tests_list`). When the landing page has a running or paused test or route, hold the
+change until it ends, or say plainly that it will skew the result: a shift in who clicks can look
+like a winner. Keep ad final URLs on the original page; the split happens on the site and keeps
+gclid and UTM tags. A route can send one ad platform's clicks to a page of its own without changing
+the ad. Quote the test's verdict (`project_ab_test_get`) as reported. Page A/B tests are not the ad
+platforms' own campaign experiments (`ppc_experiments_list`): those split a campaign, not a page.
 Depth: `references/bidding-budgets-pacing.md`.
 
 ## 4. Play: Quality + relevance (Quality Score program)
