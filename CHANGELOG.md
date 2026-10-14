@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.15
+- **Claude Code knows what a page A/B test needs.** The Website guide now covers routes: sending the visitors who came from an ad platform, a UTM campaign, a referring site, a device or a place to a page made for them, with an optional share kept on the original to compare. It says how to change the second version (edit the test copy's own files, deploy to production, then start the test) and that neither page changes while a test runs or is paused. The Ads guide holds a budget, bid, targeting, audience or final-URL change on a campaign whose landing page is under a test, or says plainly that it skews the result, and keeps ad final URLs on the original page. The SEO guide explains why a test copy points search engines to the original and stays out of the sitemap, and that the A/B redirect is a temporary 302.
+- **The vendored skills match the plugin** (0.27.48). This brings the PPC skill's rule for a landing page under a test, which 0.91.14 could not carry yet.
+
 ## 0.91.14
 - **Going over someone else's recent PPC change always asks.** Claude Code in your project folders asks before `ppc_recent_change_override`, in every permission mode, as the Claude Code and Codex plugins do. That tool is a person's yes to changing a budget, bid or setting someone else changed recently, so the AI never gives it on its own. Hiveku only records these changes for now and refuses none, so it is not needed yet. Hiveku folders open in VS Code get the new rule when the extension starts.
 
