@@ -89,6 +89,7 @@ Open every session with reads, in this order, before you form an opinion about a
 | `ppc_account_settings_get` | Currency, time zone, auto-tagging, conversion-tracking status, manager/test-account flags. Answers "am I even looking at a real spending account". |
 | `ppc_conversion_tracking_status` | Whether the numbers you are about to optimize toward are real. Returns `silent_count` and a `warnings[]` array. |
 | `ppc_change_history` | Who changed what in the last 30 days, including `client_type` GOOGLE_ADS_API. Answers "did a human already do this on Tuesday". Hard 30-day limit from Google. |
+| `ppc_recent_changes` | Who changed what through Hiveku lately (people, apps, agents) on every platform, in one read, with the hold each change sets: 7 days for budget and bidding (the whole campaign), 24 hours for the rest. `outside_changes_checked` stays false until the platforms' own history is matched in. A refused write over a hold is gone over only on the person's clear yes, through `ppc_recent_change_override`. |
 
 If `ppc_conversion_tracking_status` reports silent enabled actions, stop. Read its two-number rule
 first: it returns both `conversions` (the Conversions column, what Smart Bidding optimizes on) and
