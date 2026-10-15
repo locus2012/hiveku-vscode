@@ -139,7 +139,7 @@ The markup is one of the capture controls; the others are project settings an ag
 - **Project settings.** The capture switch (off: nothing captured automatically); the site type (Marketing site captures every form except exclusions, Web app captures only what something includes); the sign-in default (skips credential-shaped submissions on sign-in and password pages, and never a form that asks for a name); path rules (`/portal/*` is the page and everything below it, `*` is one segment); per-form rules (Always or Never). Read them with `marketing_form_capture_settings_get` and `marketing_form_capture_list`, preview a change with `marketing_form_capture_preview`, save with `marketing_form_capture_settings_update` on the owner's yes. A change applies to the next submission.
 - **Building a web app:** set Web app mode at provisioning and mark the real lead forms `data-hiveku-capture="on"` (F15). A marketing site stays on the default and excludes app-like paths.
 - **What a rule does not do.** It stops NEW captures only: what was recorded before stays until erased with `marketing_form_capture_purge` (permanent, dry run first; the owner erases from Analytics > Forms > Capture until agent execution is switched on). And it governs automatic capture only: a hosted Hiveku form and a form posting to a wired workflow webhook are never affected.
-- **Muting is not opting out.** Muting a form in Notifications stops the email and nothing else: a muted form still creates contacts, runs workflows and sends conversions.
+- **Muting is not opting out.** Muting a form in Notifications stops Hiveku's lead email, Slack post, phone alert and automatic reply for it, and nothing else: a muted form still creates contacts, runs workflows and sends conversions.
 
 ### Things that POST but are not leads (F8)
 
@@ -147,16 +147,20 @@ Meta's pixel builds a hidden `<form>` and calls `HTMLFormElement.prototype.submi
 
 ### Notifications and routing
 
-The platform notifies on EVERY submission, and a user-built notification workflow is ADDITIVE, so a site with a working notify workflow sends two emails per lead. That is an accepted trade-off, not duplicate capture: do not "fix" it by deleting the workflow without asking.
+Hiveku emails the team about every lead unless something below stops it:
 
-- `website_projects.form_notify_email` is the per-project routing control.
+- **Who gets it**, in order: the form's own list, else the site's "Send every submission to" list (`website_projects.form_notify_email`), else the account's billing email, else every member. An empty list never means nobody; only an account with no billing email and no people emails nobody.
+- **What stops it:** muting the form, or the site's "Don't email anyone" (`website_projects.form_notify_enabled` false). Either one stops the lead email, the Slack post, the phone push and the visitor's automatic reply. The lead is still recorded and becomes a contact, workflows still run and conversions still upload.
+- **One lead recorded twice** (the capture and a webhook, say) is decided by its first copy: that copy's form and site decide the mute, "Don't email anyone" and who is told.
+- **A webhook lead with no site.** A site's server that forwards its form to a Hiveku webhook sends no Origin, so unless the webhook is linked to the site, its leads land with no site: no Forms tab lists them, no mute or site setting reaches them, and they go to the billing email or every member. The site's Notifications panel lists such webhooks; **Link to this site** links one and creates its form at once, so it can be muted before its next lead.
+- **Workflows.** For a form that posts to a workflow webhook, a run that completes and actually emails the team replaces Hiveku's email; a run that fails, or tells nobody, gets Hiveku's email. A workflow a captured form starts is additive: a site with a working notify workflow there gets two emails per lead. That is an accepted trade-off, not duplicate capture: do not "fix" it by deleting the workflow without asking.
 - Recipients resolve ONLY server-side. There is no client-side recipient in markup, so never put an email address in a form attribute expecting it to route anything.
 - Cap is 60 emails per account per hour, then a rollup.
 - Each recipient gets their own email, and Hiveku records what became of it: sent, delivered, bounced, marked as spam. Each lead in the Forms tab says who was told, address by address.
 - A bouncing address is left out of later lead emails and shows in red in Notifications, and the site's other recipients and the account's people get one warning a week about it. A lead whose every recipient bounces goes to the account's people instead (the billing email, else every member), saying why. Do not tell an owner a lead "was emailed" without checking its Who was told line.
 - The subject is a per-site template, set in Analytics > Forms > Notifications. The default is `New lead: {name}, {form} ({site})`; `{email}`, `{phone}`, `{page}` and `{source}` work too. The email names the site and says where the visitor came from ("Came from: Google Ads (Paid Search), campaign Spring"), read from the same attribution as every report.
-- "Open this lead" in the email, the Slack post and the phone push opens that one lead (`?submission=<id>`), not the Forms list. The Slack post carries what the email carries.
-- Account members whose address gets a site's leads also get a phone push and a bell notification for each lead. Tapping it switches the app to the lead's account first, since a person can belong to many.
+- "Open this lead" in the email, the Slack post and the phone push opens that one lead (`?submission=<id>`), not the Forms list. The Slack post carries what the email carries, and a mute or "Don't email anyone" stops it with the email.
+- Account members whose address gets a site's leads also get a phone push and a bell notification for each lead, stopped the same way. Tapping it switches the app to the lead's account first, since a person can belong to many.
 - "Send a test email" (Notifications) sends the saved settings to the site's recipients, at most 5 an hour per site. It is also how a fixed mailbox is checked again: a bouncing address gets the test too.
 - Sender is `Hiveku Forms <no-reply@notifications.hiveku.com>`, or `forms@<the account's verified domain>` when the site turned on "Send lead emails from forms@<domain>" (sent over SES, with the account's name in the email in place of Hiveku's). The switch is disabled until the account has a verified sending domain. If SES refuses a lead email (the domain paused or lapsed, the quota spent) or the account's email sending is suspended, that person gets it from Hiveku Forms instead, and the lead's notify_error says so. The apex `hiveku.com` is NOT verified and silently rejects, so never tell an owner to expect mail from the apex.
 - Reply goes to the no-reply sender unless the site's "Reply to the person who filled in the form" switch is on (Analytics > Forms > Notifications, `website_projects.form_notify_reply_to_submitter`, off by default). With it on, each notification's Reply-To is the email the visitor entered, when that is a well-formed address; From stays the no-reply sender. The summary email for leads held back by the hourly cap never carries a Reply-To. A notify workflow's Send Email step has its own Reply-To field.
@@ -165,7 +169,7 @@ The platform notifies on EVERY submission, and a user-built notification workflo
   - **Without one:** Hiveku's standard thank-you, from `no-reply@notifications.hiveku.com` shown as "<site> via Hiveku". Its text is fixed, and the panel shows it in place of the subject and text fields. It reads: "Thanks for contacting <site>. Your message reached them, and they will get back to you soon." Its footer says Hiveku sent it for the site, and that someone who did not fill in the form can ignore it. The owner's own text is never sent from Hiveku's shared domain; to write their own, the owner verifies a sending domain.
   - **Reply-To:** one optional address the owner chooses, never the list of people who get leads. It applies to both kinds of reply.
   - **When it is not sent:**
-    - for spam, a muted form, or leads the hourly cap held;
+    - for spam, a muted form, a site whose lead emails are off ("Don't email anyone"), or leads the hourly cap held;
     - while the account's email sending is suspended;
     - to an address on the suppression list (a bounce, a complaint, do-not-contact) or a reserved test domain;
     - more than once per mailbox per site per day (a `+tag` or Gmail's dots are the same person);
@@ -176,7 +180,7 @@ The platform notifies on EVERY submission, and a user-built notification workflo
   - **A bounce or complaint on it** puts the address on the account's suppression list for good, and the team is not alerted.
   - **Forms whose workflow tells the team** send no automatic reply: add a Send Email step to the workflow instead.
   - **The test email** sends a sample of it to the site's recipients when it is on: the reply a visitor would get, whichever kind that is.
-- Every setting above is dashboard-only: no MCP tool manages notification settings.
+- **Tools.** `marketing_form_notifications_get` reads who gets a site's lead emails, in the notifier's terms: lead emails on or off, the site's list, where an empty list goes (`when_empty`), each form's mute and own list, and the account's webhooks whose leads arrive with no site (`unlinked_webhooks`). `marketing_form_notifications_update` changes "Don't email anyone", the site's list and each form's mute and list, on the owner's yes, from a person's own key only, at most 25 forms a call. Until the apps that ask the person first are released it answers 403 `agent_changes_not_enabled`: the owner changes it in Notifications. Everything else above stays dashboard-only: the subject, the Reply-To switch, sending from the account's domain, the automatic reply, the Slack webhook, the test email and Link to this site.
 
 ## Part 3: Workflows behind a form
 
@@ -288,7 +292,7 @@ A file input inside a captured form is handled by the platform. The visitor pick
 | Form "silently fails": visitor sees success, nothing arrives. | Almost never code. `require_auth_token = true` on a public form's trigger. | The `workflow_triggers` row, not the workflow's `authRequired`. Set `{ authentication: 'none' }`. Do not rewrite the component or add a proxy route. |
 | Test POST returns 401 "Unauthorized: Missing Bearer token". | Same cause, definitive signature. | Same fix. Never tell the user the webhook endpoint is broken. |
 | "Two emails for every lead." | Two writers whose fingerprints disagree: a second endpoint (F5) plus a hidden input or extra timestamp value (F6). | Grep for a fetch/action/POST handler and for `type="hidden"`. Remove the second writer first. |
-| Two emails, and the site has a notify workflow. | Not a duplicate. Platform notification plus an additive user workflow. | Count records in the Forms tab. One record, two emails is the accepted trade-off. Ask before deleting their workflow. |
+| Two emails, and the site has a notify workflow. | Not a duplicate when a captured form starts the workflow: Hiveku's email plus the workflow's own. (A webhook workflow run that emails the team replaces Hiveku's email instead.) | Count records in the Forms tab. One record, two emails is the accepted trade-off. Ask before deleting their workflow. |
 | Dozens of records named "Space Y 4 Form", "Flex Form". | No form key, identity fell to the first CSS class, junk identity kept path-scoping. | Add F1 and F2, then check the Forms tab to see how existing records behave before promising the customer a cleanup. |
 | A record named `[object HTMLInputElement]`. | A field named `name` clobbered `form.name`. | Rename to `full_name`, but per F10 flag the rename to the owner rather than doing it quietly. |
 | One form appears twice, split on a trailing slash. | Path-scoped junk identity, `@/contact` vs `@/contact/`. | F1. The key discards path entirely. |

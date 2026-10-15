@@ -47,9 +47,14 @@ for a form with no `<form>` element, counts as "on". Markup is a code change (/h
 reaches the site's built-in script on the next deploy and the analytics embed within about a day.
 A settings change below applies to the next submission, with no redeploy.
 
-**Muting is not the same as not capturing.** Muting a form under Notifications stops the email
-only: a muted form still creates contacts, runs workflows and sends ad conversions. When the owner
-says "stop that form", ask which of the two they mean.
+**Muting is not the same as not capturing.** Muting a form under Notifications stops Hiveku's
+lead email, Slack post, phone alert and automatic reply only: a muted form still creates contacts,
+runs workflows and sends ad conversions. "Don't email anyone" does the same for every form on the
+site. Both are `marketing_form_notifications_update` on the owner's yes, read first with
+`marketing_form_notifications_get`; until the apps that ask the person first are released it
+answers 403 `agent_changes_not_enabled`, and the owner changes it in Notifications. A webhook whose
+leads arrive with no site is reached by neither until the owner presses Link to this site there.
+When the owner says "stop that form", ask which of the two they mean.
 
 The play:
 
