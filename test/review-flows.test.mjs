@@ -374,8 +374,12 @@ describe('what the extension writes and wires', () => {
       'the mobile app settings writes stay in that order',
     );
     assert.ok(
-      ask.trimEnd().endsWith("'mcp__hiveku__ppc_recent_change_override',"),
-      'the newest ask rule, the PPC override, goes at the END',
+      ask.includes("'mcp__hiveku__ppc_recent_change_override',"),
+      'the PPC override stays on the ask list',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith("'mcp__hiveku__marketing_form_notifications_update',"),
+      'the newest ask rule, the lead-email change, goes at the END',
     );
   });
 

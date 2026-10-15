@@ -851,6 +851,11 @@ const HIVEKU_ASK: string[] = [
   // never give it on its own. Every call asks, in auto mode too, as in the plugin and Codex; the MCP
   // server refuses it inside hiveku_batch. Appended last.
   'mcp__hiveku__ppc_recent_change_override',
+  // Who gets a site's lead emails (2026-10-15, HK-255, MCP #228, builder #1403): turning them off, muting
+  // a form or rerouting its leads is the owner's choice. Every call asks, in auto mode too, as in the
+  // plugin and Codex; the MCP server refuses it inside hiveku_batch, and the builder holds it for agents
+  // (403 agent_changes_not_enabled) until these releases are out. Its read stays unasked. Appended last.
+  'mcp__hiveku__marketing_form_notifications_update',
 ];
 
 /**
