@@ -532,6 +532,39 @@ export const MEMORY_WRITE_REFUSED_PROSE =
   'Show the person its `message` and its `memory_page_url` link, and never retry it unchanged or report it ' +
   '(its `hint` names the one case to resend: a department line to rewrite).';
 
+/**
+ * What every agent is told about the account's plan and its limits, written once in the
+ * builder (hiveku_builder src/lib/platform-guide/plan-usage.ts, builder #1332, served with
+ * no key at /api/public/platform-guide/plan-usage) and copied here byte for byte. The MCP
+ * server, the agent servers, the Claude Code and Codex plugins and hiveku-sync carry the
+ * same bytes, and test/plan-usage-texts.test.mjs pins each one to the builder's sha256, so a
+ * change there is a change here, made on purpose. Never reword them.
+ *
+ * PLAN_USAGE_PROSE is the builder's PLAN_USAGE_RULES, the full block: the account CLAUDE.md
+ * carries it as its own section.
+ */
+export const PLAN_USAGE_PROSE = `Hiveku rules: the account's plan and its limits
+- Every paid plan (Starter, Standard, Premium) opens every feature except the Outbound add-on. Plans differ in how much of each thing they include.
+- Before work that adds something the plan counts (a contact import, a marketing send, phone numbers, social profiles, ad campaigns, websites, automations, databases, AI images or video), call account_usage_get and tell the person what the plan includes, what is used and what happens past the number.
+- A tool answer with limit_kind is not a fault: nothing was done. Never retry it unchanged, never look for a way around it, and never report it as a Hiveku problem. Tell the person in one or two calm sentences what waits and why (the answer's message), and do what its hint says.
+- When limit_kind is plan_limit, not_on_plan or ai_credits, also say when it starts again (resets_at, if any), and the next plan with its number and price (next_plan, next_limit, plans). An owner or admin can upgrade in Settings > Billing (billing_url). When try_next_plan.available is true, they can instead try the next plan free for 14 days, once (try_next_plan.how says where). For billing, add_on, setup and spend_cap, say only what the message and the hint say.
+- Where past is billed, going past the number costs money (rate, up to ceiling): say what it costs before you go past it.
+- Take every number, price and date from account_usage_get or the answer itself, never from memory. Never change the plan, start a try or buy credits or add-ons: an owner or admin does that (billing_url, try_next_plan.how and features.outbound.how say where).
+- Say this only to the account's own people, never to a customer or caller.`;
+
+/**
+ * The builder's PLAN_LIMIT_LINE (same source and pin test as PLAN_USAGE_PROSE): one line for
+ * the "Hiveku itself in your way?" lists, right after MEMORY_WRITE_REFUSED_PROSE, so a tool
+ * refused at the plan's number is told to the person and never retried or reported.
+ */
+export const PLAN_LIMIT_PROSE =
+  "A tool answer with limit_kind (a plan's number reached, something the plan does not include, AI " +
+  "credits used up, billing that needs attention, an add-on or phones not set up, a chat's spending " +
+  'limit reached) is not a fault: nothing was done. Never retry it unchanged or report it; tell the ' +
+  'person its message and do what its hint says. Only for plan_limit, not_on_plan and ai_credits, also ' +
+  'say when it starts again and the next plan and its number, using account_usage_get or the answer for ' +
+  'every number, and point an owner or admin to its billing_url.';
+
 /** The rules every write this extension teaches carries (scaffold prose, one place). */
 export const MEMORY_EDIT_RULES_PROSE =
   'If you read that entry earlier in the session, first call `memory_log_list({ memory_id, since: "<when you read it>" })`: ' +
