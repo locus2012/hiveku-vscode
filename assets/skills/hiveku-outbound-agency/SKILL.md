@@ -1,6 +1,6 @@
 ---
 name: hiveku-outbound-agency
-description: "Full outbound/BDR agency methodology for a Hiveku account. Load when someone says \"can we cold email this list?\", \"I have a spreadsheet of prospects\", \"build me a prospect list\", \"set up the campaign\", \"write the sequence steps\", \"start sending\" / \"pause the campaign\", \"somebody wrote back - set up a meeting\", \"send that reply\", \"nobody's responding to our cold emails\", or \"find me companies to pitch\". Covers cold email (Smartlead), LinkedIn outreach (HeyReach), outbound campaigns and their controls (pause/start/stop, sequence steps written to the provider by tool, provider analytics), list building and prospecting, lead enrollment (enrolling into live sequences - a send decision, not a contact import), deliverability and warmup, reply handling and triage (draft, show, confirmed send), meeting booking from outbound, and outbound reporting. ALSO load for risky outbound asks - \"blast the list\" / \"send to everyone now\", \"just send it\" without a shown draft, \"stop everything\" (STOPPED is terminal), skipping the suppression sweep or pre-launch checks, un-suppressing or removing DNC contacts, turning off warmup, maxing out sending volume - the refusal rules live here."
+description: "Outbound/BDR methodology for a Hiveku account. Load when someone says \"can we cold email this list?\", \"I have a spreadsheet of prospects\", \"build me a prospect list\", \"write the sequence steps\", \"start sending\" / \"pause the campaign\", \"somebody wrote back - set up a meeting\", \"nobody's responding to our cold emails\", or \"find me companies to pitch\". Covers cold email (Smartlead), LinkedIn outreach (HeyReach), campaign controls (pause/start/stop, sequence steps, provider analytics), list building and prospecting, lead enrollment (enrolling into live sequences is a send decision, not a contact import), deliverability and warmup, reply triage (draft, show, confirmed send), booking meetings, and reporting. ALSO load for risky asks - \"blast the list\", \"just send it\" without a shown draft, \"stop everything\" (STOPPED is terminal), skipping the suppression sweep or pre-launch checks, un-suppressing DNC contacts, turning off warmup, maxing out volume - the refusal rules live here."
 ---
 
 # Hiveku Outbound Agency - run outbound like a retainer agency
@@ -128,7 +128,9 @@ the `email-a-list` playbook: `hiveku_playbook_get({ playbook: "email-a-list" })`
 - **What connects today:** Hiveku's Outbound page connects SmartLead: it runs the campaigns and
   sorts the replies inside Hiveku. Instantly is recommended too, but it is not connected to Hiveku
   yet; it works on its own. The business subscribes to the platform itself and buys its sending
-  inboxes and separate sending domains separately: Outbound includes neither.
+  inboxes and separate sending domains separately: Outbound includes neither. Outbound is a paid
+  add-on at $125 a month, by request (hello@hiveku.com); without it, outbound tools answer 402
+  `outbound_not_enabled` (limit_kind add_on).
 - **Experience first.** Outbound is for businesses that already know cold email. Before suggesting
   it, ask whether they have run cold email before; if not, start them with the platform's own setup
   guide. Never offer Hiveku's team to set cold email up: the Hiveku team offers that itself.

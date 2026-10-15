@@ -11,9 +11,12 @@ not) - say "not visible to this key" and file that rung with `pm_tasks_create` -
 plugin-version question (`/hiveku:update`, then retry).
 
 1. **Where are we starting?** `voice_diagnose_setup` - no arguments. `tenant_provisioned: false`
-   means the Voice add-on / tenant is not enabled yet: that is a dashboard + billing step, stop and
-   hand it back. Existing DIDs, extensions or E911 addresses mean this is a top-up, not a greenfield -
-   skip the rungs already done.
+   (or a 402 `voice_not_enabled` from any phone tool) means phones are not set up on this account
+   yet: they come with every paid plan, and an owner or admin sets them up in Communications -
+   stop and hand it back. Existing DIDs, extensions or E911 addresses mean this is a top-up, not a
+   greenfield - skip the rungs already done. Then `account_usage_get`: tell the person what the
+   plan includes (`phone_numbers`, `call_minutes`), what is used and what happens past the number,
+   before the first purchase.
 2. **E911 address first** - a local number should not go live without the address 911 dispatches to.
    `voice_e911_addresses_list` for anything already verified; otherwise [CONFIRM]
    `voice_e911_address_create` - echo the exact street address and say plainly: this is where

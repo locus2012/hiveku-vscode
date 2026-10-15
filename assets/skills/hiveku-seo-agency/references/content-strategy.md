@@ -17,8 +17,9 @@ Assumes `account_context_get({ domain: 'seo' })` has run and you hold a `project
 
 Cost classes: A = free DB read; write = free, confirm-gated; B = Labs per request; C = live SERP
 per request per location; E = on_page instant per URL; F = crawl per page. Every metered call
-returns 402 when the DataForSEO balance is negative and 503 `dataforseo_unconfigured` with no
-credentials: neither means clean or empty.
+returns 402 `seo_research_limit` when this month's research lookups are used up (they start again
+next month, and the next plan has more) and 503 `dataforseo_unconfigured` with no credentials:
+neither means clean or empty.
 
 | Tool | Status | Cost class | Note |
 |---|---|---|---|

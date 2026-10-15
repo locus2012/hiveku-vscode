@@ -75,8 +75,8 @@ No tool here connects a source; that is the setup doc (`hiveku_docs_search`) or 
 - The working rule: start the crawl with `seo_audit_start`, keep the `task_id`, poll
   `seo_audit_get` for the persisted summary, and read the crawl through the `seo_research` crawl
   actions in 1.2 for the deep dive.
-- 402 = the metered budget is exhausted or the DataForSEO balance went negative; 503
-  `dataforseo_unconfigured` = no credentials. Neither means "clean" or "no data".
+- 402 = `seo_research_limit`, this month's research lookups are used up (they start again next
+  month); 503 `dataforseo_unconfigured` = no credentials. Neither means "clean" or "no data".
 
 ### 1.2 Reading a crawl: the `seo_research` crawl actions
 

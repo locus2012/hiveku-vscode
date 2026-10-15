@@ -108,8 +108,8 @@ Verified behavior (route read and live call, 2026-08-30):
   always a 50-page crawl of the project domain; there is ONE crawl type.
 - It returns `202` with `{ audit_id, task_id, target, project_id, max_crawl_pages, status: 'queued' }` and
   does not wait; a 25-page crawl finished in about 4 minutes. Keep the `task_id`.
-- `503 dataforseo_unconfigured` = no credentials; `402` = the metered budget is exhausted or the
-  DataForSEO balance went negative. Neither is "the site is clean".
+- `503 dataforseo_unconfigured` = no credentials; `402` = `seo_research_limit`, this month's
+  research lookups are used up (they start again next month). Neither is "the site is clean".
 
 **The persisted lane round-trips (live since 2026-08-30).** `seo_run_audit` and `seo_audit_start`
 return `{ audit_id, task_id }`; `seo_audit_get({ audit_id })` polls and persists the result into

@@ -450,10 +450,12 @@ backlink-opportunity, automated-report and page-schema deletes, plus `seo_rankin
 
 ### 4.4 The rails that do not exist
 
-- **No confirm on any metered spend.** Classes B through I run on the first call. The DataForSEO
-  balance can go NEGATIVE; every metered call then returns 402 with no per-tool warning, and 503
-  `dataforseo_unconfigured` means no credentials. Neither means clean or empty.
-- **No balance pre-check.** The 402 is the first signal.
+- **No confirm on any metered spend.** Classes B through I run on the first call. A metered call
+  the plan refuses returns 402 `seo_research_limit` (this month's research lookups are used up;
+  they start again next month, and the next plan has more), and 503 `dataforseo_unconfigured`
+  means no credentials. Neither means clean or empty.
+- **No pre-check in the call.** The 402 is its first signal; `account_usage_get`
+  (`research_lookups`) says what is used before you start.
 - **No undo for a tracked-keyword delete** (2.7).
 - **No live robots.txt write.** `seo_project_update` stores a deploy-time fallback; nothing
   serves until the next `deploy_site`, and only where the code ships no robots source.

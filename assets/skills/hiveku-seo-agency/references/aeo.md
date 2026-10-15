@@ -16,7 +16,8 @@ outside the Availability table is a handoff, named as such.
 Cost classes: A = free DB read; write = free, confirm-gated; C = live SERP per keyword; G = LLM
 Mentions, one live check per keyword per engine against the account's daily re-check limit (not
 billed per check); H = LLM-scored against a shared per-UTC-day budget.
-A negative DataForSEO balance turns every metered call into a 402 with no per-tool warning.
+A 402 on a metered call is 402 `seo_research_limit`: this month's research lookups are used up;
+they start again next month, and the next plan has more (`account_usage_get`).
 
 | Tool | Status | Cost class | Note |
 |---|---|---|---|

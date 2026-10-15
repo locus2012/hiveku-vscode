@@ -40,8 +40,9 @@ references - this file is the choreography.
 **Goal:** a main line that rings the team, an auto-attendant, a seat per person, voicemail,
 and a compliant E911 address - from an empty tenant.
 
-**Preconditions:** the Voice add-on is on (a 402 `voice_not_enabled` anywhere means stop and
-hand the plan question to the owner); `voice_settings_get` returns a non-null `settings` row
+**Preconditions:** phones are set up on the account (a 402 `voice_not_enabled` anywhere means
+they are not yet: they come with every paid plan, and an owner or admin sets them up in
+Communications - stop and hand it back); `voice_settings_get` returns a non-null `settings` row
 (null means the PBX tenant was never provisioned - a dashboard/provisioning handoff, not
 something any tool here fixes); `account_context_get({ domain: 'helpdesk' })` loaded before
 drafting any greeting.

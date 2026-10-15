@@ -18,8 +18,9 @@ This file repeats neither.
 Cost classes: A = free DB read; write = free, confirm-gated; B = Labs / keywords_data per request
 (batch up to 1,000 keywords; COUNTRY location codes only, 2840 = US, the server retries with US
 and returns `location_note`); C = live SERP per request per location (city and region codes
-accepted). A negative DataForSEO balance makes every metered call a 402; 503
-`dataforseo_unconfigured` means no credentials. Neither is "no keywords".
+accepted). A 402 on a metered call is `seo_research_limit`: this month's research lookups are used
+up (they start again next month, and the next plan has more); 503 `dataforseo_unconfigured` means
+no credentials. Neither is "no keywords".
 
 | Tool | Status | Cost class | Note |
 |---|---|---|---|
