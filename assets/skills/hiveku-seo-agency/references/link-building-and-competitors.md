@@ -16,7 +16,8 @@ this is the manual it points at, with the response shapes, traps, numbers and se
 
 Cost classes: A = free DB read; write = free, confirm-gated; B = Labs per request (COUNTRY codes
 only); C = live SERP; D = backlinks per request (`backlinks_bulk_*` take up to 1,000 targets in one
-call, the cheap way to qualify a list). A 402 on any of them is a negative DataForSEO balance.
+call, the cheap way to qualify a list). A 402 on any of them is `seo_research_limit`: this month's
+research lookups are used up; they start again next month, and the next plan has more.
 
 | Tool | Status | Cost class | Note |
 |---|---|---|---|

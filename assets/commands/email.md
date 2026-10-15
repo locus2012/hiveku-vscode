@@ -136,8 +136,12 @@ playbook: `hiveku_playbook_get({ playbook: "email-a-list" })`.
 5. **DRY RUN - never skip:** `email_campaign_send_now({ id, dry_run: true })`. It materializes the
    recipient list and reports materialization.totalCandidates / totalQueued / totalSkipped /
    skippedBreakdown WITHOUT sending. Two things a clean dry run does NOT prove:
- - The plan-cap and empty-audience checks only run on the REAL call. A campaign over the monthly
-     email cap dry-runs green and then fails 402 on the real send.
+ - The plan-cap and empty-audience checks only run on the REAL call. A campaign past the plan's
+     marketing emails dry-runs green, then answers 402 `plan_limit_reached` (limit_kind plan_limit)
+     on the real send and nothing goes out: Starter and Free stop at the number, Standard and
+     Premium go on past it, billed, up to four times it. So call `account_usage_get` first, set its
+     `marketing_emails` level (used, the number, `past`, `rate`, `ceiling`) against totalQueued,
+     and say what going past costs before the send.
  - totalQueued is NOT the number who will receive it. The 7-day per-contact frequency cap is applied
      at DISPATCH by the cron tick, not at materialization, and skippedBreakdown only ever contains
      no_email / suppressed_bounce / suppressed_complaint / suppressed_manual / globally_unsubscribed.

@@ -1,6 +1,6 @@
 ---
 name: hiveku-seo-agency
-description: "Full SEO agency methodology for operating a Hiveku account. Load when someone says \"we're not showing up on Google\", \"we dropped off page one\", \"why does [competitor] come up above us?\", \"our Google listing has the wrong hours\", \"someone left us a bad review on Google\", \"our old blog posts don't bring in leads anymore\", \"ChatGPT never mentions us\", \"we just signed a new SEO client\", \"build us an SEO strategy\", \"what keywords should we go after\", \"optimize this page\", \"write a brief for\", \"run a technical audit\", \"get us more backlinks\", \"who's mentioning us\", \"we're redesigning the site\", \"was it the Google update\", \"traffic fell off a cliff\", \"rank us for X\", \"did organic actually convert\", \"our Shopify store doesn't rank\", or \"rank our YouTube videos\" - and for ANY SEO work: keyword research, technical or content audits, rank tracking and ranking movements, content gaps, decay, cannibalization, on-page and schema fixes, backlinks and link building, competitor intelligence, local SEO and Google Business Profile (the map pack, listings, review replies), AEO / AI-answer visibility, and weekly checkups or monthly SEO reports and deliverables. ALSO load before risky SEO asks - deleting tracked keywords, projects, or GBP review replies, replying to all reviews at once, skipping the audit or baseline, \"disavow these links\", \"submit us to every directory\", \"crawl the whole site\", \"sync every keyword on every AI engine\", \"block the crawlers in robots.txt\", \"delete the tracking project and start over\", \"generate 50 city pages\" - the refusal rules live here."
+description: "SEO agency methodology for a Hiveku account. Load when someone says \"we're not showing up on Google\", \"why does [competitor] come up above us?\", \"our Google listing has the wrong hours\", \"ChatGPT never mentions us\", \"traffic fell off a cliff\", \"did organic actually convert\", or \"rank our YouTube videos\" - and for ANY SEO work: keyword research, technical and content audits, rank tracking, content gaps, decay, cannibalization, on-page and schema fixes, link building and backlinks, competitor intelligence, local SEO and Google Business Profile (map pack, listings, review replies), AEO / AI-answer visibility, and SEO checkups and reports. ALSO load before risky SEO asks - deleting tracked keywords, projects, or review replies, replying to all reviews at once, skipping the audit or baseline, \"disavow these links\", \"submit us to every directory\", \"block the crawlers in robots.txt\", \"generate 50 city pages\", crawling the whole site, syncing every keyword on every AI engine - the refusal rules live here."
 ---
 
 # Hiveku SEO Agency Operating System
@@ -234,8 +234,10 @@ check day. `check_frequency` defaults to weekly.
 | H LLM-scored, budget-gated | sweeps | `seo_eeat_scores`, `seo_aeo_brand_audit` daily budget |
 | I one search, 24h cooldown | listings footprint | `seo_citations_audit` |
 
-The DataForSEO balance can go NEGATIVE: every metered call then returns 402 with no per-tool
-warning; 503 `dataforseo_unconfigured` means no credentials. Neither means "clean" or "no data".
+A metered call the plan refuses returns 402 `seo_research_limit` (limit_kind plan_limit): this
+month's research lookups are used up; they start again next month, and the next plan has more
+(`account_usage_get`, `research_lookups`). Nothing was spent; do not retry it. 503
+`dataforseo_unconfigured` means no credentials. Neither means "clean" or "no data".
 
 ## Dispatch table - play, first tools, then load the reference
 

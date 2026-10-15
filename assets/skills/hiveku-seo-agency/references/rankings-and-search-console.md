@@ -17,7 +17,8 @@ the operating system; this is one instrument panel.
 
 Cost classes: A = free DB read; write = free, confirm-gated; B = Labs per request (COUNTRY codes
 only); C = live SERP per request per location. GSC reads are free platform calls against Google's
-quota. A 402 on a metered call is a negative DataForSEO balance, never "no data".
+quota. A 402 on a metered call is `seo_research_limit` (this month's research lookups are used up;
+they start again next month, and the next plan has more), never "no data".
 
 | Tool | Status | Cost class | Note |
 |---|---|---|---|

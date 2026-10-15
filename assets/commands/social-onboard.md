@@ -44,7 +44,9 @@ first week of posts is `/hiveku:social-plan`, later.
    own Google app is Gmail only); `true` means a connect task pointing at
    `/hiveku:connect-integration`. Never tell a client a platform is unsupported
    before reading it. A Page that is also active on another Hiveku account is a conflict you
-   surface, not one you decide.
+   surface, not one you decide. Call `account_usage_get` too: tell the person what the plan
+   includes (`social_profiles`, `x_posts`), what is used and what happens past the number before
+   any new profile is connected.
 2. Real history, both feeds. `social_list_posts({ limit: 100 })` (page past 100) is what Hiveku
    drafted, scheduled, held, published or failed, and only that: read `status` per row, and
    name anything at `pending_approval` with how long it has waited - that is inherited work the

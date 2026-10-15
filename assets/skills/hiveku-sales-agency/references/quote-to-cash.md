@@ -12,8 +12,11 @@ the SKILL.md approval rule applies to every send, with the exact document and ro
   { description, quantity, unit_cents, ... } - ALL MONEY IN CENTS. estimate_number auto-generates.
   For a company-level deal, create and link the company FIRST (SKILL.md section 2, Companies) so
   the estimate hangs off the right object.
-- `crm_estimate_send({ estimate_id, channel })` - email | sms | both (SMS needs the voice add-on);
-  mints a 30-day portal token; pass idempotency_key to dedupe re-sends. Get approval before sending.
+- `crm_estimate_send({ estimate_id, channel })` - email | sms | both. The SMS branch needs phones
+  set up on the account (they come with every paid plan, and an owner or admin sets them up in
+  Communications); otherwise the text is not sent and the answer says why (channel sms: an error;
+  channel both: sms.ok false beside the email result). It mints a 30-day portal token; pass
+  idempotency_key to dedupe re-sends. Get approval before sending.
   After an ambiguous timeout on a send, READ before re-sending: `crm_estimate_get` (status flips to
   sent) - and if you must retry, pass the SAME idempotency_key so the dedupe can catch it, never a
   fresh one.

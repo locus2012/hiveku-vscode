@@ -69,10 +69,12 @@ per keyword. Refuse it; scope it.
 
 ### 2. The 402 and 503 symptoms
 
-- The DataForSEO balance can go NEGATIVE. Every metered call then returns 402 with no
-  per-tool warning and no balance pre-check anywhere. A 402 is a billing event: the
-  research section becomes `insufficient_evidence`, the report says so, the human tops up.
-  Never read 402 as "no results".
+- A 402 on a metered call is the plan's answer, 402 `seo_research_limit` (limit_kind
+  plan_limit): this month's research lookups are used up (or the plan has none); they start
+  again next month, and the next plan has more (`account_usage_get`, `research_lookups`).
+  Nothing was spent. The research section becomes `insufficient_evidence`, the report says so,
+  and the person hears what waits and why. Never read 402 as "no results", and never retry
+  into it.
 - 503 `dataforseo_unconfigured` means no credentials on the account. Not clean, not empty,
   not measured.
 - Two unrelated families: vendor rate limits (429, retry after the window) and
@@ -405,7 +407,7 @@ means re-scope whatever the KD says.
 
 | Symptom | Cause, in check order | Action |
 |---|---|---|
-| 402 on every metered call | negative balance | stop; `insufficient_evidence`; tell the human; never retry into it |
+| 402 on every metered call | `seo_research_limit`: this month's research lookups are used up | stop; `insufficient_evidence`; tell the human what waits and when it starts again; never retry into it |
 | 503 `dataforseo_unconfigured` | no credentials | same; a setup task, not a finding |
 | 200 with empty `items[]` | city on a Labs call; a dropped argument name; language mismatch; a filter on a field this endpoint lacks | one broad seed at 2840 with no filters; rows there means the arguments were wrong |
 | `page-intersection` returns shared keywords, not a gap | no `exclude_pages` in the wrapper | raw tool with `exclude_pages` |

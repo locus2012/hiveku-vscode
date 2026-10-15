@@ -4,7 +4,9 @@ argument-hint: "[local <area code|city|state> | toll-free <prefix>]"
 ---
 Buy a number for the bound account: $ARGUMENTS. Follow the **hiveku-phone-agency** skill - load
 `references/numbers-and-e911.md` first. The purchase tools are newly deployed: if a name does not
-resolve, the deploy has not landed - use the dashboard step for that rung.
+resolve, the deploy has not landed - use the dashboard step for that rung. Call
+`account_usage_get` first and tell the person what the plan includes (its `phone_numbers` level),
+what is used and what happens past the number.
 
 1. **Search** - `voice_numbers_search`. Each call is a billed carrier request: ONE search, no
    looping. A local search must name at least one of `area_code`, `locality` or `state` (422

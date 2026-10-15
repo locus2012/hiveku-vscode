@@ -18,7 +18,8 @@ family's mechanics, the write discipline behind one mutation
   keywords_data; C live SERP per location; D backlinks; E on_page per URL; F crawl per page; G LLM
   mentions, one live check per keyword per engine against the daily re-check limit; H LLM-scored,
   budget-gated; I the citations audit).
-  A 402 is a negative balance, a 503 `dataforseo_unconfigured` is no credentials: neither is clean.
+  A 402 is `seo_research_limit` (this month's research lookups are used up; they start again next
+  month), a 503 `dataforseo_unconfigured` is no credentials: neither is clean.
 - **Read back after every write**: the read-back named in the step is the verification, not the
   200. **Hydrate first**: `account_context_get({ domain: 'seo' })` and `memory_list({ domain:
   'seo' })` (`include_project_scoped: true` on project-scoped accounts) before every recipe.
