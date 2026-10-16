@@ -247,6 +247,14 @@ like a winner. Keep ad final URLs on the original page; the split happens on the
 gclid and UTM tags. A route can send one ad platform's clicks to a page of its own without changing
 the ad. Quote the test's verdict (`project_ab_test_get`) as reported. Page A/B tests are not the ad
 platforms' own campaign experiments (`ppc_experiments_list`): those split a campaign, not a page.
+"Did Version B win for Google Ads clicks?" `project_ab_test_get` breaks a test's results down by ad
+platform (`adPlatforms`) and by traffic channel (`channels`): each visitor counts once, on the visit
+in which they first saw the test, and unpaid visits are one row, "Not from an ad". Quote a row with
+its visitors and conversions; a row is not a verdict, and a thin row is noise. After a test that
+sent everyone to Version B, "Make Version B the page" (`project_ab_test_action` action `promote`,
+preview first, then the user's yes) replaces the page the ads land on once the next production
+deploy is live, and a permanent 301 from the copy's address to the original keeps old links
+working. No ad change is needed: the final URLs already point at the original.
 Depth: `references/bidding-budgets-pacing.md`.
 
 ## 4. Play: Quality + relevance (Quality Score program)

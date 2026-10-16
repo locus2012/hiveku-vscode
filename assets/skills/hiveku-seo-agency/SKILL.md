@@ -357,7 +357,9 @@ Field shapes, payloads and traps: `hiveku-automation-agency/references/node-rail
   original while its test runs and is kept out of the sitemap on purpose: do not index it, link to
   it, add it to the sitemap or "fix" it as duplicate content. The canonical is sent in the page's
   HTTP headers, not in its HTML, so an audit that reads only the HTML reports it missing. A route's
-  page gets no canonical. The A/B redirect is a temporary 302 by design. Before blaming rankings
+  page gets no canonical. The A/B redirect is a temporary 302 by design. After a test, "Make Version
+  B the page" or "Remove the test copy" turns the copy's address into a permanent 301 to the
+  original once the next production deploy is live; that 301 is meant to stay. Before blaming rankings
   or traffic on the world, rule out a running or recently ended test or route on the page
   (`project_ab_tests_list`).
 - `seo_ga4_report` 429 is the hourly quota - do not retry; it is the ONLY GA4 numbers tool.
