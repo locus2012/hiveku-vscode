@@ -587,6 +587,8 @@ export const DEPARTMENTS: Department[] = [
       'out of the sitemap on purpose: do not index it, link to it, add it to the sitemap or "fix" it as duplicate content. ' +
       'The canonical is sent in the page\'s HTTP headers, not in its HTML, so an audit that reads only the HTML reports it ' +
       'missing. A route\'s page gets no canonical. The A/B redirect is a temporary 302. ' +
+      'After a test ends, promote (Version B becomes the page) or remove_copy turns the copy\'s address into a permanent ' +
+      '301 to the original once the next production deploy is live, so the copy needs no SEO cleanup. ' +
       'Before blaming rankings, rule out a running or recently ended test or route ' +
       '(`project_ab_tests_list`, in Website Pages).',
   },
@@ -628,7 +630,10 @@ export const DEPARTMENTS: Department[] = [
       'a running test or route, list the site\'s tests (`project_ab_tests_list`, in Website Pages); hold the change or say ' +
       'plainly that it skews the result. Keep ad final URLs on the original page: the split happens on the site and keeps ' +
       'gclid and UTM tags. A route can send one ad platform\'s clicks to a page of its own without changing the ad. Page A/B ' +
-      'tests are not the ad platforms\' own campaign experiments.',
+      'tests are not the ad platforms\' own campaign experiments. Results also break down by ad platform ' +
+      '(`results.adPlatforms`: did Version B win for Google Ads clicks?), but the verdict is on all visitors. A promote ' +
+      'after the test replaces the page the ads land on at the next production deploy, and a 301 keeps old links to the ' +
+      'copy working, so no ad change is needed.',
     setup: PPC_SETUP,
   },
   {
@@ -1297,7 +1302,13 @@ export const DEPARTMENTS: Department[] = [
       'For page CODE, download the project and edit files; for CMS-driven content use the Website Content (CMS) department.\n' +
       'Page A/B tests split a page\'s visitors between the original and a second version and count conversions anywhere on ' +
       'the site afterwards. Read: `project_ab_tests_list({project_id})`, then `project_ab_test_get({project_id, test_id})` for ' +
-      'results; never call a winner before its verdict says winning or won. `project_ab_test_create({project_id, page_path, ' +
+      'results; never call a winner before its verdict says winning or won. Goals: leads (the default), a form, reaching a ' +
+      'page, a tracked event, a goal from Analytics, a call, stayed 30 or 60 seconds, scrolled 50% or 75%, or bought ' +
+      'something (Shopify storefronts built or rebuilt since purchases became a goal). Results also break down by traffic ' +
+      'channel and ad platform, and `alsoCompared` (engaged time and revenue per visitor) never decides the winner. ' +
+      'After a test made with a test copy ends, `project_ab_test_action` with action promote (Version B becomes the page) ' +
+      'or remove_copy saves one version on Main, live at the next production deploy (preview first, then confirm). ' +
+      '`project_ab_test_create({project_id, page_path, ' +
       'variant_path | make_copy})` saves a draft and changes nothing live (make_copy commits a copy of the page, so it needs ' +
       'confirm). To change the second version, edit the copy\'s own files (never the original\'s), deploy to production, then ' +
       'start the test: it cannot start until both pages answer on the live site. While a test runs or is paused, change ' +

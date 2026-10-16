@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.18
+- **Claude Code knows what page A/B tests do now.** The Website guide lists the goals (leads, a form, a page, a tracked event, a goal from Analytics, a call, stayed 30 or 60 seconds, scrolled 50% or 75%, bought something), the results by traffic channel and ad platform, and that "also compared" (engaged time and revenue per visitor) never decides the winner. It also says how to make Version B the page, or remove the test copy, after a test made with a test copy ends. The Ads guide answers "did Version B win for Google Ads clicks?" and says a promote needs no ad change. The SEO guide says the copy's address becomes a permanent 301 after a promote or removal.
+- **The vendored skills match the plugin** (0.27.56).
+
 ## 0.91.17
 - **Changing who gets lead emails always asks.** Claude Code in your project folders asks before `marketing_form_notifications_update`, in every permission mode, as the Claude Code and Codex plugins do. That tool turns a site's lead emails off ("Don't email anyone"), mutes a form or sends its leads to other people, which is the owner's choice. Hiveku keeps it off for AI tools until these releases are out; reading who gets a site's lead emails (`marketing_form_notifications_get`) needs no ask. Hiveku folders open in VS Code get the new rule when the extension starts.
 - **The forms guides say how lead emails work.** Who gets a lead email (the form's list, else the site's list, else the billing email, else everyone on the account), that muting a form or "Don't email anyone" stops the email, the Slack post, the phone alert and the visitor's automatic reply, that a lead coming through a webhook with no site link reaches none of the site's settings until the owner presses Link to this site, and that a failed workflow does not mean nobody was told. The vendored skills match the plugin (0.27.53).
