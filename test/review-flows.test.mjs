@@ -378,8 +378,15 @@ describe('what the extension writes and wires', () => {
       'the PPC override stays on the ask list',
     );
     assert.ok(
-      ask.trimEnd().endsWith("'mcp__hiveku__marketing_form_notifications_update',"),
-      'the newest ask rule, the lead-email change, goes at the END',
+      ask.includes("'mcp__hiveku__marketing_form_notifications_update',"),
+      'the lead-email change stays on the ask list',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "'mcp__hiveku__env_group_create',\n  'mcp__hiveku__env_group_update',\n  'mcp__hiveku__env_group_delete',\n" +
+          "  'mcp__hiveku__env_group_set',\n  'mcp__hiveku__env_group_link',\n  'mcp__hiveku__env_group_unlink',",
+      ),
+      'the newest ask rules, the environment group writes, go at the END in this order',
     );
   });
 

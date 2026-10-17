@@ -856,6 +856,17 @@ const HIVEKU_ASK: string[] = [
   // plugin and Codex; the MCP server refuses it inside hiveku_batch, and the builder holds it for agents
   // (403 agent_changes_not_enabled) until these releases are out. Its read stays unasked. Appended last.
   'mcp__hiveku__marketing_form_notifications_update',
+  // An account's environment groups (2026-10-17, plan B4, MCP #236, builder #1517): variables several sites
+  // share. A save reaches every linked site's live functions, a link or unlink adds or removes a site's values
+  // at once, and a deleted group's values go with it. Every call asks, in auto mode too, as in the plugin and
+  // Codex. The reads (env_groups_list, env_group_get, env_group_history, project_env_groups) stay unasked.
+  // Appended last, in this order.
+  'mcp__hiveku__env_group_create',
+  'mcp__hiveku__env_group_update',
+  'mcp__hiveku__env_group_delete',
+  'mcp__hiveku__env_group_set',
+  'mcp__hiveku__env_group_link',
+  'mcp__hiveku__env_group_unlink',
 ];
 
 /**
