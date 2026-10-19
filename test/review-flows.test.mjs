@@ -383,9 +383,10 @@ describe('what the extension writes and wires', () => {
     );
     assert.ok(
       ask.trimEnd().endsWith(
-        "'mcp__hiveku__account_timezone_set',\n  'mcp__hiveku__helpdesk_assistant_knowledge_sources_update',",
+        "'mcp__hiveku__env_group_create',\n  'mcp__hiveku__env_group_update',\n  'mcp__hiveku__env_group_delete',\n" +
+          "  'mcp__hiveku__env_group_set',\n  'mcp__hiveku__env_group_link',\n  'mcp__hiveku__env_group_unlink',",
       ),
-      'the newest ask rules, the account timezone and the assistant sources, go at the END in this order',
+      'the newest ask rules, the environment group writes, go at the END in this order',
     );
   });
 

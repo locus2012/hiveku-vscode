@@ -861,9 +861,20 @@ const HIVEKU_ASK: string[] = [
   // whole account. helpdesk_assistant_knowledge_sources_update (builder #1569, MCP #239) decides what the
   // website assistant may tell anyone who opens the chat, and the builder holds it for agents
   // (403 agent_changes_not_enabled) until these releases are out. Every call asks, in auto mode too, as in
-  // the plugin and Codex; their reads stay unasked. Appended last, in this order.
+  // the plugin and Codex; their reads stay unasked. Appended after the lead emails, in this order.
   'mcp__hiveku__account_timezone_set',
   'mcp__hiveku__helpdesk_assistant_knowledge_sources_update',
+  // An account's environment groups (2026-10-17, plan B4, MCP #236, builder #1517): variables several sites
+  // share. A save reaches every linked site's live functions, a link or unlink adds or removes a site's values
+  // at once, and a deleted group's values go with it. Every call asks, in auto mode too, as in the plugin and
+  // Codex. The reads (env_groups_list, env_group_get, env_group_history, project_env_groups) stay unasked.
+  // Appended last, in this order.
+  'mcp__hiveku__env_group_create',
+  'mcp__hiveku__env_group_update',
+  'mcp__hiveku__env_group_delete',
+  'mcp__hiveku__env_group_set',
+  'mcp__hiveku__env_group_link',
+  'mcp__hiveku__env_group_unlink',
 ];
 
 /**
