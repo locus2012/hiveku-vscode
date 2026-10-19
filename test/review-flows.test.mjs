@@ -378,8 +378,14 @@ describe('what the extension writes and wires', () => {
       'the PPC override stays on the ask list',
     );
     assert.ok(
-      ask.trimEnd().endsWith("'mcp__hiveku__marketing_form_notifications_update',"),
-      'the newest ask rule, the lead-email change, goes at the END',
+      ask.includes("'mcp__hiveku__marketing_form_notifications_update',"),
+      'the lead-email change stays on the ask list',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "'mcp__hiveku__account_timezone_set',\n  'mcp__hiveku__helpdesk_assistant_knowledge_sources_update',",
+      ),
+      'the newest ask rules, the account timezone and the assistant sources, go at the END in this order',
     );
   });
 
