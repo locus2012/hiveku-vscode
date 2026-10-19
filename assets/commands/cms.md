@@ -15,7 +15,9 @@ manifest (e.g. `blog`), NOT a UUID.
    / `cms_delete_collection`. Fields: `cms_add_field` / `cms_update_field` / `cms_remove_field`
    (valid types from `cms_field_types`). Changing schema affects every entry - confirm first.
 3. ENTRIES (content): `cms_write_entry({ project_id: <the project_id>, collection_id, slug, fields })`
-   (upsert by slug; `data` is an accepted alias for `fields`). The optional top-level `status`
+   (upsert by slug; `data` is an accepted alias for `fields`). On a native Hiveku-CMS project the
+   write REPLACES the whole item (a field you leave out is dropped): to add or fix one value,
+   `cms_read_entry` it and write it back with all its fields plus that value. The optional top-level `status`
    ("draft"|"published"|"scheduled") and `publish_at` are merged in as ORDINARY FIELDS named `status`
    and `publishAt` - `status: "draft"` does NOT create a draft, and `publish_at` alone only date-gates
    rendering (a real scheduled flip needs the schedule cron). Bulk-create in ONE call with
@@ -24,7 +26,8 @@ manifest (e.g. `blog`), NOT a UUID.
 4. PUBLISH - the flow is write-draft → review → promote, and `draft: true` is the only thing that
    makes a draft:
  - `cms_write_entry({ ..., fields, draft: true })` writes the entry's draft shadow instead of the
-     live entry (validation is skipped, so partial payloads are fine).
+     live entry (validation is skipped, so partial payloads are fine). The shadow is the
+     `<slug>.draft.json` (or `.draft.mdx`) file beside the item: unpublished edits, not a separate item.
  - Review it: `cms_read_entry({ ..., draft: "1" })` reads the shadow back. `cms_preview_write` can
      paint the Fly preview iframe, but it writes NOTHING to the database and creates no draft -
      promoting after it alone returns 404.
@@ -43,5 +46,14 @@ manifest (e.g. `blog`), NOT a UUID.
      shadow, no version history and no restore on Webflow: `cms_delete_entry` unpublishes then
      deletes the item for good, so confirm every delete with the exact slugs. The rest of the
      Webflow surface is `/hiveku:webflow` and `hiveku-web-agency/references/webflow-sites.md`.
+5. A BUILD THAT FAILS ON CONTENT: a missing page parameter (`generateStaticParams`, E617) usually
+   means an item lacks the value. Check the items first, in EVERY collection that feeds a page with
+   a parameter, and repair each with `cms_read_entry` + `cms_write_entry` (all its fields plus the
+   missing value). The route is wrong only when the error says "received number" or every item
+   already has the value as a string; never patch a route to skip an item or hand-edit a generated
+   reader. Test-build before calling it fixed (`hiveku-web-agency/references/build-and-deploy.md`,
+   Rule 29a). Tell the client in the editor's words ("the new news item had no web address saved");
+   never ask them to "add a slug" or to fill in any field the editor does not show, and never name
+   slug, wfOrder, file names, E617 or generateStaticParams to them.
 Write brand-aligned copy (read `account_context_get` / the account memory first), confirm destructive
 changes, and after edits check the page in the browser or the live preview.
