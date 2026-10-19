@@ -2,6 +2,7 @@
 
 ## 0.91.19
 - **Two more writes always ask.** Claude Code in your project folders asks before `account_timezone_set` and `helpdesk_assistant_knowledge_sources_update`, in every permission mode, as the Claude Code and Codex plugins do. The account's timezone moves every schedule and report day for the whole account. Turning one of the website assistant's sources on (its Google listing, website pages or documents), or sharing a knowledge base with it, lets anyone who opens the chat on your website be told what that holds. Reading either needs no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
+- **The vendored skills match the plugin** (main after 0.27.58, with plugin #134): the website guide's build-and-deploy reference and the CMS command.
 
 ## 0.91.18
 - **Claude Code knows what page A/B tests do now.** The Website guide lists the goals (leads, a form, a page, a tracked event, a goal from Analytics, a call, stayed 30 or 60 seconds, scrolled 50% or 75%, bought something), the results by traffic channel and ad platform, and that "also compared" (engaged time and revenue per visitor) never decides the winner. It also says how to make Version B the page, or remove the test copy, after a test made with a test copy ends. The Ads guide answers "did Version B win for Google Ads clicks?" and says a promote needs no ad change. The SEO guide says the copy's address becomes a permanent 301 after a promote or removal.

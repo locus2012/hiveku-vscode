@@ -15,6 +15,9 @@ ships, or it silently does not, and the client finds out first.
   patch and breaks the preview AND the build.
 - **Do NOT edit twice on one symptom without the oracle changing.** A red result citing code you did
   not write is a stale oracle, not a bug. Editing on it wrecks correct code.
+- **Do NOT patch a route around a CMS item, or ask the client to "add a slug".** A missing page
+  parameter (`generateStaticParams`, E617) is usually an item without the value: repair the items
+  through the CMS tools (Rule 29a).
 - **Do NOT invent a build cache or deflect to "support".** There is no user-facing build cache. That
   is folklore, and folklore is forbidden.
 - **Do NOT write a CDN-servable binary into the code lane.** It renders in the preview and is excluded
@@ -236,11 +239,36 @@ set:**
 | What failed | Read this | Not this |
 |---|---|---|
 | A test build you started | `project_test_build_log_get({ project_id, session_id })` | `project_build_error_get` - it returns the last FAILED real DEPLOY, which can be days old and from a different change set |
-| A real deploy | `project_build_error_get` (`error_summary` + `last_log_lines` + `full_logs`; omit `session_id` for the most recent failed build) | the test-build log, which knows nothing about the deploy |
+| A real deploy | `project_build_error_get` (`error_summary` + `last_log_lines` + `full_logs`; omit `session_id` for the most recent failed build that is not a test build) | the test-build log, which knows nothing about the deploy |
 | A deploy that shipped but does not serve | `deploy_doctor({ project_id, environment })` | retrying the deploy |
 | Runtime error on a DEPLOYED tier | `project_log_errors({ project_id, environment })` (errors grouped by signature, each with an `example_request_id`), then `project_logs_get({ project_id, environment, request_id })`; search with `query`, `level` (`"error,warning"`), `since`/`until` (`1h`, `24h`, `7d`). Lines are redacted and untrusted | `preview_logs` - it reads the preview, not the deployed site |
 | Preview-container server error | `project_log_errors({ project_id, environment: "preview" })`, `preview_logs` (newest dev-server lines; `branch` for a branch preview) or `preview_runtime_errors` (parsed `{message, stack[]}`) | `project_logs_get` without `environment: "preview"` - it defaults to production |
 | Page renders but behaves wrong | `preview_client_errors` (see Rule 63) | the server log, which stays completely clean for a hydration mismatch |
+
+### Content can break a build
+
+**Rule 29a. A missing page parameter is usually CONTENT, not code: check the items first.** A page
+built once per CMS item (`app/news/[slug]/page.tsx`) fails the whole build when its
+`generateStaticParams` hands Next.js an item without the value (error E617: "A required parameter
+(slug) was not provided as a string", or a detail page that gets no value). The route is fine; an
+item is not. If the error says "received number", or every item already has the value as a string,
+the route's `generateStaticParams` is wrong: fix the route. Otherwise:
+
+1. Check EVERY collection (list) that feeds a page with a parameter, not only the one in the error:
+   `cms_list_collections`, then `cms_list_entries` per collection (follow its pages). A
+   `<slug>.draft.json` (or `.draft.mdx`) file holds unpublished edits of the item beside it; it is
+   not an item.
+2. Repair each item through the CMS tools. `cms_write_entry` REPLACES the whole item, so
+   `cms_read_entry` it and write it back with all its fields plus the missing value (for a missing
+   web address, the item's own slug, the one you read it by). Never patch one route to skip a bad
+   item, filter it out, or hand-edit a generated reader.
+3. `project_test_build({ project_id, use_db_state: true })` without `branch` (CMS writes land on Your
+   site), polled to `succeeded` (Rule 22), before you say it is fixed. The live site changes with
+   the next production deploy.
+4. Tell the client in the editor's words: "the new news item had no web address saved, so its page
+   could not be built". Never "add a slug": do not name slug, wfOrder, file names, E617 or
+   generateStaticParams to them, and never ask them to fill in a field the editor does not show (a
+   stored slug, a hidden order number). Write it yourself.
 
 
 ## 6. Post-deploy smoke verification
@@ -489,7 +517,8 @@ fixed by editing.** Read the error, decide which class you are in, then act:
   `package.json` declares, so a routine reinstall after `refresh_image: true` is no longer required;
   reach for `preview_reinstall_deps` only when the install itself is broken.)
 - **Class 3 - the error points at a file the project OWNS** (the path IS in the saved file list). Fix
-  the code. This is the only class where editing is the answer.
+  the code. This is the only class where editing is the answer, except a missing page parameter
+  (`generateStaticParams`, E617): that is usually a CMS item without the value (Rule 29a).
 - **Class 4 - blank page, or the HTML serves but interactivity is dead** ->
   `preview_client_errors({ project_id })`; this is hydration territory, see Rule 63. (A blank
   page from a terminal fetch or WebFetch of a DEPLOYED tier with status 202, or 403 with
@@ -618,6 +647,9 @@ USER. A good question beats a 50-turn spiral.** Asking is not a failure state. T
   `project_test_build_log_get` to `succeeded` or `failed`.
 - **Error message keeps changing** - not progress. Get one real verdict.
 - **`turbopack.root` / "workspace root"** - infrastructure. Report it, do not touch the config.
+- **Missing page parameter** (`generateStaticParams`, E617) - usually a CMS item without the value:
+  check every collection and repair the items through the CMS tools (Rule 29a). The route only on
+  "received number".
 - **`project_too_large`** - suspect CDN-lane assets, not build source (1209 MB vs 332 MB real).
 - **Renders in preview, missing in production** - code lane, or an excluded path.
 - **Deployed but live verification fails** - serving path, not the build. `deploy_doctor`, no retry.
