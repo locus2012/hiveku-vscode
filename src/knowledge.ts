@@ -856,6 +856,14 @@ const HIVEKU_ASK: string[] = [
   // plugin and Codex; the MCP server refuses it inside hiveku_batch, and the builder holds it for agents
   // (403 agent_changes_not_enabled) until these releases are out. Its read stays unasked. Appended last.
   'mcp__hiveku__marketing_form_notifications_update',
+  // The account's timezone and where the website assistant looks answers up (2026-10-19, plugin 0.27.58,
+  // Codex 0.3.22). account_timezone_set (builder #1576, MCP #243) moves every schedule and report day for the
+  // whole account. helpdesk_assistant_knowledge_sources_update (builder #1569, MCP #239) decides what the
+  // website assistant may tell anyone who opens the chat, and the builder holds it for agents
+  // (403 agent_changes_not_enabled) until these releases are out. Every call asks, in auto mode too, as in
+  // the plugin and Codex; their reads stay unasked. Appended last, in this order.
+  'mcp__hiveku__account_timezone_set',
+  'mcp__hiveku__helpdesk_assistant_knowledge_sources_update',
 ];
 
 /**
