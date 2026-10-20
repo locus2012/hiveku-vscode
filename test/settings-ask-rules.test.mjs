@@ -75,9 +75,15 @@ const ADDED = [
 /** Every ask rule, as the scaffold must write them (the .mcp.json server is "hiveku"). */
 /**
  * Version control: a rollback apply always asks (Versions Wave 2), so does settling merge conflicts
- * (2026-10-08), and so does joining the merge line, which is the approval to merge (2026-10-09).
+ * (2026-10-08), so does joining the merge line, which is the approval to merge (2026-10-09), and so
+ * does running a review's checks again, which spends the site's test builds (2026-10-19).
  */
-const VERSIONS = ['mcp__hiveku__project_vcs_rollback', 'mcp__hiveku__project_vcs_resolve', 'mcp__hiveku__project_vcs_queue_add'];
+const VERSIONS = [
+  'mcp__hiveku__project_vcs_rollback',
+  'mcp__hiveku__project_vcs_resolve',
+  'mcp__hiveku__project_vcs_queue_add',
+  'mcp__hiveku__project_vcs_checks_rerun',
+];
 
 /** A site's secrets (2026-10-10, plan B3): writing, deleting, copying into the preview and revealing always ask. */
 const SECRETS = [
