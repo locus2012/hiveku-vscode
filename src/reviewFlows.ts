@@ -246,6 +246,54 @@ export function mergeableNote(mergeable: api.Mergeable | null | undefined, targe
   return null;
 }
 
+/** What a pull request's checks say, for its choice in the actions list; null when it has none. */
+export function checksChoice(checks: api.ReviewChecks | null | undefined): { label: string; description: string } | null {
+  if (!checks) return null;
+  const older = checks.current === false ? ' (for an older state of the branch; it is checked again by itself)' : '';
+  if (checks.state === 'running') return { label: '$(sync~spin) Checks running', description: `the build and the site's checks on the branch${older}` };
+  if (checks.state === 'passed') return { label: '$(pass) Checks passed', description: `${checks.runs.length} answered${older}` };
+  const failed = checks.runs.find((run) => run.status === 'failed');
+  return { label: '$(error) Checks failed', description: `${failed?.summary ?? 'see the log'}${older}` };
+}
+
+/** Each answer of a pull request's checks on its own line, for the message the checks choice opens. */
+export function checksMessage(checks: api.ReviewChecks): string {
+  const runs = checks.runs.map((run) => `${run.status === 'passed' ? 'Passed' : run.status === 'failed' ? 'Failed' : 'Warning'}: ${run.summary}`);
+  return runs.length ? runs.join('\n') : 'No answer yet: the build and the site\'s checks are running on the branch.';
+}
+
+const PREVIEW_REASON_WORDS: Record<NonNullable<api.ReviewPreview['reason']>, string> = {
+  live_data:
+    "none is started for it: the site's development settings hold a database or keys a preview must not get (the review's page says which, and what would change it)",
+  site_cap: 'none started yet: the site already runs as many previews as pull requests may start',
+  account_cap: 'none started yet: your sites already run as many previews as pull requests may start',
+  failed: 'the preview did not start; it is tried again later and when the branch changes',
+  idle: 'stopped after an hour unused; it starts again when the branch changes',
+};
+
+/**
+ * What a pull request's preview says, for its choice in the actions list, and
+ * what choosing it does: open it when it serves, look again while it starts,
+ * else open the review's page (why none runs is in the description). Null when
+ * nothing is known.
+ */
+export function previewChoice(
+  preview: api.ReviewPreview | null | undefined,
+): { label: string; description: string; act: 'preview' | 'refresh' | 'dashboard'; url: string | null } | null {
+  if (!preview) return null;
+  if (preview.state === 'live' && preview.url) {
+    return {
+      label: '$(globe) Open the preview',
+      description: preview.started_for === 'review' ? 'started for this pull request' : 'a preview of its branch',
+      act: 'preview',
+      url: preview.url,
+    };
+  }
+  if (preview.state === 'starting') return { label: '$(sync~spin) Preview starting', description: 'opens here once it is ready', act: 'refresh', url: null };
+  if (preview.reason) return { label: '$(info) No preview running', description: PREVIEW_REASON_WORDS[preview.reason] ?? '', act: 'dashboard', url: null };
+  return null;
+}
+
 /**
  * Offer to restore an archived branch when `err` is a branch_archived refusal.
  * Returns true when it handled the error (the caller shows nothing else).
