@@ -383,10 +383,13 @@ describe('what the extension writes and wires', () => {
     );
     assert.ok(
       ask.trimEnd().endsWith(
-        "'mcp__hiveku__env_group_create',\n  'mcp__hiveku__env_group_update',\n  'mcp__hiveku__env_group_delete',\n" +
-          "  'mcp__hiveku__env_group_set',\n  'mcp__hiveku__env_group_link',\n  'mcp__hiveku__env_group_unlink',",
+        "'mcp__hiveku__env_group_set',\n  'mcp__hiveku__env_group_link',\n  'mcp__hiveku__env_group_unlink',\n" +
+          "  // Opening a sent email (2026-10-20, MCP #255, builder #1622): the answer is the email's whole content, and an\n" +
+          "  // app's password-reset, sign-in and invite emails hold live links that work for whoever reads them. Every call\n" +
+          "  // asks, as in the plugin (NEVER_AUTO_APPROVE) and Codex (0.3.25). Appended last.\n" +
+          "  'mcp__hiveku__email_message_get',",
       ),
-      'the newest ask rules, the environment group writes, go at the END in this order',
+      'the newest ask rule, opening a sent email, goes at the END, after the environment group writes',
     );
   });
 

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.21
+- **Opening a sent email always asks.** Claude Code in your project folders asks before `email_message_get`, in every permission mode, as the Claude Code and Codex plugins do. It returns a sent email's whole content, and an app's password-reset, sign-in and invite emails hold live links that work for whoever reads them. The other Email Service reads (`email_logs_list`, `email_usage`, `email_api_key_get`, `email_webhook_get`) need no ask. Hiveku folders open in VS Code get the new rule when the extension starts.
+
 ## 0.91.20
 - **Changing an environment group always asks.** Claude Code in your project folders asks before `env_group_create`, `env_group_update`, `env_group_delete`, `env_group_set`, `env_group_link` and `env_group_unlink`, in every permission mode, as the Claude Code and Codex plugins do. An environment group is a set of variables an account shares across its sites (Settings > Environment groups), so one change reaches every site linked to the group at its next deploy or live sync. Reading groups (`env_groups_list`, `env_group_get`, `env_group_history`, `project_env_groups`) needs no ask, and no group tool ever returns a value. Hiveku folders open in VS Code get the new rule when the extension starts.
 
