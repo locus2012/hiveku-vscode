@@ -349,7 +349,7 @@ describe('own changes and mergeability (builder #955, MCP #177)', () => {
     assert.equal(flows.previewChoice({ state: 'starting', url: 'https://x', started_for: 'review', reason: null }).act, 'refresh');
     const liveData = flows.previewChoice({ state: 'none', url: null, started_for: null, reason: 'live_data', withheld: ['DATABASE_URL'] });
     assert.equal(liveData.act, 'dashboard');
-    assert.match(liveData.description, /reach live data .*DATABASE_URL_DEV/);
+    assert.match(liveData.description, /reach live data or hold live keys \(a separate Hiveku database for development, DATABASE_URL_DEV, and test keys fix it\)/);
     for (const reason of ['site_cap', 'account_cap', 'failed', 'idle']) {
       assert.ok(flows.previewChoice({ state: 'none', url: null, started_for: null, reason }).description.length > 10, reason);
     }
