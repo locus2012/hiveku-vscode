@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.91.22
+- **A pull request shows its checks and preview.** On a site with Build before merging on, Hiveku builds an open pull request's branch and runs the site's checks before merging (type check, lint, tests). The pull request's actions in Source Control show the answer: running, passed, or failed with the first failing line, and whether it is for an older state of the branch. Opening it lists every answer, with a button to the review's page. The preview item opens the review's live preview, says it is starting, or says why none runs; when the site's development settings reach live data, it says how to fix that.
+- **Checking a branch again always asks.** Claude Code in your project folders asks before `project_vcs_checks_rerun`, in every permission mode, as the Claude Code and Codex plugins do: it spends the site's test builds, six per 15 minutes shared with people and the merge line. Hiveku folders open in VS Code get the new rule when the extension starts.
+- **`/hiveku-pr` uses the checks and the preview**: a review reads the current checks, and the merge line section says it builds the merged result again.
+
 ## 0.91.21
 - **Opening a sent email always asks.** Claude Code in your project folders asks before `email_message_get`, in every permission mode, as the Claude Code and Codex plugins do. It returns a sent email's whole content, and an app's password-reset, sign-in and invite emails hold live links that work for whoever reads them. The other Email Service reads (`email_logs_list`, `email_usage`, `email_api_key_get`, `email_webhook_get`) need no ask. Hiveku folders open in VS Code get the new rule when the extension starts.
 
