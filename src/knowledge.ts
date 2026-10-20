@@ -875,6 +875,10 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__env_group_set',
   'mcp__hiveku__env_group_link',
   'mcp__hiveku__env_group_unlink',
+  // Opening a sent email (2026-10-20, MCP #255, builder #1622): the answer is the email's whole content, and an
+  // app's password-reset, sign-in and invite emails hold live links that work for whoever reads them. Every call
+  // asks, as in the plugin (NEVER_AUTO_APPROVE) and Codex (0.3.25). Appended last.
+  'mcp__hiveku__email_message_get',
 ];
 
 /**
