@@ -264,7 +264,7 @@ export function checksMessage(checks: api.ReviewChecks): string {
 
 const PREVIEW_REASON_WORDS: Record<NonNullable<api.ReviewPreview['reason']>, string> = {
   live_data:
-    "none is started for it: the site's development settings reach live data or hold live keys (a separate Hiveku database for development, DATABASE_URL_DEV, and test keys fix it)",
+    "none is started for it: the site's development settings hold a database or keys a preview must not get (the review's page says which, and what would change it)",
   site_cap: 'none started yet: the site already runs as many previews as pull requests may start',
   account_cap: 'none started yet: your sites already run as many previews as pull requests may start',
   failed: 'the preview did not start; it is tried again later and when the branch changes',

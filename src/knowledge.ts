@@ -1701,8 +1701,8 @@ open PR → review → merge → \`/hiveku-deploy production\`.
   \`project_test_build_log_get({ project_id: "${pid}", session_id })\` has the log), else build the branch yourself with
   \`project_test_build({ project_id: "${pid}", use_db_state: true, branch: <source_branch> })\`. \`data.preview\` is the
   preview of the branch Hiveku starts for an open PR (\`url\` when \`state\` is "live"); \`reason\` "live_data" means none
-  is started because the site's development settings reach live data: say so, and start one by hand only on the
-  user's yes. Summarize what changes and flag anything risky BEFORE offering to merge. To post it,
+  is started because the site's development settings hold a database or keys a preview must not get (\`withheld\`
+  names them): say so, and start one by hand only on the user's yes. Summarize what changes and flag anything risky BEFORE offering to merge. To post it,
   show the user the text first, then ONE \`project_vcs_pr_review({ project_id: "${pid}", number, state, body, comments,
   source_fingerprint })\`: \`state\` "commented", or "changes_requested" when something must change before it merges;
   \`comments\` are \`{ path, line, body }\` at a line of the PR's version of a file it changes. \`project_vcs_pr_comment\`

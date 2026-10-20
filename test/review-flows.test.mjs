@@ -349,7 +349,9 @@ describe('own changes and mergeability (builder #955, MCP #177)', () => {
     assert.equal(flows.previewChoice({ state: 'starting', url: 'https://x', started_for: 'review', reason: null }).act, 'refresh');
     const liveData = flows.previewChoice({ state: 'none', url: null, started_for: null, reason: 'live_data', withheld: ['DATABASE_URL'] });
     assert.equal(liveData.act, 'dashboard');
-    assert.match(liveData.description, /reach live data or hold live keys \(a separate Hiveku database for development, DATABASE_URL_DEV, and test keys fix it\)/);
+    assert.match(liveData.description, /hold a database or keys a preview must not get \(the review's page says which, and what would change it\)/);
+    // Never "test keys" for every case: most keys have no test mode.
+    assert.doesNotMatch(liveData.description, /test keys/);
     for (const reason of ['site_cap', 'account_cap', 'failed', 'idle']) {
       assert.ok(flows.previewChoice({ state: 'none', url: null, started_for: null, reason }).description.length > 10, reason);
     }
@@ -359,7 +361,7 @@ describe('own changes and mergeability (builder #955, MCP #177)', () => {
     const src = (await fs.readFile(path.join(ROOT, 'src', 'knowledge.ts'), 'utf8')).replace(/\\`/g, '`').replace(/\s+/g, ' ');
     assert.match(src, /data\.checks` is the build and the site's checks that Hiveku runs on the branch: use them when `current` is true/);
     assert.match(src, /project_test_build_log_get\(\{ project_id: "\$\{pid\}", session_id \}\)` has the log/);
-    assert.match(src, /`reason` "live_data" means none is started because the site's development settings reach live data: say so, and start one by hand only on the user's yes/);
+    assert.match(src, /`reason` "live_data" means none is started because the site's development settings hold a database or keys a preview must not get \(`withheld` names them\): say so, and start one by hand only on the user's yes/);
     assert.match(src, /with "Build before merging" on that the merged result builds and passes the site's checks/);
   });
 
