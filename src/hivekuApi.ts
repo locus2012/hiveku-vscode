@@ -816,6 +816,39 @@ export interface PullRequestDetail {
   mergeable?: Mergeable | null;
   /** pr_get answers it beside `pr`, not on it. */
   review_status?: ReviewStatus | null;
+  /** The build and the site's checks on its branch ("Build before merging"; builder #1643); null when none. */
+  checks?: ReviewChecks | null;
+  /** The live preview of its branch, or why none runs (builder #1648); null when it is not open. */
+  preview?: ReviewPreview | null;
+}
+
+/** One answer of a pull request's checks: the build's, or one code check's. */
+export interface ReviewCheckRun {
+  name: string;
+  status: 'passed' | 'failed' | 'warning';
+  /** In words; a failure names its first failing line. */
+  summary: string;
+}
+
+/** The last check of a pull request's branch (pr_get `checks`). */
+export interface ReviewChecks {
+  state: 'running' | 'passed' | 'failed';
+  /** Whether it checked the branch as it is now; null when not known. */
+  current: boolean | null;
+  /** The test build session: project_test_build_log_get reads its whole log. */
+  session_id: string | null;
+  runs: ReviewCheckRun[];
+}
+
+/** The preview of a pull request's branch (pr_get `preview`). */
+export interface ReviewPreview {
+  state: 'live' | 'starting' | 'none';
+  url: string | null;
+  started_for: 'review' | 'person' | null;
+  /** Why none runs, when known. */
+  reason: 'live_data' | 'site_cap' | 'account_cap' | 'failed' | 'idle' | null;
+  /** live_data: the settings that reach live data, by name. */
+  withheld?: string[];
 }
 
 export interface EnvBinding {

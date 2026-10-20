@@ -316,6 +316,53 @@ describe('own changes and mergeability (builder #955, MCP #177)', () => {
     assert.equal(flows.mergeableNote(undefined, 'main'), null);
   });
 
+  test("an open pull request's checks: running, passed, failed with its first failing line, and an older state said so", () => {
+    const run = (name, status, summary) => ({ name, status, summary });
+    assert.equal(flows.checksChoice(null), null);
+    assert.deepEqual(flows.checksChoice({ state: 'running', current: true, session_id: 's', runs: [] }), {
+      label: '$(sync~spin) Checks running',
+      description: "the build and the site's checks on the branch",
+    });
+    assert.deepEqual(flows.checksChoice({ state: 'passed', current: true, session_id: 's', runs: [run('build', 'passed', 'builds'), run('tests', 'passed', 'pass')] }), {
+      label: '$(pass) Checks passed',
+      description: '2 answered',
+    });
+    const failed = { state: 'failed', current: false, session_id: 's', runs: [run('build', 'passed', 'It builds.'), run('tests', 'failed', 'The tests failed: expected 2 to be 3.')] };
+    assert.deepEqual(flows.checksChoice(failed), {
+      label: '$(error) Checks failed',
+      description: 'The tests failed: expected 2 to be 3. (for an older state of the branch; it is checked again by itself)',
+    });
+    assert.equal(flows.checksMessage(failed), 'Passed: It builds.\nFailed: The tests failed: expected 2 to be 3.');
+    assert.match(flows.checksMessage({ state: 'running', current: true, session_id: 's', runs: [] }), /No answer yet/);
+  });
+
+  test("an open pull request's preview: open it, look again while it starts, else why none runs", () => {
+    assert.equal(flows.previewChoice(null), null);
+    assert.equal(flows.previewChoice({ state: 'none', url: null, started_for: null, reason: null }), null);
+    assert.deepEqual(flows.previewChoice({ state: 'live', url: 'https://hvk-br-a.preview.hiveku.com', started_for: 'review', reason: null }), {
+      label: '$(globe) Open the preview',
+      description: 'started for this pull request',
+      act: 'preview',
+      url: 'https://hvk-br-a.preview.hiveku.com',
+    });
+    assert.equal(flows.previewChoice({ state: 'live', url: 'https://x', started_for: 'person', reason: null }).description, 'a preview of its branch');
+    assert.equal(flows.previewChoice({ state: 'starting', url: 'https://x', started_for: 'review', reason: null }).act, 'refresh');
+    const liveData = flows.previewChoice({ state: 'none', url: null, started_for: null, reason: 'live_data', withheld: ['DATABASE_URL'] });
+    assert.equal(liveData.act, 'dashboard');
+    assert.match(liveData.description, /reach live data .*DATABASE_URL_DEV/);
+    for (const reason of ['site_cap', 'account_cap', 'failed', 'idle']) {
+      assert.ok(flows.previewChoice({ state: 'none', url: null, started_for: null, reason }).description.length > 10, reason);
+    }
+  });
+
+  test('/hiveku-pr reads the checks and the preview Hiveku runs for an open pull request', async () => {
+    const src = (await fs.readFile(path.join(ROOT, 'src', 'knowledge.ts'), 'utf8')).replace(/\\`/g, '`').replace(/\s+/g, ' ');
+    assert.match(src, /data\.checks` is the build and the site's checks that Hiveku runs on the branch: use them when `current` is true/);
+    assert.match(src, /project_test_build_log_get\(\{ project_id: "\$\{pid\}", session_id \}\)` has the log/);
+    assert.match(src, /`reason` "live_data" means none is started because the site's development settings reach live data: say so, and start one by hand only on the user's yes/);
+    assert.match(src, /with "Build before merging" on that the merged result builds and passes the site's checks/);
+  });
+
   test('/hiveku-pr reviews from data.changes and reads data.mergeable before a merge', async () => {
     const src = await fs.readFile(path.join(ROOT, 'src', 'knowledge.ts'), 'utf8');
     const pr = src.slice(src.indexOf("'hiveku-pr': `"), src.indexOf("'hiveku-github': `"));

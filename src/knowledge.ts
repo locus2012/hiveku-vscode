@@ -1693,7 +1693,13 @@ open PR → review → merge → \`/hiveku-deploy production\`.
   and \`review_status\`, with \`source_fingerprint\`) and \`project_vcs_pr_comments\` (the conversations). For each
   path in \`data.changes.entries\` worth reading: \`project_vcs_diff_file({ project_id: "${pid}", from: <target_branch>, to: <source_branch>, path })\`
   → \`base\` is the target's copy, \`head\` the source's; a null side means the file does not exist there; \`tooLarge\`
-  replaces content over 1 MB. Summarize what changes and flag anything risky BEFORE offering to merge. To post it,
+  replaces content over 1 MB. With "Build before merging" on, \`data.checks\` is the build and the site's checks that
+  Hiveku runs on the branch: use them when \`current\` is true (a failed run's \`summary\` names the first failing line;
+  \`project_test_build_log_get({ project_id: "${pid}", session_id })\` has the log), else build the branch yourself with
+  \`project_test_build({ project_id: "${pid}", use_db_state: true, branch: <source_branch> })\`. \`data.preview\` is the
+  preview of the branch Hiveku starts for an open PR (\`url\` when \`state\` is "live"); \`reason\` "live_data" means none
+  is started because the site's development settings reach live data: say so, and start one by hand only on the
+  user's yes. Summarize what changes and flag anything risky BEFORE offering to merge. To post it,
   show the user the text first, then ONE \`project_vcs_pr_review({ project_id: "${pid}", number, state, body, comments,
   source_fingerprint })\`: \`state\` "commented", or "changes_requested" when something must change before it merges;
   \`comments\` are \`{ path, line, body }\` at a line of the PR's version of a file it changes. \`project_vcs_pr_comment\`
@@ -1721,7 +1727,8 @@ open PR → review → merge → \`/hiveku-deploy production\`.
   naming the target and what is ahead, then \`project_vcs_queue_add({ project_id: "${pid}", number })\` (it always
   asks). Report \`position\` (1 merges next), \`ahead\`, and any \`conflicts_with_ahead\` (a PR ahead it collides with:
   it will be sent back after that one merges, then resolve and add it again). The line checks it still merges
-  cleanly, that it adds no secret keys to code, and, with the approval rule on, that a person approved it; it waits
+  cleanly, that it adds no secret keys to code, with "Build before merging" on that the merged result builds and
+  passes the site's checks, and, with the approval rule on, that a person approved it; it waits
   for an approval without holding up the others (\`entry.waiting\`). Watch it with
   \`project_vcs_queue({ project_id: "${pid}" })\`; take it out with \`project_vcs_queue_remove\` (the PR stays open).
   Several agents on one site: read \`project_vcs_queue\` before starting. A direct merge answering 409

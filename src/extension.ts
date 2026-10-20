@@ -90,6 +90,9 @@ import {
   conflictRefusalMessage,
   directMergeRefusal,
   mergeableNote,
+  checksChoice,
+  checksMessage,
+  previewChoice,
   offerRestoreArchivedBranch,
   prMergeRefusal,
   pullRequestListDetail,
@@ -3461,11 +3464,16 @@ async function pullRequestActions(scm: HivekuScm, client: HivekuMcpClient, pr: a
   const summary = d
     ? `${d.added} added, ${d.modified} modified, ${d.removed} removed`
     : `diff unavailable${(detail.changes_error ?? detail.diff_error) ? ` (${detail.changes_error ?? detail.diff_error})` : ''}`;
-  type Act = 'review' | 'merge' | 'close' | 'reopen' | 'dashboard';
+  type Act = 'review' | 'merge' | 'close' | 'reopen' | 'dashboard' | 'checks' | 'preview' | 'refresh';
   const choices: Array<{ label: string; description: string; act: Act }> = [];
   if (d && d.entries.length > 0) {
     choices.push({ label: '$(diff) Review files', description: `${d.entries.length} changed — open side-by-side diffs`, act: 'review' });
   }
+  // The checks and the preview Hiveku runs for an open pull request (builder #1643, #1648).
+  const checks = fresh.status === 'open' ? checksChoice(detail.checks) : null;
+  if (checks) choices.push({ ...checks, act: detail.checks?.state === 'running' ? 'refresh' : 'checks' });
+  const preview = fresh.status === 'open' ? previewChoice(detail.preview) : null;
+  if (preview) choices.push({ label: preview.label, description: preview.description, act: preview.act });
   // What the site's "Require an approval" rule says about merging it now
   // (review_status, newer servers only). Approving is a person's act in the dashboard.
   // pr_get answers review_status beside `pr`; a list row carries it on the row.
@@ -3493,6 +3501,22 @@ async function pullRequestActions(scm: HivekuScm, client: HivekuMcpClient, pr: a
     await reviewPullRequestFiles(scm, fresh, d!);
     // Back to the action list so review flows straight into merge/close.
     return pullRequestActions(scm, client, fresh);
+  }
+
+  if (action.act === 'refresh') return pullRequestActions(scm, client, fresh);
+
+  if (action.act === 'preview' && preview?.url) {
+    await vscode.env.openExternal(vscode.Uri.parse(preview.url));
+    return;
+  }
+
+  if (action.act === 'checks' && detail.checks) {
+    const show = detail.checks.state === 'failed' ? vscode.window.showWarningMessage : vscode.window.showInformationMessage;
+    const pick = await show(checksMessage(detail.checks), { modal: true }, 'Open in the dashboard');
+    if (pick === 'Open in the dashboard') {
+      await vscode.env.openExternal(vscode.Uri.parse(reviewPageUrl(appUrl(), scm.link.account_id, scm.link.project_id, fresh.number)));
+    }
+    return;
   }
 
   if (action.act === 'dashboard') {
