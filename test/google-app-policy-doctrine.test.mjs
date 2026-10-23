@@ -320,7 +320,11 @@ describe('the providers that keep their own apps still do', () => {
     const ppc = flat(DEPARTMENTS.find((d) => d.id === 'ppc').setup);
     assert.ok(ppc.includes("oauth_app_create({ provider: 'microsoft', name, client_id, client_secret, products: ['microsoft_ads'] })"));
     const crm = flat(DEPARTMENTS.find((d) => d.id === 'crm').setup);
-    assert.ok(crm.includes("a Google OAuth app with product 'crm_email_calendar'"), 'the CRM inbox no longer names its Gmail app');
+    assert.ok(crm.includes("Gmail's INTERNAL Google app"), 'the CRM inbox no longer names its Gmail app');
+    assert.ok(crm.includes("email_inbox_setup_guide({ platform: 'gmail'|'outlook', for: 'crm', mailbox })"), 'the CRM inbox no longer starts with the setup guide');
+    const helpdesk = flat(DEPARTMENTS.find((d) => d.id === 'helpdesk').setup);
+    assert.ok(helpdesk.includes("email_inbox_setup_guide({ platform: 'gmail'|'outlook', for: 'helpdesk'"), 'the helpdesk setup does not start with the setup guide');
+    assert.ok(helpdesk.includes('starts empty'), 'the helpdesk setup no longer says a new inbox starts empty');
     const connect = flat(scaffolds.get('(none)').files.find((f) => f.where === path.join('.claude', 'commands', 'hiveku-connect.md')).text);
     assert.ok(connect.includes('MICROSOFT_ADS_CLIENT_ID / MICROSOFT_ADS_CLIENT_SECRET'));
     assert.ok(connect.includes('crm_email_calendar'));
