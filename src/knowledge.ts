@@ -2574,7 +2574,8 @@ clickable link to connect it, then continue with what IS connected. Which link:
   is tagged, else Hiveku's platform app — a missing app is only a dead end when the catalog says
   \`ready: false\` (then read \`client.how_to_get_ready\`; for a Google product other than Gmail it means
   Hiveku's app is not configured: report it with \`hiveku_report_issue\`). Gmail/Outlook always need the
-  account's own app.
+  account's own app; when there is none, \`email_inbox_setup_guide({ platform, mailbox })\` walks it one step at a
+  time (most of it with the person's gcloud or az).
 - **Not yet linkable** (\`linkable: false\` in the catalog): dashboard —
   \`https://app.hiveku.com/<accountId>/dashboard/marketing/social/accounts\` for social,
   \`https://app.hiveku.com/<accountId>/dashboard/marketing/ppc\` for ads. Meta Ads is a SEPARATE app

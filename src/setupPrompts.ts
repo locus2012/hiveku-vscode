@@ -124,6 +124,33 @@ Hiveku is headless commerce (bring-your-own Shopify app), so part of this is don
 Explain each step and ask me for what you need (shop domain, etc.).`,
   },
   {
+    id: 'gmail_inbox',
+    label: 'Gmail inbox (help desk or CRM)',
+    blurb: "Our own internal Gmail app via gcloud, then a connect link",
+    build: (a) =>
+      `${head(a, 'a Gmail inbox')}
+
+1. Ask me which mailbox (e.g. support@our-domain.com) and whether it is for the help desk or the CRM. Then call email_inbox_setup_guide({ platform: 'gmail', for: 'helpdesk' or 'crm', mailbox }) and follow its next_step one step at a time, calling it again after each step that changes something.
+   - With no Gmail app yet it walks our own INTERNAL Google app: you run most of it on my computer with Google's command line (gcloud), and I sign in to it when you ask. I fill in the two Google pages it links, and I type the client secret into Settings > OAuth Apps myself; never ask me to paste it here.
+   - A personal @gmail.com address cannot have an internal app: tell me, and stop.
+2. When the guide says needs_connection, call the integration_connect_link_create it names (with its oauth_app_id) and give me the returned url on its own line; I open it signed in as that mailbox.
+3. ${CONNECT_STATUS}
+4. For the help desk, ask me to send a test email to the mailbox and confirm it becomes a ticket within about 10 minutes (helpdesk_ticket_list). For the CRM, the test email must come from an address that is already a CRM contact: it is logged on that contact's timeline within about 10 minutes.`,
+  },
+  {
+    id: 'outlook_inbox',
+    label: 'Outlook inbox (help desk or CRM)',
+    blurb: 'Our own Microsoft app via az, then a connect link',
+    build: (a) =>
+      `${head(a, 'an Outlook (Microsoft 365) inbox')}
+
+1. Ask me which mailbox and whether it is for the help desk or the CRM. Then call email_inbox_setup_guide({ platform: 'outlook', for: 'helpdesk' or 'crm', mailbox }) and follow its next_step one step at a time, calling it again after each step that changes something.
+   - With no Microsoft app yet it walks our own app registration with Microsoft's command line (az), all on my computer, and I sign in to az when you ask. I create the client secret in my own terminal and type it into Settings > OAuth Apps myself; never ask me to paste it here.
+2. When the guide says needs_connection, call the integration_connect_link_create it names (with its oauth_app_id and our tenant id) and give me the returned url on its own line.
+3. ${CONNECT_STATUS}
+4. For the help desk, ask me to send a test email to the mailbox and confirm it becomes a ticket within about 10 minutes. For the CRM, the test email must come from an address that is already a CRM contact.`,
+  },
+  {
     id: 'bing_webmaster',
     label: 'Bing Webmaster',
     blurb: 'API key — fully from Claude Code',

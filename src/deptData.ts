@@ -14,7 +14,7 @@
 import type { PageAccessKey } from './pageAccessKeys';
 
 import { HivekuMcpClient } from './mcpClient';
-import { SEO_SETUP, CRM_SETUP, EMAIL_SETUP, SOCIAL_SETUP, OUTBOUND_SETUP, ACCOUNTING_SETUP, CREATIVE_SETUP, VOICE_SETUP } from './setupPlaybooks';
+import { SEO_SETUP, CRM_SETUP, EMAIL_SETUP, SOCIAL_SETUP, OUTBOUND_SETUP, ACCOUNTING_SETUP, CREATIVE_SETUP, VOICE_SETUP, HELPDESK_SETUP } from './setupPlaybooks';
 
 export type Row = Record<string, unknown>;
 
@@ -1025,6 +1025,7 @@ export const DEPARTMENTS: Department[] = [
       'KB articles: `helpdesk_kb_article_create` / `_update` / `_delete`; list or search with ' +
       '`helpdesk_kb_search` (omit `q` to list the whole KB, `visibility: \'draft\'` for the review ' +
       'queue; `category_id` is optional). Moving visibility to `public` auto-publishes.',
+    setup: HELPDESK_SETUP,
   },
   {
     id: 'pm',

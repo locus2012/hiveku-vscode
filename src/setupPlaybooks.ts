@@ -78,10 +78,13 @@ existing contacts mean parts of this are already done — only fill the gaps.
    \`auto_create_fields\` defaults false so typos don't pollute the custom-field schema.
 
 ## Email inbox (Gmail / Outlook)
-1. \`email_connect_start({ platform: 'gmail'|'outlook' })\` → \`setup_url\` you HAND TO THE USER (valid 5 min;
-   they must authorize in their own browser). Prereq: a Google OAuth app with product 'crm_email_calendar' —
-   on \`no_oauth_app\`, the owner registers one at /dashboard/settings/oauth-apps (dashboard).
-2. Verify: \`crm_inbox_connections\` shows the inbox with \`is_active: true\`.
+1. \`email_inbox_setup_guide({ platform: 'gmail'|'outlook', for: 'crm', mailbox })\` → the ONE next step. With no
+   mail app yet it walks the account's own app: Gmail's INTERNAL Google app, most of it run with the person's
+   \`gcloud\` plus two Google pages it links; Outlook's app registration, all \`az\`. The person types the client
+   secret into Settings > OAuth Apps.
+2. Connect: \`integration_connect_link_create({ connector: 'gmail'|'outlook', oauth_app_id, owner_user_email })\` →
+   a link you HAND TO THE USER (they approve in their own browser).
+3. Verify: \`email_connections_list\` shows the inbox \`connection_status: 'connected'\`.
 
 ## Optional — sync from GoHighLevel / HubSpot
 1. Check link state: \`crm_ghl_status\` / \`crm_hubspot_status\` → \`{ connected: false }\` means the OAuth link
@@ -117,9 +120,10 @@ is the one gate they share, and staff lift it, not a tool.
 physical address, so nothing can send — a test send included.
 
 ## Mailbox identities (Gmail / Outlook for 1:1 send/reply — a different lane from campaigns)
-1. \`email_connect_start({ platform: 'gmail'|'outlook' })\` → \`setup_url\` for the user (valid 5 min; needs the
-   'crm_email_calendar' OAuth app — on \`no_oauth_app\` the owner registers one at /dashboard/settings/oauth-apps).
-2. Poll \`email_connections_list\` until the row shows \`connection_status: 'connected'\`.
+1. \`email_inbox_setup_guide({ platform: 'gmail'|'outlook', for: 'crm', mailbox })\` → the ONE next step (with no
+   mail app yet, it walks the account's own app with the person's \`gcloud\` or \`az\`).
+2. \`integration_connect_link_create({ connector: 'gmail'|'outlook', oauth_app_id, owner_user_email })\` → a link for
+   the user; poll \`email_connections_list\` until the row shows \`connection_status: 'connected'\`.
 
 ## First audience — with a consent attestation
 1. \`email_audience_create({ name, kind, filter_json })\` — 'dynamic' (default) re-evaluates \`filter_json\` at send
@@ -170,6 +174,26 @@ SMTP) and a campaign cannot use one of those; \`email_campaign_create\` rejects 
 \`email_campaign_metrics({ id })\`: status 'sent' AND \`by_status.sent > 0\` (a 'sent' campaign with
 \`by_status.sent: 0\` reached nobody). \`email_domain_list\` shows the domain verified + default. Then re-run
 "Download Department Data → Email" to refresh \`hiveku-data/email/*.json\`.
+`;
+
+export const HELPDESK_SETUP = `# Helpdesk first-run: the support inbox — verified
+
+## STEP 1 — connect the support inbox (Gmail or Outlook)
+1. \`email_inbox_setup_guide({ platform: 'gmail'|'outlook', for: 'helpdesk', mailbox: 'support@...' })\` → the status
+   and the ONE next step; call it again after each step that changes something.
+   - needs_app: the account's own mail app. Gmail = its INTERNAL Google app (Google Workspace only; a personal
+     @gmail.com cannot have one): you run most of it with the person's \`gcloud\`, and they fill in the two Google
+     pages it links. Outlook = an app registration made with \`az\`. The person types the client secret into
+     Settings > OAuth Apps.
+   - needs_connection: \`integration_connect_link_create({ connector, oauth_app_id, owner_user_email, consumers: ['helpdesk'] })\`
+     → a link the person opens signed in as the mailbox. An inbox already connected for the CRM needs no new
+     sign-in: they switch on "Monitor for Helpdesk" in its Sync settings (Helpdesk > Connections).
+2. Use a dedicated support mailbox (a user that can sign in), never a busy personal or sales inbox: every new email
+   to it becomes a ticket. A Google Group cannot connect.
+3. A newly connected inbox starts empty: only mail that arrives after it is connected becomes tickets, and the
+   automatic acknowledgement goes only to mail less than a day old.
+4. Verify: \`email_connections_list\` shows it \`connected\` with consumers including 'helpdesk'; a test email becomes a
+   ticket within about 10 minutes (\`helpdesk_ticket_list\`).
 `;
 
 export const SOCIAL_SETUP = `# Social first-run: accounts, pillars, slots, first draft - verified
