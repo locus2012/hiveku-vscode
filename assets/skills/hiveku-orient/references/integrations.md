@@ -371,7 +371,13 @@ Its `status`:
   A help desk inbox starts empty: only mail that arrives after it is connected becomes tickets,
   never what it already held. An inbox already connected for the CRM gets the help desk switched on
   in the dashboard (Monitor for Helpdesk), with no new sign-in.
-- `connected`: send a test email; it becomes a ticket within about 10 minutes.
+- `connected`: send a test email; it becomes a ticket within about 10 minutes, or about a minute on
+  Outlook (push turns on when the inbox connects). For about a minute on Gmail,
+  `email_inbox_setup_guide({ platform, section: 'instant_replies' })`: a Pub/Sub topic in the Gmail
+  app's own project with the person's gcloud, then the switch (`email_connection_push_enable`).
+  Where the organization blocks outside accounts, the guide's project-only exception needs the
+  person's clear yes first, and is put back right after. An Outlook inbox still on 10 minutes gets
+  the same section: one switch.
 - `personal_account`: a personal @gmail.com cannot have an Internal app (Google Workspace only).
   Say so, and offer a Workspace mailbox or Outlook.
 
