@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.24
+- **Instant replies for a help desk inbox.** The vendored skills match the plugin (0.27.85): once a Gmail inbox is connected, Claude Code offers instant replies (new mail in about a minute instead of the 10-minute check) through `email_inbox_setup_guide({ section: 'instant_replies' })`, and says an Outlook inbox gets push when it connects.
+
 ## 0.91.23
 - **Claude Code can set up a Gmail or Outlook inbox for the help desk or the CRM.** The CRM and email setup guides no longer stop at "the owner registers an OAuth app". They start with `email_inbox_setup_guide`, which walks the account's own app one step at a time: for Gmail, an internal Google app made with Google's command line (`gcloud`) on your computer plus two Google pages it links; for Outlook, an app registration made with Microsoft's command line (`az`). Then the inbox connects with a link. You type the client secret into Settings > OAuth Apps yourself, never into the chat. A personal @gmail.com address cannot have an internal app, and the guide says so.
 - **The help desk has its first setup guide**: connecting the support inbox (a mailbox of its own, new mail only from the moment it connects, and Monitor for Helpdesk on an inbox that is already connected).
