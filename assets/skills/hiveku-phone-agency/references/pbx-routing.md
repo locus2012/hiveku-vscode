@@ -197,21 +197,29 @@ never as step one of a diagnosis.
 An extension is a REAL SIP endpoint: a seat phone, a softphone, or a PSTN forward
 (`endpoint_type` `external_number`). Everything here is live from the moment it returns.
 
-### `voice_extension_create` - the order can orphan
+### `voice_extension_create` - clashes are refused first
 
-Provisions the endpoint ON THE PBX FIRST and then writes the row. No carrier order, no money -
-but a failed insert leaves a live SIP endpoint with no builder row and an UNRECOVERABLE password
-(the phone system returns the SIP password exactly once, it is encrypted before the insert, and
-it appears nowhere in the response - device setup is dashboard-only, always).
+Provisions the endpoint ON THE PBX FIRST and then writes the row. No carrier order, no money.
+The phone system returns the SIP password exactly once, it is encrypted before the insert, and
+it appears nowhere in the response - device setup is dashboard-only, always.
 
-**The 409 can name the wrong constraint.** The table carries three unique constraints, and the
-handler returns `extension_taken` for any collision whose reported target contains the substring
-`'extension'` - which the per-account `sip_username` constraint and the one-endpoint-per
-(user, endpoint_type, device) constraint BOTH do. So a second `softphone_mobile` for the same
-person surfaces either as "Extension 1005 is already in use on this account" or as a bare 500
-`internal_error`. Its own description's verdict: "Neither message is the truth, and both leave
-the PBX endpoint behind. Check voice_extensions_list before retrying." Do exactly that - never
-blind-retry a failed create.
+**Clashes are refused before the phone system is asked**, with nothing created anywhere: 409
+`extension_taken` when any extension on the account already uses the number (as its number or
+its sign-in name), and 409 `person_has_this_phone_type` when `user_id` already has an extension
+of that `endpoint_type` (one of each phone type per person; the mobile app's own per-phone
+extensions aside). Every refusal carries a plain `message` that says what clashed and what to do,
+for example "Jamie Holloway already has a desktop softphone extension (1001), and each person can
+have one desktop softphone extension. Assign this one to someone else, leave it unassigned, or
+pick another phone type." Relay it to the human as it is. Read `voice_extensions_list` first for
+a free number and for the person's existing extensions.
+
+**A save that fails after the phone system made the extension** (two creates at once, or a
+database fault) saves nothing, and the phone system's new copy is removed again, unless a saved
+extension uses the same number: the phone system's delete removes every entry with that number,
+so that copy is left and reported for support. The answer is then 409 `extension_taken` or
+`person_has_this_phone_type` when the other create won, else 500 `internal_error`, each with its
+message. Never blind-retry a 500: read `voice_extensions_list` first (a number the phone system
+already holds is refused 409 `extension_provision_failed`).
 
 **Silent 200s to expect, each verified in the description:**
 

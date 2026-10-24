@@ -82,9 +82,15 @@ fully operational with no brand at all - do not tell it it needs 10DLC.
 | PENDING or FAILED | - | none verified | false | `brand_unverified` |
 | VERIFIED | none submitted | none verified | false | `no_active_campaign` |
 | VERIFIED | submitted, in review | none verified | false | `campaign_pending` |
+| VERIFIED | every one sent is FAILED, EXPIRED or SUSPENDED | none verified | false | `campaign_rejected` |
 | VERIFIED | ACTIVE, no messaging profile | none verified | false | `no_messaging_profile` |
 | VERIFIED | ACTIVE + profile | any | **true** | null |
 | any (even none) | any | at least one verified TF DID | **true** | null |
+
+`campaign_rejected` never clears by waiting: the carriers turned the campaign down, it expired,
+or it was suspended. Do not report it as "still in review". Appeal a FAILED or SUSPENDED one
+(Part 6: only when the content and page are already right), or file a new campaign.
+`campaign_pending` is the one that unlocks on its own.
 
 `no_messaging_profile` means an ACTIVE campaign was never provisioned; the status cron's repair
 phase fills it in, so re-read before repairing by hand. Note what the table does NOT cover:

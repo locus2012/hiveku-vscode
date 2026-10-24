@@ -398,9 +398,10 @@ The trigger phrase is **"No active Gmail connection found."** Any `crm_calendar_
    | `user_email` / `user_id` | Which Hiveku user OWNS the connection. Optional on a solo account, REQUIRED on a multi-user one |
    | `oauth_app_id` | Pins a specific OAuth Client. Defaults to the account's first Google app with the right product |
 
-   Pick the narrowest scope that does the job. `modify_with_calendar` is the default and is right
-   when calendar tools are also in play; if the user only wants replies read, `readonly` is a
-   smaller ask on the consent screen and a smaller blast radius.
+   Pick the narrowest scope that does the job. A new Gmail connection asks for `modify` (read,
+   send, labels) unless you name one; Calendar and Meet connect separately on Hiveku's own Google
+   app (connector `google_calendar`). If the user only wants replies read, `readonly` is a smaller
+   ask on the consent screen and a smaller blast radius.
 
 3. **Hand the `setup_url` to the user. Do not open it yourself.** They must be in their own
    browser session to grant Google consent. **It expires after five minutes.** Send it as the
@@ -408,10 +409,10 @@ The trigger phrase is **"No active Gmail connection found."** Any `crm_calendar_
 
 4. **The `no_oauth_app` branch.** A response carrying `code: 'no_oauth_app'` means the account has
    no Google OAuth Client registered with `product='crm_email_calendar'`. This is a precondition,
-   not a transient failure, and retrying produces the identical error forever. It is a rung 3
-   handoff with a specific owner and a specific page: **the account OWNER must register an OAuth
-   app at `/dashboard/settings/oauth-apps`**, after which `email_connect_start` works. Say exactly
-   that, then stop. Do not loop, and do not offer to do it for them.
+   not a transient failure, and retrying produces the identical error forever. Offer to set the app
+   up now: `email_inbox_setup_guide({ platform, mailbox })` walks it one step at a time, and you run
+   most of it with the person's `gcloud` (Outlook: `az`); the person fills in the two Google pages it
+   links and types the secret into Settings > OAuth Apps. Do not loop on the connect call meanwhile.
 
 5. **Verify** by polling `email_connections_list` for `connection_status: 'connected'`. Once it
    lands the inbox and calendar tools return real data. Confirm with a cheap read such as
@@ -456,5 +457,5 @@ mail, which runs on a different lane entirely.
 | Internal team mail appearing as lead replies | The membership resolver | It failed open to noise-only, or a `+` address was dropped |
 | Labels appearing on a customer's mailbox | `auto_label` | Defaults TRUE on `gmail_inbox_lead_replies` |
 | Reconnect link does not work | Elapsed time | The `setup_url` is valid for five minutes |
-| `no_oauth_app` on every attempt | Not transient | Owner must register an OAuth app in the dashboard |
+| `no_oauth_app` on every attempt | Not transient | No mail app yet: set it up with `email_inbox_setup_guide` |
 | Mailbox fine, nothing sends | `email_service_status` | `sending_enabled: false` with a suspension block |
