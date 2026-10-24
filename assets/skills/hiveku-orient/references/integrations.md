@@ -37,16 +37,20 @@ Here is a link that connects it: <setup_url>. It opens Google's consent screen, 
 it expires in 15 minutes. Tell me when you are through and I will bind the customer id and run
 the first sync" is an answer.
 
-Two things a session can never do, and should say plainly rather than pretending to attempt:
+Two things a session can never do itself, and should say plainly rather than pretending to attempt:
 
 - **Open the consent page.** The user has to be signed into their own Google, Meta or Shopify
   session in their own browser. You generate the URL; they click it.
-- **Anything in the Google Cloud Console.** Creating a project, enabling an API, editing the OAuth
-  consent screen, adding a redirect URI, adding a test user, publishing the app. All of it needs
-  console access you do not have. And it is only ever needed for one thing: the account's own
-  internal Gmail app. Every other Google product runs on Hiveku's own Google app (Part 3, layer (a)),
-  so never send anyone into a Google Cloud project for Google Ads, Analytics, Tag Manager, Search
-  Console, Business Profile or Calendar.
+- **Fill in Google's two pages of the account's own Gmail app.** The consent screen (Branding,
+  with Audience = Internal) and creating the Web client have no command or API, so the person fills
+  them in a browser, from the exact links and values `email_inbox_setup_guide` gives. Everything
+  else in that setup you CAN do, on the person's computer with their own `gcloud`: creating the
+  project, turning on the Gmail API, checking each step (Claude Code: they type `! gcloud auth
+  login` here; Codex: they sign in from their own terminal and you ask to run gcloud outside the
+  sandbox). That internal Gmail app is the only Google Cloud project an account may own: every
+  other Google product runs on Hiveku's own Google app (Part 3, layer (a)), so never send anyone
+  into a Google Cloud project for Google Ads, Analytics, Tag Manager, Search Console, Business
+  Profile or Calendar.
 
 ---
 
@@ -191,8 +195,9 @@ only for the products its `products` array lists.
 - **Fix from nothing (same providers; for Google, the Gmail app only):**
   `oauth_app_create({ provider, name, client_id, client_secret, products })`,
   all five required, plus optional `notes`. The `name` must be unique per (account, provider).
-  This needs credentials the user fetches from their console, and the console work itself is theirs
-  (Part 4).
+  The setup itself is `email_inbox_setup_guide({ platform })` (Part 4): most of it runs with the
+  person's `gcloud` (Outlook: `az`), and the person types the secret into Settings > OAuth Apps, or
+  hands it to you for this call (never repeat or save it).
 
 The product slugs, exactly: `crm_email_calendar`, `google_calendar_meet`, `google_ads`,
 `google_search_console`, `google_business_profile`, `google_analytics`, `microsoft_ads`,
@@ -348,20 +353,35 @@ seconds; give up after about 15 minutes.
 connection that exists. The domain-table id is the `connection_id` from the **initiate** response,
 or whatever `seo_connections_list` / `ppc_connection_list` returns after the backfill runs.
 
-### Gmail, Calendar and Meet: `email_connect_start`, never `integration_oauth_initiate`
+### Gmail and Outlook mailboxes: `email_inbox_setup_guide`, then a connect link
 
-- `platform`: `gmail` (default) or `outlook`.
-- `scope_label`: default `modify_with_calendar` (Gmail read/send/modify plus Google Calendar plus
-  Meet read-only). Alternatives `readonly`, `send`, `modify`.
-- `user_email` or `user_id`: which Hiveku user OWNS the connection. Optional on a solo account,
-  **required on a multi-user account**.
-- `consumers`: `['crm']` by default; `['helpdesk']` routes inbound mail to `helpdesk_tickets`.
-- Optional `oauth_app_id` and `display_name`.
-- Returns a `setup_url` **valid for 5 minutes** (`expires_in_seconds: 300`). That is a third of
-  the `integration_oauth_initiate` window. Send it when the user is ready to click.
-- Prereq is a Google OAuth client with product `crm_email_calendar`. Missing it returns
-  `code: 'no_oauth_app'`, which is a handoff to the account owner, not a transient failure.
-- Verify by polling `email_connections_list` for `connection_status: 'connected'`.
+People say "connect our support Gmail", "the helpdesk isn't seeing replies", "No active Gmail
+connection". Call `email_inbox_setup_guide({ platform: 'gmail' | 'outlook', for: 'helpdesk' | 'crm',
+mailbox })` first and follow its `next_step`; call it again after each step that changes something.
+Its `status`:
+
+- `needs_app`: the account has no mail app yet. Gmail needs the account's own INTERNAL Google app:
+  you run the steps with the person's `gcloud` (project, Gmail API) and they fill in the two Google
+  pages the guide links. Outlook is an app registration made entirely with `az`. Keep the guide's
+  `rules` (one step at a time, `--project` on every gcloud command, never `gcloud config set`, never
+  repeat or save the client secret). The person types the secret into Settings > OAuth Apps, or
+  hands it to you for `oauth_app_create`.
+- `needs_connection`: mint the connect link the step names: `integration_connect_link_create({
+  connector, oauth_app_id, owner_user_email, consumers, scope_label })`, with `tenant` for Outlook.
+  A help desk inbox starts empty: only mail that arrives after it is connected becomes tickets,
+  never what it already held. An inbox already connected for the CRM gets the help desk switched on
+  in the dashboard (Monitor for Helpdesk), with no new sign-in.
+- `connected`: send a test email; it becomes a ticket within about 10 minutes.
+- `personal_account`: a personal @gmail.com cannot have an Internal app (Google Workspace only).
+  Say so, and offer a Workspace mailbox or Outlook.
+
+`scope_label` omitted: a NEW Gmail connection asks for mail only (`modify`), a new Outlook one for
+`modify_with_calendar`, and a reconnect keeps what the row already has. Calendar and Meet connect in
+one click on Hiveku's own Google app (connector `google_calendar`), not on the Gmail app.
+`email_connect_start` still works (it returns an `authorize_url` valid for 5 minutes, and takes
+`user_email`/`user_id` for the owner and `consumers`), but the connect link is the lane: it lasts
+hours and resolves the client when the person presses Continue. Verify with
+`email_connections_list` (`connection_status`, `consumers`).
 
 ### Bing Webmaster and other BYOK SEO sources: `seo_connection_create`
 
@@ -630,7 +650,7 @@ GTM can work on a connection where `seo_ga4_admin_scopes` still 400s.
 | Symptom or error | Layer | Confirm with | Hand the user |
 |---|---|---|---|
 | 412 `integration_not_configured` / `no_oauth_app_for_product` from `integration_oauth_initiate` | (a) | `integration_connectors_list` | For these four Google products it means Hiveku's own Google app is not configured on this environment: report it to Hiveku support. Never register or extend an own Google app for them (refused, `google_own_app_not_allowed`) |
-| `code: 'no_oauth_app'` from `email_connect_start` or `shopify_connect_start` | (a) | `oauth_app_list` | The account OWNER registers a client (`crm_email_calendar`, or `shopify_storefront`) at the oauth-apps page. Do not retry the connect call |
+| `code: 'no_oauth_app'` from `email_connect_start`, or 412 `no_oauth_client` for gmail / outlook | (a) | `oauth_app_list` | Gmail or Outlook: offer to set the app up now with `email_inbox_setup_guide({ platform, mailbox })` and follow its next_step (most of it with the person's gcloud or az). Shopify: the owner registers a `shopify_storefront` client at the oauth-apps page. Do not retry the connect call until the app exists |
 | A department tool says no connection is configured, but `integration_test` refreshes cleanly | (b), mirror gap | `integration_list` vs `seo_connections_list` / `ppc_connection_list` | Re-read the department list once, which runs the backfill. If the slug is `google_analytics`, the backfill does not cover it: dashboard handoff |
 | `seo_gtm_status` returns 404 | (b) | `seo_connections_list` for platform `google_analytics` | Connect Google Analytics at `/<accountId>/dashboard/marketing/seo`, then pick the GA4 property |
 | `connection_status: 'pending'` and a tool returns nothing | (b), unbound | `seo_connections_list` / `ppc_connection_list` for the null binding field | Nothing. This is yours: run the discover tool, then `seo_connection_update` / `ppc_connection_update` |
@@ -684,7 +704,7 @@ GTM can work on a connection where `seo_ga4_admin_scopes` still 400s.
 - **Binding an MCC as `customer_id`.** Campaigns never live on a manager account. Use
   `ppc_ads_discover_customers` and bind `customer_id` plus `manager_id`.
 - **Retrying a 412 or a `no_oauth_app`.** Both are structural. Nothing changes until a client is
-  registered.
+  registered: for Gmail or Outlook, set it up with `email_inbox_setup_guide` instead of stopping.
 - **Letting a raw `setup_url` expire in a long message.** 5 minutes for `email_connect_start`, 15
   for `integration_oauth_initiate` and `shopify_connect_start`. A connect link lasts until its
   `expires_at` (hours), which is the reason to prefer it. Put the link last either way.

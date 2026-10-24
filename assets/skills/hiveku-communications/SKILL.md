@@ -200,8 +200,9 @@ found."** The ladder: (1) diagnose with `email_connections_list` - the ONLY read
 `connection_status` and `last_error`; (2) `email_connect_start({ platform, scope_label,
 user_email })` - on a multi-user account you MUST say which user owns it; (3) hand the
 `setup_url` over, do not open it - **valid five minutes**; (4) `code: 'no_oauth_app'` is not
-transient: the account OWNER must register an OAuth Client at `/dashboard/settings/oauth-apps`
-first - say that and stop; (5) verify `connection_status: 'connected'`, then a cheap read.
+transient: the account has no Gmail/Outlook app yet - offer to set it up now with
+`email_inbox_setup_guide({ platform, mailbox })` and follow its next_step (you run most of it with
+the person's gcloud or az); (5) verify `connection_status: 'connected'`, then a cheap read.
 
 Mailbox health is not sending health: `email_service_status` (read `sending_enabled` FIRST -
 false means a `suspension` block explains why, ALL sending is blocked, and suspensions are
@@ -387,8 +388,9 @@ strategy via `talk_to_department({ domain: 'marketing' })`; workflow design via
   `marketing_template_*`.
 - **Trusting `email_connections_list`'s description.** It returns Gmail/Outlook connections
   and is the ONLY reader carrying `connection_status`/`last_error`.
-- **Retrying `email_connect_start` after `no_oauth_app`**, or letting the five-minute
-  `setup_url` expire buried in a long message.
+- **Retrying `email_connect_start` after `no_oauth_app`** (set the app up with
+  `email_inbox_setup_guide` instead), or letting the five-minute `setup_url` expire buried in a
+  long message.
 - **Calling `gmail_inbox_lead_replies` as a read.** `auto_label` defaults true; it writes
   labels to a real mailbox.
 - **Running a live workflow to see if it works.** `test_mode: true` first, every time.
