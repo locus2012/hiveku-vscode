@@ -436,8 +436,8 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__email_message_get',\n" +
           "  // The Email Service setup writes (2026-10-25): email_send and email_domain_send_instructions send email to real\n" +
           "  // people, email_project_connect rewrites how a live site sends its email, and email_suppression_import adds\n" +
-          "  // suppression rows that can never be removed. Every call asks, as in the plugin (ALWAYS_ASK_WRITES, 0.27.94) and\n" +
-          "  // Codex (0.3.35); the builder holds all four for agents until these asks are out. Appended last.\n" +
+          "  // suppression rows that can never be removed. Every call asks, as in the plugin (ALWAYS_ASK_WRITES, 0.27.96) and\n" +
+          "  // Codex (0.3.36); the builder holds all four for agents until these asks are out. Appended last.\n" +
           "  'mcp__hiveku__email_send',\n  'mcp__hiveku__email_domain_send_instructions',\n" +
           "  'mcp__hiveku__email_project_connect',\n  'mcp__hiveku__email_suppression_import',",
       ),
