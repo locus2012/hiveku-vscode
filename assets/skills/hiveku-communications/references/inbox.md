@@ -246,7 +246,7 @@ reply lands in the customer's thread; omit them and it is a new message. It self
 contact's timeline unless `log_activity: false` - writing `crm_create_activity` for the same send
 double-logs it. With no `connection_id` it uses the account's default SENDABLE mailbox; a
 read-only-scope or calendar connection 400s cleanly with the reason (a connection problem -
-`crm_list_email_connections` / `email_connect_start` - never a retry case). It has **no draft
+`crm_list_email_connections`, then a reconnect link as in Part 5 - never a retry case). It has **no draft
 state, no recall, and no idempotency key**: two identical calls are two emails. The approval gate
 binds to the exact subject and body shown; on an ambiguous timeout read
 `crm_contact_emails_list({ contact_id })` back before ANY retry. It is a `crm_` tool - invisible to
@@ -389,28 +389,34 @@ The trigger phrase is **"No active Gmail connection found."** Any `crm_calendar_
    `connection_status: 'error'` (grant revoked or token dead, needs reconnect), or a healthy row
    the caller simply did not select (a `connection_id` problem, not a connection problem).
 
-2. **Start the reconnect** with `email_connect_start`:
+2. **Ask the guide for the one next step**: `email_inbox_setup_guide({ platform, mailbox, for })`.
 
    | Argument | Notes |
    |---|---|
    | `platform` | `'gmail'` or `'outlook'`. Defaults to gmail |
-   | `scope_label` | `readonly` (read only, no calendar), `send` (send only), `modify` (read/send/modify, no calendar), `modify_with_calendar` (default: Gmail plus Google Calendar plus Meet read-only) |
-   | `user_email` / `user_id` | Which Hiveku user OWNS the connection. Optional on a solo account, REQUIRED on a multi-user one |
-   | `oauth_app_id` | Pins a specific OAuth Client. Defaults to the account's first Google app with the right product |
+   | `mailbox` | The failing address. The guide finds its row: a dead one gets a reconnect, no row a new connection |
+   | `for` | `'crm'` for a sales or CRM inbox, `'helpdesk'` (the default) for a support inbox. It decides what the mail feeds and the access asked for |
 
-   Pick the narrowest scope that does the job. A new Gmail connection asks for `modify` (read,
-   send, labels) unless you name one; Calendar and Meet connect separately on Hiveku's own Google
-   app (connector `google_calendar`). If the user only wants replies read, `readonly` is a smaller
-   ask on the consent screen and a smaller blast radius.
+   Its needs_connection step names the exact call; mint it with the step's `args`. A dead row gets
+   `integration_connect_link_create` with `target_connection_id`, which re-authenticates it IN
+   PLACE: same id, same consumers, and it never narrows what the row has. A new connection gets
+   `owner_user_email` instead (on a multi-user account, the user who owns it). A new Gmail
+   connection asks for `modify` (read, send, labels), a help desk that replies through Hiveku's
+   own email only `readonly`; Calendar and Meet connect separately on Hiveku's own Google app
+   (connector `google_calendar`), so do not pass `modify_with_calendar` for a new Gmail
+   connection. `email_connect_start` only starts a new connection on a five-minute consent URL
+   (`authorize_url`); it never repairs a row.
 
-3. **Hand the `setup_url` to the user. Do not open it yourself.** They must be in their own
-   browser session to grant Google consent. **It expires after five minutes.** Send it as the
-   last thing in a short message, when they are ready to click, not buried in a plan.
+3. **Hand the link's `url` to the user. Do not open it yourself.** They must be in their own
+   browser session, signed in as that mailbox, to grant consent. **It is shown once** and lasts
+   until `expires_at`, so send it as the last thing in a short message, when they are ready to
+   click, not buried in a plan. Poll `integration_connect_link_status({ link_id, wait_seconds: 8 })`
+   when they say they are through.
 
 4. **The `no_oauth_app` branch.** A response carrying `code: 'no_oauth_app'` means the account has
    no Google OAuth Client registered with `product='crm_email_calendar'`. This is a precondition,
    not a transient failure, and retrying produces the identical error forever. Offer to set the app
-   up now: `email_inbox_setup_guide({ platform, mailbox })` walks it one step at a time, and you run
+   up now: `email_inbox_setup_guide({ platform, mailbox, for })` walks it one step at a time, and you run
    most of it with the person's `gcloud` (Outlook: `az`); the person fills in the two Google pages it
    links and types the secret into Settings > OAuth Apps. Do not loop on the connect call meanwhile.
 
@@ -456,6 +462,6 @@ mail, which runs on a different lane entirely.
 | `crm_contact_email_send` returns 400 | `crm_list_email_connections` | The default sendable mailbox is a read-only-scope or calendar row - reconnect with a sending scope, do not retry |
 | Internal team mail appearing as lead replies | The membership resolver | It failed open to noise-only, or a `+` address was dropped |
 | Labels appearing on a customer's mailbox | `auto_label` | Defaults TRUE on `gmail_inbox_lead_replies` |
-| Reconnect link does not work | Elapsed time | The `setup_url` is valid for five minutes |
+| Reconnect link does not work | `integration_connect_link_status` | `expired` or `revoked`: mint a new one. `failed` says why in `error`, and the same link works again until it expires |
 | `no_oauth_app` on every attempt | Not transient | No mail app yet: set it up with `email_inbox_setup_guide` |
 | Mailbox fine, nothing sends | `email_service_status` | `sending_enabled: false` with a suspension block |
