@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.91.26
+- **Claude Code sends Google's client file for you.** The vendored skills match the plugin (0.27.94). Once your Gmail app's client is made, Claude Code calls `oauth_app_client_file_link` and runs the one command it returns on your computer, which sends the file Google downloaded (client_secret_*.json) to Hiveku. The secret never goes into the chat and nobody types it. Uploading the file under Settings > OAuth Apps still works.
+- **An inbox connected for the CRM can join the help desk from Claude Code**, with `email_connection_update`. Only the person the inbox belongs to can turn the help desk on for it; for a teammate's inbox, they switch on Monitor for Helpdesk in its Sync settings.
+- **The CRM, email and help desk setup guides and the Gmail inbox prompt** say the same.
+- **The email sequence guide** (from the plugin) says a paused sequence also stops workflows' Enroll in Sequence steps from adding anyone, and to tell you which switched-on workflows name it before pausing.
+
 ## 0.91.25
 - **A dead or missing inbox is repaired through the setup guide.** The vendored communications skill matches the plugin (0.27.88). When an inbox stopped syncing or a CRM tool says "No active Gmail connection", Claude Code asks `email_inbox_setup_guide({ platform, mailbox, for })` for the one next step (`for: 'crm'` for a sales or CRM inbox). An inbox that stopped working gets a reconnect link (`integration_connect_link_create` with `target_connection_id`), which repairs it in place: the same inbox, feeding the same places. An account with no Gmail or Outlook app yet is walked through making one. `email_connect_start` only starts a new connection and never repairs one, and a new Gmail connection no longer asks for Calendar and Meet, which connect on their own.
 
