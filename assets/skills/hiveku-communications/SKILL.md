@@ -197,12 +197,16 @@ customer wrote to.
 
 The symptom is any CRM email, inbox or calendar tool reporting **"No active Gmail connection
 found."** The ladder: (1) diagnose with `email_connections_list` - the ONLY reader carrying
-`connection_status` and `last_error`; (2) `email_connect_start({ platform, scope_label,
-user_email })` - on a multi-user account you MUST say which user owns it; (3) hand the
-`setup_url` over, do not open it - **valid five minutes**; (4) `code: 'no_oauth_app'` is not
-transient: the account has no Gmail/Outlook app yet - offer to set it up now with
-`email_inbox_setup_guide({ platform, mailbox })` and follow its next_step (you run most of it with
-the person's gcloud or az); (5) verify `connection_status: 'connected'`, then a cheap read.
+`connection_status` and `last_error`; (2) `email_inbox_setup_guide({ platform, mailbox, for })`
+with the failing address and `for: 'crm'` for a sales or CRM inbox (omitted, it is the help
+desk), and follow its next_step: a dead row gets a reconnect link (`integration_connect_link_create`
+with `target_connection_id`, IN PLACE: same row, same consumers), a missing one a new connection
+(on a multi-user account it names the user who owns it); (3) no Gmail/Outlook app yet
+(`code: 'no_oauth_app'`, not transient): the guide walks the setup, most of it with the person's
+gcloud or az; (4) hand the link's `url` over on its own line, do not open it - **shown once**,
+valid until `expires_at` - then poll `integration_connect_link_status({ link_id })`; (5) verify
+`connection_status: 'connected'`, then a cheap read. `email_connect_start` only starts a new
+connection (a five-minute `authorize_url`); it never repairs a row.
 
 Mailbox health is not sending health: `email_service_status` (read `sending_enabled` FIRST -
 false means a `suspension` block explains why, ALL sending is blocked, and suspensions are
@@ -388,9 +392,10 @@ strategy via `talk_to_department({ domain: 'marketing' })`; workflow design via
   `marketing_template_*`.
 - **Trusting `email_connections_list`'s description.** It returns Gmail/Outlook connections
   and is the ONLY reader carrying `connection_status`/`last_error`.
-- **Retrying `email_connect_start` after `no_oauth_app`** (set the app up with
-  `email_inbox_setup_guide` instead), or letting the five-minute `setup_url` expire buried in a
-  long message.
+- **Retrying a connect after `no_oauth_app`** (set the app up with `email_inbox_setup_guide`
+  instead), **repairing a dead row with `email_connect_start`** (that starts a new connection; a
+  reconnect link with `target_connection_id` fixes the row in place), or burying the link, which
+  is shown once, in a long message.
 - **Calling `gmail_inbox_lead_replies` as a read.** `auto_label` defaults true; it writes
   labels to a real mailbox.
 - **Running a live workflow to see if it works.** `test_mode: true` first, every time.

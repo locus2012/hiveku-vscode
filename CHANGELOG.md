@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.25
+- **A dead or missing inbox is repaired through the setup guide.** The vendored communications skill matches the plugin (0.27.88). When an inbox stopped syncing or a CRM tool says "No active Gmail connection", Claude Code asks `email_inbox_setup_guide({ platform, mailbox, for })` for the one next step (`for: 'crm'` for a sales or CRM inbox). An inbox that stopped working gets a reconnect link (`integration_connect_link_create` with `target_connection_id`), which repairs it in place: the same inbox, feeding the same places. An account with no Gmail or Outlook app yet is walked through making one. `email_connect_start` only starts a new connection and never repairs one, and a new Gmail connection no longer asks for Calendar and Meet, which connect on their own.
+
 ## 0.91.24
 - **Instant replies for a help desk inbox.** The vendored skills match the plugin (0.27.85): once a Gmail inbox is connected, Claude Code offers instant replies (new mail in about a minute instead of the 10-minute check) through `email_inbox_setup_guide({ section: 'instant_replies' })`, and says an Outlook inbox gets push when it connects.
 
