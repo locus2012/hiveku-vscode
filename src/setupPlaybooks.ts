@@ -80,8 +80,9 @@ existing contacts mean parts of this are already done — only fill the gaps.
 ## Email inbox (Gmail / Outlook)
 1. \`email_inbox_setup_guide({ platform: 'gmail'|'outlook', for: 'crm', mailbox })\` → the ONE next step. With no
    mail app yet it walks the account's own app: Gmail's INTERNAL Google app, most of it run with the person's
-   \`gcloud\` plus two Google pages it links; Outlook's app registration, all \`az\`. The person types the client
-   secret into Settings > OAuth Apps.
+   \`gcloud\` plus two Google pages it links; Outlook's app registration, all \`az\`. A Gmail app's client goes in
+   with \`oauth_app_client_file_link\` (one command sends Google's downloaded file from the person's computer; never
+   open it); Outlook's secret the person types into Settings > OAuth Apps.
 2. Connect: \`integration_connect_link_create({ connector: 'gmail'|'outlook', oauth_app_id, owner_user_email })\` →
    a link you HAND TO THE USER (they approve in their own browser).
 3. Verify: \`email_connections_list\` shows the inbox \`connection_status: 'connected'\`.
@@ -183,11 +184,13 @@ export const HELPDESK_SETUP = `# Helpdesk first-run: the support inbox — verif
    and the ONE next step; call it again after each step that changes something.
    - needs_app: the account's own mail app. Gmail = its INTERNAL Google app (Google Workspace only; a personal
      @gmail.com cannot have one): you run most of it with the person's \`gcloud\`, and they fill in the two Google
-     pages it links. Outlook = an app registration made with \`az\`. The person types the client secret into
-     Settings > OAuth Apps.
+     pages it links. Outlook = an app registration made with \`az\`. A Gmail app's client goes in with
+     \`oauth_app_client_file_link\` (one command sends Google's downloaded file; never open it); Outlook's secret the
+     person types into Settings > OAuth Apps.
    - needs_connection: \`integration_connect_link_create({ connector, oauth_app_id, owner_user_email, consumers: ['helpdesk'] })\`
      → a link the person opens signed in as the mailbox. An inbox already connected for the CRM needs no new
-     sign-in: they switch on "Monitor for Helpdesk" in its Sync settings (Helpdesk > Connections).
+     sign-in: \`email_connection_update({ connection_id, consumers: ['crm', 'helpdesk'] })\`. Only its own person may
+     turn the help desk on (403 inbox_share_not_yours): else they switch on "Monitor for Helpdesk" in its Sync settings.
 2. Use a dedicated support mailbox (a user that can sign in), never a busy personal or sales inbox: every new email
    to it becomes a ticket. A Google Group cannot connect.
 3. A newly connected inbox starts empty: only mail that arrives after it is connected becomes tickets, and the
