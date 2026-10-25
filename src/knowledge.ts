@@ -882,6 +882,14 @@ const HIVEKU_ASK: string[] = [
   // app's password-reset, sign-in and invite emails hold live links that work for whoever reads them. Every call
   // asks, as in the plugin (NEVER_AUTO_APPROVE) and Codex (0.3.25). Appended last.
   'mcp__hiveku__email_message_get',
+  // The Email Service setup writes (2026-10-25): email_send and email_domain_send_instructions send email to real
+  // people, email_project_connect rewrites how a live site sends its email, and email_suppression_import adds
+  // suppression rows that can never be removed. Every call asks, as in the plugin (ALWAYS_ASK_WRITES, 0.27.94) and
+  // Codex (0.3.35); the builder holds all four for agents until these asks are out. Appended last.
+  'mcp__hiveku__email_send',
+  'mcp__hiveku__email_domain_send_instructions',
+  'mcp__hiveku__email_project_connect',
+  'mcp__hiveku__email_suppression_import',
 ];
 
 /**

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.26
+- **Sending email and changing how a site sends it always ask.** Claude Code in your project folders asks before `email_send`, `email_domain_send_instructions`, `email_project_connect` and `email_suppression_import`, in every permission mode, as the Claude Code and Codex plugins do. Two send email to real people (one email through your Email Service, or a domain's DNS records to the person who manages them), one writes a site's email keys and settings into its variables, and one adds addresses to the suppression list, where imported bounces and complaints can never be removed. Hiveku folders open in VS Code get the new rules when the extension starts.
+
 ## 0.91.25
 - **A dead or missing inbox is repaired through the setup guide.** The vendored communications skill matches the plugin (0.27.88). When an inbox stopped syncing or a CRM tool says "No active Gmail connection", Claude Code asks `email_inbox_setup_guide({ platform, mailbox, for })` for the one next step (`for: 'crm'` for a sales or CRM inbox). An inbox that stopped working gets a reconnect link (`integration_connect_link_create` with `target_connection_id`), which repairs it in place: the same inbox, feeding the same places. An account with no Gmail or Outlook app yet is walked through making one. `email_connect_start` only starts a new connection and never repairs one, and a new Gmail connection no longer asks for Calendar and Meet, which connect on their own.
 
