@@ -196,8 +196,10 @@ only for the products its `products` array lists.
   `oauth_app_create({ provider, name, client_id, client_secret, products })`,
   all five required, plus optional `notes`. The `name` must be unique per (account, provider).
   The setup itself is `email_inbox_setup_guide({ platform })` (Part 4): most of it runs with the
-  person's `gcloud` (Outlook: `az`), and the person types the secret into Settings > OAuth Apps, or
-  hands it to you for this call (never repeat or save it).
+  person's `gcloud` (Outlook: `az`). A Gmail app's client goes in with `oauth_app_client_file_link`:
+  one command sends Google's downloaded file from the person's computer, so never open or print the
+  file. For Outlook the person types the secret into Settings > OAuth Apps, or hands it to you for
+  this call (never repeat or save it).
 
 The product slugs, exactly: `crm_email_calendar`, `google_calendar_meet`, `google_ads`,
 `google_search_console`, `google_business_profile`, `google_analytics`, `microsoft_ads`,
@@ -364,13 +366,17 @@ Its `status`:
   you run the steps with the person's `gcloud` (project, Gmail API) and they fill in the two Google
   pages the guide links. Outlook is an app registration made entirely with `az`. Keep the guide's
   `rules` (one step at a time, `--project` on every gcloud command, never `gcloud config set`, never
-  repeat or save the client secret). The person types the secret into Settings > OAuth Apps, or
-  hands it to you for `oauth_app_create`.
+  repeat or save the client secret). Gmail: send Google's client file with
+  `oauth_app_client_file_link` (one command, run on the person's computer; never open the file).
+  Outlook: the person types the secret into Settings > OAuth Apps, or hands it to you for
+  `oauth_app_create`.
 - `needs_connection`: mint the connect link the step names: `integration_connect_link_create({
   connector, oauth_app_id, owner_user_email, consumers, scope_label })`, with `tenant` for Outlook.
   A help desk inbox starts empty: only mail that arrives after it is connected becomes tickets,
-  never what it already held. An inbox already connected for the CRM gets the help desk switched on
-  in the dashboard (Monitor for Helpdesk), with no new sign-in.
+  never what it already held. An inbox already connected for the CRM joins the help desk with
+  `email_connection_update({ connection_id, consumers: ['crm', 'helpdesk'] })`, with no new sign-in.
+  Only the person the inbox belongs to may turn the help desk on for it (403 inbox_share_not_yours):
+  otherwise that person switches on Monitor for Helpdesk in its Sync settings.
 - `connected`: send a test email; it becomes a ticket within about 10 minutes, or about a minute on
   Outlook (push turns on when the inbox connects). For about a minute on Gmail,
   `email_inbox_setup_guide({ platform, section: 'instant_replies' })`: a Pub/Sub topic in the Gmail

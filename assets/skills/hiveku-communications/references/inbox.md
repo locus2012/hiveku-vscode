@@ -418,7 +418,9 @@ The trigger phrase is **"No active Gmail connection found."** Any `crm_calendar_
    not a transient failure, and retrying produces the identical error forever. Offer to set the app
    up now: `email_inbox_setup_guide({ platform, mailbox, for })` walks it one step at a time, and you run
    most of it with the person's `gcloud` (Outlook: `az`); the person fills in the two Google pages it
-   links and types the secret into Settings > OAuth Apps. Do not loop on the connect call meanwhile.
+   links. A Gmail app's client goes in with `oauth_app_client_file_link` (one command sends Google's
+   downloaded file from their computer; never open it), and Outlook's secret the person types into
+   Settings > OAuth Apps. Do not loop on the connect call meanwhile.
 
 5. **Verify** by polling `email_connections_list` for `connection_status: 'connected'`. Once it
    lands the inbox and calendar tools return real data. Confirm with a cheap read such as

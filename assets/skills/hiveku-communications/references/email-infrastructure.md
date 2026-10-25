@@ -201,11 +201,15 @@ do not survive: as each one next comes due, the sequence tick EXITS it permanent
 `exited`, `exit_reason` `sequence_inactive`, `next_fire_at` cleared). `email_sequence_activate`
 does not bring those contacts back, and `email_sequence_enroll` cannot either, because
 `marketing_sequence_enrollment` is unique on `(sequence_id, contact_id)` and the enroll insert
-skips duplicates, so re-enrolling an exited contact is a no-op reported as `alreadyEnrolled`. Use
-it only to retire a sequence for good.
+skips duplicates, so re-enrolling an exited contact is a no-op reported as `alreadyEnrolled`. New
+people stop joining too: every workflow step Email Marketing: Enroll in Sequence that names it adds
+nobody while it is off. Before pausing, find those switched-on workflows (`workflow_list`, then
+`workflow_get`) and tell the operator. Use it only to retire a sequence for good.
 
 The `emailMarketingAddToSequence` node enrolls from a workflow and is **idempotent**, so
-re-enrolling the same contact is a no-op rather than a double send.
+re-enrolling the same contact is a no-op rather than a double send. It runs the Enroll contacts
+box's checks, and while the sequence is off it adds nobody: the step completes with
+`skippedReason: sequence_off` and a warning on the run, and the workflow goes on.
 `emailMarketingRemoveFromSequence` exits them with `exit_reason=workflow_removed`.
 
 ### Sales sequences: `crm_*`
