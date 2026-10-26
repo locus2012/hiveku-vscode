@@ -323,6 +323,11 @@ permanently, not a hold), and `crm_*_sequence` is the separate sales engine
 and the diagnosis ladder: `references/email-infrastructure.md` - load it before creating a
 template, scheduling a campaign, or answering "why is our email not arriving".
 
+**An app's own email** goes through the Email Service (API keys, SMTP at `smtp.hiveku.com`, the
+Resend-compatible API, webhooks, the sent-email log). Moving a site off Resend, Mailgun or its own
+SMTP: `references/email-migration.md` (`/hiveku:email-migrate`). It never reads an old key's value, and
+a key enters a site only through `email_project_connect`.
+
 ## Boundary: the email department has an agent; communications as a whole does not
 
 `talk_to_department`'s domain enum is `seo`, `social`, `content`, `marketing`, `branding`,
@@ -413,6 +418,7 @@ incidents behind each rule. Load the relevant one BEFORE building, not after a s
 |---|---|
 | `references/inbox.md` | Reading or searching any mailbox; replying in a thread (`crm_contact_email_send` interactively, the `gmailReply` node for automation); `gmail_*` signatures and traps; connecting or repairing a Gmail/Outlook connection; `no_oauth_app`; "no active Gmail connection found". |
 | `references/email-infrastructure.md` | Campaigns (finding, creating, cancelling a scheduled send), audiences, the three template families, both sequence engines, the CRM send queue, sending domains, suppression, deliverability, send-log diagnosis. |
+| `references/email-migration.md` | Moving a website's email off Resend, Mailgun or its own SMTP: the inventory by variable names, the lane, the domain beside the old provider's records, the suppression import, connecting the site, the preview test, cutover and cleanup. |
 
 Phone and SMS manuals moved: they are the **hiveku-phone-agency** skill's references now
 (`hiveku-phone-agency/references/sms-operations.md`,

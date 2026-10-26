@@ -569,8 +569,14 @@ use two keys.** Leaking a server secret via `NEXT_PUBLIC_` is the number one way
 own backend keys, and the trap is that it works: the prefix makes the client code run, so the symptom
 of the mistake is that the bug goes away.
 
-**Rule 55. If the user pastes the platform `DATABASE_URL` (`postgres://postgres:*@db.*.supabase.co`)
-or an `hk_live_*` key - STOP. That is a platform credential**, not theirs to store in a project.
+**Rule 55. If the user pastes the platform `DATABASE_URL` (`postgres://postgres:*@db.*.supabase.co`) -
+STOP. That is a platform credential**, not theirs to store in a project. **An Email Service key
+(`hk_live_`, `hk_test_` or `hvk_email_`) is the account's own, but it enters a site only through
+`email_project_connect`**, which writes it as a server-only variable (the test key for the preview,
+development and staging, the production key for production). Never paste one into code, a commit, a
+chat reply or a browser-public variable (Rule 54). Until Hiveku turns that tool on (403
+`agent_changes_not_enabled`), the person adds the keys under the site's environment variables
+themselves. Moving an app's email: `hiveku-communications/references/email-migration.md`.
 
 **Rule 56. Reserved secret names a tenant may never store:** `AGENT_SERVER_SECRET`,
 `INTERNAL_API_SECRET`, `CLERK_SECRET_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
