@@ -141,6 +141,10 @@ describe('where the Memory page puts a row', () => {
     assert.deepEqual(place({ domain: '_command:weekly', content: 'x' }), { place: 'shared', group: 'shortcuts' });
     assert.deepEqual(place({ domain: '_rule:x', department: 'orchestrator' }), { place: 'other', owner: 'orchestrator', group: 'rules' });
     assert.deepEqual(place({ domain: 'pipeline-notes', department: 'sales' }), { place: 'other', owner: 'sales', group: 'notes' });
+    // Outbound's route lists its own note and its `outbound_*` notes, nothing else.
+    assert.deepEqual(place({ domain: 'outbound_icp', department: 'outbound' }), { place: 'agent', agent: 'outbound', topic: null, group: 'notes' });
+    assert.deepEqual(place({ domain: 'outbound', department: 'outbound' }), { place: 'agent', agent: 'outbound', topic: null, group: 'notes' });
+    assert.deepEqual(place({ domain: 'reply-notes', department: 'outbound' }), { place: 'other', owner: 'outbound', group: 'notes' });
     assert.deepEqual(place({ domain: '_rule:x', department: 'graphic_design' }), { place: 'other', owner: 'graphic_design', group: 'rules' });
   });
 

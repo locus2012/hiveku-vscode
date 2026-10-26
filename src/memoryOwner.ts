@@ -384,8 +384,20 @@ export type Placement =
   /** Never drawn: internal state, an old shape, or the About your business rows themselves. */
   | { place: 'hidden'; reason: 'system' | 'legacy' | 'account' };
 
-/** The departments whose own memory route returns one notes document, named for the agent. */
-const ONE_NOTES_NAME: ReadonlySet<string> = new Set(['sales', 'helpdesk', 'comms', 'production', 'accounting', 'coder']);
+/**
+ * The departments whose own memory route returns one notes document, named for the agent.
+ * Outbound's also returns its `outbound_*` notes (ideal customer, reply tone, do not contact),
+ * which its server reads before every draft (builder memory-types.ts DEPARTMENT_NOTES_PREFIXES).
+ */
+const ONE_NOTES_NAME: ReadonlySet<string> = new Set(['sales', 'helpdesk', 'comms', 'production', 'accounting', 'coder', 'outbound']);
+const NOTES_PREFIXES: Readonly<Record<string, string>> = { outbound: 'outbound_' };
+
+/** Whether `domain` is a notes document the department's own route lists (builder isDepartmentNotesName). */
+function isOwnNotesName(department: string, domain: string): boolean {
+  if (domain === department) return true;
+  const prefix = Object.prototype.hasOwnProperty.call(NOTES_PREFIXES, department) ? NOTES_PREFIXES[department] : undefined;
+  return !!prefix && domain.length > prefix.length && domain.startsWith(prefix);
+}
 
 function agentPlace(agent: TeamAgent, group: string, topic: string | null = null): Placement {
   return { place: 'agent', agent, topic, group };
@@ -420,8 +432,8 @@ export function placeRow(row: OwnerInput): Placement {
   // The chief of staff reads her `_account:*` rows and her profile only.
   if (owner === 'orchestrator' && kind !== 'profile') return { place: 'other', owner, group };
   if (isTeamAgent(owner) && owner !== 'marketing') {
-    // The agent's own route lists one notes document, its own name.
-    if (kind === 'note' && ONE_NOTES_NAME.has(owner) && domain !== owner) return { place: 'other', owner, group };
+    // The agent's own route lists one notes document, its own name (and Outbound's `outbound_*` notes).
+    if (kind === 'note' && ONE_NOTES_NAME.has(owner) && !isOwnNotesName(owner, domain)) return { place: 'other', owner, group };
     return agentPlace(owner, group);
   }
   if (isMarketingTopic(owner)) {
