@@ -48,7 +48,8 @@ import { accountMemoryDashboardUrl, isAccountMemoryDomain } from './accountMemor
 /**
  * The Marketing team: its lead (`marketing`) and its topics, each a peer with
  * its own chat (builder memory-types.ts MARKETING_FAMILY_DEPARTMENTS, with
- * `analytics` since audit decision 6).
+ * `analytics` since audit decision 6; without `outbound`, its own agent since
+ * 2026-10-26).
  */
 export const MARKETING_FAMILY: readonly string[] = [
   'marketing',
@@ -56,7 +57,6 @@ export const MARKETING_FAMILY: readonly string[] = [
   'seo',
   'social',
   'ppc',
-  'outbound',
   'branding',
   'customer_avatar',
   'customer_journey',
@@ -69,7 +69,7 @@ export const MARKETING_FAMILY: readonly string[] = [
 ];
 
 /** The agents that run their own servers. */
-export const SERVER_AGENTS: readonly string[] = ['sales', 'helpdesk', 'production', 'accounting', 'comms', 'coder', 'orchestrator'];
+export const SERVER_AGENTS: readonly string[] = ['outbound', 'sales', 'helpdesk', 'production', 'accounting', 'comms', 'coder', 'orchestrator'];
 
 /** Every department a memory entry can belong to. */
 export const MEMORY_DEPARTMENTS: readonly string[] = [...MARKETING_FAMILY, ...SERVER_AGENTS];
@@ -86,7 +86,7 @@ export function isMarketingTopic(value: unknown): value is string {
 }
 
 /** Every agent with a row of its own on the Memory page, in the page's order. */
-export const TEAM_AGENTS = ['orchestrator', 'sales', 'helpdesk', 'marketing', 'production', 'accounting', 'coder', 'comms'] as const;
+export const TEAM_AGENTS = ['orchestrator', 'sales', 'helpdesk', 'marketing', 'outbound', 'production', 'accounting', 'coder', 'comms'] as const;
 export type TeamAgent = (typeof TEAM_AGENTS)[number];
 
 export function isTeamAgent(value: unknown): value is TeamAgent {
@@ -99,6 +99,7 @@ export const AGENT_NAMES: Readonly<Record<TeamAgent, string>> = {
   sales: 'Sales',
   helpdesk: 'Support',
   marketing: 'Marketing',
+  outbound: 'Outbound',
   production: 'Production',
   accounting: 'Accounting',
   coder: 'Website',
@@ -116,7 +117,6 @@ export const TOPIC_NAMES: Readonly<Record<string, string>> = {
   branding: 'Branding',
   customer_journey: 'Customer journey',
   knowledge_base: 'Knowledge base',
-  outbound: 'Outbound',
   workflow: 'Workflow',
   before_after_grid: 'Before and after',
   website_design: 'Website design',
@@ -547,7 +547,7 @@ export interface NewEntryAgent {
  * owners and admins add those on the Memory page.
  */
 export function newEntryAgents(): NewEntryAgent[] {
-  const team: NewEntryAgent[] = (['sales', 'helpdesk', 'comms', 'production', 'accounting', 'coder'] as TeamAgent[]).map((key) => ({
+  const team: NewEntryAgent[] = (['sales', 'helpdesk', 'comms', 'outbound', 'production', 'accounting', 'coder'] as TeamAgent[]).map((key) => ({
     key,
     label: AGENT_NAMES[key],
     marketing: false,

@@ -39,10 +39,16 @@ describe('the one owner rule', () => {
   });
 
   test('(b) the seeded starter shape: column marketing plus a topic marker belongs to that topic', () => {
-    for (const topic of ['email', 'seo', 'ppc', 'social', 'content', 'website_design', 'customer_journey', 'customer_avatar', 'knowledge_base', 'branding', 'before_after_grid', 'outbound']) {
+    for (const topic of ['email', 'seo', 'ppc', 'social', 'content', 'website_design', 'customer_journey', 'customer_avatar', 'knowledge_base', 'branding', 'before_after_grid']) {
       assert.equal(owner.ownerOf({ domain: '_skill:starter', department: 'marketing', content: `${marker(topic)}\nbody` }), topic, topic);
       assert.equal(owner.ownerOf({ domain: '_rule:starter', department: null, content: `${marker(topic)}\nbody` }), topic, `${topic}, no column`);
     }
+    // Outbound is its own agent since 2026-10-26, not a Marketing topic: its marker no longer beats a
+    // marketing column (that row is the Marketing lead's), and without a column it is Outbound's.
+    assert.equal(owner.ownerOf({ domain: '_skill:starter', department: 'marketing', content: `${marker('outbound')}\nbody` }), 'marketing');
+    assert.equal(owner.ownerOf({ domain: '_rule:starter', department: null, content: `${marker('outbound')}\nbody` }), 'outbound');
+    assert.equal(owner.ownerOf({ domain: '_rule:starter', department: 'outbound', content: `${marker('outbound')}\nbody` }), 'outbound');
+    assert.ok(!owner.isMarketingTopic('outbound') && owner.isTeamAgent('outbound'));
     // Analytics is a Marketing topic (audit decision 6).
     assert.equal(owner.ownerOf({ domain: '_rule:x', department: 'marketing', content: marker('analytics') }), 'analytics');
     assert.ok(owner.isMarketingTopic('analytics'));
@@ -199,13 +205,15 @@ describe('+ New entry (audit G7)', () => {
   test('offers every agent that follows what is filed for it, in the page order and words', () => {
     const agents = owner.newEntryAgents();
     const keys = agents.map((a) => a.key);
-    for (const key of ['sales', 'helpdesk', 'comms', 'production', 'accounting', 'coder', 'marketing', 'seo', 'ppc', 'email', 'customer_avatar']) {
+    for (const key of ['sales', 'helpdesk', 'comms', 'outbound', 'production', 'accounting', 'coder', 'marketing', 'seo', 'ppc', 'email', 'customer_avatar']) {
       assert.ok(keys.includes(key), key);
     }
     // Not the chief of staff (she reads only her own _account:* memory), not
     // shared with every agent, and not a department the agent servers do not follow yet.
     for (const key of ['orchestrator', 'shared', 'analytics']) assert.ok(!keys.includes(key), key);
-    assert.deepEqual(agents.slice(0, 6).map((a) => a.label), ['Sales', 'Support', 'Communications', 'Production', 'Accounting', 'Website']);
+    assert.deepEqual(agents.slice(0, 7).map((a) => a.label), ['Sales', 'Support', 'Communications', 'Outbound', 'Production', 'Accounting', 'Website']);
+    // Outbound is one of the team, never under the Marketing separator (its own agent since 2026-10-26).
+    assert.equal(agents.find((a) => a.key === 'outbound').marketing, false);
     assert.equal(agents.find((a) => a.key === 'marketing').label, 'Marketing strategy');
     assert.equal(agents.find((a) => a.key === 'ppc').label, 'Paid ads');
   });

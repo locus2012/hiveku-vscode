@@ -103,7 +103,7 @@ describe('the Knowledge tab data', () => {
     assert.equal(tab.memoryUrl, PAGE);
 
     // The page's order for the groups the tab draws.
-    assert.deepEqual(tab.team.map((a) => a.key), ['orchestrator', 'sales', 'helpdesk', 'marketing', 'production', 'accounting', 'coder', 'comms']);
+    assert.deepEqual(tab.team.map((a) => a.key), ['orchestrator', 'sales', 'helpdesk', 'marketing', 'outbound', 'production', 'accounting', 'coder', 'comms']);
     assert.ok(tab.topics.some((t) => t.key === 'analytics' && t.name === 'Analytics'));
     // Plain strings only reach the webview.
     for (const row of tab.memories) for (const v of Object.values(row)) assert.ok(['string', 'number', 'boolean'].includes(typeof v), JSON.stringify(v));
@@ -238,7 +238,7 @@ describe('+ New entry: who it is for first (G7)', () => {
     const [firstItems, firstOpts] = calls.picks[0];
     assert.match(firstOpts.placeHolder, /Who is it for/);
     const offered = firstItems.filter((it) => it.kind !== vscodeStub.QuickPickItemKind.Separator).map((it) => it.label);
-    assert.deepEqual(offered.slice(0, 6), ['Sales', 'Support', 'Communications', 'Production', 'Accounting', 'Website']);
+    assert.deepEqual(offered.slice(0, 7), ['Sales', 'Support', 'Communications', 'Outbound', 'Production', 'Accounting', 'Website']);
     assert.ok(offered.includes('Paid ads') && offered.includes('Ideal customers'));
     assert.ok(!offered.includes('Analytics'), 'not filed until the agent servers follow it');
     assert.equal(start.open, 'editor');
