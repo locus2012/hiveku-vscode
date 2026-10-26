@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.28
+- **Outbound is its own agent in Memory.** Outbound left the Marketing team on 2026-10-26: the Knowledge tab lists it with the team, and + New entry offers it under Your AI team instead of the Marketing team. Outbound follows only what is filed under it and the rules shared with every agent, never the Marketing hub's. Its folder stays `outbound/`, and its notes (`outbound`, plus `outbound_icp`, `outbound_reply_tone` and `outbound_do_not_contact`) show under Outbound.
+
 ## 0.91.27
 - **Sending email and changing how a site sends it always ask.** Claude Code in your project folders asks before `email_send`, `email_domain_send_instructions`, `email_project_connect` and `email_suppression_import`, in every permission mode, as the Claude Code and Codex plugins do. Two send email to real people (one email through your Email Service, or a domain's DNS records to the person who manages them), one writes a site's email keys and settings into its variables, and one adds addresses to the suppression list, where imported bounces and complaints can never be removed. Hiveku folders open in VS Code get the new rules when the extension starts.
 - **Moving an app's email to Hiveku.** The vendored skills match the plugin (0.27.98): the communications skill's new email migration guide walks an app off Resend, Mailgun or its own SMTP. It covers taking stock of the old provider by variable names only, setting the domain up beside it, connecting the site, testing in the live preview, the cutover and the cleanup. It names the by-hand step for each of the four tools above while Hiveku holds them. The web agency guide's Rule 55 says an Email Service key enters a site only through `email_project_connect`.
