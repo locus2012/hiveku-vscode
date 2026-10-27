@@ -439,9 +439,18 @@ describe('what the extension writes and wires', () => {
           "  // suppression rows that can never be removed. Every call asks, as in the plugin (ALWAYS_ASK_WRITES, 0.27.96) and\n" +
           "  // Codex (0.3.36); the builder holds all four for agents until these asks are out. Appended last.\n" +
           "  'mcp__hiveku__email_send',\n  'mcp__hiveku__email_domain_send_instructions',\n" +
-          "  'mcp__hiveku__email_project_connect',\n  'mcp__hiveku__email_suppression_import',",
+          "  'mcp__hiveku__email_project_connect',\n  'mcp__hiveku__email_suppression_import',\n" +
+          "  // Lead lists (the Grid, 2026-10-27, MCP #307). Their writes are named outbound_lead_list_*, so the '*_list_*'\n" +
+          "  // read glob above matched every one and approved it unasked. outbound_lead_list_run_start spends money (email\n" +
+          "  // checks, AI calls) and can add leads to a campaign that is sending; run_control resumes a run; the other five\n" +
+          "  // change a list or its runs. Asking beats that glob, so every call asks. The plugin and Codex ask for the two\n" +
+          "  // run tools. Appended last.\n" +
+          "  'mcp__hiveku__outbound_lead_list_create',\n  'mcp__hiveku__outbound_lead_list_update',\n" +
+          "  'mcp__hiveku__outbound_lead_list_rows_add',\n  'mcp__hiveku__outbound_lead_list_workflow_attach',\n" +
+          "  'mcp__hiveku__outbound_lead_list_run_start',\n  'mcp__hiveku__outbound_lead_list_run_control',\n" +
+          "  'mcp__hiveku__outbound_lead_list_runs_stop_all',",
       ),
-      'the newest ask rules, the Email Service setup writes, go at the END, after opening a sent email',
+      'the newest ask rules, the lead list writes, go at the END, after the Email Service setup writes',
     );
   });
 

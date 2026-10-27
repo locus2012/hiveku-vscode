@@ -903,6 +903,18 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__email_domain_send_instructions',
   'mcp__hiveku__email_project_connect',
   'mcp__hiveku__email_suppression_import',
+  // Lead lists (the Grid, 2026-10-27, MCP #307). Their writes are named outbound_lead_list_*, so the '*_list_*'
+  // read glob above matched every one and approved it unasked. outbound_lead_list_run_start spends money (email
+  // checks, AI calls) and can add leads to a campaign that is sending; run_control resumes a run; the other five
+  // change a list or its runs. Asking beats that glob, so every call asks. The plugin and Codex ask for the two
+  // run tools. Appended last.
+  'mcp__hiveku__outbound_lead_list_create',
+  'mcp__hiveku__outbound_lead_list_update',
+  'mcp__hiveku__outbound_lead_list_rows_add',
+  'mcp__hiveku__outbound_lead_list_workflow_attach',
+  'mcp__hiveku__outbound_lead_list_run_start',
+  'mcp__hiveku__outbound_lead_list_run_control',
+  'mcp__hiveku__outbound_lead_list_runs_stop_all',
 ];
 
 /**
