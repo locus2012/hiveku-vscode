@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.30
+- **Lead lists in Outbound.** Pulling `outbound` adds a `lead_lists` dataset (each list's name, rows, folder, running runs and last update), and the Outbound notes name the 12 lead list tools: which read, which write, and that a column runs only after its estimate and your yes (10 rows first; a campaign that is sending needs an explicit yes).
+- **Every lead list write asks.** Their names hold `_list_`, which the read rule `*_list_*` matched, so they would have run unasked, the run that spends money among them. They are on the ask list now, in new folders and in folders made before.
+
 ## 0.91.29
 - **Turning Visitor Intelligence on always asks.** Claude Code in your project folders asks before `analytics_visitor_intelligence_start`, as the Claude Code plugin does: the analytics reads are now approved by name, so a new analytics tool that changes something prompts instead of riding a wildcard.
 - **Outbound is its own agent in Memory.** Outbound left the Marketing team on 2026-10-26: the Knowledge tab lists it with the team, and + New entry offers it under Your AI team instead of the Marketing team. Outbound follows only what is filed under it and the rules shared with every agent, never the Marketing hub's. Its folder stays `outbound/`, and its notes (`outbound`, plus `outbound_icp`, `outbound_reply_tone` and `outbound_do_not_contact`) show under Outbound.
