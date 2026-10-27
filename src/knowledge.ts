@@ -663,7 +663,20 @@ const HIVEKU_ALLOW: string[] = [
   // agent SEE what the client pointed at defeats the purpose. Listed by name for
   // the same reason preview_screenshot is.
   'mcp__hiveku__project_annotation_screenshot',
-  'mcp__hiveku__analytics_*',
+  // The analytics READS, by name: a glob over analytics_* also approved
+  // analytics_visitor_intelligence_start (2026-10-26, HK-727), which turns
+  // Visitor Intelligence on and must ask. The three POSTs are reads
+  // (POST_READS in scripts/check-permission-rules.mjs).
+  'mcp__hiveku__analytics_overview',
+  'mcp__hiveku__analytics_pages',
+  'mcp__hiveku__analytics_sessions',
+  'mcp__hiveku__analytics_traffic_sources',
+  'mcp__hiveku__analytics_visitors',
+  'mcp__hiveku__analytics_events_list',
+  'mcp__hiveku__analytics_visitor_intelligence_get',
+  'mcp__hiveku__analytics_channel_scorecard',
+  'mcp__hiveku__analytics_diagnose_tracking',
+  'mcp__hiveku__analytics_probe_page',
   'mcp__hiveku__talk_to_department',
   // Role daily-brief signals (read-only reports the /hiveku-daily commands chain).
   'mcp__hiveku__*_summary',
