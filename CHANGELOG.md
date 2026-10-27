@@ -1,6 +1,7 @@
 # Changelog
 
-## 0.91.28
+## 0.91.29
+- **Turning Visitor Intelligence on always asks.** Claude Code in your project folders asks before `analytics_visitor_intelligence_start`, as the Claude Code plugin does: the analytics reads are now approved by name, so a new analytics tool that changes something prompts instead of riding a wildcard.
 - **Outbound is its own agent in Memory.** Outbound left the Marketing team on 2026-10-26: the Knowledge tab lists it with the team, and + New entry offers it under Your AI team instead of the Marketing team. Outbound follows only what is filed under it and the rules shared with every agent, never the Marketing hub's. Its folder stays `outbound/`, and its notes (`outbound`, plus `outbound_icp`, `outbound_reply_tone` and `outbound_do_not_contact`) show under Outbound.
 
 ## 0.91.27
