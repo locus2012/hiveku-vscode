@@ -690,9 +690,10 @@ export const DEPARTMENTS: Department[] = [
       { id: 'objections', label: 'Objection library (patterns + counter-responses)', tool: 'outbound_list_objections', args: { limit: 200 }, columns: [{ key: ['pattern', 'objection'], label: 'objection' }, { key: ['category', 'type'], label: 'category' }, { key: ['times_seen', 'count'], label: 'seen' }] },
       { id: 'sales_assets', label: 'Sales assets (active only)', tool: 'outbound_list_sales_assets', args: { is_active: 'true', limit: 100 }, columns: [{ key: ['name', 'title'], label: 'asset' }, { key: ['asset_type', 'type'], label: 'type' }, { key: 'is_active', label: 'active' }] },
       { id: 'sequence_learnings', label: 'Sequence performance learnings (A/B winners + losers)', tool: 'outbound_list_sequence_learnings', args: { limit: 200 }, columns: [{ key: ['sequence_name', 'sequence_id'], label: 'sequence' }, { key: ['outcome', 'verdict'], label: 'outcome' }, { key: ['created_at'], label: 'when', date: true }] },
+      { id: 'lead_lists', label: 'Lead lists (the Grid: imported leads with step columns)', tool: 'outbound_lead_lists_list', columns: [{ key: 'name', label: 'list' }, { key: 'rowCount', label: 'rows' }, { key: 'folder' }, { key: 'activeRuns', label: 'running' }, { key: 'updatedAt', label: 'updated', date: true }] },
     ],
     crud:
-      '32 `outbound_*` tools. The writes are `outbound_create_campaign`, `outbound_create_lead`, ' +
+      '52 `outbound_*` tools. The writes are `outbound_create_campaign`, `outbound_create_lead`, ' +
       '`outbound_leads_bulk_create`, `outbound_update_lead`, `outbound_push_lead_to_crm`, `outbound_save_reply_draft`, ' +
       '`outbound_reply_draft_send`, `outbound_campaign_status_set`, `outbound_campaign_sequences_save`, ' +
       '`outbound_log_objection`, `outbound_update_objection`, `outbound_add_sales_asset`, `outbound_update_sales_asset` ' +
@@ -784,7 +785,15 @@ export const DEPARTMENTS: Department[] = [
       'and lead profile-field edits. The approval gate did not go away, it moved: the exact draft, steps or transition ' +
       'is shown, the operator says yes, then the confirmed call is made. The local automations worker still never sends ' +
       'and never calls `outbound_reply_draft_send`, `outbound_campaign_status_set` or ' +
-      '`outbound_campaign_sequences_save`.',
+      '`outbound_campaign_sequences_save`. Lead lists (the Grid: up to 100,000 leads, each workflow step a column) are 12 ' +
+      'of them: `outbound_lead_lists_list`, `outbound_lead_list_get`, `outbound_lead_list_rows` and ' +
+      '`outbound_lead_list_steps` read; `outbound_lead_list_create`, `outbound_lead_list_update` (rename, set columns), ' +
+      '`outbound_lead_list_rows_add` and `outbound_lead_list_workflow_attach` write the list. A column runs only through ' +
+      '`outbound_lead_list_run_estimate` (rows, the most it can cost, the campaign and whether it is sending) and then, ' +
+      'after the person says yes to that estimate, `outbound_lead_list_run_start` with `confirm_max_cost_cents` and, for ' +
+      'a sending campaign, `confirm_active: true`. Run 10 rows (`mode: "sample"`) before the rest. ' +
+      '`outbound_lead_list_run_control` pauses, resumes or cancels a run; `outbound_lead_list_runs_stop_all` pauses every ' +
+      'run on a list at once.',
   },
   {
     id: 'social',
