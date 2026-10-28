@@ -12,7 +12,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadOut } from './helpers/load.mjs';
 
-const { walkFiles } = loadOut('workspace');
+const { walkFiles, isIgnoredPath } = loadOut('workspace');
+
+test('isIgnoredPath: a skipped name anywhere in the path, the file name included', () => {
+  for (const p of ['.env', '.envrc', 'apps/web/.env.local', '.codex/config.toml', 'dist/app.js', '.claude/settings.local.json']) {
+    assert.equal(isIgnoredPath(p), true, p);
+  }
+  for (const p of ['src/app/page.tsx', '.env.example', 'docs/env.md', 'public/.well-known/x.txt']) {
+    assert.equal(isIgnoredPath(p), false, p);
+  }
+});
 
 test("walkFiles skips key files and one computer's secret files at any depth", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'hiveku-local-only-'));

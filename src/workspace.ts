@@ -80,6 +80,15 @@ export function sha256(buf: Buffer | string): string {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
 
+/**
+ * True for a project path walkFiles never sees: a name in IGNORE_DIRS anywhere in it, the file's own
+ * name included. A remote file like that is missing locally because the walk skips it (a site's
+ * public `.env`, say), not because it was deleted, so it is never sent as a deletion.
+ */
+export function isIgnoredPath(rel: string): boolean {
+  return rel.split('/').some((segment) => IGNORE_DIRS.has(segment));
+}
+
 /** Recursively list project-relative POSIX paths under `root`, skipping IGNORE_DIRS. */
 export async function walkFiles(root: string): Promise<string[]> {
   const out: string[] = [];
