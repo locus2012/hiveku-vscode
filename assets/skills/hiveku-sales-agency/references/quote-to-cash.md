@@ -64,11 +64,18 @@ fire by luck.
 
 - Templates: `crm_contract_template_list` / `crm_contract_template_get` /
   `crm_contract_template_create`.
-- **`crm_contract_template_update({ template_id, ... })` edits ONLY name, description and
-  is_archived.** The document body is immutable by design - sent envelopes reference the template id
-  for audit. Passing layout_json to it returns success and changes nothing, on a legal document. To
-  change terms, `crm_contract_template_create` a new version and `crm_contract_template_delete` the
-  old one (that archives, sets is_archived=true; templates are never hard-deleted).
+- **`crm_contract_template_update({ template_id, ... })` edits the body too**, as the dashboard's
+  template editor does: `layout_json` (the whole layout: read it with `crm_contract_template_get`,
+  change it, send it all back), `signers` (replaced whole), `fields` (a PDF template's) and
+  `default_consent`, besides name, description and is_archived. With more than one signer role,
+  every signature block must be tied to a role, or nothing is saved. Contracts already made keep
+  their own copy, so new terms reach only contracts made after the change. To keep the old terms as
+  they are, `crm_contract_template_duplicate({ template_id, name? })` first and change the copy.
+  `crm_contract_template_delete` archives (is_archived=true); templates are never hard-deleted.
+- Alerts: the teammate who sent the contract is told when it is viewed, signed, declined or
+  completed (else the one who made it, else the owners and admins), plus up to 10 teammates added
+  with `notify_user_ids` on create or `crm_envelope_alerts_set({ envelope_id, notify_user_ids })`.
+  Only teammates whose role can open contracts are told, never the client.
 - `crm_envelope_create({ title, signers })` - both required. Body is EITHER layout_json (block-based,
   compiled server-side) OR `source_pdf_s3_key` + `fields[]` (legacy PDF + coordinate fields); there
   is no `source_pdf` argument. signers[] is 1-10; signing_order = parallel | sequential (default
@@ -104,8 +111,9 @@ fire by luck.
 - **Sequential envelopes email only signer 1.** Downstream signers are invited on prior completion.
   Wrong signer order on a sequential envelope silently strands the deal - order external signers
   first, and diagnose with `crm_envelope_list_signers`, never a blind resend.
-- **`crm_contract_template_update` cannot change the document body.** Name, description and
-  is_archived only; a layout_json passed to it succeeds and does nothing. New terms = new template.
+- **A template change reaches only contracts made after it.** Contracts already made keep their
+  own copy. To keep the old terms for later contracts too, duplicate the template first
+  (`crm_contract_template_duplicate`) and change the copy.
 - **Money is in cents** on estimates/invoices (unit_cents). A $1,500 line item is 150000.
 - **Envelope from_email is branding, not a gate.** Unset, invites carry the platform sender
   (`agreements@notifications.hiveku.com` via Resend) - the send succeeds either way. Flag the

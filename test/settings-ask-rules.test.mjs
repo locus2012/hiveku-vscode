@@ -437,7 +437,7 @@ describe('Permission gate: the ask array', () => {
     // line is only asserted when it printed. With one, every ask name must be a
     // real tool: a typo would gate nothing, silently.
     if (/allow rules/.test(run.stdout)) {
-      assert.match(run.stdout, /\b3 denied, 46 ask\b/);
+      assert.match(run.stdout, new RegExp(`\\b3 denied, ${EXPECTED_ASK.length} ask\\b`));
       assert.doesNotMatch(run.stderr, /naming no tool/);
     }
   });
@@ -522,7 +522,17 @@ describe('The ask list gates what the plugins gate', () => {
       const batched = decideForPayload({ tool_name: 'mcp__plugin_hiveku_hk__hiveku_batch', tool_input: { calls: [{ tool: name, args: {} }] } });
       assert.equal(batched?.hookSpecificOutput?.permissionDecision, 'ask', `the plugin hook does not ask on a batch carrying ${name}`);
     }
-    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch' && !VERSION_TOOLS.includes(name) && !GATED_READS.includes(name));
+    // Most lead list writes ask here only because the '*_list_*' read glob would approve them. The
+    // plugin has no such glob: it leaves a write off its read-only list to the person's settings, as
+    // it does crm_create_contact, and forces a prompt only for the runs that spend. So it must not
+    // approve the others unasked.
+    const SPENDING_RUNS = ['outbound_lead_list_run_start', 'outbound_lead_list_run_control'];
+    const GLOB_ONLY = [...LEAD_LISTS, ...FORMULA_FILL].map(bare).filter((name) => !SPENDING_RUNS.includes(name));
+    for (const name of GLOB_ONLY) {
+      const direct = decideForPayload({ tool_name: `mcp__plugin_hiveku_hk__${name}`, tool_input: {} });
+      assert.notEqual(direct?.hookSpecificOutput?.permissionDecision, 'allow', `the plugin hook approves ${name} unasked`);
+    }
+    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch' && !VERSION_TOOLS.includes(name) && !GATED_READS.includes(name) && !GLOB_ONLY.includes(name));
     // The version tools are judged by the plugin hook's version rules (lib/vcs-tool-rules.mjs),
     // not its always-ask maps: a rollback dry run is allowed and an apply asks (an ask rule here
     // cannot read dry_run, so it asks always), and a conflict resolve always asks.

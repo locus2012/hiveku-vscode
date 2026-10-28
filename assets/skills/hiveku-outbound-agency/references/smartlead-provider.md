@@ -36,8 +36,10 @@ replace it. Provider-gate census - which tools 412 `unsupported_provider` on any
   `outbound_campaign_analytics_get`, and `outbound_reply_draft_send`. All five answer 412
   `unsupported_provider` on a non-SmartLead campaign and 412 `integration_missing_key` when the
   SmartLead integration is inactive or has no key (one shared loader behind the five routes).
-- `outbound_update_lead` has NO provider gate (it applies the local update and returns 200 with
-  a `warning`), and the draft SAVE, objections, sales-asset and sequence-learning tools are pure
+- `outbound_update_lead` sends the lead's own fields to the provider first and saves them only
+  once it took them (a refused plan or key, or a lead it has not listed yet, saves none of them:
+  the answer's `not_changed` and `warning` say which and why; its Hiveku-only fields still save),
+  and the draft SAVE, objections, sales-asset and sequence-learning tools are pure
   Hiveku-side tables with no provider check at all - `outbound_save_reply_draft` writes a row,
   `outbound_reply_draft_send` is the one draft tool that touches the provider.
 
