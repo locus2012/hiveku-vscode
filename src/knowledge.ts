@@ -915,6 +915,10 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__outbound_lead_list_run_start',
   'mcp__hiveku__outbound_lead_list_run_control',
   'mcp__hiveku__outbound_lead_list_runs_stop_all',
+  // "Ask them to record again" (2026-10-27, MCP #309): emails or texts a customer whose video testimonial the
+  // recording limit cut off. It reaches a real person, goes once per testimonial, and cannot be taken back, so
+  // every call asks, as in the plugin (ALWAYS_ASK_WRITES) and Codex (0.3.40). Appended last.
+  'mcp__hiveku__marketing_testimonial_rerecord_send',
 ];
 
 /**
