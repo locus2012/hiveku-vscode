@@ -693,7 +693,7 @@ export const DEPARTMENTS: Department[] = [
       { id: 'lead_lists', label: 'Lead lists (the Grid: imported leads with step columns)', tool: 'outbound_lead_lists_list', columns: [{ key: 'name', label: 'list' }, { key: 'rowCount', label: 'rows' }, { key: 'folder' }, { key: 'activeRuns', label: 'running' }, { key: 'updatedAt', label: 'updated', date: true }] },
     ],
     crud:
-      '52 `outbound_*` tools. The writes are `outbound_create_campaign`, `outbound_create_lead`, ' +
+      '53 `outbound_*` tools. The writes are `outbound_create_campaign`, `outbound_create_lead`, ' +
       '`outbound_leads_bulk_create`, `outbound_update_lead`, `outbound_push_lead_to_crm`, `outbound_save_reply_draft`, ' +
       '`outbound_reply_draft_send`, `outbound_campaign_status_set`, `outbound_campaign_sequences_save`, ' +
       '`outbound_log_objection`, `outbound_update_objection`, `outbound_add_sales_asset`, `outbound_update_sales_asset` ' +
