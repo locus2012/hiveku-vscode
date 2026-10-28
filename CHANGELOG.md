@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.32
+- **Filling a lead list's formula column always asks.** Claude Code in your project folders asks before `outbound_lead_list_formula_fill`, in every permission mode, as it does for the other lead list writes. Its name holds `_list_`, which the read rule `*_list_*` matches, so it would otherwise run unasked.
+- **The Outbound notes know lead lists' new columns and auto-run.** Pulling `outbound` names the 13 lead list tools. The notes cover formula and linked columns (an update that leaves them out keeps them), filling a formula column for the rows already in a list, and each column's auto-run: Claude Code can see it and stop it, but never turns it on or resumes it. A run with `mode: "new"` runs the new rows that auto-run left waiting.
+
 ## 0.91.31
 - **Asking a customer to record their testimonial again always asks.** Claude Code in your project folders asks before `marketing_testimonial_rerecord_send`, in every permission mode, as the Claude Code and Codex plugins do. It emails or texts a customer whose video the recording limit cut off, once per testimonial, and a message that went cannot be taken back. Its preview, `marketing_testimonial_rerecord_preview`, sends nothing. Hiveku folders open in VS Code get the new rule when the extension starts.
 

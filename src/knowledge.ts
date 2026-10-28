@@ -919,6 +919,10 @@ const HIVEKU_ASK: string[] = [
   // recording limit cut off. It reaches a real person, goes once per testimonial, and cannot be taken back, so
   // every call asks, as in the plugin (ALWAYS_ASK_WRITES) and Codex (0.3.40). Appended last.
   'mcp__hiveku__marketing_testimonial_rerecord_send',
+  // Formula fill for lead lists (2026-10-28, MCP #315): it rewrites a list's formula columns for the rows already
+  // in it. Its name holds '_list_', so the read glob above would approve it unasked; asking beats that glob, as for
+  // the other lead list writes. Appended last.
+  'mcp__hiveku__outbound_lead_list_formula_fill',
 ];
 
 /**

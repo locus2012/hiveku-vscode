@@ -693,7 +693,7 @@ export const DEPARTMENTS: Department[] = [
       { id: 'lead_lists', label: 'Lead lists (the Grid: imported leads with step columns)', tool: 'outbound_lead_lists_list', columns: [{ key: 'name', label: 'list' }, { key: 'rowCount', label: 'rows' }, { key: 'folder' }, { key: 'activeRuns', label: 'running' }, { key: 'updatedAt', label: 'updated', date: true }] },
     ],
     crud:
-      '52 `outbound_*` tools. The writes are `outbound_create_campaign`, `outbound_create_lead`, ' +
+      '53 `outbound_*` tools. The writes are `outbound_create_campaign`, `outbound_create_lead`, ' +
       '`outbound_leads_bulk_create`, `outbound_update_lead`, `outbound_push_lead_to_crm`, `outbound_save_reply_draft`, ' +
       '`outbound_reply_draft_send`, `outbound_campaign_status_set`, `outbound_campaign_sequences_save`, ' +
       '`outbound_log_objection`, `outbound_update_objection`, `outbound_add_sales_asset`, `outbound_update_sales_asset` ' +
@@ -785,13 +785,19 @@ export const DEPARTMENTS: Department[] = [
       'and lead profile-field edits. The approval gate did not go away, it moved: the exact draft, steps or transition ' +
       'is shown, the operator says yes, then the confirmed call is made. The local automations worker still never sends ' +
       'and never calls `outbound_reply_draft_send`, `outbound_campaign_status_set` or ' +
-      '`outbound_campaign_sequences_save`. Lead lists (the Grid: up to 100,000 leads, each workflow step a column) are 12 ' +
+      '`outbound_campaign_sequences_save`. Lead lists (the Grid: up to 100,000 leads, each workflow step a column) are 13 ' +
       'of them: `outbound_lead_lists_list`, `outbound_lead_list_get`, `outbound_lead_list_rows` and ' +
-      '`outbound_lead_list_steps` read; `outbound_lead_list_create`, `outbound_lead_list_update` (rename, set columns), ' +
-      '`outbound_lead_list_rows_add` and `outbound_lead_list_workflow_attach` write the list. A column runs only through ' +
+      '`outbound_lead_list_steps` read; `outbound_lead_list_create`, `outbound_lead_list_update` (rename, set columns, ' +
+      'including a formula column\'s `formula` and a linked column\'s `link`; an item that leaves them out keeps them), ' +
+      '`outbound_lead_list_formula_fill` (fill a formula column for the rows already there, until `done`), ' +
+      '`outbound_lead_list_rows_add` and `outbound_lead_list_workflow_attach` write the list. A person can turn on a ' +
+      'column\'s auto-run in the grid (new rows only, within the limits they set): you can see it in ' +
+      '`outbound_lead_list_steps` and stop it, never turn it on or resume it, and rows you add wait for the person unless ' +
+      'that column opted in. Otherwise a column runs only through ' +
       '`outbound_lead_list_run_estimate` (rows, the most it can cost, the campaign and whether it is sending) and then, ' +
       'after the person says yes to that estimate, `outbound_lead_list_run_start` with `confirm_max_cost_cents` and, for ' +
-      'a sending campaign, `confirm_active: true`. Run 10 rows (`mode: "sample"`) before the rest. ' +
+      'a sending campaign, `confirm_active: true`. Run 10 rows (`mode: "sample"`) before the rest; `mode: "new"` runs ' +
+      'the rows auto-run left waiting. ' +
       '`outbound_lead_list_run_control` pauses, resumes or cancels a run; `outbound_lead_list_runs_stop_all` pauses every ' +
       'run on a list at once.',
   },
