@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.33
+- **Codex's settings and one computer's secret files never leave your folder.** Pushes now skip `.codex/` (Codex's settings for the folder, which hold your Hiveku key) and the local secret files other tools keep: `.env.development.local`, `.env.production.local`, `.env.test.local`, `.envrc`, `.dev.vars` and `.dev.vars.local`. They already skipped `.mcp.json`, `.env`, `.env.local` and `.claude/`. Hiveku also leaves these files out on its side.
+- **A file your folder never shows is never deleted from Hiveku.** A site's own public `.env`, or any other file named like one the extension skips, looked deleted in the Changes view, so saving a version or pushing could delete it from Hiveku. Such files are now left alone.
+
 ## 0.91.32
 - **Filling a lead list's formula column always asks.** Claude Code in your project folders asks before `outbound_lead_list_formula_fill`, in every permission mode, as it does for the other lead list writes. Its name holds `_list_`, which the read rule `*_list_*` matches, so it would otherwise run unasked.
 - **The Outbound notes know lead lists' new columns and auto-run.** Pulling `outbound` names the 13 lead list tools. The notes cover formula and linked columns (an update that leaves them out keeps them), filling a formula column for the rows already in a list, and each column's auto-run: Claude Code can see it and stop it, but never turns it on or resumes it. A run with `mode: "new"` runs the new rows that auto-run left waiting.

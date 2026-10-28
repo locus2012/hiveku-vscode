@@ -200,6 +200,21 @@ describe('the Commit button', () => {
     assert.equal(scm.sc.inputBox.value, 'fix: header.tsx', 'the name stays to be fixed');
   });
 
+  test('a file the folder never shows (a site\'s public .env) is never saved as deleted', async () => {
+    const f = await folder({ 'src/a.ts': 'new' });
+    const c = client(NEW_TOOLS, {
+      project_files_status: {
+        data: { changed: [{ path: 'src/a.ts' }], only_local: [], only_remote: [{ path: '.env' }, { path: 'src/old.ts' }] },
+      },
+      project_vcs_commit: { data: { id: 'v1', promoted: true } },
+    });
+    const scm = scmFor(f, c);
+    scm.sc.inputBox.value = 'Updated the header';
+    await scm.commit();
+    assert.equal(commits(c).length, 1);
+    assert.deepEqual(commits(c)[0].args.deletedFiles, ['src/old.ts']);
+  });
+
   test('409 nothing_to_commit on a commit WITH files is "already a version", not an error', async () => {
     const f = await folder({ 'src/a.ts': 'same-as-live' });
     const c = client(NEW_TOOLS, {

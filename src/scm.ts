@@ -14,7 +14,7 @@ import {
   captureBaseline,
   materializeTree,
   readBaseManifest,
-  IGNORE_DIRS,
+  isIgnoredPath,
   isCdnServableAssetPath,
   readFileForCommit,
   readProjectLink,
@@ -166,6 +166,9 @@ export class HivekuScm implements vscode.Disposable {
       }
       for (const p of treeMap.keys()) if (!localMap.has(p)) deleted.push(p);
     }
+    // A path the local walk never sees (IGNORE_DIRS) is missing here, not deleted: never list it as
+    // a deletion, or saving a version would delete it from Hiveku.
+    deleted = deleted.filter((p) => !isIgnoredPath(p));
 
     this.statuses.clear();
     const states: vscode.SourceControlResourceState[] = [];
@@ -628,14 +631,13 @@ export class HivekuScm implements vscode.Disposable {
     }
     // A remote path missing locally is NOT reliable evidence the user deleted it.
     // walkFiles skips IGNORE_DIRS by NAME at any depth (workspace.ts), so a
-    // remote file living under dist/, build/, out/, .cache/ or .claude/ never
-    // appears in the local walk and would be classified as a deletion. Never
-    // delete those — the local copy simply cannot see them.
-    const isUnderIgnoredDir = (rel: string): boolean =>
-      rel.split('/').slice(0, -1).some((seg) => IGNORE_DIRS.has(seg));
+    // remote file living under dist/, build/, out/, .cache/ or .claude/, or
+    // itself named like one (a site's public .env), never appears in the local
+    // walk and would be classified as a deletion. Never delete those — the
+    // local copy simply cannot see them.
     const allMissing = [...treeMap.keys()].filter((p) => !localSet.has(p));
-    const shielded = allMissing.filter(isUnderIgnoredDir);
-    let toDelete = allMissing.filter((p) => !isUnderIgnoredDir(p));
+    const shielded = allMissing.filter(isIgnoredPath);
+    let toDelete = allMissing.filter((p) => !isIgnoredPath(p));
     if (shielded.length > 0) {
       this.log.appendLine(
         `[push] not deleting ${shielded.length} remote path(s) under ignored directories (invisible to the local walk): ${shielded.slice(0, 5).join(', ')}${shielded.length > 5 ? '…' : ''}`,
