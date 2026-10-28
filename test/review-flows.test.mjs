@@ -448,9 +448,13 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__outbound_lead_list_create',\n  'mcp__hiveku__outbound_lead_list_update',\n" +
           "  'mcp__hiveku__outbound_lead_list_rows_add',\n  'mcp__hiveku__outbound_lead_list_workflow_attach',\n" +
           "  'mcp__hiveku__outbound_lead_list_run_start',\n  'mcp__hiveku__outbound_lead_list_run_control',\n" +
-          "  'mcp__hiveku__outbound_lead_list_runs_stop_all',",
+          "  'mcp__hiveku__outbound_lead_list_runs_stop_all',\n" +
+          "  // \"Ask them to record again\" (2026-10-27, MCP #309): emails or texts a customer whose video testimonial the\n" +
+          "  // recording limit cut off. It reaches a real person, goes once per testimonial, and cannot be taken back, so\n" +
+          "  // every call asks, as in the plugin (ALWAYS_ASK_WRITES) and Codex (0.3.40). Appended last.\n" +
+          "  'mcp__hiveku__marketing_testimonial_rerecord_send',",
       ),
-      'the newest ask rules, the lead list writes, go at the END, after the Email Service setup writes',
+      'the newest ask rule, asking a customer to record again, goes at the END, after the lead list writes',
     );
   });
 
