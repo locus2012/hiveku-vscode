@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.31
+- **Asking a customer to record their testimonial again always asks.** Claude Code in your project folders asks before `marketing_testimonial_rerecord_send`, in every permission mode, as the Claude Code and Codex plugins do. It emails or texts a customer whose video the recording limit cut off, once per testimonial, and a message that went cannot be taken back. Its preview, `marketing_testimonial_rerecord_preview`, sends nothing. Hiveku folders open in VS Code get the new rule when the extension starts.
+
 ## 0.91.30
 - **Lead lists in Outbound.** Pulling `outbound` adds a `lead_lists` dataset (each list's name, rows, folder, running runs and last update), and the Outbound notes name the 12 lead list tools: which read, which write, and that a column runs only after its estimate and your yes (10 rows first; a campaign that is sending needs an explicit yes).
 - **Every lead list write asks.** Their names hold `_list_`, which the read rule `*_list_*` matched, so they would have run unasked, the run that spends money among them. They are on the ask list now, in new folders and in folders made before.
