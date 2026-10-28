@@ -20,12 +20,13 @@ Required: `campaign_id`, `email` per lead. Know the real behavior before loading
   Hiveku's rule is never to skip the block list or the unsubscribe list, and an opt-out holds for
   good (say why). `ignore_duplicate_leads_in_other_campaign` widens who receives cold email, so it
   is set only when the user asks for it by name and hears what it skips.
-- **Bulk results are COUNTS-ONLY - carry that honestly.** SmartLead returns
-  `{ uploaded, not_uploaded }` with no per-lead outcomes: WHICH leads were rejected
-  (duplicates, block list) is unknowable until the next stats sync reconciles the
-  `pending_sync` placeholder rows. Report the two counts and say the per-lead breakdown
-  arrives at the next sync - never present per-lead status as known, never guess which N were
-  rejected.
+- **Bulk results: report what the provider said, and no more.** Its answer gives no lead ids.
+  When it names the leads it skipped, they come back in `not_accepted` and get no row; report
+  them by address. When it gives counts only, every lead gets a `pending_sync` placeholder and
+  the answer says when it took fewer than were sent (`took_fewer_than_sent`, `upstream.sent`
+  and a note): report the counts, say which leads it took shows at the next campaign sync
+  (which also removes a placeholder the provider never had once it is stale), and never guess
+  which ones were rejected.
 - **Local rows are written only after SmartLead accepts; an upstream failure records
   nothing** - a batch that failed upstream left no partial state and is re-sent whole, once,
   per the retry discipline below.
@@ -33,14 +34,16 @@ Required: `campaign_id`, `email` per lead. Know the real behavior before loading
   lead (possibly a duplicate or on the global block list)" - the prospect is already enrolled
   or suppressed. Retrying will never succeed. Count it and move on. On the bulk path the same
   rejects surface only inside the `not_uploaded` count, namelessly, until the sync.
-- **`status: 'pending_sync'` with a `pending-<timestamp>` external_id is the NORMAL result.**
-  SmartLead's add-lead response has no lead id, so Hiveku inserts a placeholder that the next
-  sync reconciles. A wall of `pending_sync` rows after a bulk load is a healthy load, not a
-  broken one. Do not report it as a failure.
-- A `pending-*` lead cannot be patched upstream: `outbound_update_lead` carrying `custom_fields`
-  on one returns 200 with `warning: "Lead is still pending SmartLead sync - only local fields
-  updated."` (`custom_fields` is the only argument the tool pushes upstream, so it is the only
-  one that can raise this warning.)
+- **`status: 'pending_sync'` with a `pending-...` external_id is the NORMAL result.**
+  The provider's add-lead answer has no lead id, so Hiveku inserts a placeholder that the next
+  campaign sync claims (one per address in a campaign). A wall of `pending_sync` rows after a
+  bulk load is a healthy load, not a broken one. Do not report it as a failure. Leads the
+  provider names as skipped get no placeholder (`not_accepted`), and the sync removes a
+  placeholder the provider never had once it is stale.
+- A `pending-*` lead cannot be changed at the provider yet: `outbound_update_lead` with its own
+  fields (names, email, phone, links, company, `custom_fields`) answers with them in
+  `not_changed` (or the `not_changed_at_provider` error when nothing else was sent) until the
+  sync lists the lead. Retry after the next campaign sync.
 - Other refusals: 404 (campaign not found), 412 `integration_inactive`, 412
   `unsupported_provider` (non-SmartLead campaign), 412 `integration_missing_key`, 502
   `upstream_failed`.
@@ -275,18 +278,16 @@ Three traps from the schema and the route itself:
   from a write tool, so the next sync may contradict you. Agent-side state belongs in
   `internal_status` / `is_interested` / `internal_notes`, which are local by design and survive
   sync (the sync skips an upstream `is_interested: false`, so your flag is not clobbered).
-- **The tool CANNOT edit name, email, company, phone, linkedin, or website.** Its inputSchema
-  declares only `lead_id, status, internal_status, is_interested, internal_notes,
-  custom_fields`, and the MCP proxy drops any argument the schema does not declare before the
-  request leaves - a `first_name` you pass is silently discarded, never applied, and the call
-  still returns a normal 200. Profile-field edits are dashboard or SmartLead-REST only; never
-  promise one through this tool.
-- **`custom_fields` is the ONE declared argument that is pushed upstream - READ the response
-  `warning` field whenever you send it.** The push is best-effort and the call still returns
-  **200** on failure, with `warning: "SmartLead update failed: ..."`, "Integration cannot accept
-  upstream updates - only local fields updated.", or "Lead is still pending SmartLead sync -
-  only local fields updated." A 200 does not mean the provider accepted the change; surface the
-  warning or the edit is lost on the next reconcile.
+- **The lead's own fields go to the provider first.** first_name, last_name, email, phone,
+  linkedin_url, website, company_name and `custom_fields` are sent to the sending provider and
+  saved in Hiveku only once it took them (`custom_fields` merge into the lead's own, and
+  Hiveku's copies of the lead in its other campaigns take the change too). When the provider did
+  not take them (an expired plan, a refused key, a lead it has not listed yet, no answer), none
+  of them is saved: the answer's `not_changed` lists them and `warning` says why, while the
+  other fields still save; with only such fields the call is an error (`not_changed_at_provider`).
+  Tell the person the change was not made; never report it as saved.
+- **A value too long for its column is refused before anything is sent** (a phone over 50
+  characters, say): shorten it rather than retrying as is.
 
 ## CRM handoff (`outbound_push_lead_to_crm`)
 

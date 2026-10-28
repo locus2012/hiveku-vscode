@@ -571,9 +571,11 @@ what is already free (`references/local-worker.md`).
   `{ outcome: 'failed' }` (surfaced as 422). `crm_create_activity` only for what the push does
   not carry - chiefly your drafted response.
 - **Lead state:** agent-side state lives in `internal_status` / `is_interested` /
-  `internal_notes` - NEVER `status` (local mirror only; sync may contradict it). The tool
-  cannot edit profile fields (schema drops them silently at 200), and a `custom_fields` push
-  can fail inside a 200 - read the `warning` field. Full traps: `references/tool-traps.md`.
+  `internal_notes` - NEVER `status` (local mirror only; sync may contradict it). The lead's
+  own fields (names, email, phone, links, company, `custom_fields`) go to the sending provider
+  first and are saved only once it took them: read `not_changed` and `warning` (or the
+  `not_changed_at_provider` error) and tell the person when a change was not made. Full traps:
+  `references/tool-traps.md`.
 
 ### 6.3 Act by classification
 
@@ -682,9 +684,11 @@ belong in `outbound_record_sequence_learning`, not memory.
   send of the same draft, and 422s `missing_provider_ids` until the thread is re-synced in
   the dashboard** - 6.1.
 - **`outbound_create_lead` 412s on any non-SmartLead campaign** - section 2.
-- **`outbound_leads_bulk_create` reports COUNTS ONLY** ({ uploaded, not_uploaded }) - which
-  leads were rejected is unknowable until the next stats sync - 3.7.
-- **`outbound_update_lead` cannot edit profile fields; warnings inside 200s** - 6.2.
+- **`outbound_leads_bulk_create` names the leads the provider skipped** (`not_accepted`), or
+  with counts only says it took fewer (`took_fewer_than_sent`); a `pending_sync` lead is not
+  confirmed until the sync lists it - 3.7.
+- **`outbound_update_lead` saves the lead's own fields only once the provider took them** -
+  read `not_changed` - 6.2.
 - **`outbound_push_lead_to_crm` fails by RESOLVING** - 6.2.
 - **Manual `crm_create_deal` next to a configured Interested stage = DUPLICATE deal** - 6.3.
 - **`outbound_list_sales_assets` returns RETIRED assets by default** - 6.1.
