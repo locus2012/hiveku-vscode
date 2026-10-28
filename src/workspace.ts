@@ -13,8 +13,12 @@ export const PROJECT_FILE = path.join('.hiveku', 'project.json');
 /**
  * Names we never sync to Hiveku — build output, VCS internals, and the local-only
  * files the extension scaffolds. The last group is SECURITY-critical: `.mcp.json`
- * carries the inlined MCP key and `.env.local` the pulled secrets, so they must
- * never appear in the change set or get committed into the project's Hiveku files.
+ * and `.codex/config.toml` carry the inlined MCP key, `.env.local` the pulled
+ * secrets, and the other local env files (`.env.<mode>.local`, `.envrc`,
+ * `.dev.vars`) one computer's secrets, so they must never appear in the change
+ * set or get committed into the project's Hiveku files. Hiveku refuses them too
+ * (the builder's protected-project-paths.ts); skipping them here means a push
+ * never sends them.
  * (walkFiles tests this against every entry name — files and directories alike.)
  */
 export const IGNORE_DIRS = new Set([
@@ -31,10 +35,17 @@ export const IGNORE_DIRS = new Set([
   '.fly',
   '.hiveku',
   '.claude',
+  '.codex',
   '.mcp.json',
   '.env',
   '.env.local',
+  '.env.development.local',
+  '.env.production.local',
+  '.env.test.local',
   '.env.hiveku',
+  '.envrc',
+  '.dev.vars',
+  '.dev.vars.local',
   'hiveku-data',
 ]);
 
