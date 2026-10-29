@@ -323,24 +323,27 @@ it** - reading only the status code would tell you it worked. Fix the cause and 
 EIN match can auto-verify within minutes; otherwise expect days.
 
 **2. `voice_sms_campaign_draft` - free text.** Drafts a carrier-compliant campaign from the
-account's own business context: name, use case, description, message flow, samples, keyword
-sets. No row is created, nothing is filed. Requires the brand VERIFIED first (the same
+account's own business context: name, use case, description, message flow, up to three
+samples, and whether messages carry links or phone numbers. It writes no keyword sets or
+auto-replies: add those yourself before submitting. No row is created, nothing is filed. Requires the brand VERIFIED first (the same
 precondition submit enforces). The drafter writes a plausible flow; only the preflight proves
 the opt-in page it names actually complies.
 
 **3. `voice_sms_cta_preflight`** on the draft's message flow. Part 4. Do not skip it because
 the draft "looks right" - the page, not the draft, is what gets scanned.
 
-**4. `voice_sms_campaign_submit` - the filing. ~$15 per fresh submit, no
-withdrawal.** Takes the full campaign payload (name, use case, description, message flow,
+**4. `voice_sms_campaign_submit` - the filing. ~$15 per filing attempt, no
+withdrawal.** Every attempt is billed, including one that comes back with `submission_error`. Takes the full campaign payload (name, use case, description, message flow,
 sample messages, keyword sets and auto-replies; `sub_usecases` when MIXED/LOW_VOLUME). The CTA
-preflight is enforced server-side at submit - a page that fails hard-blocks the filing (the
-tool's own `acknowledge_cta_warnings: true` is the informed override for WARNING-level findings
-such as an unreachable page; provable failures still refuse; the
-dashboard has an acknowledge-warnings override; the public share-link page has none). Same
+preflight is enforced server-side at submit - a page that fails hard-blocks the filing.
+`acknowledge_cta_warnings: true` skips that check entirely, provable failures included: send
+it only after reading `voice_sms_cta_preflight`, for a page a person has verified another way
+(the dashboard has the same override; the public share-link page has none). Same
 response trap as the brand: **`submission_error` non-null on a 200 = the row persisted but
 never reached the carrier** - that row is exactly what `voice_sms_campaign_resubmit` re-files;
-do NOT create a second campaign for it. The client share link (Part 9) files the same campaign
+do NOT create a second campaign for it. Call it with only `campaign_id` to send the saved
+campaign as it is; each resend is billed as a filing and counts toward the re-filing limit (3
+resends or appeals of one campaign, 8 campaign filings on the account, in 30 days). The client share link (Part 9) files the same campaign
 when the client is the one holding the details.
 
 **5. Poll.** `voice_sms_campaign_get` for the row, or `voice_sms_registration_get`

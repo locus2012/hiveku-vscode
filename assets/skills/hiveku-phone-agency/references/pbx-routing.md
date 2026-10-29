@@ -35,6 +35,15 @@ capability does not exist, and never invent a name.
 | Blocklist / caps | `voice_blocked_numbers_list`, `voice_blocked_numbers_add`, `voice_blocked_numbers_remove`, `voice_toll_fraud_state` | - | - |
 | DID routing | `voice_number_update` | - | - |
 | Webhooks | `voice_webhooks_list`, `voice_webhook_create`, `voice_webhook_update`, `voice_webhook_delete` | - | - |
+| Desk phones | `voice_desk_phones_get`, `voice_desk_phone_set` | - | the line's SIP password (never returned to a key) |
+| Sites, roles, API keys | `voice_sites_list`, `voice_site_create`, `voice_roles_list`, `voice_role_assign`, `voice_role_remove`, `voice_api_keys_list`, `voice_api_key_create`, `voice_api_key_revoke` | - | - |
+
+The phone system admin tools (live 2026-10-29): sites are the account's locations, each with its
+911 address; roles say who holds which phone role (`voice_role_assign` and `voice_role_remove` change
+another person's privileges, so ask first); phone API keys are listed without their secret, and the
+answer of `voice_api_key_create` carries the secret exactly once (pass it on, never store or log it;
+revoking is permanent); `voice_desk_phone_set` sets an extension's desk phone model and MAC address, a
+live phone change, and no answer carries SIP credentials. All of these writes ask first.
 
 Legend: LIVE now = resolves on this server today. INCOMING = declared by the MCP server but not
 yet in this plugin's tool index - the column is empty because nothing in this file is INCOMING
