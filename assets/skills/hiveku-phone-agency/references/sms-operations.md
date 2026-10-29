@@ -19,6 +19,7 @@ a gap.
 | `voice_sms_send` | LIVE | Raw E.164 send; starts/reuses the thread |
 | `voice_sms_send_to_contact` | LIVE | Send to a CRM contact; templates + scheduling |
 | `voice_sms_thread_reply` | LIVE | Reply inside an existing conversation |
+| `voice_sms_media_upload` | LIVE | Store a picture for a text (base64): its `url` goes in `media_urls` of a send or reply; anyone with the link can open it |
 | `voice_sms_threads_list` | LIVE | The SMS inbox |
 | `voice_sms_thread_messages_list` | LIVE | One thread's transcript; read-only by default |
 | `voice_sms_opt_out_add` | LIVE | Manual do-not-text entry for a bare number |
