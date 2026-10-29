@@ -456,9 +456,14 @@ describe('what the extension writes and wires', () => {
           "  // Formula fill for lead lists (2026-10-28, MCP #315): it rewrites a list's formula columns for the rows already\n" +
           "  // in it. Its name holds '_list_', so the read glob above would approve it unasked; asking beats that glob, as for\n" +
           "  // the other lead list writes. Appended last.\n" +
-          "  'mcp__hiveku__outbound_lead_list_formula_fill',",
+          "  'mcp__hiveku__outbound_lead_list_formula_fill',\n" +
+          "  // Emailing a number transfer's letter of authorization (LOA) for e-signature (2026-10-29, builder #1883, calls\n" +
+          "  // and texts wave 1). voice_port_order_loa_send emails the letter that authorizes moving the account's phone numbers\n" +
+          "  // to a signer the agent names, and a sent email cannot be taken back, so a person approves each send: every call\n" +
+          "  // asks, as in the Claude Code and Codex plugins. Its read, voice_port_order_loa_get, stays unasked. Appended last.\n" +
+          "  'mcp__hiveku__voice_port_order_loa_send',",
       ),
-      'the newest ask rule, the lead list formula fill, goes at the END, after asking a customer to record again',
+      'the newest ask rule, the transfer authorization email, goes at the END, after the lead list formula fill',
     );
   });
 
