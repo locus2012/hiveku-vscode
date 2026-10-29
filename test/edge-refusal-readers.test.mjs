@@ -386,5 +386,7 @@ test('extension.ts and console.ts show these words, not words of their own', asy
   assert.match(ext, /deptFailed = failedDatasets\(results\);/);
   assert.doesNotMatch(ext, /usually means this account's key is expired|The usual cause is an expired or revoked account key/, 'the key wording lives in dataFailures.ts only');
   const consoleSrc = await src('console.ts');
-  assert.match(consoleSrc, /const banner = deadKeyBanner\(err\);\s*if \(banner\) panel\.webview\.postMessage\(\{ type: 'banner', text: banner \}\);/);
+  // HK-886: the edge's refusal (with its ray id) gets a banner of its own (accountReach.ts readFailureBanner),
+  // and deadKeyBanner still says a key problem.
+  assert.match(consoleSrc, /const banner = readFailureBanner\(err\) \?\? deadKeyBanner\(err\);\s*if \(banner\) panel\.webview\.postMessage\(\{ type: 'banner', text: banner \}\);/);
 });

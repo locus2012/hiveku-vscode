@@ -13,6 +13,7 @@ import * as crypto from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { HivekuMcpClient, isCoreEdgeRefusal } from './mcpClient';
+import { readFailureBanner } from './accountReach';
 import * as api from './hivekuApi';
 import type { AccountRecord } from './accounts';
 import { departmentById, extractRows, fetchDataset, mapLimit, type Column, type Row } from './deptData';
@@ -1184,7 +1185,9 @@ export function openAccountConsole(
           panel.webview.postMessage({ type: 'tabs', tabs: buildTabs(lastPageAccess) });
         }
       } catch (err) {
-        const banner = deadKeyBanner(err);
+        // The account could not be read (HK-886): the key, or the web edge's refusal with its
+        // ray id. accountEntitlements kept this error to itself, so the banner never showed.
+        const banner = readFailureBanner(err) ?? deadKeyBanner(err);
         if (banner) panel.webview.postMessage({ type: 'banner', text: banner });
       }
     })();
