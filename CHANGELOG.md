@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.35
+- **Emailing a number transfer's authorization always asks.** Claude Code in your project folders asks before `voice_port_order_loa_send`, in every permission mode, as the Claude Code and Codex plugins do. It emails a number transfer's letter of authorization (LOA) to the person who signs it, for e-signature, and an email that went cannot be taken back. Reading how far it got, `voice_port_order_loa_get`, needs no ask. The tool arrives in a later Hiveku update, and the rule is in place first. Hiveku folders open in VS Code get the new rule when the extension starts.
+
 ## 0.91.34
 - **An account that cannot be read is never shown as quiet.** When every read for an account fails, the sidebar's attention list now puts it first and says why: the web edge in front of Hiveku refused the reads (with the ray id to give Hiveku support), the answers could not be read, or Hiveku refused its key. Reconnect is offered only when the key is the problem. The account console says the same in its banner, where it used to say nothing.
 - **The phone guide covers the phone system admin tools.** Sites with their 911 addresses, phone roles, phone API keys and desk phones, matching the plugin.
