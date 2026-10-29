@@ -136,12 +136,24 @@ describe('the attention dialog', () => {
     const failure = reach.readFailure(await errorFrom(() => BLOCK_PAGE));
     const row = reach.unreachableRow('Acme', failure);
     assert.equal(row.label, '$(warning) Acme could not be read');
-    assert.equal(row.detail, `The web edge in front of Hiveku refused its reads (HTTP 403, ray id ${RAY}). Not checked, and its key is fine: pick it to see what to do.`);
+    // It never reached Hiveku: Hiveku did not refuse the key, but nothing checked that the key is fine either.
+    assert.equal(row.detail, `The web edge in front of Hiveku refused its reads (HTTP 403, ray id ${RAY}). Not checked. Hiveku did not refuse its key: pick it to see what to do.`);
+    assert.ok(!/key is fine/.test(row.detail), row.detail);
     assert.equal(row.line, `$(warning) Acme could not be read: the web edge in front of Hiveku refused its reads (HTTP 403, ray id ${RAY})`);
     const warning = reach.unreachableWarning('Acme', failure);
     assert.deepEqual(warning.actions, ['Open anyway']);
     assert.equal(warning.message, `Acme could not be read. ${mc.coreEdgeRefusalMessage(403, RAY)}`);
     for (const words of [row.label, row.detail, row.line, warning.message]) assert.ok(!words.includes(EM_DASH), words);
+  });
+
+  test('an answer that could not be read: says nothing of the key, since who refused it is not known; no Reconnect', async () => {
+    const failure = reach.readFailure(await errorFrom(() => cutOff(403)));
+    const row = reach.unreachableRow('Acme', failure);
+    assert.equal(row.detail, 'The answers to its reads could not be read (HTTP 403). Not checked: pick it to see what to do.');
+    assert.ok(!/key/i.test(row.detail), row.detail);
+    const warning = reach.unreachableWarning('Acme', failure);
+    assert.deepEqual(warning.actions, ['Open anyway']);
+    assert.equal(warning.message, `Acme could not be read. ${mc.coreRefusalUnreadMessage(403)}`);
   });
 
   test("a key Hiveku refused: Reconnect, with the key's words", async () => {

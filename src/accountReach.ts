@@ -12,8 +12,8 @@
  *   - the web edge in front of Hiveku refused the reads (McpEdgeRefusalError,
  *     HK-847), with its HTTP status and ray id: never a key problem, never a
  *     reason to reconnect;
- *   - the answers could not be read, so who refused them is not known: not a
- *     key problem either;
+ *   - the answers could not be read, so who refused them is not known: not
+ *     taken as a key problem either;
  *   - Hiveku refused the key (its own JSON 401 or 403), or no key is stored:
  *     reconnecting fixes it;
  *   - anything else (a time-out, a server error), in its own words, as before.
@@ -94,14 +94,21 @@ export function unreachableFromReads(results: ReadonlyArray<PromiseSettledResult
   );
 }
 
-/** The attention dialog's row for an unreachable account, and its line in the badge's tooltip. */
+/**
+ * The attention dialog's row for an unreachable account, and its line in the badge's tooltip. It
+ * claims only what the client knows: a refusal from the web edge never reached Hiveku, so Hiveku did
+ * not refuse the key, but the key was not checked either; for an answer that could not be read, it is
+ * not known who refused it (review of HK-886).
+ */
 export function unreachableRow(label: string, failure: ReachFailure): { label: string; detail: string; line: string } {
   const next =
     failure.kind === 'key'
       ? 'Not checked: pick it to reconnect.'
       : failure.kind === 'other'
         ? 'Not checked: pick it to see why.'
-        : 'Not checked, and its key is fine: pick it to see what to do.';
+        : failure.kind === 'edge'
+          ? 'Not checked. Hiveku did not refuse its key: pick it to see what to do.'
+          : 'Not checked: pick it to see what to do.';
   return {
     label: `$(warning) ${label} could not be read`,
     detail: `${capitalize(failure.reason)}. ${next}`,
