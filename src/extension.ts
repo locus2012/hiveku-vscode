@@ -58,6 +58,7 @@ import { departmentById, DEPARTMENTS } from './deptData';
 import { CHAT_DOMAINS } from './chatDomains';
 import { exportDepartments, everyDepartmentFailed, failedDatasets, DATA_DIR, type DeptResult } from './dataExport';
 import { allFailedWarning, clipError, everythingDataNote, type FailedDataset } from './dataFailures';
+import { attentionBadgeCount, readFailure, unreachableFromReads, unreachableRow, unreachableWarning, type ReachFailure } from './accountReach';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
 import { setupLocalSupabase } from './localSupabase';
 import { scaffoldLocalAutomations, installAgencyCadence } from './localAutomations';
@@ -135,12 +136,12 @@ async function scanAccounts(): Promise<{
   lines: string[];
   changed: boolean;
   /** Accounts whose data could not be read at all — never treat these as quiet. */
-  unreachable: Array<{ label: string; reason: string; accountId: string }>;
+  unreachable: Array<{ label: string; reason: string; accountId: string; failure: ReachFailure }>;
   /** Same rows as `lines`, but carrying the account so each one can be acted on. */
   items: AttentionItem[];
 }> {
   const lines: string[] = [];
-  const unreachable: Array<{ label: string; reason: string; accountId: string }> = [];
+  const unreachable: Array<{ label: string; reason: string; accountId: string; failure: ReachFailure }> = [];
   const items: AttentionItem[] = [];
   let changed = false;
   for (const acc of accounts.list()) {
@@ -152,6 +153,14 @@ async function scanAccounts(): Promise<{
         api.workflowRunsRecent(client),
         client.callToolJson<{ data?: { name?: string } }>('get_account_info', {}),
       ]);
+      // Every read failed: the account could not be read, which is not a quiet account
+      // (HK-886). allSettled never throws, so this used to read as "nothing to do". Its
+      // snapshot is kept, so the next good scan does not call every project and task new.
+      const notRead = unreachableFromReads([projectsR, tasksR, runsR, infoR]);
+      if (notRead) {
+        unreachable.push({ label: acc.label, accountId: acc.accountId, reason: notRead.reason, failure: notRead });
+        continue;
+      }
       // Follow account renames from Hiveku into the sidebar/console labels.
       if (infoR.status === 'fulfilled') {
         const fresh = infoR.value?.data?.name;
@@ -235,20 +244,23 @@ async function scanAccounts(): Promise<{
       // "nothing to do" — and the summary then reported "all clear", which is
       // the most misleading thing it could say about an account it never
       // managed to read.
-      unreachable.push({ label: acc.label, accountId: acc.accountId, reason: err instanceof Error ? err.message : String(err) });
+      const failure = readFailure(err);
+      unreachable.push({ label: acc.label, accountId: acc.accountId, reason: failure.reason, failure });
     }
   }
   // Surface failures FIRST — an operator triaging a roster needs to know which
   // accounts were not checked before trusting anything the list implies.
+  // Each with its reason: the edge's refusal with its ray id, or the key (accountReach.ts).
   if (unreachable.length > 0) {
-    lines.unshift(
-      ...unreachable.map((u) => `$(warning) ${u.label} — could not be read (${u.reason.slice(0, 80)})`),
-    );
+    const rows = unreachable.map((u) => ({ u, row: unreachableRow(u.label, u.failure) }));
+    lines.unshift(...rows.map(({ row }) => row.line));
     items.unshift(
-      ...unreachable.map((u) => ({
-        label: `$(warning) ${u.label} — could not be read (${u.reason.slice(0, 80)})`,
+      ...rows.map(({ u, row }) => ({
+        label: row.label,
+        detail: row.detail,
         accountId: u.accountId,
         kind: 'unreachable' as const,
+        failure: u.failure,
       })),
     );
   }
@@ -260,6 +272,9 @@ interface AttentionItem {
   label: string;
   accountId: string;
   kind: 'tasks' | 'workflows' | 'changes' | 'unreachable';
+  /** An unreachable account's row: why, and what picking it offers (HK-886). */
+  detail?: string;
+  failure?: ReachFailure;
 }
 
 let notificationScanInFlight = false;
@@ -278,11 +293,7 @@ async function updateNotifications(): Promise<void> {
   if (!hivekuRoot()) {
     lines.unshift('1 setup step: set your Hiveku root folder (all accounts store under it) - run "Hiveku: Set Root Folder"');
   }
-  let count = 0;
-  for (const s of lines) {
-    const m = s.match(/(\d+)/);
-    if (m) count += Number.parseInt(m[1], 10);
-  }
+  const count = attentionBadgeCount(lines);
     treeView.badge = count > 0 ? { value: count, tooltip: `Hiveku — updates:\n${lines.join('\n')}` } : undefined;
     // New/updated projects or tasks landed on Hiveku → refresh the sidebar so it's current.
     if (changed) tree.refresh();
@@ -2882,7 +2893,7 @@ async function attention(): Promise<void> {
       label: it.label,
       detail:
         it.kind === 'unreachable'
-          ? 'Not checked — open to reconnect'
+          ? it.detail ?? 'Not checked: pick it to see why.'
           : it.kind === 'tasks'
             ? 'Open this account\'s tasks'
             : it.kind === 'workflows'
@@ -2897,11 +2908,11 @@ async function attention(): Promise<void> {
   const record = accounts.list().find((r) => r.accountId === pick.item.accountId);
   if (!record) return;
   if (pick.item.kind === 'unreachable') {
-    const choice = await vscode.window.showWarningMessage(
-      `${record.label} could not be read. Its key may have been revoked or the network failed.`,
-      'Reconnect',
-      'Open anyway',
-    );
+    // Why, and Reconnect only when the key may be the cause (accountReach.ts, HK-886).
+    const warning = pick.item.failure
+      ? unreachableWarning(record.label, pick.item.failure)
+      : { message: `${record.label} could not be read. Its key may have been revoked or the network failed.`, actions: ['Reconnect', 'Open anyway'] };
+    const choice = await vscode.window.showWarningMessage(warning.message, ...warning.actions);
     if (choice === 'Reconnect') {
       await vscode.commands.executeCommand('hiveku.connect');
       return;

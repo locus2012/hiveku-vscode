@@ -1753,21 +1753,40 @@ export interface AccountEntitlements {
  * The account's plan + per-page access map (plan ∩ release-tier), via the
  * `account_entitlements` tool. Returns undefined if the tool isn't available
  * (older server) — callers should then show everything (graceful fallback).
+ *
+ * A read that did not come back throws (HK-886): the web edge's refusal, a key
+ * Hiveku refused, a time-out. Swallowing it hid the reason the account console's
+ * banner shows; both callers catch it (console.ts initTabs, extension.ts
+ * getEntitlements). Only an answer from Hiveku itself that it has no such tool,
+ * or none usable, still falls back.
  */
 export async function accountEntitlements(client: HivekuMcpClient): Promise<AccountEntitlements | undefined> {
+  let res: unknown;
   try {
-    const res = await client.callToolJson<unknown>('account_entitlements', {});
-    const d = unwrap<Record<string, unknown>>(res) ?? {};
-    const pa = (d.page_access && typeof d.page_access === 'object' ? d.page_access : null) as Record<string, boolean> | null;
-    if (!pa) return undefined;
-    return {
-      plan: String(d.plan ?? ''),
-      page_access: pa,
-      entitled_features: Array.isArray(d.entitled_features) ? (d.entitled_features as string[]) : [],
-    };
-  } catch {
-    return undefined;
+    res = await client.callToolJson<unknown>('account_entitlements', {});
+  } catch (err) {
+    if (answeredWithoutEntitlements(err)) return undefined;
+    throw err;
   }
+  const d = unwrap<Record<string, unknown>>(res) ?? {};
+  const pa = (d.page_access && typeof d.page_access === 'object' ? d.page_access : null) as Record<string, boolean> | null;
+  if (!pa) return undefined;
+  return {
+    plan: String(d.plan ?? ''),
+    page_access: pa,
+    entitled_features: Array.isArray(d.entitled_features) ? (d.entitled_features as string[]) : [],
+  };
+}
+
+/**
+ * True when Hiveku answered the entitlements call, but with nothing to use: a
+ * tool error (an older server without the tool), its JSON-RPC error, or a body
+ * that is not the tool's JSON. Anything else is a read that never came back.
+ */
+function answeredWithoutEntitlements(err: unknown): boolean {
+  if (err instanceof McpToolError) return true;
+  const text = err instanceof Error ? err.message : String(err);
+  return /^MCP error -?\d+:/.test(text) || /^Tool account_entitlements returned /.test(text);
 }
 export async function helpdeskTickets(client: HivekuMcpClient, status?: string): Promise<Array<Record<string, unknown>>> {
   const res = await client.callToolJson<unknown>('helpdesk_ticket_list', status ? { status } : {});
