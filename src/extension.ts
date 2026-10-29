@@ -13,7 +13,7 @@ import * as path from 'path';
 import * as cp from 'child_process';
 import * as vscode from 'vscode';
 import { AccountStore, type AccountRecord } from './accounts';
-import { HivekuMcpClient, isEdgeRefusal, onRegistryDrift, resetRegistryDrift } from './mcpClient';
+import { HivekuMcpClient, onRegistryDrift, resetRegistryDrift } from './mcpClient';
 import * as api from './hivekuApi';
 import { downloadAndExtract } from './download';
 import { hivekuUserAgent } from './hivekuUserAgent';
@@ -57,6 +57,7 @@ import { ROLES, effectiveDepartments } from './roles';
 import { departmentById, DEPARTMENTS } from './deptData';
 import { CHAT_DOMAINS } from './chatDomains';
 import { exportDepartments, everyDepartmentFailed, failedDatasets, DATA_DIR, type DeptResult } from './dataExport';
+import { allFailedWarning, clipError, everythingDataNote, type FailedDataset } from './dataFailures';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
 import { setupLocalSupabase } from './localSupabase';
 import { scaffoldLocalAutomations, installAgencyCadence } from './localAutomations';
@@ -1371,12 +1372,6 @@ function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** Trim a tool error to something a one-line notification can actually show. */
-function clipError(msg: string): string {
-  const oneLine = msg.replace(/\s+/g, ' ').trim();
-  return oneLine.length > 180 ? `${oneLine.slice(0, 180)}…` : oneLine;
-}
-
 /** Filter the sidebar account list (SaaS owners can have hundreds). */
 async function filterAccounts(): Promise<void> {
   const v = await vscode.window.showInputBox({
@@ -1694,7 +1689,9 @@ async function downloadEverything(node?: { record?: AccountRecord }): Promise<vo
     let knowledgeNote = '';
     let siteCount = 0;
     let deptCount = 0;
-    let deptDatasetsFailed = 0;
+    // Every failed dataset's error, kept for the summary: the web edge in front
+    // of Hiveku refusing them says nothing about the key (dataFailures.ts, HK-847).
+    let deptFailed: FailedDataset[] = [];
     let deptAllFailed = false;
     let deptError: string | undefined;
     await vscode.window.withProgress(
@@ -1760,20 +1757,14 @@ async function downloadEverything(node?: { record?: AccountRecord }): Promise<vo
           log.appendLine(`[everything] department data: ${deptError}`);
         }
         deptCount = results.length;
-        deptDatasetsFailed = failedDatasets(results).length;
+        deptFailed = failedDatasets(results);
         deptAllFailed = everyDepartmentFailed(results);
         progress.report({ message: 'account memory' });
         await saveAccountMemoryCopy(client, record, dir);
         await ensureDataGitignored(dir).catch(() => undefined);
       },
     );
-    const dataNote = deptError
-      ? ` Department data was NOT downloaded: ${deptError}`
-      : deptAllFailed
-        ? ` No department returned data — all ${deptCount} of them failed (${deptDatasetsFailed} datasets), which usually means this account's key is expired or revoked. Reconnect with the command "Hiveku: Connect Hiveku (sign in via browser)", then run this again.`
-        : deptDatasetsFailed
-          ? ` ${deptDatasetsFailed} dataset(s) failed and were not saved — they are listed in ${DATA_DIR}/STATUS.json under "failed".`
-          : '';
+    const dataNote = everythingDataNote({ deptError, deptCount, failed: deptFailed, allFailed: deptAllFailed });
     await offerOpenFolder(
       dir,
       `Downloaded ${record.label}: scaffold + ${count} knowledge file(s) + ${siteCount} site project(s) + data for ${deptCount} department(s).${knowledgeNote}${dataNote}`,
@@ -2127,21 +2118,11 @@ async function downloadData(node: { record: AccountRecord } | undefined, only?: 
         `Saved ${total} rows across ${results.length} departments to ${DATA_DIR}/. Claude Code can now analyze it locally.`,
         'Open index',
       );
-    } else if (everyDepartmentFailed(results) && isEdgeRefusal(failed[0]?.error ?? '')) {
-      // The web edge in front of Hiveku refused the requests: they never
-      // reached Hiveku, so this says nothing about the key (HK-847).
-      choice = await vscode.window.showWarningMessage(
-        `Nothing was downloaded for ${account.label}: no department returned data (${failed.length} of ${datasetTotal} datasets failed), so ${DATA_DIR}/ has no new data. ` +
-          `The web edge in front of Hiveku refused the requests, so they never reached Hiveku and say nothing about the account key. First error: ${firstCause}`,
-        'Open index',
-      );
     } else if (everyDepartmentFailed(results)) {
-      choice = await vscode.window.showWarningMessage(
-        `Nothing was downloaded for ${account.label}: no department returned data (${failed.length} of ${datasetTotal} datasets failed), so ${DATA_DIR}/ has no new data. ` +
-          `The usual cause is an expired or revoked account key — reconnect and run this again. First error — ${firstCause}`,
-        'Reconnect account',
-        'Open index',
-      );
+      // Reconnect only when the key may be the cause: never for requests the
+      // web edge in front of Hiveku refused (dataFailures.ts, HK-847).
+      const warning = allFailedWarning({ label: account.label, datasetTotal, failed });
+      choice = await vscode.window.showWarningMessage(warning.message, ...warning.actions);
       if (choice === 'Reconnect account') await vscode.commands.executeCommand('hiveku.connect');
     } else {
       const what = [

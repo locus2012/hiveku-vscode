@@ -37,7 +37,8 @@ import { hivekuUserAgent } from './hivekuUserAgent';
 // that is not Hiveku's own JSON-RPC error is the web edge in front of Hiveku
 // refusing that one request: a plain message with its ray id, never sent
 // again, and the closing line no longer blames the key for it
-// (coreEdgeScript.ts).
+// (coreEdgeScript.ts). An answer that could not be read is counted apart, and
+// the closing line says so instead of naming the edge.
 export const RUNNER_VERSION = 6;
 export const RUNNER_REL_PATH = path.join('.hiveku', 'pull-data.mjs');
 
@@ -139,8 +140,9 @@ const RATE_LIMIT_MAX_RETRY_SECONDS = 60;
 
 let rpcId = 1, sessionId = null, initialized = false;
 // What refused requests in this run: the closing line reads them, so a run the
-// web edge in front of Hiveku refused is not blamed on the account key.
-let edgeRefusals = 0, keyRefusals = 0;
+// web edge in front of Hiveku refused is not blamed on the account key. An
+// answer that could not be read is counted apart: who refused it is not known.
+let edgeRefusals = 0, unreadRefusals = 0, keyRefusals = 0;
 
 ${CORE_EDGE_SCRIPT}
 function clampRetrySeconds(n) {
@@ -177,7 +179,7 @@ async function rpcOnce(method, params) {
     try { text = await res.text(); } catch { text = null; } finally { clearTimeout(timer); }
     // A 401, 403 or 429 Hiveku did not send itself is the edge refusing this one request.
     const refused = hivekuEdgeRefusal(res, text);
-    if (refused) { edgeRefusals++; throw refused; }
+    if (refused) { if (refused.kind === 'unreadable') unreadRefusals++; else edgeRefusals++; throw refused; }
     if (text === null) text = '';
     if (res.status === 401) keyRefusals++;
     const detail = 'MCP HTTP ' + res.status + ': ' + text.slice(0, 300);
@@ -735,11 +737,20 @@ async function main() {
   statusAll.runner_version = ${RUNNER_VERSION};
   writeJson(statusFile, statusAll);
   if (targets.length && okDepts === 0) {
-    // Requests the web edge in front of Hiveku refused never reached Hiveku, so
-    // unless Hiveku itself refused the key (its own 401), the key is not the cause.
-    console.error(edgeRefusals && !keyRefusals
-      ? 'Every dataset failed. The web edge in front of Hiveku refused ' + edgeRefusals + ' request(s) in this run (their errors are in hiveku-data/STATUS.json): those never reached Hiveku, so they say nothing about the account key.'
-      : 'Every dataset failed — check the account key in .mcp.json.');
+    // Requests the web edge in front of Hiveku refused never reached Hiveku, and
+    // an answer that could not be read does not say who refused it, so unless
+    // Hiveku itself refused the key (its own 401), the key is not the cause.
+    // /hiveku-pull-data (roleCommands.ts) tells the agent to read this line.
+    if (keyRefusals || !(edgeRefusals || unreadRefusals)) {
+      console.error('Every dataset failed — check the account key in .mcp.json.');
+    } else if (!unreadRefusals) {
+      console.error('Every dataset failed. The web edge in front of Hiveku refused ' + edgeRefusals + ' request(s) in this run (their errors are in hiveku-data/STATUS.json): those never reached Hiveku, so they say nothing about the account key.');
+    } else {
+      console.error('Every dataset failed. ' + (edgeRefusals
+        ? 'The web edge in front of Hiveku refused ' + edgeRefusals + ' request(s) in this run, and the answers to ' + unreadRefusals + ' more could not be read'
+        : 'The answers to ' + unreadRefusals + ' request(s) in this run could not be read, so it is not known whether Hiveku or the web edge in front of Hiveku refused them') +
+        ' (their errors are in hiveku-data/STATUS.json): none of that is a sign that the account key stopped working.');
+    }
     process.exit(1);
   }
   // Only the account memory was asked for: its one read is the whole run.

@@ -107,9 +107,12 @@ export function edgeRayId(headers: { get(name: string): string | null } | undefi
 /**
  * Every refusal message below holds this phrase, so a reader that has only
  * the text (a dataset's error string, an error rethrown around this one) can
- * still tell it apart from Hiveku's own refusal. See isEdgeRefusal.
+ * still tell it apart from Hiveku's own refusal. See isCoreEdgeRefusal.
  */
 export const EDGE_REFUSAL_MARK = 'the web edge in front of Hiveku';
+
+/** Only the words for an answer that could not be read hold this (coreRefusalUnreadMessage). See coreEdgeRefusalKind. */
+const UNREAD_REFUSAL_MARK = 'could not be read, so it is not known whether Hiveku or';
 
 /**
  * The words for a refusal from the web edge in front of Hiveku. They claim only
@@ -172,15 +175,40 @@ export class McpEdgeRefusalError extends Error {
 }
 
 /**
- * True for a refusal that must never be read as a dead key or a reason to
- * reconnect: an McpEdgeRefusalError, or text that carries one's message (a
- * dataset's error string, an error rethrown with the message inside it). Every
- * reader that turns "401" into "your key expired" asks this first.
+ * Which of those two an error carries: an McpEdgeRefusalError's own kind, or,
+ * for a reader that has only the text (a dataset's error string, an error
+ * rethrown with the message inside it), the kind its words say. null for
+ * anything else, Hiveku's own refusals among them.
  */
-export function isEdgeRefusal(err: unknown): boolean {
-  if (err instanceof McpEdgeRefusalError) return true;
+export function coreEdgeRefusalKind(err: unknown): McpEdgeRefusalError['kind'] | null {
+  if (err instanceof McpEdgeRefusalError) return err.kind;
+  const text = (err instanceof Error ? err.message : typeof err === 'string' ? err : '').toLowerCase();
+  if (!text.includes(EDGE_REFUSAL_MARK.toLowerCase())) return null;
+  return text.includes(UNREAD_REFUSAL_MARK.toLowerCase()) ? 'unreadable' : 'edge_blocked';
+}
+
+/**
+ * True for a refusal that must never be read as a dead key or a reason to
+ * reconnect: either kind above. Every reader that turns "401" into "your key
+ * expired" asks this first. Named apart from hivekuUserAgent.ts isEdgeRefusal,
+ * which reads the site firewall's challenge or block off a Response; this one
+ * reads core's refusals off an error or its text, and both files are vendored
+ * into the desktop app side by side.
+ */
+export function isCoreEdgeRefusal(err: unknown): boolean {
+  return coreEdgeRefusalKind(err) !== null;
+}
+
+/**
+ * True for Hiveku itself refusing the key: its own JSON 401, which this client
+ * throws as `MCP HTTP 401: <body>` (an edge 401 never reads that way). It is the
+ * one failure reconnecting fixes, so a run where every dataset failed blames the
+ * key only when one of them carries it, as the data runner's closing line does
+ * (dataRunner.ts, dataFailures.ts).
+ */
+export function isHivekuKeyRefusal(err: unknown): boolean {
   const text = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
-  return text.toLowerCase().includes(EDGE_REFUSAL_MARK.toLowerCase());
+  return /\bMCP HTTP 401:/.test(text) && !isCoreEdgeRefusal(err);
 }
 
 /**

@@ -12,7 +12,7 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { HivekuMcpClient, isEdgeRefusal } from './mcpClient';
+import { HivekuMcpClient, isCoreEdgeRefusal } from './mcpClient';
 import * as api from './hivekuApi';
 import type { AccountRecord } from './accounts';
 import { departmentById, extractRows, fetchDataset, mapLimit, type Column, type Row } from './deptData';
@@ -1111,6 +1111,18 @@ async function uploadMediaFlow(client: HivekuMcpClient): Promise<number> {
   return uploaded;
 }
 
+/**
+ * The console's banner when its first read for an account fails: a dead key
+ * gets "run Connect", any other failure gets none (null). A refusal from the web
+ * edge in front of Hiveku never gets it, whatever its status: it never reached
+ * Hiveku, so it says nothing about the key (mcpClient.ts isCoreEdgeRefusal, HK-847).
+ */
+export function deadKeyBanner(err: unknown): string | null {
+  const m = err instanceof Error ? err.message : String(err);
+  if (isCoreEdgeRefusal(err) || !/\b401\b|invalid or inactive|no stored key|unauthor/i.test(m)) return null;
+  return `This account's key looks dead (${m.slice(0, 120)}). Run "Hiveku: Connect Hiveku" to mint a fresh one.`;
+}
+
 export function openAccountConsole(
   account: AccountRecord,
   clientFor: ClientFor,
@@ -1172,11 +1184,8 @@ export function openAccountConsole(
           panel.webview.postMessage({ type: 'tabs', tabs: buildTabs(lastPageAccess) });
         }
       } catch (err) {
-        const m = err instanceof Error ? err.message : String(err);
-        // The web edge in front of Hiveku refusing a request is never a dead key (mcpClient.ts isEdgeRefusal).
-        if (!isEdgeRefusal(err) && /\b401\b|invalid or inactive|no stored key|unauthor/i.test(m)) {
-          panel.webview.postMessage({ type: 'banner', text: `This account's key looks dead (${m.slice(0, 120)}). Run "Hiveku: Connect Hiveku" to mint a fresh one.` });
-        }
+        const banner = deadKeyBanner(err);
+        if (banner) panel.webview.postMessage({ type: 'banner', text: banner });
       }
     })();
   };

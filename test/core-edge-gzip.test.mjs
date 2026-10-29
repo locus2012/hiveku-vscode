@@ -5,21 +5,23 @@
  * extension writes onto a machine (automations/lib.mjs and
  * .hiveku/pull-data.mjs, both carrying src/coreEdgeScript.ts), and the readers
  * that turn a 401 into "your key expired" (tree.ts loadFailureNode, and the
- * dataset errors dataRefresh.ts and extension.ts read through isEdgeRefusal).
+ * dataset errors dataRefresh.ts and extension.ts read through isCoreEdgeRefusal;
+ * test/edge-refusal-readers.test.mjs pins what each of those readers says).
  *
  * The Claude Code plugin did this first (HK-838, lib/upstream.mjs and
  * test/edge-refusal.test.mjs there). What happened: the edge in front of core
  * answered one pm_tasks_create with an HTML 403 titled "Blocked" because of what
  * the task's text held. The call never reached Hiveku.
  *
- * Everything runs against a local HTTP stub on 127.0.0.1. No request reaches a
- * live host, and no test holds an attack-shaped string: the stub refuses on a
- * marker of its own.
+ * Everything runs against a local HTTP stub on 127.0.0.1 (test/helpers/core-stub.mjs).
+ * No request reaches a live host, and no test holds an attack-shaped string:
+ * the stub refuses on a marker of its own.
  *
  * Pinned:
  *   1. The client sends every body gzip: Content-Encoding gzip, every other
  *      header as before, and the inflated bytes are exactly the JSON it sent
- *      before; the customer's text is not readable on the wire.
+ *      before; the customer's text is not readable on the wire. The handshake
+ *      leaves no request timer armed (the 204 clears its own).
  *   2. An HTML 403 from the edge is McpEdgeRefusalError (edge_blocked, the
  *      status, the ray id), and the next call is sent and answered.
  *   3. Every other answer on 401, 403 or 429 that is not Hiveku's own JSON-RPC
@@ -30,13 +32,14 @@
  *      is unchanged, and its JSON 429 still waits Retry-After and is sent once
  *      more. A 503 keeps the generic path, whatever its body.
  *   5. A refusal whose body cannot be read is no key problem either.
- *   6. The readers: the tree never offers reconnect for an edge refusal, and a
- *      dataset's error string from a real export is recognised.
+ *   6. The readers: the tree never offers reconnect for an edge refusal, a
+ *      dataset's error string from a real export is recognised with its kind,
+ *      and only Hiveku's own 401 is a key refusal.
  *   7. The words: plain, the ray id first, no em dash, no vendor names, and no
  *      advice to reconnect.
  *   8. The generated scripts send gzip and refuse the same way with the same
  *      words, and the runner's closing line blames the key only when Hiveku
- *      itself refused it.
+ *      itself refused it, and counts answers that could not be read apart.
  *   9. coreEdgeScript.ts decides and words every answer as mcpClient.ts does.
  *
  * Runs against the compiled extension (npm test compiles first).
@@ -45,14 +48,28 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
-import { createServer } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import './helpers/vscode-stub.mjs';
 import { loadOut } from './helpers/load.mjs';
-import { isGzip, readRequest } from './helpers/request-body.mjs';
+import { isGzip } from './helpers/request-body.mjs';
+import {
+  BLOCK_PAGE,
+  EDGE_429_PAGE,
+  NOT_HIVEKU,
+  OTHER_ACCOUNT_MESSAGE,
+  RAY,
+  REFUSE_MARKER,
+  REVOKED_KEY_MESSAGE,
+  coreAuthRefusal,
+  coreRateLimit,
+  cutOff,
+  refuseMarked,
+  rejection,
+  startStub,
+} from './helpers/core-stub.mjs';
 
 const mc = loadOut('mcpClient');
 const tree = loadOut('tree');
@@ -62,173 +79,11 @@ const la = loadOut('localAutomations');
 const { CORE_EDGE_SCRIPT } = loadOut('coreEdgeScript');
 const { DEPARTMENTS } = loadOut('deptData');
 
-const RAY = '8f1c2d3e4f5a6b7c-SJC';
-/** The stub refuses a tools/call whose arguments hold this. Not an attack string: a label. */
-const REFUSE_MARKER = 'stub-edge-refuses-this';
 const RECORD = { label: 'Acme', accountId: '3f2504e0-4f89-11d3-9a0c-0305e82c3301' };
 /** A department with plain list datasets only, as test/account-memory-runner.test.mjs picks it. */
 const DEPT = DEPARTMENTS.find((d) => d.datasets.length > 0 && !d.references?.length && !d.datasets.some((ds) => ds.scope || ds.detail));
 
-/* ── what core and the edge send ─────────────────────────────────────────── */
-
-/**
- * hiveku-mcp-api-server src/middleware/mcp-auth.ts at origin/main: a revoked
- * or unknown key (401, with WWW-Authenticate) and a key used for another
- * account (403), both as res.status(status).json({ jsonrpc: '2.0', id, error:
- * { code: -32001, message } }).
- */
-const REVOKED_KEY_MESSAGE =
-  'Invalid or inactive API key. Verify the key in your Hiveku dashboard ' +
-  "(Settings → API & Connectors) and confirm it's active. If you rotated the " +
-  "key, update .mcp.json (or your client's env) and restart the MCP client.";
-const OTHER_ACCOUNT_MESSAGE = 'API key does not belong to the specified account';
-
-function coreAuthRefusal(status, id, message) {
-  return {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      // Every answer through core's zone carries a ray id, Hiveku's own too:
-      // a cf-ray header alone never makes an answer the edge's.
-      'cf-ray': RAY,
-      ...(status === 401
-        ? { 'www-authenticate': 'Bearer realm="hiveku-mcp", resource_metadata="https://core.hiveku.com/.well-known/oauth-protected-resource/mcp"' }
-        : {}),
-    },
-    body: JSON.stringify({ jsonrpc: '2.0', id: id || null, error: { code: -32001, message } }),
-  };
-}
-
-/** hiveku-mcp-api-server src/middleware/rate-limiter.ts rateLimitMiddleware's 429, with a one-second wait. */
-function coreRateLimit(id) {
-  return {
-    status: 429,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'retry-after': '1', 'cf-ray': RAY },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: id || null,
-      error: {
-        code: -32000,
-        message: 'Rate limit exceeded. Maximum 100 requests per 60 seconds. Retry after 1 seconds.',
-        data: { kind: 'rate_limit', retry_after_seconds: 1, limit: 100, window_seconds: 60 },
-      },
-    }),
-  };
-}
-
-/** The edge's block page, in the shape seen on 2026-10-28: HTML, titled "Blocked". */
-const BLOCK_PAGE = {
-  status: 403,
-  headers: { 'content-type': 'text/html; charset=utf-8', 'cf-ray': RAY },
-  body:
-    '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Blocked</title></head>' +
-    '<body><h1>Blocked</h1><p>This request was blocked.</p></body></html>',
-};
-
-/** The edge turning a request away on 429, with a Retry-After of its own: still never slept on. */
-const EDGE_429_PAGE = {
-  status: 429,
-  headers: { 'content-type': 'text/html', 'cf-ray': RAY, 'retry-after': '1' },
-  body: '<html><title>Too many requests</title></html>',
-};
-
-/** Bodies that are not Hiveku's JSON-RPC error. */
-const NOT_HIVEKU = [
-  BLOCK_PAGE.body,
-  '',
-  '   ',
-  'Forbidden',
-  '[]',
-  'null',
-  JSON.stringify({ error: { code: -32001, message: 'no jsonrpc member' } }),
-  JSON.stringify({ jsonrpc: '2.0', error: 'a string' }),
-  JSON.stringify({ jsonrpc: '2.0', error: { code: '403', message: 'code is not a number' } }),
-  JSON.stringify({ jsonrpc: '2.0', error: { code: 1.5, message: 'code is not whole' } }),
-  JSON.stringify({ jsonrpc: '2.0', error: { code: -32001 } }),
-  JSON.stringify({ jsonrpc: '2.0', result: {} }),
-];
-
-/* ── the stub ────────────────────────────────────────────────────────────── */
-
-function defaultAnswer(rpc) {
-  if (rpc?.method === 'initialize') {
-    return {
-      status: 200,
-      headers: { 'content-type': 'application/json', 'mcp-session-id': 'stub-session' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: { protocolVersion: '2024-11-05', capabilities: {}, serverInfo: { name: 'stub', version: '0' } } }),
-    };
-  }
-  if (rpc?.method === 'notifications/initialized') return { status: 204, headers: {}, body: '' };
-  if (rpc?.method === 'tools/call') {
-    return {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: { content: [{ type: 'text', text: JSON.stringify({ data: [] }) }] } }),
-    };
-  }
-  return { status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: rpc?.id ?? null, result: {} }) };
-}
-
-/**
- * A local MCP endpoint. `answer(rpc, seen)` returns { status, headers, body },
- * a function that writes the response itself, or undefined for the default.
- * Every request is kept: its headers, the raw bytes, and what core's body
- * parser would make of them.
- */
-async function startStub(answer = () => undefined) {
-  const requests = [];
-  const sockets = new Set();
-  const server = createServer(async (req, res) => {
-    let raw = Buffer.alloc(0);
-    let text = null;
-    let rpc = null;
-    try {
-      ({ raw, text } = await readRequest(req));
-      rpc = JSON.parse(text);
-    } catch {
-      // Kept as null: a test that expects JSON fails on it.
-    }
-    const seen = { headers: req.headers, raw, text, rpc };
-    requests.push(seen);
-    const reply = answer(rpc, seen) ?? defaultAnswer(rpc);
-    if (typeof reply === 'function') return reply(res);
-    res.writeHead(reply.status, reply.headers);
-    res.end(reply.body);
-  });
-  server.on('connection', (socket) => {
-    sockets.add(socket);
-    socket.on('close', () => sockets.delete(socket));
-  });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const base = `http://127.0.0.1:${server.address().port}`;
-  return {
-    base,
-    url: `${base}/mcp`,
-    requests,
-    toolCalls: () => requests.filter((r) => r.rpc?.method === 'tools/call'),
-    close: () => {
-      for (const socket of sockets) socket.destroy();
-      return new Promise((resolve) => server.close(resolve));
-    },
-  };
-}
-
 const clientFor = (stub) => new mc.HivekuMcpClient({ baseUrl: stub.base, apiKey: 'hvk_test_placeholder' });
-
-/** A tools/call whose arguments hold the marker is refused with `reply`; everything else is answered. */
-const refuseMarked = (reply) => (rpc) =>
-  rpc?.method === 'tools/call' && JSON.stringify(rpc.params?.arguments ?? {}).includes(REFUSE_MARKER)
-    ? (typeof reply === 'function' ? reply(rpc) : reply)
-    : undefined;
-
-async function rejection(promise) {
-  try {
-    await promise;
-  } catch (err) {
-    return err;
-  }
-  assert.fail('the call was expected to fail');
-}
 
 /** The words, checked the same way everywhere (part 7). */
 function assertPlainEdgeWords(message, { status, ray }) {
@@ -285,6 +140,39 @@ describe('HivekuMcpClient: every body to core goes gzip (HK-847)', () => {
     const body = await mc.gzipJsonBody(message);
     assert.equal(gunzipSync(body).toString('utf8'), JSON.stringify(message));
   });
+
+  test("the handshake leaves no request timer armed: the 204 to notifications/initialized clears its own", async () => {
+    // Every request arms a timer for its whole budget (135 s by default). The
+    // 204 path returned without clearing it, so one stayed armed after every
+    // handshake. Watch the long timers armed while initialize() runs.
+    const stub = await startStub();
+    const realSetTimeout = globalThis.setTimeout;
+    const realClearTimeout = globalThis.clearTimeout;
+    const armed = new Set();
+    globalThis.setTimeout = (fn, ms, ...rest) => {
+      const handle = realSetTimeout(fn, ms, ...rest);
+      if (ms >= 60_000) armed.add(handle);
+      return handle;
+    };
+    globalThis.clearTimeout = (handle) => {
+      armed.delete(handle);
+      return realClearTimeout(handle);
+    };
+    let leftArmed;
+    try {
+      await clientFor(stub).initialize();
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+      globalThis.clearTimeout = realClearTimeout;
+      leftArmed = armed.size;
+      // Never hold the test run open for the budget, whatever the outcome.
+      for (const handle of armed) realClearTimeout(handle);
+      await stub.close();
+    }
+    assert.deepEqual(stub.requests.map((r) => r.rpc?.method), ['initialize', 'notifications/initialized']);
+    assert.equal(stub.requests.length, 2);
+    assert.equal(leftArmed, 0, 'every request timer is cleared once its answer is in, the 204 included');
+  });
 });
 
 /* ── 2 and 3. the edge's refusals ────────────────────────────────────────── */
@@ -300,7 +188,7 @@ describe('HivekuMcpClient: a refusal from the web edge fails that one request', 
       assert.equal(err.httpStatus, 403);
       assert.equal(err.rayId, RAY);
       assert.equal(err.message, mc.coreEdgeRefusalMessage(403, RAY));
-      assert.equal(mc.isEdgeRefusal(err), true);
+      assert.equal(mc.isCoreEdgeRefusal(err), true);
       assertPlainEdgeWords(err.message, { status: 403, ray: RAY });
 
       const before = stub.toolCalls().length;
@@ -370,7 +258,8 @@ describe("HivekuMcpClient: Hiveku's own refusals keep the path they had", () => 
       const err = await rejection(clientFor(stub).callTool('get_account_info', {}));
       assert.ok(!(err instanceof mc.McpEdgeRefusalError));
       assert.equal(err.message, `MCP HTTP 401: ${sent.body.slice(0, 500)}`);
-      assert.equal(mc.isEdgeRefusal(err), false);
+      assert.equal(mc.isCoreEdgeRefusal(err), false);
+      assert.equal(mc.isHivekuKeyRefusal(err), true, 'the one refusal reconnecting fixes');
       const node = tree.loadFailureNode('Projects', err, RECORD);
       assert.equal(node.label, 'Key expired for Acme — click to reconnect');
       assert.deepEqual(node.command, { command: 'hiveku.connect', title: 'Reconnect Hiveku', arguments: [RECORD] });
@@ -386,7 +275,8 @@ describe("HivekuMcpClient: Hiveku's own refusals keep the path they had", () => 
       const err = await rejection(clientFor(stub).callTool('pm_tasks_create', { title: REFUSE_MARKER }));
       assert.ok(!(err instanceof mc.McpEdgeRefusalError));
       assert.equal(err.message, `MCP HTTP 403: ${sent.body.slice(0, 500)}`);
-      assert.equal(mc.isEdgeRefusal(err), false);
+      assert.equal(mc.isCoreEdgeRefusal(err), false);
+      assert.equal(mc.isHivekuKeyRefusal(err), false, 'a 403 is not the key being refused');
     } finally {
       await stub.close();
     }
@@ -431,12 +321,7 @@ describe("HivekuMcpClient: Hiveku's own refusals keep the path they had", () => 
 /* ── 5. an unreadable refusal ────────────────────────────────────────────── */
 
 test('a 401 whose body is cut off before it can be read is no key problem, and the next call goes out', async () => {
-  const cutOff = (res) => {
-    res.writeHead(401, { 'content-type': 'application/json', 'content-length': '400' });
-    res.write('{"jsonrpc":"2.0","id":3,"error":');
-    setTimeout(() => res.socket.destroy(), 20);
-  };
-  const stub = await startStub(refuseMarked(() => cutOff));
+  const stub = await startStub(refuseMarked(() => cutOff(401)));
   try {
     const client = clientFor(stub);
     const err = await rejection(client.callTool('pm_tasks_create', { title: REFUSE_MARKER }));
@@ -448,6 +333,9 @@ test('a 401 whose body is cut off before it can be read is no key problem, and t
     assert.match(err.message, /could not be read, so it is not known whether Hiveku or the web edge in front of Hiveku refused it/);
     assert.doesNotMatch(err.message, /[—–]/);
     assert.equal(tree.loadFailureNode('Tasks', err, RECORD).command, undefined, 'never "click to reconnect"');
+    assert.equal(mc.coreEdgeRefusalKind(err), 'unreadable');
+    assert.equal(mc.coreEdgeRefusalKind(err.message), 'unreadable', 'the words alone say which kind');
+    assert.equal(mc.isHivekuKeyRefusal(err), false);
     await client.callToolJson('pm_tasks_list', {});
   } finally {
     await stub.close();
@@ -456,7 +344,7 @@ test('a 401 whose body is cut off before it can be read is no key problem, and t
 
 /* ── 6. the readers that only have the text ──────────────────────────────── */
 
-describe('isEdgeRefusal: the readers that turn a 401 into "your key expired"', () => {
+describe('isCoreEdgeRefusal: the readers that turn a 401 into "your key expired"', () => {
   test('a real export the edge refused: every dataset failed, and its error string reads as the edge, not the key', async () => {
     assert.ok(DEPT, 'no simple department in the registry');
     const stub = await startStub((rpc) => (rpc?.method === 'tools/call' ? BLOCK_PAGE : undefined));
@@ -467,27 +355,44 @@ describe('isEdgeRefusal: the readers that turn a 401 into "your key expired"', (
       const first = dx.failedDatasets(results)[0];
       assert.ok(first, 'a failed dataset');
       assert.equal(first.error, mc.coreEdgeRefusalMessage(403, RAY));
-      // extension.ts reads failed[0].error; dataRefresh.ts reads the message it builds around it.
-      assert.equal(mc.isEdgeRefusal(first.error), true);
-      assert.equal(mc.isEdgeRefusal(`every dataset failed — ${first.department}/${first.dataset}: ${first.error}`.slice(0, 300)), true);
+      // extension.ts reads the failed datasets' errors; dataRefresh.ts reads the message it builds around one.
+      assert.equal(mc.isCoreEdgeRefusal(first.error), true);
+      assert.equal(mc.coreEdgeRefusalKind(first.error), 'edge_blocked');
+      assert.equal(mc.isHivekuKeyRefusal(first.error), false);
+      assert.equal(mc.isCoreEdgeRefusal(`every dataset failed (${first.department}/${first.dataset}): ${first.error}`.slice(0, 300)), true);
     } finally {
       await stub.close();
       await fs.rm(dir, { recursive: true, force: true });
     }
   });
 
-  test("Hiveku's own refusals and ordinary failures are not edge refusals", () => {
+  test("Hiveku's own refusals and ordinary failures are not edge refusals, and only Hiveku's own 401 is a key refusal", () => {
+    const hivekuKey = `MCP HTTP 401: ${coreAuthRefusal(401, 1, REVOKED_KEY_MESSAGE).body}`;
     for (const notEdge of [
-      `MCP HTTP 401: ${coreAuthRefusal(401, 1, REVOKED_KEY_MESSAGE).body}`,
+      hivekuKey,
       'MCP HTTP 403: {"jsonrpc":"2.0","id":1,"error":{"code":-32001,"message":"API key does not belong to the specified account"}}',
       'MCP request timed out after 135s (tools/call)',
       new Error('fetch failed'),
       undefined,
       null,
     ]) {
-      assert.equal(mc.isEdgeRefusal(notEdge), false, String(notEdge));
+      assert.equal(mc.isCoreEdgeRefusal(notEdge), false, String(notEdge));
+      assert.equal(mc.coreEdgeRefusalKind(notEdge), null, String(notEdge));
+      assert.equal(mc.isHivekuKeyRefusal(notEdge), notEdge === hivekuKey, String(notEdge));
     }
-    assert.equal(mc.isEdgeRefusal(new Error(`Could not load: ${mc.coreEdgeRefusalMessage(401, null)}`)), true, 'rethrown with the message inside');
+    assert.equal(mc.isHivekuKeyRefusal(new Error(hivekuKey)), true);
+    assert.equal(mc.isHivekuKeyRefusal(`every dataset failed (crm/deals): ${hivekuKey}`), true, 'inside a message built around it');
+    const rethrown = new Error(`Could not load: ${mc.coreEdgeRefusalMessage(401, null)}`);
+    assert.equal(mc.isCoreEdgeRefusal(rethrown), true, 'rethrown with the message inside');
+    assert.equal(mc.coreEdgeRefusalKind(rethrown), 'edge_blocked');
+    for (const status of [401, 403, 429]) {
+      assert.equal(mc.coreEdgeRefusalKind(new mc.McpEdgeRefusalError('edge_blocked', status, RAY)), 'edge_blocked');
+      assert.equal(mc.coreEdgeRefusalKind(new mc.McpEdgeRefusalError('unreadable', status)), 'unreadable');
+      assert.equal(mc.coreEdgeRefusalKind(mc.coreEdgeRefusalMessage(status, RAY)), 'edge_blocked');
+      assert.equal(mc.coreEdgeRefusalKind(mc.coreRefusalUnreadMessage(status)), 'unreadable');
+      // An edge 401 never reads as Hiveku refusing the key, even with "MCP HTTP 401:" around it.
+      assert.equal(mc.isHivekuKeyRefusal(`MCP HTTP 401: ${mc.coreEdgeRefusalMessage(status, RAY)}`), false);
+    }
   });
 });
 
@@ -668,6 +573,52 @@ describe('.hiveku/pull-data.mjs (dataRunner.ts): gzip, the same refusal, and a c
       await fs.rm(dir, { recursive: true, force: true });
     }
   });
+
+  test('a run whose answers could not be read says so: it names neither the web edge nor the key', async () => {
+    const stub = await startStub((rpc) => (rpc?.method === 'tools/call' ? cutOff(401) : undefined));
+    const dir = await accountFolder(stub);
+    try {
+      const r = await run(dir, DEPT.id);
+      assert.equal(r.code, 1, r.stdout + r.stderr);
+      assert.match(
+        r.stderr,
+        /Every dataset failed\. The answers to \d+ request\(s\) in this run could not be read, so it is not known whether Hiveku or the web edge in front of Hiveku refused them \(their errors are in hiveku-data\/STATUS\.json\): none of that is a sign that the account key stopped working\./,
+      );
+      assert.doesNotMatch(r.stderr, /check the account key|refused \d+ request/);
+      const status = JSON.parse(await fs.readFile(path.join(dir, 'hiveku-data', 'STATUS.json'), 'utf8'));
+      const failed = status.failed.filter((f) => f.department === DEPT.id);
+      assert.equal(failed.length, DEPT.datasets.length, JSON.stringify(status.failed));
+      for (const f of failed) assert.equal(f.error, mc.coreRefusalUnreadMessage(401).slice(0, 200));
+    } finally {
+      await stub.close();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a run the web edge refused and whose other answers could not be read counts each apart, and still names no key', async () => {
+    const unreadTool = DEPT.datasets[0].tool;
+    const stub = await startStub((rpc) => {
+      if (rpc?.method !== 'tools/call') return undefined;
+      return rpc.params.name === unreadTool ? cutOff(401) : BLOCK_PAGE;
+    });
+    const dir = await accountFolder(stub);
+    try {
+      const r = await run(dir, DEPT.id);
+      assert.equal(r.code, 1, r.stdout + r.stderr);
+      // Every other request (the other datasets and the account memory) the edge refused; one answer was cut off.
+      const refused = stub.toolCalls().filter((c) => c.rpc.params.name !== unreadTool).length;
+      assert.equal(stub.toolCalls().length - refused, 1, 'one answer cut off');
+      assert.ok(refused >= DEPT.datasets.length - 1, String(refused));
+      const line =
+        `Every dataset failed. The web edge in front of Hiveku refused ${refused} request(s) in this run, and the answers to 1 more ` +
+        'could not be read (their errors are in hiveku-data/STATUS.json): none of that is a sign that the account key stopped working.';
+      assert.ok(r.stderr.includes(line), r.stderr);
+      assert.doesNotMatch(r.stderr, /check the account key/);
+    } finally {
+      await stub.close();
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 /* ── 9. the pasted source agrees with mcpClient.ts ───────────────────────── */
@@ -717,6 +668,9 @@ test('coreEdgeScript.ts decides and words every answer exactly as mcpClient.ts d
         const expected = text === null ? mc.coreRefusalUnreadMessage(status) : mc.coreEdgeRefusalMessage(status, mc.edgeRayId(res.headers, text));
         assert.equal(ours?.message, expected, `${status} ${text}`);
         assert.equal(ours.edgeRefusal, true);
+        // The kind the runner counts by is the kind the extension reads off the same words.
+        assert.equal(ours.kind, text === null ? 'unreadable' : 'edge_blocked', `${status} ${text}`);
+        assert.equal(mc.coreEdgeRefusalKind(ours.message), ours.kind, `${status} ${text}`);
       }
     }
   } finally {

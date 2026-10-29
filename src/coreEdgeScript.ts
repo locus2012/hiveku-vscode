@@ -63,11 +63,13 @@ function hivekuRefusalUnreadText(status) {
 }
 // The Error for a 401, 403 or 429 that Hiveku did not answer itself, or null when Hiveku did (or for any other
 // status). text is null when the answer could not be read: who refused is then not known, and it is still no key problem.
+// kind says which, as the extension's McpEdgeRefusalError does, so a count of them claims no more than it saw.
 function hivekuEdgeRefusal(res, text) {
   if (res.status !== 401 && res.status !== 403 && res.status !== 429) return null;
   if (text !== null && hivekuErrorAnswer(text)) return null;
   var err = new Error(text === null ? hivekuRefusalUnreadText(res.status) : hivekuEdgeRefusalText(res.status, hivekuEdgeRayId(res.headers, text)));
   err.edgeRefusal = true;
+  err.kind = text === null ? 'unreadable' : 'edge_blocked';
   return err;
 }
 `;

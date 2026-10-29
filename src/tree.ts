@@ -17,7 +17,7 @@
 
 import * as vscode from 'vscode';
 import { AccountStore, type AccountRecord } from './accounts';
-import { HivekuMcpClient, isEdgeRefusal } from './mcpClient';
+import { HivekuMcpClient, isCoreEdgeRefusal } from './mcpClient';
 import * as api from './hivekuApi';
 import { PLATFORM_KIND_LABELS, externalPlatform, externalSiteHost, externalSiteUrl, isExternalProject } from './projectKind';
 import {
@@ -89,11 +89,11 @@ interface MessageNode {
  * was revoked/rotated/deactivated — e.g. a retired Connect key) becomes a
  * one-click "reconnect" instead of a cryptic "MCP HTTP 401". A refusal from the
  * web edge in front of Hiveku never does, whatever its status: it never reached
- * Hiveku, so it says nothing about the key (mcpClient.ts isEdgeRefusal, HK-847).
+ * Hiveku, so it says nothing about the key (mcpClient.ts isCoreEdgeRefusal, HK-847).
  */
 export function loadFailureNode(what: string, err: unknown, record: AccountRecord): MessageNode {
   const msg = err instanceof Error ? err.message : String(err);
-  const isAuth = !isEdgeRefusal(err) && (/\b401\b/.test(msg) || /invalid or inactive api key|unauthor/i.test(msg));
+  const isAuth = !isCoreEdgeRefusal(err) && (/\b401\b/.test(msg) || /invalid or inactive api key|unauthor/i.test(msg));
   if (isAuth) {
     return {
       kind: 'message',
