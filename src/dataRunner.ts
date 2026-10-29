@@ -17,6 +17,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { CORE_EDGE_SCRIPT } from './coreEdgeScript';
 import { dataManifest } from './deptData';
 import { hivekuUserAgent } from './hivekuUserAgent';
 
@@ -32,7 +33,12 @@ import { hivekuUserAgent } from './hivekuUserAgent';
 // (`account_memory`, and a `failed` entry while the read fails). `failed` is now
 // computed from the per-department blocks (it read top-level keys and was
 // always empty) and keeps the entries of departments this run did not touch.
-export const RUNNER_VERSION = 5;
+// v6 (HK-847): every request body is gzip-compressed, and a 401, 403 or 429
+// that is not Hiveku's own JSON-RPC error is the web edge in front of Hiveku
+// refusing that one request: a plain message with its ray id, never sent
+// again, and the closing line no longer blames the key for it
+// (coreEdgeScript.ts).
+export const RUNNER_VERSION = 6;
 export const RUNNER_REL_PATH = path.join('.hiveku', 'pull-data.mjs');
 
 /**
@@ -90,6 +96,7 @@ function runnerScript(): string {
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, chmodSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 if (typeof fetch !== 'function') { console.error('Node 18+ is required (global fetch). Current: ' + process.version); process.exit(1); }
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -131,7 +138,11 @@ const REQUEST_TIMEOUT_S = Math.round(REQUEST_TIMEOUT_MS / 1000);
 const RATE_LIMIT_MAX_RETRY_SECONDS = 60;
 
 let rpcId = 1, sessionId = null, initialized = false;
+// What refused requests in this run: the closing line reads them, so a run the
+// web edge in front of Hiveku refused is not blamed on the account key.
+let edgeRefusals = 0, keyRefusals = 0;
 
+${CORE_EDGE_SCRIPT}
 function clampRetrySeconds(n) {
   if (!Number.isFinite(n)) return 15;
   return Math.min(Math.max(Math.ceil(n), 1), RATE_LIMIT_MAX_RETRY_SECONDS);
@@ -144,13 +155,13 @@ function retryAfterFromProse(message) {
 }
 
 async function rpcOnce(method, params) {
-  const headers = { Authorization: AUTH, 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': '${hivekuUserAgent('HivekuDataRunner')}' };
+  const headers = { Authorization: AUTH, 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', Accept: 'application/json', 'User-Agent': '${hivekuUserAgent('HivekuDataRunner')}' };
   if (sessionId) headers['Mcp-Session-Id'] = sessionId;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
   let res;
   try {
-    res = await fetch(ENDPOINT, { method: 'POST', headers, body: JSON.stringify({ jsonrpc: '2.0', id: rpcId++, method, params }), signal: ctrl.signal });
+    res = await fetch(ENDPOINT, { method: 'POST', headers, body: hivekuGzipBody({ jsonrpc: '2.0', id: rpcId++, method, params }), signal: ctrl.signal });
   } catch (err) {
     clearTimeout(timer);
     if (ctrl.signal.aborted) throw new Error('MCP request timed out after ' + REQUEST_TIMEOUT_S + 's (' + method + ')');
@@ -162,8 +173,13 @@ async function rpcOnce(method, params) {
   const sh = res.headers.get('mcp-session-id');
   if (sh) sessionId = sh;
   if (!res.ok) {
-    let text = '';
-    try { text = await res.text(); } catch { text = ''; } finally { clearTimeout(timer); }
+    let text = null;
+    try { text = await res.text(); } catch { text = null; } finally { clearTimeout(timer); }
+    // A 401, 403 or 429 Hiveku did not send itself is the edge refusing this one request.
+    const refused = hivekuEdgeRefusal(res, text);
+    if (refused) { edgeRefusals++; throw refused; }
+    if (text === null) text = '';
+    if (res.status === 401) keyRefusals++;
     const detail = 'MCP HTTP ' + res.status + ': ' + text.slice(0, 300);
     if (res.status === 429) {
       // Retry-After is the limiter's own remaining-window figure. Take it over
@@ -194,6 +210,8 @@ async function rpc(method, params) {
   try {
     return await rpcOnce(method, params);
   } catch (err) {
+    // The edge refusing this one request is not Hiveku's rate limit: it is never sent again.
+    if (err && err.edgeRefusal) throw err;
     const wait = (err && err.retryAfterSeconds) || retryAfterFromProse(err && err.message ? err.message : String(err));
     if (!wait) throw err;
     console.log('  rate limited by the server — waiting ' + wait + 's, then retrying once (' + method + ')');
@@ -716,7 +734,14 @@ async function main() {
   statusAll.failed = otherPriorFailed.concat(accountFailed, freshFailed);
   statusAll.runner_version = ${RUNNER_VERSION};
   writeJson(statusFile, statusAll);
-  if (targets.length && okDepts === 0) { console.error('Every dataset failed — check the account key in .mcp.json.'); process.exit(1); }
+  if (targets.length && okDepts === 0) {
+    // Requests the web edge in front of Hiveku refused never reached Hiveku, so
+    // unless Hiveku itself refused the key (its own 401), the key is not the cause.
+    console.error(edgeRefusals && !keyRefusals
+      ? 'Every dataset failed. The web edge in front of Hiveku refused ' + edgeRefusals + ' request(s) in this run (their errors are in hiveku-data/STATUS.json): those never reached Hiveku, so they say nothing about the account key.'
+      : 'Every dataset failed — check the account key in .mcp.json.');
+    process.exit(1);
+  }
   // Only the account memory was asked for: its one read is the whole run.
   if (!targets.length && accountMemory && !accountMemory.ok) { console.error('The account memory could not be read; the previous copy (if any) was kept.'); process.exit(1); }
   console.log('Done. Data in hiveku-data/ is a copy of this pull: read anything again from Hiveku before you act on it, and use live MCP tools for writes.');

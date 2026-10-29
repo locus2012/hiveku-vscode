@@ -9,9 +9,179 @@
  * service key and never talks to the Olympus routes directly.
  */
 
+import { promisify } from 'util';
+import { gzip } from 'zlib';
 import { hivekuUserAgent } from './hivekuUserAgent';
 
 const PROTOCOL_VERSION = '2024-11-05';
+
+const gzipAsync = promisify(gzip);
+
+/**
+ * ★ EVERY BODY TO CORE GOES GZIP-COMPRESSED (HK-847): Content-Encoding gzip,
+ * the Content-Type unchanged, and the JSON inside byte for byte what it was.
+ *
+ * The web edge in front of core.hiveku.com reads plain request bodies against
+ * content rules nobody at Hiveku can see or change. On 2026-10-28 it answered a
+ * pm_tasks_create from the Claude Code plugin with an HTML "Blocked" page
+ * because of a file path in the task's text (HK-838), and the same body sent
+ * gzip-compressed passed. The plugin sends every body this way since 0.27.111
+ * (lib/upstream.mjs gzipBody). This client does the same, and so do the two
+ * scripts this extension writes onto a machine (dataRunner.ts and
+ * localAutomations.ts, through coreEdgeScript.ts).
+ *
+ * WHERE THE SERVER INFLATES IT (hiveku-mcp-api-server, checked 2026-10-29):
+ * src/middleware/json-body.ts is its one JSON body parser, mounted app-wide in
+ * src/index-unified-http.ts before every route. It inflates gzip and deflate
+ * (body-parser's default) and counts its 30 MB limit after inflating, so a
+ * compressed body has the ceiling a plain one had.
+ *
+ * Off the extension host's thread (zlib's own pool), so a large save does not
+ * stall the window while it compresses.
+ *
+ * Only core: the extension's two posts to app.hiveku.com (connect.ts's code
+ * exchange, extension.ts's key self-revoke) stay plain. The builder's routes
+ * read request.json(), which does not inflate, and neither body carries
+ * customer text for the edge to read.
+ */
+export function gzipJsonBody(message: unknown): Promise<Buffer> {
+  return gzipAsync(Buffer.from(JSON.stringify(message), 'utf8'));
+}
+
+/**
+ * ★ WHO REFUSED: HIVEKU, OR THE WEB EDGE IN FRONT OF IT (HK-847).
+ *
+ * 401, 403 and 429 come from both. Hiveku's MCP server sends each one as a
+ * JSON-RPC error object: mcp-auth.ts for a revoked key (401) or a key used for
+ * another account (403), rate-limiter.ts for its 429. The edge sends a page of
+ * its own instead, and the request never reached Hiveku. So the BODY decides,
+ * never the status alone:
+ *  - Hiveku's own JSON-RPC error keeps the path it always had: `MCP HTTP 401:
+ *    <body>` still reads as a dead key (tree.ts, console.ts), and a 429 still
+ *    waits the server's Retry-After and is sent once more (request()).
+ *  - Anything else on those statuses (an HTML page, a "Blocked" title, plain
+ *    text, an empty body, JSON that is not a JSON-RPC error) is the edge
+ *    refusing THIS request: McpEdgeRefusalError. It is never re-sent, never
+ *    read as a key problem, and nothing is kept from it, so the next request
+ *    goes out as usual. Erring that way costs one refused request; erring the
+ *    other way tells the person a working key is dead.
+ * 503 is not one of them: the proxy in front of Hiveku also answers 503 when a
+ * deploy cuts a call it had already delivered, so a write behind it may have
+ * landed (the plugin's REFUSAL_STATUSES says more). It keeps the generic path.
+ */
+const EDGE_REFUSAL_STATUSES = new Set([401, 403, 429]);
+
+/** True for Hiveku's own error answer: JSON-RPC 2.0 whose `error` has a whole-number code and a string message. */
+export function isHivekuErrorAnswer(text: string): boolean {
+  if (!text.trim()) return false;
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return false;
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false;
+  const { jsonrpc, error } = body as { jsonrpc?: unknown; error?: unknown };
+  if (jsonrpc !== '2.0' || !error || typeof error !== 'object' || Array.isArray(error)) return false;
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  return Number.isInteger(code) && typeof message === 'string';
+}
+
+/** A ray id is an id: only an id-shaped value is passed on. */
+const RAY_HEADER_RE = /^[0-9a-f]{16}(?:-[a-z]{3,4})?$/i;
+/** "Ray ID: <strong>8f1c...</strong>" in a block page, or "ray_id":"8f1c..." in a JSON one. */
+const RAY_IN_PAGE_RE = /ray[\s_-]*id[\s\S]{0,80}?(?<![0-9a-z])([0-9a-f]{16})(?![0-9a-z])/i;
+
+/**
+ * The ray id the edge gave its refusal: the cf-ray header first (the id the
+ * edge logs the request under), else one named in the page. null when neither
+ * holds one.
+ */
+export function edgeRayId(headers: { get(name: string): string | null } | undefined, text: string): string | null {
+  const header = String(headers?.get('cf-ray') ?? '').trim();
+  if (RAY_HEADER_RE.test(header)) return header;
+  const found = text.slice(0, 64 * 1024).match(RAY_IN_PAGE_RE);
+  return found ? found[1] : null;
+}
+
+/**
+ * Every refusal message below holds this phrase, so a reader that has only
+ * the text (a dataset's error string, an error rethrown around this one) can
+ * still tell it apart from Hiveku's own refusal. See isEdgeRefusal.
+ */
+export const EDGE_REFUSAL_MARK = 'the web edge in front of Hiveku';
+
+/**
+ * The words for a refusal from the web edge in front of Hiveku. They claim only
+ * what this client knows: the edge refused this request, so it never reached
+ * Hiveku, and Hiveku did not refuse the key. Not why: a rule on a request's text
+ * is the usual cause (HK-838), but a rule on where requests come from answers
+ * every request the same way, so a 401 or 403 says what to do then. The ray id
+ * comes first, so a message cut short in a notification or a status file
+ * still carries it. Plain words for the person who reads them: no vendor names.
+ * hiveku-sync (src/mcp.mjs edgeRefusalMessage) says exactly this; the plugin
+ * (lib/upstream.mjs edgeRefusalError) says the same facts to a model, with the
+ * next steps a model has.
+ */
+export function coreEdgeRefusalMessage(status: number, rayId: string | null): string {
+  const byText = status === 401 || status === 403;
+  const label = rayId ? `HTTP ${status}, ray id ${rayId}` : `HTTP ${status}`;
+  const give = rayId ? `ray id ${rayId}` : 'the time it happened';
+  const what = byText
+    ? `The web edge in front of Hiveku refused this one request (${label}), most often because of something in its text.`
+    : `The web edge in front of Hiveku turned this one request away (${label}). It does that when it is busy, and also ` +
+      "because of something in a request's text.";
+  const next = byText
+    ? 'Try it again with the text shortened or rephrased: code and file paths are the usual cause. If every request ' +
+      'is refused this way, even a plain one, the block is on where the requests come from, not on their text: tell ' +
+      `Hiveku support and give them ${give}.`
+    : 'Wait a minute and try it once more. If it is turned away again, shorten or rephrase the text: code and file ' +
+      `paths are the usual cause. If it keeps happening, tell Hiveku support and give them ${give}.`;
+  return (
+    `${what} It never reached Hiveku and nothing was saved. Hiveku did not refuse your key, so there is no need to ` +
+    `reconnect: the next request is sent as usual. ${next}`
+  );
+}
+
+/** The words for a 401, 403 or 429 whose answer could not be read, so who refused it is not known. */
+export function coreRefusalUnreadMessage(status: number): string {
+  return (
+    `The answer to this request (HTTP ${status}) could not be read, so it is not known whether Hiveku or ` +
+    `${EDGE_REFUSAL_MARK} refused it. It is not taken as a sign that your key stopped working: the next request ` +
+    'is sent as usual. Try it once more.'
+  );
+}
+
+/**
+ * A 401, 403 or 429 that was not Hiveku's own JSON-RPC error. `edge_blocked`:
+ * the edge's own page, so the request never reached Hiveku. `unreadable`: the
+ * answer could not be read, so who refused it is not known. Neither is a key
+ * problem, neither is re-sent, and nothing is kept from either.
+ */
+export class McpEdgeRefusalError extends Error {
+  readonly kind: 'edge_blocked' | 'unreadable';
+  readonly httpStatus: number;
+  readonly rayId: string | null;
+  constructor(kind: 'edge_blocked' | 'unreadable', httpStatus: number, rayId: string | null = null) {
+    super(kind === 'edge_blocked' ? coreEdgeRefusalMessage(httpStatus, rayId) : coreRefusalUnreadMessage(httpStatus));
+    this.name = 'McpEdgeRefusalError';
+    this.kind = kind;
+    this.httpStatus = httpStatus;
+    this.rayId = kind === 'edge_blocked' ? rayId : null;
+  }
+}
+
+/**
+ * True for a refusal that must never be read as a dead key or a reason to
+ * reconnect: an McpEdgeRefusalError, or text that carries one's message (a
+ * dataset's error string, an error rethrown with the message inside it). Every
+ * reader that turns "401" into "your key expired" asks this first.
+ */
+export function isEdgeRefusal(err: unknown): boolean {
+  if (err instanceof McpEdgeRefusalError) return true;
+  const text = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+  return text.toLowerCase().includes(EDGE_REFUSAL_MARK.toLowerCase());
+}
 
 /**
  * Global request gate shared by every client instance. The extension shares
@@ -282,6 +452,9 @@ export class HivekuMcpClient {
     try {
       return await this.requestOnce<T>(method, params, timeoutMs);
     } catch (err) {
+      // The edge refusing this one request is not Hiveku's rate limit: it is
+      // never slept on and sent again (EDGE_REFUSAL_STATUSES).
+      if (err instanceof McpEdgeRefusalError) throw err;
       // A typed 429 already carries the server's own figure; anything else has
       // to be read out of the message, which is strictly the weaker source.
       const retryAfter = err instanceof McpRateLimitError
@@ -302,6 +475,8 @@ export class HivekuMcpClient {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.apiKey}`,
       'Content-Type': 'application/json',
+      // The body is gzip, so the edge's content rules never read it (gzipJsonBody).
+      'Content-Encoding': 'gzip',
       Accept: 'application/json',
       // Server buckets extension traffic separately from agent sessions.
       'X-Hiveku-Client': 'vscode-extension',
@@ -318,6 +493,7 @@ export class HivekuMcpClient {
     // DEFAULT_TOOL_TIMEOUT_MS. Giving up early does not stop the work; it only
     // makes the extension report a failure for something that then succeeds.
     const budget = timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
+    const gzipped = await gzipJsonBody({ jsonrpc: '2.0', id, method, params });
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), budget);
     let res: Response;
@@ -325,7 +501,7 @@ export class HivekuMcpClient {
       res = await fetch(this.endpoint, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ jsonrpc: '2.0', id, method, params }),
+        body: gzipped,
         signal: ctrl.signal,
       });
     } catch (err) {
@@ -345,7 +521,21 @@ export class HivekuMcpClient {
     if (sessionHeader) this.sessionId = sessionHeader;
 
     if (!res.ok) {
-      const text = await res.text().catch(() => '').finally(() => clearTimeout(timer));
+      let read: string | null;
+      try {
+        read = await res.text();
+      } catch {
+        read = null;
+      } finally {
+        clearTimeout(timer);
+      }
+      // ★ A 401, 403 or 429 is classified by its body before anything reads it
+      // as a dead key or a rate limit (EDGE_REFUSAL_STATUSES).
+      if (EDGE_REFUSAL_STATUSES.has(res.status)) {
+        if (read === null) throw new McpEdgeRefusalError('unreadable', res.status);
+        if (!isHivekuErrorAnswer(read)) throw new McpEdgeRefusalError('edge_blocked', res.status, edgeRayId(res.headers, read));
+      }
+      const text = read ?? '';
       const detail = `MCP HTTP ${res.status}: ${text.slice(0, 500)}`;
       if (res.status === 429) {
         // `Retry-After` is the limiter's own remaining-window figure in whole
@@ -357,7 +547,12 @@ export class HivekuMcpClient {
       }
       throw new Error(detail);
     }
-    if (res.status === 204) return null as T;
+    if (res.status === 204) {
+      // Nothing to read, so nothing for the timer to bound: without this it
+      // stayed armed for the whole budget after every handshake.
+      clearTimeout(timer);
+      return null as T;
+    }
 
     let body: { error?: { code: number; message: string }; result?: T };
     try {

@@ -24,6 +24,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { loadOut, fakeClient } from './helpers/load.mjs';
+import { readRequestText } from './helpers/request-body.mjs';
 
 const am = loadOut('accountMemory');
 const dr = loadOut('dataRunner');
@@ -53,9 +54,8 @@ const DEPT = DEPARTMENTS.find((d) => d.datasets.length > 0 && !d.references?.len
 let answers = {};
 let seen = [];
 const server = createServer(async (req, res) => {
-  let body = '';
-  for await (const chunk of req) body += chunk;
-  const msg = JSON.parse(body);
+  // Inflated the way core's body parser does: the runner sends gzip (HK-847).
+  const msg = JSON.parse(await readRequestText(req));
   const reply = (result) => {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }));

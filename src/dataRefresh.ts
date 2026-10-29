@@ -11,7 +11,7 @@
 import * as fs from 'fs/promises';
 import * as vscode from 'vscode';
 import { AccountStore } from './accounts';
-import { HivekuMcpClient } from './mcpClient';
+import { HivekuMcpClient, isEdgeRefusal } from './mcpClient';
 import { everyDepartmentFailed, exportDepartments, failedDatasets } from './dataExport';
 import { effectiveDepartments } from './roles';
 
@@ -143,12 +143,15 @@ export class DataRefresher {
             const staleFor = p.lastRun
               ? `${Math.floor((Date.now() - Date.parse(p.lastRun)) / 3600_000)}h`
               : 'ever since it was enabled';
+            // The web edge in front of Hiveku refusing the requests says nothing
+            // about the key (mcpClient.ts isEdgeRefusal), so it gets no reconnect.
+            const actions = isEdgeRefusal(reason)
+              ? ['Retry now', 'Turn off auto-refresh']
+              : ['Reconnect account', 'Retry now', 'Turn off auto-refresh'];
             void vscode.window
               .showWarningMessage(
                 `Hiveku data refresh for "${record.label}" has failed ${failures} times — its hiveku-data export is stale (${staleFor}). Agents reading it are working from old numbers. Last error: ${reason}`,
-                'Reconnect account',
-                'Retry now',
-                'Turn off auto-refresh',
+                ...actions,
               )
               .then(async (choice) => {
                 if (choice === 'Reconnect account') {

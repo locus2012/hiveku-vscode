@@ -12,7 +12,7 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { HivekuMcpClient } from './mcpClient';
+import { HivekuMcpClient, isEdgeRefusal } from './mcpClient';
 import * as api from './hivekuApi';
 import type { AccountRecord } from './accounts';
 import { departmentById, extractRows, fetchDataset, mapLimit, type Column, type Row } from './deptData';
@@ -1173,7 +1173,8 @@ export function openAccountConsole(
         }
       } catch (err) {
         const m = err instanceof Error ? err.message : String(err);
-        if (/\b401\b|invalid or inactive|no stored key|unauthor/i.test(m)) {
+        // The web edge in front of Hiveku refusing a request is never a dead key (mcpClient.ts isEdgeRefusal).
+        if (!isEdgeRefusal(err) && /\b401\b|invalid or inactive|no stored key|unauthor/i.test(m)) {
           panel.webview.postMessage({ type: 'banner', text: `This account's key looks dead (${m.slice(0, 120)}). Run "Hiveku: Connect Hiveku" to mint a fresh one.` });
         }
       }

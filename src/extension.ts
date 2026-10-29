@@ -13,7 +13,7 @@ import * as path from 'path';
 import * as cp from 'child_process';
 import * as vscode from 'vscode';
 import { AccountStore, type AccountRecord } from './accounts';
-import { HivekuMcpClient, onRegistryDrift, resetRegistryDrift } from './mcpClient';
+import { HivekuMcpClient, isEdgeRefusal, onRegistryDrift, resetRegistryDrift } from './mcpClient';
 import * as api from './hivekuApi';
 import { downloadAndExtract } from './download';
 import { hivekuUserAgent } from './hivekuUserAgent';
@@ -2125,6 +2125,14 @@ async function downloadData(node: { record: AccountRecord } | undefined, only?: 
     if (failed.length === 0 && detailFailed === 0) {
       choice = await vscode.window.showInformationMessage(
         `Saved ${total} rows across ${results.length} departments to ${DATA_DIR}/. Claude Code can now analyze it locally.`,
+        'Open index',
+      );
+    } else if (everyDepartmentFailed(results) && isEdgeRefusal(failed[0]?.error ?? '')) {
+      // The web edge in front of Hiveku refused the requests: they never
+      // reached Hiveku, so this says nothing about the key (HK-847).
+      choice = await vscode.window.showWarningMessage(
+        `Nothing was downloaded for ${account.label}: no department returned data (${failed.length} of ${datasetTotal} datasets failed), so ${DATA_DIR}/ has no new data. ` +
+          `The web edge in front of Hiveku refused the requests, so they never reached Hiveku and say nothing about the account key. First error: ${firstCause}`,
         'Open index',
       );
     } else if (everyDepartmentFailed(results)) {
