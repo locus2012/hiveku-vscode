@@ -37,6 +37,7 @@ user the capability does not exist, and never invent a name.
 | `voice_portability_check` | LIVE |
 | `voice_port_order_create` | LIVE |
 | `voice_port_order_update` | LIVE |
+| `voice_port_order_document_upload` | LIVE |
 | `voice_port_order_action` | LIVE |
 | `voice_port_order_refresh_status` | LIVE |
 | `voice_port_order_share_link_create` | LIVE |

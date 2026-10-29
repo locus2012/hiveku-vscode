@@ -26,7 +26,7 @@ capability does not exist, and never invent a name.
 | Area | LIVE now | INCOMING | No tool - dashboard only |
 |---|---|---|---|
 | Diagnostics | `voice_diagnose_setup`, `voice_tenant_healthcheck`, `voice_presence_get`, `voice_extension_status`, `voice_audit_export_csv`, `voice_tenant_repair` | - | - |
-| Extensions | `voice_extensions_list`, `voice_extension_get`, `voice_extension_create`, `voice_extension_update`, `voice_extension_delete` | - | device/handset provisioning (the SIP password exists exactly once, dashboard-side) |
+| Extensions | `voice_extensions_list`, `voice_extension_get`, `voice_extension_create`, `voice_extension_update`, `voice_extension_delete`, `voice_extension_greeting_upload` | - | device/handset provisioning (the SIP password exists exactly once, dashboard-side) |
 | Ring groups | `voice_ring_groups_list`, `voice_ring_group_get`, `voice_ring_group_create`, `voice_ring_group_update`, `voice_ring_group_delete` | - | - |
 | IVRs | `voice_ivrs_list`, `voice_ivr_walk`, `voice_ivr_create`, `voice_ivr_update`, `voice_ivr_delete`, `voice_default_greetings_get`, `voice_tts_voices_list`, `voice_ivrs_reprovision`, `voice_tts_preview` | - | - |
 | Queues | `voice_queues_list`, `voice_queue_get`, `voice_queue_create`, `voice_queue_update`, `voice_queue_delete` | - | queue-agent state reset (no path anywhere - see section 6) |
