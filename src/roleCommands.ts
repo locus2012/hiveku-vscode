@@ -365,9 +365,14 @@ you act on anything in them, read it again from Hiveku (step 3).
    - Before you act on a row, READ it again live with the tool its file names: the files are a copy.
    - WRITE via the live MCP tools (the write path is in each department's README.md + SETUP.md).
    - After a write that changes a dataset, re-pull just that dataset with --dataset so local stays true.
-4. If the runner errors on every dataset, this account's key is no longer valid — tell the user to
-   run "Hiveku: Connect Hiveku" for this account (never open or print the key file). Per-dataset
-   errors are normal for unconnected integrations (see the dept SETUP.md).
+4. If the runner fails on every dataset, its last line says why; follow it:
+   - "check the account key in .mcp.json": the key is no longer valid. Tell the user to run
+     "Hiveku: Connect Hiveku" for this account (never open or print the key file).
+   - The web edge in front of Hiveku refused the requests, or their answers could not be read: the
+     key is fine, so never tell the user to reconnect for it. Say so, and run it again later. If every
+     run is refused that way, tell the user to give Hiveku support the ray id from the errors in
+     hiveku-data/STATUS.json.
+   Per-dataset errors are normal for unconnected integrations (see the dept SETUP.md).
 `;
 
 const NEW_COMMAND = `---

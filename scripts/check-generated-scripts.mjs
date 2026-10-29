@@ -109,6 +109,10 @@ check('automations/lib.mjs bakes HivekuLocalAutomation/<version> in and sends it
   assert.equal(agent[1], 'HivekuLocalAutomation');
   assert.equal(agent[2], pkg.version);
   assert.match(lib, /'User-Agent': HIVEKU_USER_AGENT/);
+  // HK-847: the body goes gzip, and the edge's refusal is read (test/core-edge-gzip.test.mjs runs both).
+  assert.match(lib, /'Content-Encoding': 'gzip'/);
+  assert.match(lib, /body: hivekuGzipBody\(/);
+  assert.match(lib, /const refused = hivekuEdgeRefusal\(res, text\);/);
   writeFileSync(libPath, lib);
   nodeCheck(libPath);
 });
@@ -121,7 +125,10 @@ await checkAsync('.hiveku/pull-data.mjs bakes HivekuDataRunner/<version> in and 
   assert.ok(agent, m[1]);
   assert.equal(agent[1], 'HivekuDataRunner');
   assert.equal(agent[2], pkg.version);
-  assert.equal(dr.RUNNER_VERSION, 5);
+  assert.equal(dr.RUNNER_VERSION, 6);
+  assert.match(runner, /'Content-Encoding': 'gzip'/);
+  assert.match(runner, /body: hivekuGzipBody\(/);
+  assert.match(runner, /const refused = hivekuEdgeRefusal\(res, text\);/);
   nodeCheck(join(tmp, dr.RUNNER_REL_PATH));
 });
 

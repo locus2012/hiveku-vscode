@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 import { AccountStore } from './accounts';
 import { HivekuMcpClient } from './mcpClient';
 import { everyDepartmentFailed, exportDepartments, failedDatasets } from './dataExport';
+import { readAllFailed, refreshWarningActions } from './dataFailures';
 import { effectiveDepartments } from './roles';
 
 const KEY = 'hiveku.autoRefresh';
@@ -121,10 +122,10 @@ export class DataRefresher {
           // warning below could never fire. Treat "no department produced data" as
           // the failure it is — the same rule the generated runner exits 1 on.
           if (everyDepartmentFailed(results)) {
-            const first = failedDatasets(results)[0];
-            throw new Error(
-              `every dataset failed${first ? ` — ${first.department}/${first.dataset}: ${first.error}` : ''}`,
-            );
+            // The dataset that says why (dataFailures.ts): Hiveku's own 401 first,
+            // so the warning below still offers Reconnect when the key is the cause.
+            const { shown } = readAllFailed(failedDatasets(results));
+            throw new Error(`every dataset failed${shown ? ` (${shown.department}/${shown.dataset}): ${shown.error}` : ''}`);
           }
           map[accountId] = { ...p, lastRun: new Date().toISOString(), lastError: undefined, failures: 0 };
           await this.setPrefs(map);
@@ -143,12 +144,13 @@ export class DataRefresher {
             const staleFor = p.lastRun
               ? `${Math.floor((Date.now() - Date.parse(p.lastRun)) / 3600_000)}h`
               : 'ever since it was enabled';
+            // The web edge in front of Hiveku refusing the requests says nothing
+            // about the key, so it gets no reconnect (dataFailures.ts, HK-847).
+            const actions = refreshWarningActions(reason);
             void vscode.window
               .showWarningMessage(
                 `Hiveku data refresh for "${record.label}" has failed ${failures} times — its hiveku-data export is stale (${staleFor}). Agents reading it are working from old numbers. Last error: ${reason}`,
-                'Reconnect account',
-                'Retry now',
-                'Turn off auto-refresh',
+                ...actions,
               )
               .then(async (choice) => {
                 if (choice === 'Reconnect account') {

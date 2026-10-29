@@ -15,6 +15,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { CORE_EDGE_SCRIPT } from './coreEdgeScript';
 import { availableCadenceCommands } from './roleCommands';
 import { hivekuUserAgent } from './hivekuUserAgent';
 
@@ -25,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { homedir } from 'node:os';
+import { gzipSync } from 'node:zlib';
 
 export const ROOT = dirname(fileURLToPath(import.meta.url));
 // Every Hiveku client identifies itself. Baked in when the extension wrote this
@@ -58,6 +60,7 @@ const MCP_MAX_RETRY_SECONDS = 60;
 
 let _session = null, _inited = false, _id = 1;
 
+${CORE_EDGE_SCRIPT}
 function _clampRetry(n) {
   if (!Number.isFinite(n)) return 15;
   return Math.min(Math.max(Math.ceil(n), 1), MCP_MAX_RETRY_SECONDS);
@@ -71,13 +74,13 @@ function _retryAfterFromProse(message) {
 
 async function _rpcOnce(method, params) {
   const url = (process.env.HIVEKU_MCP_URL || 'https://core.hiveku.com/mcp');
-  const headers = { Authorization: 'Bearer ' + process.env.HIVEKU_MCP_KEY, 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': HIVEKU_USER_AGENT };
+  const headers = { Authorization: 'Bearer ' + process.env.HIVEKU_MCP_KEY, 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', Accept: 'application/json', 'User-Agent': HIVEKU_USER_AGENT };
   if (_session) headers['Mcp-Session-Id'] = _session;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), MCP_TIMEOUT_MS);
   let res;
   try {
-    res = await fetch(url, { method: 'POST', headers, body: JSON.stringify({ jsonrpc: '2.0', id: _id++, method, params }), signal: ctrl.signal });
+    res = await fetch(url, { method: 'POST', headers, body: hivekuGzipBody({ jsonrpc: '2.0', id: _id++, method, params }), signal: ctrl.signal });
   } catch (err) {
     clearTimeout(timer);
     if (ctrl.signal.aborted) throw new Error('MCP request timed out after ' + MCP_TIMEOUT_S + 's (' + method + ')');
@@ -85,8 +88,12 @@ async function _rpcOnce(method, params) {
   }
   const sid = res.headers.get('mcp-session-id'); if (sid) _session = sid;
   if (!res.ok) {
-    let text = '';
-    try { text = await res.text(); } catch { text = ''; } finally { clearTimeout(timer); }
+    let text = null;
+    try { text = await res.text(); } catch { text = null; } finally { clearTimeout(timer); }
+    // A 401, 403 or 429 Hiveku did not send itself is the edge refusing this one request.
+    const refused = hivekuEdgeRefusal(res, text);
+    if (refused) throw refused;
+    if (text === null) text = '';
     const detail = 'MCP HTTP ' + res.status + ': ' + text.slice(0, 300);
     if (res.status === 429) {
       // Retry-After is the limiter's own remaining-window figure; prefer it.
@@ -115,6 +122,8 @@ async function rpc(method, params) {
   try {
     return await _rpcOnce(method, params);
   } catch (err) {
+    // The edge refusing this one request is not Hiveku's rate limit: it is never sent again.
+    if (err && err.edgeRefusal) throw err;
     const wait = (err && err.retryAfterSeconds) || _retryAfterFromProse(err && err.message ? err.message : String(err));
     if (!wait) throw err;
     console.log(new Date().toISOString(), 'rate limited by Hiveku - waiting ' + wait + 's, then retrying once (' + method + ')');
