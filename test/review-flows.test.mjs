@@ -492,9 +492,14 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__marketing_form_inbox_delete',\n" +
           "  'mcp__hiveku__site_transfer',\n" +
           "  'mcp__hiveku__marketing_form_notifications_test',\n" +
-          "  'mcp__hiveku__cms_schedule_set',",
+          "  'mcp__hiveku__cms_schedule_set',\n" +
+          "  // Cancelling a contact email that is waiting to send (2026-10-30, MCP 52fbc5e5a8bd). crm_email_scheduled_cancel cancels\n" +
+          "  // it for good: it will not go and the cancel cannot be undone, so every call asks, as in the Claude Code and Codex\n" +
+          "  // plugins (where it sits beside voice_sms_scheduled_cancel). The read that lists the waiting emails,\n" +
+          "  // crm_contact_scheduled_emails_list, stays unasked. Appended last.\n" +
+          "  'mcp__hiveku__crm_email_scheduled_cancel',",
       ),
-      'the newest ask rules, the site inbox delete, move, test lead email and scheduled publish, go at the END, after the contract starts, edits and signer changes',
+      'the newest ask rule, the waiting contact email cancel, goes at the END, after the site inbox delete, move, test lead email and scheduled publish',
     );
   });
 

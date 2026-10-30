@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.39
+- **Cancelling a contact email that is waiting to send always asks.** Claude Code in your project folders asks before `crm_email_scheduled_cancel`, in every permission mode, as the Claude Code and Codex plugins do. A cancelled email will not go, and the cancel cannot be undone. Listing the emails waiting to send, `crm_contact_scheduled_emails_list`, needs no ask. Hiveku folders open in VS Code get the new rule when the extension starts.
+
 ## 0.91.38
 - **Deleting a site's leads, moving a site, a test lead email and scheduling a publish always ask.** Claude Code in your project folders asks before `marketing_form_inbox_delete`, `site_transfer`, `marketing_form_notifications_test` and `cms_schedule_set`, in every permission mode, as the Claude Code and Codex plugins do. The delete erases the leads it names with the files their visitors uploaded. The move takes a site, with its leads, pages and content, to another workspace. The test sends a real email to the site's lead email addresses. A schedule has Hiveku publish the whole site at the time it names. Reading a site's leads, where it can move, or a schedule (`marketing_form_inbox_list`, `marketing_form_inbox_get`, `site_transfer_targets`, `cms_schedule_get`) needs no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
 
