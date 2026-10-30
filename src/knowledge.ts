@@ -937,6 +937,17 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__crm_envelope_alerts_set',
   'mcp__hiveku__crm_contract_template_create',
   'mcp__hiveku__crm_contract_template_update',
+  // Starting or editing a contract, or changing its signer (2026-10-30, Agent Feedback wave 73 step A2, MCP 3b38e47).
+  // crm_envelope_create_from_template and crm_envelope_create can start a contract with outside email addresses that
+  // get the client's signed contract; crm_envelope_update can add such addresses or turn a contract's alerts off;
+  // crm_envelope_signer_reassign changes who signs a sent contract and emails the new person a signing link. A signed
+  // contract or a signing link emailed out cannot be taken back, so every call asks, as in the Claude Code and Codex
+  // plugins. The envelope reads, crm_envelope_get, crm_envelope_list and crm_envelope_alerts_get, stay unasked.
+  // Appended last, in this order.
+  'mcp__hiveku__crm_envelope_create_from_template',
+  'mcp__hiveku__crm_envelope_signer_reassign',
+  'mcp__hiveku__crm_envelope_create',
+  'mcp__hiveku__crm_envelope_update',
 ];
 
 /**

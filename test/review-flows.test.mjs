@@ -470,9 +470,20 @@ describe('what the extension writes and wires', () => {
           "  // crm_contract_template_get and crm_contract_template_list, stay unasked. Appended last, in this order.\n" +
           "  'mcp__hiveku__crm_envelope_alerts_set',\n" +
           "  'mcp__hiveku__crm_contract_template_create',\n" +
-          "  'mcp__hiveku__crm_contract_template_update',",
+          "  'mcp__hiveku__crm_contract_template_update',\n" +
+          "  // Starting or editing a contract, or changing its signer (2026-10-30, Agent Feedback wave 73 step A2, MCP 3b38e47).\n" +
+          "  // crm_envelope_create_from_template and crm_envelope_create can start a contract with outside email addresses that\n" +
+          "  // get the client's signed contract; crm_envelope_update can add such addresses or turn a contract's alerts off;\n" +
+          "  // crm_envelope_signer_reassign changes who signs a sent contract and emails the new person a signing link. A signed\n" +
+          "  // contract or a signing link emailed out cannot be taken back, so every call asks, as in the Claude Code and Codex\n" +
+          "  // plugins. The envelope reads, crm_envelope_get, crm_envelope_list and crm_envelope_alerts_get, stay unasked.\n" +
+          "  // Appended last, in this order.\n" +
+          "  'mcp__hiveku__crm_envelope_create_from_template',\n" +
+          "  'mcp__hiveku__crm_envelope_signer_reassign',\n" +
+          "  'mcp__hiveku__crm_envelope_create',\n" +
+          "  'mcp__hiveku__crm_envelope_update',",
       ),
-      'the newest ask rules, the signed contract recipients, go at the END, after the transfer authorization email',
+      'the newest ask rules, the contract starts, edits and signer changes, go at the END, after the signed contract recipients',
     );
   });
 
