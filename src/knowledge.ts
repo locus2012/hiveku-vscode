@@ -959,6 +959,11 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__site_transfer',
   'mcp__hiveku__marketing_form_notifications_test',
   'mcp__hiveku__cms_schedule_set',
+  // Cancelling a contact email that is waiting to send (2026-10-30, MCP 52fbc5e5a8bd). crm_email_scheduled_cancel cancels
+  // it for good: it will not go and the cancel cannot be undone, so every call asks, as in the Claude Code and Codex
+  // plugins (where it sits beside voice_sms_scheduled_cancel). The read that lists the waiting emails,
+  // crm_contact_scheduled_emails_list, stays unasked. Appended last.
+  'mcp__hiveku__crm_email_scheduled_cancel',
 ];
 
 /**
