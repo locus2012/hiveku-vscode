@@ -8,14 +8,12 @@ and before touching a voicemail's read state. Routing and diagnosis of the syste
 
 ## Availability
 
-Every tool in this file is LIVE today except the one marked INCOMING: reading the calls ringing
-right now, the rows of the desktop app's Call coming in card (on its way to this server and not
-yet in this plugin's tool index; the row flips to LIVE at release).
+Every tool in this file is LIVE today - nothing here is waiting on a ship.
 
 | Tool | State |
 |---|---|
 | `voice_calls_list`, `voice_recent_calls`, `voice_call_get`, `voice_calls_export_csv` | LIVE |
-| `voice_calls_ringing_list` | INCOMING |
+| `voice_calls_ringing_list` | LIVE |
 | `voice_call_disposition_set`, `voice_number_lookup`, `crm_calls_list` | LIVE |
 | `voice_voicemails_list`, `voice_voicemail_mark_read` | LIVE |
 | `voice_call_transcript_get`, `voice_recording_url_get`, `voice_audit_export_csv` | LIVE |
