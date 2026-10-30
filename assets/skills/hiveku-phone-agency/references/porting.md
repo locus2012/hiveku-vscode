@@ -24,12 +24,10 @@ The stakes, first:
 
 ## Availability
 
-Every tool below resolves on this server today except the two marked INCOMING: emailing the
-letter of authorization to its signer, and reading how far it got (on their way to this server
-and not yet in this plugin's tool index; each row flips to LIVE at release). A name that does not
-resolve on your key is a profile question first: check the key's profile, then the
-hiveku-communications reachability ladder, then hand off with a precise dashboard step filed via
-`pm_tasks_create`. Never tell the user the capability does not exist, and never invent a name.
+Every tool below resolves on this server today. A name that does not resolve on your key is a
+profile question first: check the key's profile, then the hiveku-communications reachability
+ladder, then hand off with a precise dashboard step filed via `pm_tasks_create`. Never tell the
+user the capability does not exist, and never invent a name.
 
 | Tool | Status |
 |---|---|
@@ -40,8 +38,8 @@ hiveku-communications reachability ladder, then hand off with a precise dashboar
 | `voice_port_order_create` | LIVE |
 | `voice_port_order_update` | LIVE |
 | `voice_port_order_document_upload` | LIVE |
-| `voice_port_order_loa_send` | INCOMING |
-| `voice_port_order_loa_get` | INCOMING |
+| `voice_port_order_loa_send` | LIVE |
+| `voice_port_order_loa_get` | LIVE |
 | `voice_port_order_action` | LIVE |
 | `voice_port_order_refresh_status` | LIVE |
 | `voice_port_order_share_link_create` | LIVE |
@@ -234,20 +232,43 @@ A link minted here lets a logged-OUT third party write credentials onto the orde
 LOA - minting and revoking take the same authority as editing the order. Confirm the recipient
 before emailing one.
 
-### The LOA signature link (dashboard-side, worth knowing)
+### The LOA signature link: `voice_port_order_loa_send` and `voice_port_order_loa_get`
 
-The LOA e-signature rides its own signer link, separate from the port-setup share link, with
-dashboard-side rules that generate support questions:
+The LOA e-signature rides its own signing link, separate from the port-setup share link. A link
+is made by `voice_port_order_loa_send` (it emails the link to the signer), by a person in the
+dashboard (who emails it too, or uses Sign now to open it in their own browser), or by the
+client's secure page (for the client's own browser). The rules:
 
-- The signer link deliberately has NO expiry - ports take weeks, and an expiring token would die
+- **The signing link has NO expiry** - ports take weeks, and a link that expired would die
   mid-port.
-- Once the link has been EMAILED to the signer it is never silently rotated; re-issuing a
-  signature link is an explicit dashboard action, and any re-mint KILLS every outstanding copy of
-  the old link. If the client says "my signing link stopped working", someone re-issued it -
-  send the newest one, do not mint yet another.
-- A detail correction on the order does NOT regenerate the LOA PDF - the client signs the
-  original prefill. If a correction is material to the authorization (numbers added or removed,
-  a different signer), flag it to a human rather than assuming the signed LOA covers it.
+- **Whoever opens the emailed link can sign the transfer for the account.** Ask before every
+  `voice_port_order_loa_send`, naming the transfer, the address and the signer's name. The email
+  carries no words of yours (there is no message), the link is never in the answer, and only a
+  person's own key can send it (Hiveku's own agents cannot). When the address is new to this
+  transfer, the account's owners and admins are also emailed that it went there.
+- **Each send stops the link before it.** When the address and everything the LOA says are the
+  same, the send makes a new link for the same LOA. When the address is different, anything the
+  LOA says changed since it was drawn (the numbers, the billing name, the signer's name, the
+  account number, the billing phone number, the service address, the losing carrier), or the
+  earlier LOA was declined or stopped, the send draws a fresh LOA (`fresh_document: true`) and
+  the earlier one stops working. If the email fails, nothing changes: the earlier link still
+  works.
+- **A signed LOA is never sent again.** The send answers `already_signed: true` and emails
+  nothing.
+- **A correction does not redraw an LOA that is already out.** `voice_port_order_update`
+  changes the transfer, and saving details on the client's secure page never stops a link that
+  was emailed, so the signer still sees the LOA as it was drawn. While it is unsigned, send it
+  again (with the user's yes): the send draws a fresh LOA when anything on it changed, so the
+  signer signs what the transfer says now. Once it is signed, nothing is drawn again: if a
+  correction is material to the authorization (numbers added or removed, a different signer),
+  flag it to a human rather than assuming the signed LOA covers it.
+- **"My signing link stopped working"** means a newer link replaced it (a send, Sign now, or the
+  client's secure page), or the LOA was declined or stopped. Read `voice_port_order_loa_get`
+  first: it says where and when the newest email went (`emailed_to`, `last_emailed_at`), whether
+  the working link was made on the secure page or by Sign now and never emailed
+  (`unemailed_link`), and how far it got (`state`: not sent, emailed, opened, signed, declined or
+  stopped). Point the signer at the newest email, and send again only when no working link
+  reached them: each send stops the one before.
 
 ## 7. Fixing: `voice_port_order_update`, comments, verification codes
 
