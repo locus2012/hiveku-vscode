@@ -536,20 +536,19 @@ describe('The ask list gates what the plugins gate', () => {
       const direct = decideForPayload({ tool_name: `mcp__plugin_hiveku_hk__${name}`, tool_input: {} });
       assert.notEqual(direct?.hookSpecificOutput?.permissionDecision, 'allow', `the plugin hook approves ${name} unasked`);
     }
-    // The plugin asks before the transfer authorization email through its ask list
-    // (data/permission-critical-tools.json, which each install copies into its settings), as it does before
-    // voice_port_order_action: its hook leaves a direct call to those settings and asks when a batch carries it.
-    // So the plugin must list it, must not approve it unasked, and must ask on a batch that carries it. These hold
-    // too if the plugin's hook also forces the prompt.
-    const SETTINGS_ASKS = PORT_LOA.map(bare);
-    for (const name of SETTINGS_ASKS) {
-      assert.ok(onAskList.has(name), `${name} is not on the plugin's permission-critical ask list`);
-      const direct = decideForPayload({ tool_name: `mcp__plugin_hiveku_hk__${name}`, tool_input: {} });
-      assert.notEqual(direct?.hookSpecificOutput?.permissionDecision, 'allow', `the plugin hook approves ${name} unasked`);
-      const batched = decideForPayload({ tool_name: 'mcp__plugin_hiveku_hk__hiveku_batch', tool_input: { calls: [{ tool: name, args: {} }] } });
-      assert.equal(batched?.hookSpecificOutput?.permissionDecision, 'ask', `the plugin hook does not ask on a batch carrying ${name}`);
+    // The transfer authorization email goes through the strict checks below with the other forced writes
+    // (review of #88). The plugin's ask list is not enough for it: INSTALL.md has each person paste that list
+    // into their settings by hand, so an install pasted before the email existed would run it unasked under the
+    // plugin's blanket allow. The plugin's hook forces it instead, as it does email_send, and a direct call
+    // with real arguments must ask.
+    for (const name of PORT_LOA.map(bare)) {
+      const direct = decideForPayload({
+        tool_name: `mcp__plugin_hiveku_hk__${name}`,
+        tool_input: { port_order_id: '00000000-0000-0000-0000-000000000000', signer_email: 'signer@example.com' },
+      });
+      assert.equal(direct?.hookSpecificOutput?.permissionDecision, 'ask', `the plugin hook does not ask on a direct call to ${name}`);
     }
-    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch' && !VERSION_TOOLS.includes(name) && !GATED_READS.includes(name) && !GLOB_ONLY.includes(name) && !SETTINGS_ASKS.includes(name));
+    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch' && !VERSION_TOOLS.includes(name) && !GATED_READS.includes(name) && !GLOB_ONLY.includes(name));
     // The version tools are judged by the plugin hook's version rules (lib/vcs-tool-rules.mjs),
     // not its always-ask maps: a rollback dry run is allowed and an apply asks (an ask rule here
     // cannot read dry_run, so it asks always), and a conflict resolve always asks.
