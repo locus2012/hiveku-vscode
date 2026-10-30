@@ -2,8 +2,8 @@
 
 Load this before touching any SMS registration object, before quoting a fee, before telling a
 client why their texts do not deliver, and before ANY filing. Registration is the one part of
-the phone system where a wrong call costs real money (brand vetting fees, ~$15 per fresh
-campaign submit), files legal identity data (an EIN) with third parties irreversibly, or takes
+the phone system where a wrong call costs real money (brand vetting fees, ~$15 for each
+campaign filing the registry takes), files legal identity data (an EIN) with third parties irreversibly, or takes
 a working number OFF THE AIR for weeks. Money and legal first, always.
 
 Every tool below resolves on this server today. A name that does not resolve on your key is a
@@ -306,9 +306,11 @@ trouble.
 
 ## Part 5: The filing order, with fees
 
-Money attaches at two points: the brand vet and each fresh campaign submit (~$15 at the
-registry, non-refundable, per submission - three rejections is three fees unless you use the
-free lanes in Part 6). Get each step right before paying for the next.
+Money attaches when the registry takes a filing, approved or not: the brand (~$4 each time it
+is vetted) and each campaign filing, resend or accepted appeal (~$15 each, non-refundable -
+three rejections is three fees). A submit that comes back with `submission_error` is not
+billed, but every attempt counts toward the filing limit. Get each step right before paying
+for the next.
 
 **1. `voice_sms_brand_submit` - the brand. IRREVERSIBLE AND FEE-BEARING.** It files the legal
 entity (legal name, EIN, entity type, address, contact email and phone) with the vendor, the
@@ -332,8 +334,9 @@ the opt-in page it names actually complies.
 **3. `voice_sms_cta_preflight`** on the draft's message flow. Part 4. Do not skip it because
 the draft "looks right" - the page, not the draft, is what gets scanned.
 
-**4. `voice_sms_campaign_submit` - the filing. ~$15 per filing attempt, no
-withdrawal.** Every attempt is billed, including one that comes back with `submission_error`. Takes the full campaign payload (name, use case, description, message flow,
+**4. `voice_sms_campaign_submit` - the filing. ~$15 for each filing the registry takes,
+approved or not, no withdrawal.** A submit that comes back with `submission_error` is not
+billed but counts toward the filing limit. Takes the full campaign payload (name, use case, description, message flow,
 sample messages, keyword sets and auto-replies; `sub_usecases` when MIXED/LOW_VOLUME). The CTA
 preflight is enforced server-side at submit - a page that fails hard-blocks the filing.
 `acknowledge_cta_warnings: true` skips that check entirely, provable failures included: send
@@ -342,7 +345,8 @@ it only after reading `voice_sms_cta_preflight`, for a page a person has verifie
 response trap as the brand: **`submission_error` non-null on a 200 = the row persisted but
 never reached the carrier** - that row is exactly what `voice_sms_campaign_resubmit` re-files;
 do NOT create a second campaign for it. Call it with only `campaign_id` to send the saved
-campaign as it is; each resend is billed as a filing and counts toward the re-filing limit (3
+campaign as it is; a resend the registry takes is billed as a filing, and every resend counts
+toward the re-filing limit (3
 resends or appeals of one campaign, 8 campaign filings on the account, in 30 days). The client share link (Part 9) files the same campaign
 when the client is the one holding the details.
 
@@ -382,9 +386,12 @@ content is why it failed, the appeal fails again** - Locus proved this with a by
 re-rejection. Appeal ONLY when the campaign and page are already right and the reviewer's
 stated reason is wrong or already fixed on the page side. Works only while the campaign is
 canonical FAILED or SUSPENDED (422 `not_appealable` otherwise); on success the status flips to
-PENDING (raw APPEAL_PENDING). Free.
+PENDING (raw APPEAL_PENDING). Billed as one filing (~$15) once the registry accepts it, approved
+or not, and counted toward the re-filing limit; a 502 `appeal_failed` is neither billed nor
+counted.
 
-**`voice_sms_campaign_resubmit` (~$15) - only for a row that never reached the carrier.** The
+**`voice_sms_campaign_resubmit` (~$15 once the registry takes it) - only for a row that never
+reached the carrier.** The
 submit path persists locally even when the vendor call fails, leaving `telnyx_campaign_id`
 null; resubmit re-files THAT row. Body is optional: nothing re-files exactly as stored; a body
 must be the COMPLETE payload, not a patch - **omitting a field you previously set CLEARS it.**
@@ -536,7 +543,7 @@ standing risk.
    BRAND-LEVEL (website read as lead-gen).
 2. PAGE: fix the page (Part 4), verify with `voice_sms_cta_preflight` AND a raw no-JS fetch,
    then `voice_sms_campaign_appeal` - the content is unchanged and now the page is right, so
-   an appeal is the correct free lane.
+   an appeal is the correct lane (one filing, ~$15, once the registry accepts it).
 3. CONTENT: no free edit path exists (Part 6). Quote the honest choice: delete + fresh submit
    (~$15) with the content fixed, or wait for the content-update tool.
 4. BRAND-LEVEL, repeatedly, with carriers qualifying: stop paying. Escalate to the vendor's
