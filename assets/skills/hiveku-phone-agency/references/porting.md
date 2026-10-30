@@ -24,10 +24,12 @@ The stakes, first:
 
 ## Availability
 
-Every tool below resolves on this server today. A name that does not resolve on your key is a
-profile question first: check the key's profile, then the hiveku-communications reachability
-ladder, then hand off with a precise dashboard step filed via `pm_tasks_create`. Never tell the
-user the capability does not exist, and never invent a name.
+Every tool below resolves on this server today except the two marked INCOMING: emailing the
+letter of authorization to its signer, and reading how far it got (on their way to this server
+and not yet in this plugin's tool index; each row flips to LIVE at release). A name that does not
+resolve on your key is a profile question first: check the key's profile, then the
+hiveku-communications reachability ladder, then hand off with a precise dashboard step filed via
+`pm_tasks_create`. Never tell the user the capability does not exist, and never invent a name.
 
 | Tool | Status |
 |---|---|
@@ -38,6 +40,8 @@ user the capability does not exist, and never invent a name.
 | `voice_port_order_create` | LIVE |
 | `voice_port_order_update` | LIVE |
 | `voice_port_order_document_upload` | LIVE |
+| `voice_port_order_loa_send` | INCOMING |
+| `voice_port_order_loa_get` | INCOMING |
 | `voice_port_order_action` | LIVE |
 | `voice_port_order_refresh_status` | LIVE |
 | `voice_port_order_share_link_create` | LIVE |

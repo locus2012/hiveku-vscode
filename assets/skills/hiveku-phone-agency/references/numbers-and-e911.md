@@ -21,10 +21,12 @@ Money and irreversibility first, because both live here:
 
 ## Availability
 
-Every tool below resolves on this server today. A name that does not resolve on your key is a
-profile question first: check the key's profile, then the hiveku-communications reachability
-ladder, then hand off with a precise dashboard step filed via `pm_tasks_create`. Never tell the
-user the capability does not exist, and never invent a name.
+Every tool below resolves on this server today except the one marked INCOMING: reading the 911
+notice's words and whether the account accepted it (on its way to this server and not yet in this
+plugin's tool index; the row flips to LIVE at release). No tool accepts the notice. A name that
+does not resolve on your key is a profile question first: check the key's profile, then the
+hiveku-communications reachability ladder, then hand off with a precise dashboard step filed via
+`pm_tasks_create`. Never tell the user the capability does not exist, and never invent a name.
 
 | Tool | Status |
 |---|---|
@@ -39,6 +41,7 @@ user the capability does not exist, and never invent a name.
 | `voice_usage_get` | LIVE |
 | `voice_diagnose_setup` | LIVE |
 | `voice_e911_address_create` | LIVE |
+| `voice_e911_notice_get` | INCOMING |
 | `voice_number_purchase` | LIVE |
 | `voice_number_orders_list` | LIVE |
 

@@ -37,8 +37,11 @@ call-tracking pools, and the call-conversion send-back to the ad platforms.
 ## The availability rule
 
 Each reference opens with an Availability table. Every `voice_` name in those tables resolves
-on this server today (LIVE). Each tool is described from its own registered description - trust
-that over any older copy of a reference.
+on this server today (LIVE) except the four rows marked INCOMING (two in
+`references/porting.md`, one in `references/calls-voicemail-transcripts.md`, one in
+`references/numbers-and-e911.md`): INCOMING means the tool is on its way to this server and this
+plugin's tool index does not carry it yet, and the row flips to LIVE at release. Each tool is
+described from its own registered description - trust that over any older copy of a reference.
 
 **A name that does not resolve is a profile question first.** (1) Check the key's profile - the
 list above says which names each key sees, and an invisible tool fails exactly like a missing
