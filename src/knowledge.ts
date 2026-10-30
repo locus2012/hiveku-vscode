@@ -964,6 +964,28 @@ const HIVEKU_ASK: string[] = [
   // plugins (where it sits beside voice_sms_scheduled_cancel). The read that lists the waiting emails,
   // crm_contact_scheduled_emails_list, stays unasked. Appended last.
   'mcp__hiveku__crm_email_scheduled_cancel',
+  // The desktop app's Ads area, wave B (2026-10-30, MCP #346, live 0980f6ab2256). Abe opened the three conversion
+  // go-live switches and the Ads approvals to a person's own key that day; the desktop app calls them after its own
+  // confirm dialog, and here a person approves each first, as in the Claude Code and Codex plugins:
+  // marketing_approval_approve runs what the Ads AI staged on the client's ad platforms; the three go-live switches take
+  // conversion uploads and corrections out of validate-only or start sending CRM outcomes to Meta, none of which can be
+  // un-sent; ppc_campaign_update and the two status tools change live campaigns, ad groups and ads on the platform (a
+  // pause asks too); the four conversion-upload writes arm a source, run the uploads, re-arm the parked backlog and point
+  // a source at a conversion action; ppc_connection_delete erases Hiveku's copy of an ad account. The reads, the reject
+  // (marketing_approval_reject), the default-account flag and the Hiveku-only draft deletes stay unasked. Appended last,
+  // in this order.
+  'mcp__hiveku__marketing_approval_approve',
+  'mcp__hiveku__marketing_offline_conversions_go_live',
+  'mcp__hiveku__ppc_conversion_adjustments_go_live',
+  'mcp__hiveku__ppc_meta_lead_quality_enable',
+  'mcp__hiveku__ppc_campaign_update',
+  'mcp__hiveku__ppc_ad_group_status_set',
+  'mcp__hiveku__ppc_ad_status_set',
+  'mcp__hiveku__marketing_offline_conversions_set_enabled',
+  'mcp__hiveku__marketing_offline_conversions_run',
+  'mcp__hiveku__marketing_offline_conversions_requeue',
+  'mcp__hiveku__marketing_offline_conversions_designate',
+  'mcp__hiveku__ppc_connection_delete',
 ];
 
 /**
