@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.37
+- **Starting or editing a contract, or changing who signs it, always asks.** Claude Code in your project folders asks before `crm_envelope_create_from_template`, `crm_envelope_signer_reassign`, `crm_envelope_create` and `crm_envelope_update`, in every permission mode, as the Claude Code and Codex plugins do. Starting a contract, from a template or not, can add outside email addresses that get the client's signed contract. Editing a contract can add such addresses, or turn its alerts off. Reassigning a signer changes who signs a sent contract and emails the new person a signing link. A signed contract or a signing link that was emailed cannot be taken back. Reading a contract, `crm_envelope_get`, `crm_envelope_list` or `crm_envelope_alerts_get`, needs no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
+
 ## 0.91.36
 - **Changing who gets a client's signed contract always asks.** Claude Code in your project folders asks before `crm_envelope_alerts_set`, `crm_contract_template_create` and `crm_contract_template_update`, in every permission mode, as the Claude Code and Codex plugins do. The alerts change can add outside email addresses that get a contract's alerts and the client's signed contract, or turn the contract's alerts off. The template changes can add outside addresses that get each client's signed contract, for every contract started or bulk sent from that template. A signed contract that was emailed cannot be taken back. Reading a template, `crm_contract_template_get` or `crm_contract_template_list`, needs no ask. Adding outside addresses arrives in a later Hiveku update, and the rules are in place first. Hiveku folders open in VS Code get the new rules when the extension starts.
 
