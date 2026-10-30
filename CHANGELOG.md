@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.36
+- **Changing who gets a client's signed contract always asks.** Claude Code in your project folders asks before `crm_envelope_alerts_set`, `crm_contract_template_create` and `crm_contract_template_update`, in every permission mode, as the Claude Code and Codex plugins do. The alerts change can add outside email addresses that get a contract's alerts and the client's signed contract, or turn the contract's alerts off. The template changes can add outside addresses that get each client's signed contract, for every contract started or bulk sent from that template. A signed contract that was emailed cannot be taken back. Reading a template, `crm_contract_template_get` or `crm_contract_template_list`, needs no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
+
 ## 0.91.35
 - **Emailing a number transfer's authorization always asks.** Claude Code in your project folders asks before `voice_port_order_loa_send`, in every permission mode, as the Claude Code and Codex plugins do. It emails a number transfer's letter of authorization (LOA) to the person who signs it, for e-signature, and an email that went cannot be taken back. Reading how far it got, `voice_port_order_loa_get`, needs no ask. The tool arrives in a later Hiveku update, and the rule is in place first. Hiveku folders open in VS Code get the new rule when the extension starts.
 

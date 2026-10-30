@@ -928,6 +928,15 @@ const HIVEKU_ASK: string[] = [
   // to a signer the agent names, and a sent email cannot be taken back, so a person approves each send: every call
   // asks, as in the Claude Code and Codex plugins. Its read, voice_port_order_loa_get, stays unasked. Appended last.
   'mcp__hiveku__voice_port_order_loa_send',
+  // Who gets a client's signed contract (2026-10-30, Agent Feedback wave 73, MCP 2ac18108fb). crm_envelope_alerts_set
+  // can add outside email addresses that get a contract's alerts and the client's signed contract, or turn its alerts
+  // off. crm_contract_template_create and crm_contract_template_update can add outside addresses that get each
+  // client's signed contract, for every contract started or bulk sent from the template. A signed contract emailed
+  // out cannot be taken back, so every call asks, as in the Claude Code and Codex plugins. The template reads,
+  // crm_contract_template_get and crm_contract_template_list, stay unasked. Appended last, in this order.
+  'mcp__hiveku__crm_envelope_alerts_set',
+  'mcp__hiveku__crm_contract_template_create',
+  'mcp__hiveku__crm_contract_template_update',
 ];
 
 /**

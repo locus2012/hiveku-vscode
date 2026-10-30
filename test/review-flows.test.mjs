@@ -461,9 +461,18 @@ describe('what the extension writes and wires', () => {
           "  // and texts wave 1). voice_port_order_loa_send emails the letter that authorizes moving the account's phone numbers\n" +
           "  // to a signer the agent names, and a sent email cannot be taken back, so a person approves each send: every call\n" +
           "  // asks, as in the Claude Code and Codex plugins. Its read, voice_port_order_loa_get, stays unasked. Appended last.\n" +
-          "  'mcp__hiveku__voice_port_order_loa_send',",
+          "  'mcp__hiveku__voice_port_order_loa_send',\n" +
+          "  // Who gets a client's signed contract (2026-10-30, Agent Feedback wave 73, MCP 2ac18108fb). crm_envelope_alerts_set\n" +
+          "  // can add outside email addresses that get a contract's alerts and the client's signed contract, or turn its alerts\n" +
+          "  // off. crm_contract_template_create and crm_contract_template_update can add outside addresses that get each\n" +
+          "  // client's signed contract, for every contract started or bulk sent from the template. A signed contract emailed\n" +
+          "  // out cannot be taken back, so every call asks, as in the Claude Code and Codex plugins. The template reads,\n" +
+          "  // crm_contract_template_get and crm_contract_template_list, stay unasked. Appended last, in this order.\n" +
+          "  'mcp__hiveku__crm_envelope_alerts_set',\n" +
+          "  'mcp__hiveku__crm_contract_template_create',\n" +
+          "  'mcp__hiveku__crm_contract_template_update',",
       ),
-      'the newest ask rule, the transfer authorization email, goes at the END, after the lead list formula fill',
+      'the newest ask rules, the signed contract recipients, go at the END, after the transfer authorization email',
     );
   });
 
