@@ -267,8 +267,12 @@ client's secure page (for the client's own browser). The rules:
   first: it says where and when the newest email went (`emailed_to`, `last_emailed_at`), whether
   the working link was made on the secure page or by Sign now and never emailed
   (`unemailed_link`), and how far it got (`state`: not sent, emailed, opened, signed, declined or
-  stopped). Point the signer at the newest email, and send again only when no working link
-  reached them: each send stops the one before.
+  stopped). When `unemailed_link` is null and `state` is emailed or opened, point the signer at
+  the newest email. When `unemailed_link` is set, the newest email's link no longer works, even
+  if `state` says emailed or opened: the working link is only in the browser that made it (the
+  client's, from the secure page, or the person's in the dashboard, from Sign now). Send again,
+  with the user's yes, only when no working link reached the signer: each send stops the one
+  before.
 
 ## 7. Fixing: `voice_port_order_update`, comments, verification codes
 
