@@ -481,9 +481,20 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__crm_envelope_create_from_template',\n" +
           "  'mcp__hiveku__crm_envelope_signer_reassign',\n" +
           "  'mcp__hiveku__crm_envelope_create',\n" +
-          "  'mcp__hiveku__crm_envelope_update',",
+          "  'mcp__hiveku__crm_envelope_update',\n" +
+          "  // A site's lead inbox delete, the move to another workspace, a test lead email and a scheduled publish (2026-10-30,\n" +
+          "  // Website Builder wave B, MCP 2c376519acf8). marketing_form_inbox_delete erases the leads it names with their uploaded\n" +
+          "  // files; site_transfer moves a site, with its leads, pages and content, to another workspace;\n" +
+          "  // marketing_form_notifications_test sends a real email to the site's lead addresses; cms_schedule_set has Hiveku\n" +
+          "  // publish the whole site at the time it names. A person approves each first, as in the Claude Code and Codex plugins.\n" +
+          "  // Their reads (marketing_form_inbox_list, marketing_form_inbox_get, site_transfer_targets, cms_schedule_get) stay\n" +
+          "  // unasked. Appended last, in this order.\n" +
+          "  'mcp__hiveku__marketing_form_inbox_delete',\n" +
+          "  'mcp__hiveku__site_transfer',\n" +
+          "  'mcp__hiveku__marketing_form_notifications_test',\n" +
+          "  'mcp__hiveku__cms_schedule_set',",
       ),
-      'the newest ask rules, the contract starts, edits and signer changes, go at the END, after the signed contract recipients',
+      'the newest ask rules, the site inbox delete, move, test lead email and scheduled publish, go at the END, after the contract starts, edits and signer changes',
     );
   });
 

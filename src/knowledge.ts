@@ -948,6 +948,17 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__crm_envelope_signer_reassign',
   'mcp__hiveku__crm_envelope_create',
   'mcp__hiveku__crm_envelope_update',
+  // A site's lead inbox delete, the move to another workspace, a test lead email and a scheduled publish (2026-10-30,
+  // Website Builder wave B, MCP 2c376519acf8). marketing_form_inbox_delete erases the leads it names with their uploaded
+  // files; site_transfer moves a site, with its leads, pages and content, to another workspace;
+  // marketing_form_notifications_test sends a real email to the site's lead addresses; cms_schedule_set has Hiveku
+  // publish the whole site at the time it names. A person approves each first, as in the Claude Code and Codex plugins.
+  // Their reads (marketing_form_inbox_list, marketing_form_inbox_get, site_transfer_targets, cms_schedule_get) stay
+  // unasked. Appended last, in this order.
+  'mcp__hiveku__marketing_form_inbox_delete',
+  'mcp__hiveku__site_transfer',
+  'mcp__hiveku__marketing_form_notifications_test',
+  'mcp__hiveku__cms_schedule_set',
 ];
 
 /**

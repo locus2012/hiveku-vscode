@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.38
+- **Deleting a site's leads, moving a site, a test lead email and scheduling a publish always ask.** Claude Code in your project folders asks before `marketing_form_inbox_delete`, `site_transfer`, `marketing_form_notifications_test` and `cms_schedule_set`, in every permission mode, as the Claude Code and Codex plugins do. The delete erases the leads it names with the files their visitors uploaded. The move takes a site, with its leads, pages and content, to another workspace. The test sends a real email to the site's lead email addresses. A schedule has Hiveku publish the whole site at the time it names. Reading a site's leads, where it can move, or a schedule (`marketing_form_inbox_list`, `marketing_form_inbox_get`, `site_transfer_targets`, `cms_schedule_get`) needs no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
+
 ## 0.91.37
 - **Starting or editing a contract, or changing who signs it, always asks.** Claude Code in your project folders asks before `crm_envelope_create_from_template`, `crm_envelope_signer_reassign`, `crm_envelope_create` and `crm_envelope_update`, in every permission mode, as the Claude Code and Codex plugins do. Starting a contract, from a template or not, can add outside email addresses that get the client's signed contract. Editing a contract can add such addresses, or turn its alerts off. Reassigning a signer changes who signs a sent contract and emails the new person a signing link. A signed contract or a signing link that was emailed cannot be taken back. Reading a contract, `crm_envelope_get`, `crm_envelope_list` or `crm_envelope_alerts_get`, needs no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
 
