@@ -519,9 +519,16 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__marketing_offline_conversions_run',\n" +
           "  'mcp__hiveku__marketing_offline_conversions_requeue',\n" +
           "  'mcp__hiveku__marketing_offline_conversions_designate',\n" +
-          "  'mcp__hiveku__ppc_connection_delete',",
+          "  'mcp__hiveku__ppc_connection_delete',\n" +
+          "  // Confirm on your phone (2026-10-31, builder #1908, MCP #359): confirm_on_phone_start pushes a request to the\n" +
+          "  // person's own Hiveku phone app to accept the 911 notice, and confirm_on_phone_cancel ends one they may be confirming\n" +
+          "  // there. Neither accepts anything (only the person does, on their phone), but each is the person's to start, so every\n" +
+          "  // call asks, as in the Claude Code and Codex plugins. The request read and the phones list stay unasked. Appended\n" +
+          "  // last, in this order.\n" +
+          "  'mcp__hiveku__confirm_on_phone_start',\n" +
+          "  'mcp__hiveku__confirm_on_phone_cancel',",
       ),
-      'the newest ask rules, the Ads area wave B writes, go at the END, after the waiting contact email cancel',
+      'the newest ask rules, the Confirm on your phone start and cancel, go at the END, after the Ads area wave B writes',
     );
   });
 
