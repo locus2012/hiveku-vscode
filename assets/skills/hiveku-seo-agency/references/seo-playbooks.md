@@ -370,8 +370,8 @@ publishing nothing to Google the client did not approve. `references/local-seo.m
    orphaned; link from the service pages and the locations hub [CONFIRM].
 8. 30-day watch: `seo_local_rank_changes({ days: 28, min_drop: 2 })` weekly,
    `seo_local_rank_history({ keyword, domain, days: 90 })` on movers, `seo_gbp_insights({
-   connection_id })` for calls and directions. GBP posts publish via `social_create_post` with
-   platform `google_business_profile`; read posts back with `seo_gbp_posts`; the listings
+   connection_id })` for calls and directions. GBP posts publish with `seo_gbp_post_create` (preview, then
+   confirm; `seo_gbp_post_update` and `seo_gbp_post_delete` change them); read posts back with `seo_gbp_posts`; the listings
    scan is `seo_listings_scan` (ask-gated, spends; `references/local-seo.md`).
 
 **Tell the client:** which location binds to which branch, the Listing Score and gaps, citations

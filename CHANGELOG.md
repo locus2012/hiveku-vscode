@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.42
+- **The Hiveku skills match the plugin's again.** The SEO skill's local SEO, change discipline and playbook references, and the web skill's branch preview reference, now read as in the Claude Code plugin 0.27.139: among other things, a branch preview's start answers within 40 seconds, and asking for the same branch again hands back the same preview. Released with 0.91.41's asks before Confirm on your phone starts or cancels.
+
 ## 0.91.41
 - **Asking your phone to accept the 911 notice always asks first.** Claude Code in your project folders asks before `confirm_on_phone_start` and `confirm_on_phone_cancel`, in every permission mode, as the Claude Code and Codex plugins do. The start sends a request to your Hiveku phone app to accept the 911 notice, and the cancel ends one you may be confirming there. Neither accepts anything: only you do, on your phone, with Face ID, a fingerprint or your passcode. Reading how the request stands and listing your phones need no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
 
