@@ -986,6 +986,13 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__marketing_offline_conversions_requeue',
   'mcp__hiveku__marketing_offline_conversions_designate',
   'mcp__hiveku__ppc_connection_delete',
+  // Confirm on your phone (2026-10-31, builder #1908, MCP #359): confirm_on_phone_start pushes a request to the
+  // person's own Hiveku phone app to accept the 911 notice, and confirm_on_phone_cancel ends one they may be confirming
+  // there. Neither accepts anything (only the person does, on their phone), but each is the person's to start, so every
+  // call asks, as in the Claude Code and Codex plugins. The request read and the phones list stay unasked. Appended
+  // last, in this order.
+  'mcp__hiveku__confirm_on_phone_start',
+  'mcp__hiveku__confirm_on_phone_cancel',
 ];
 
 /**
