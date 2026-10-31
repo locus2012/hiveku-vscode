@@ -22,7 +22,7 @@ per request per location; I = one Business Listings search with a 24h cooldown.
 |---|---|---|---|
 | `seo_gbp_overview`, `seo_gbp_listing`, `seo_gbp_insights`, `seo_gbp_reviews` | LIVE | A | cached snapshot on a 6-hour cron; over 26h old is stale, not fact |
 | `seo_gbp_location`, `seo_gbp_attributes`, `seo_gbp_services`, `seo_gbp_media`, `seo_gbp_discover_locations` | LIVE | live | `gbp_quota_exceeded` = wait a minute; `gbp_quota_not_approved` = the Cloud project never passed review, waiting cannot help |
-| `seo_gbp_location_update`, `seo_gbp_attributes_update`, `seo_gbp_services_update`, `seo_gbp_media_add`, `seo_gbp_media_delete`, `seo_gbp_review_reply`, `seo_gbp_review_reply_delete` | LIVE | write | all seven: first call previews with `requires_confirm: true`, identical call with `confirm: true` publishes |
+| `seo_gbp_location_update`, `seo_gbp_attributes_update`, `seo_gbp_services_update`, `seo_gbp_media_add`, `seo_gbp_media_delete`, `seo_gbp_review_reply`, `seo_gbp_review_reply_delete`, `seo_gbp_post_create`, `seo_gbp_post_update`, `seo_gbp_post_delete` | LIVE | write | all ten: first call previews with `requires_confirm: true`, identical call with `confirm: true` publishes |
 | `seo_local_search_performance`, `seo_local_top_queries`, `seo_local_top_pages`, `seo_local_rank_changes`, `seo_local_rank_history`, `seo_local_compare_periods` | LIVE | A | account-scoped; every `days` you pass is HALVED into two windows |
 | `seo_citations_get` | LIVE | A | the stored citation audit; `basis: 'no_signal'` = UNVERIFIED |
 | `seo_citations_audit` | LIVE | I | 429 inside the cooldown returns the stored audit; no confirm step of its own |
@@ -32,7 +32,7 @@ per request per location; I = one Business Listings search with a 24h cooldown.
 | `social_create_post` | LIVE | write | GBP posts, platform `google_business_profile`, through the social approval queue |
 | `seo_track_keyword`, `seo_tracked_keywords_list`, `seo_tracked_keyword_delete` | LIVE | write / A | "keyword + city" and pack tracking; owned by keyword-research.md |
 | `seo_connections_list`, `seo_connection_create`, `seo_connection_update` | LIVE | A / write | the GBP connect flow (section 1) |
-| `seo_gbp_posts` | LIVE | A | READ of published posts per `connection_id`, `refresh`, `limit`; publishing stays on `social_create_post` |
+| `seo_gbp_posts` | LIVE | A | READ of published posts per `connection_id`, `refresh`, `limit`; publish, edit and delete a post with `seo_gbp_post_create`, `seo_gbp_post_update` and `seo_gbp_post_delete` (preview, then confirm) |
 | `seo_listings_get` | LIVE | A | the stored listings snapshot per `connection_id`; `seo_gbp_listing` remains the Listing Score and duplicate-status read |
 | `seo_listings_scan` | LIVE | I | ask-gated; Listing Score plus the Google Maps footprint: duplicates, NAP drift; spends one Business Listings search, 24h cooldown; `seo_citations_audit` runs the same engine and cooldown |
 

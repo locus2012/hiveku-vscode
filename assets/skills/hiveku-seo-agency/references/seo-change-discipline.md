@@ -316,7 +316,7 @@ included number before adding it.
 
 ### 2.8 GBP fields: public immediately
 
-All seven `seo_gbp_*` writes preview first and publish on the identical call with
+All ten `seo_gbp_*` writes preview first and publish on the identical call with
 `confirm: true`, straight onto the live listing. `seo_gbp_location_update` changes only the fields
 in `updates`, but a name, address, category or service-area edit (business type, cities served, address
 visibility) can trigger Google re-verification, which can
@@ -390,7 +390,7 @@ prompt the operator before these run, when the ask block is installed: `deploy_s
 `project_files_bulk_save`, `project_vcs_commit`, `marketing_report_send`, `seo_task_implement`,
 `seo_report_clear`, `seo_deliverable_delete`, `seo_connection_delete`, `seo_gsc_delete_sitemap`,
 `seo_gtm_install`, `seo_gtm_publish`, `seo_ga4_key_event_delete`,
-`seo_ga4_event_create_rule_delete` and all seven `seo_gbp_*` writes. It is a harness prompt, not
+`seo_ga4_event_create_rule_delete` and all ten `seo_gbp_*` writes. It is a harness prompt, not
 a server rail: it does not exist inside a workflow or another host, and `pages_update`,
 `cms_write_entry`, `project_redirects_deploy`, `seo_tracked_keyword_delete`,
 `seo_project_update`, `seo_track_keyword`, `seo_aeo_rankings_sync`, `seo_citations_audit` and
