@@ -1020,6 +1020,13 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__seo_deliverable_save_from_workspace',
   'mcp__hiveku__seo_report_clear',
   'mcp__hiveku__seo_connection_delete',
+  // The desktop app's Automations editor and Pending AI actions (2026-10-31, MCP feature/automations-desktop-tools).
+  // workflow_node_run runs one workflow step for real (the steps before it are simulated), so its email, text, record
+  // change or outside call reaches real customers; workflow_pending_action_decide approves or rejects an action an AI
+  // step staged, and approving sends or changes for real at once. Every call asks, as in the Claude Code and Codex
+  // plugins. The dry run (workflow_test) and the queue's read stay unasked. Appended last, in this order.
+  'mcp__hiveku__workflow_node_run',
+  'mcp__hiveku__workflow_pending_action_decide',
 ];
 
 /**

@@ -553,9 +553,16 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__seo_sheet_tab_delete',\n" +
           "  'mcp__hiveku__seo_deliverable_save_from_workspace',\n" +
           "  'mcp__hiveku__seo_report_clear',\n" +
-          "  'mcp__hiveku__seo_connection_delete',"
+          "  'mcp__hiveku__seo_connection_delete',\n" +
+          "  // The desktop app's Automations editor and Pending AI actions (2026-10-31, MCP feature/automations-desktop-tools).\n" +
+          "  // workflow_node_run runs one workflow step for real (the steps before it are simulated), so its email, text, record\n" +
+          "  // change or outside call reaches real customers; workflow_pending_action_decide approves or rejects an action an AI\n" +
+          "  // step staged, and approving sends or changes for real at once. Every call asks, as in the Claude Code and Codex\n" +
+          "  // plugins. The dry run (workflow_test) and the queue's read stay unasked. Appended last, in this order.\n" +
+          "  'mcp__hiveku__workflow_node_run',\n" +
+          "  'mcp__hiveku__workflow_pending_action_decide',"
       ),
-      'the newest ask rules, the SEO area writes, go at the END, after the Confirm on your phone start and cancel',
+      'the newest ask rules, the Automations step run and the staged action decision, go at the END, after the SEO area writes',
     );
   });
 
