@@ -526,9 +526,36 @@ describe('what the extension writes and wires', () => {
           "  // call asks, as in the Claude Code and Codex plugins. The request read and the phones list stay unasked. Appended\n" +
           "  // last, in this order.\n" +
           "  'mcp__hiveku__confirm_on_phone_start',\n" +
-          "  'mcp__hiveku__confirm_on_phone_cancel',",
+          "  'mcp__hiveku__confirm_on_phone_cancel',\n" +
+          "  // The desktop app's SEO area, waves B and C (2026-10-30 and 31; MCP #362, live e1d4be7). Every call asks, as in the\n" +
+          "  // Claude Code and Codex plugins: seo_task_deploy publishes an SEO task's change to the client's live site; the three\n" +
+          "  // Business Profile post tools publish, change or delete a public post (their confirm: true is filled in by the model,\n" +
+          "  // not a person); seo_rankings_refresh spends the day's on-demand rank checks, seo_rankings_bulk_add starts tracking up\n" +
+          "  // to 1,000 keywords (each past the plan's count is billed $1.50 a month) and seo_rankings_ai_backfill adds the AI\n" +
+          "  // search platforms to every tracked keyword; seo_website_report_create spends research checks and publishes a page\n" +
+          "  // anyone with its link can open, which the report's delete ends and its sections tool changes at once;\n" +
+          "  // seo_deliverable_save_from_workspace can replace a saved report; and the deletes (a keyword's rank history, an audit,\n" +
+          "  // sheet rows or a whole tab, the report's sections, an SEO connection with all its saved history) cannot be undone.\n" +
+          "  // The reads stay unasked. Appended last, in this order.\n" +
+          "  'mcp__hiveku__seo_task_deploy',\n" +
+          "  'mcp__hiveku__seo_gbp_post_create',\n" +
+          "  'mcp__hiveku__seo_gbp_post_update',\n" +
+          "  'mcp__hiveku__seo_gbp_post_delete',\n" +
+          "  'mcp__hiveku__seo_rankings_refresh',\n" +
+          "  'mcp__hiveku__seo_rankings_bulk_add',\n" +
+          "  'mcp__hiveku__seo_rankings_ai_backfill',\n" +
+          "  'mcp__hiveku__seo_website_report_create',\n" +
+          "  'mcp__hiveku__seo_website_report_delete',\n" +
+          "  'mcp__hiveku__seo_website_report_sections_set',\n" +
+          "  'mcp__hiveku__seo_rankings_keyword_delete',\n" +
+          "  'mcp__hiveku__seo_audit_delete',\n" +
+          "  'mcp__hiveku__seo_sheet_rows_delete',\n" +
+          "  'mcp__hiveku__seo_sheet_tab_delete',\n" +
+          "  'mcp__hiveku__seo_deliverable_save_from_workspace',\n" +
+          "  'mcp__hiveku__seo_report_clear',\n" +
+          "  'mcp__hiveku__seo_connection_delete',"
       ),
-      'the newest ask rules, the Confirm on your phone start and cancel, go at the END, after the Ads area wave B writes',
+      'the newest ask rules, the SEO area writes, go at the END, after the Confirm on your phone start and cancel',
     );
   });
 
