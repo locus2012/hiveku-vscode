@@ -1051,6 +1051,18 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__agent_switch_set',
   'mcp__hiveku__voice_pronunciations_save',
   'mcp__hiveku__marketplace_template_install',
+  // The desktop app's workflow grid (2026-11-01, MCP feature/lead-grid-desktop-tools). Deleting a lead list or its rows
+  // cannot be undone; releasing held rows makes them new to auto-run; the AI formula writer spends the account's AI
+  // allowance; an import adds a file's rows; auto-run spends every month, and only a person in the Hiveku app may start,
+  // resume or continue it. Every call asks, as in the Claude Code and Codex plugins. Appended last, in this order.
+  'mcp__hiveku__outbound_lead_grid_delete',
+  'mcp__hiveku__outbound_lead_grid_rows_delete',
+  'mcp__hiveku__outbound_lead_grid_rows_hold',
+  'mcp__hiveku__outbound_lead_grid_formula_write',
+  'mcp__hiveku__outbound_lead_grid_import_start',
+  'mcp__hiveku__outbound_lead_grid_import_auto_run',
+  'mcp__hiveku__outbound_lead_grid_auto_run_enable',
+  'mcp__hiveku__outbound_lead_grid_auto_run_control',
 ];
 
 /**

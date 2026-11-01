@@ -584,9 +584,21 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__agent_profile_save',\n" +
           "  'mcp__hiveku__agent_switch_set',\n" +
           "  'mcp__hiveku__voice_pronunciations_save',\n" +
-          "  'mcp__hiveku__marketplace_template_install',"
+          "  'mcp__hiveku__marketplace_template_install',\n" +
+          "  // The desktop app's workflow grid (2026-11-01, MCP feature/lead-grid-desktop-tools). Deleting a lead list or its rows\n" +
+          "  // cannot be undone; releasing held rows makes them new to auto-run; the AI formula writer spends the account's AI\n" +
+          "  // allowance; an import adds a file's rows; auto-run spends every month, and only a person in the Hiveku app may start,\n" +
+          "  // resume or continue it. Every call asks, as in the Claude Code and Codex plugins. Appended last, in this order.\n" +
+          "  'mcp__hiveku__outbound_lead_grid_delete',\n" +
+          "  'mcp__hiveku__outbound_lead_grid_rows_delete',\n" +
+          "  'mcp__hiveku__outbound_lead_grid_rows_hold',\n" +
+          "  'mcp__hiveku__outbound_lead_grid_formula_write',\n" +
+          "  'mcp__hiveku__outbound_lead_grid_import_start',\n" +
+          "  'mcp__hiveku__outbound_lead_grid_import_auto_run',\n" +
+          "  'mcp__hiveku__outbound_lead_grid_auto_run_enable',\n" +
+          "  'mcp__hiveku__outbound_lead_grid_auto_run_control',"
       ),
-      'the newest ask rules, the Memory page writes, go at the END, after the Automations step run and the staged action decision',
+      'the newest ask rules, the workflow grid writes, go at the END, after the Memory page writes',
     );
   });
 
