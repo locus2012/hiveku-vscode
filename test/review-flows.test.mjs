@@ -612,7 +612,7 @@ describe('what the extension writes and wires', () => {
           "  // they ask here as a second guard. A Discussions channel's share, unshare and delete are on the Discussions plan's ask\n" +
           "  // list: a share or an unshare takes effect at once for another workspace, and a delete takes the channel's whole\n" +
           "  // history from everyone. Every call asks, as in the Claude Code and Codex plugins. No name ends in _get or _list or\n" +
-          "  // holds _list_, so no read glob above approves one. Their reads and the webinar create and edit stay unasked. Appended\n" +
+          "  // holds _list_, so no read glob above approves one. Their reads and the webinar create stay unasked. Appended\n" +
           "  // last, in this order.\n" +
           "  'mcp__hiveku__marketing_webinar_invite',\n" +
           "  'mcp__hiveku__marketing_webinar_cancel',\n" +
@@ -621,9 +621,11 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__discussion_recording_delete',\n" +
           "  'mcp__hiveku__discussion_channel_share',\n" +
           "  'mcp__hiveku__discussion_channel_unshare',\n" +
-          "  'mcp__hiveku__discussion_delete',"
+          "  'mcp__hiveku__discussion_delete',\n" +
+          "  // A webinar's edit asks (Abe, 2026-11-01): a new time emails its registrants and an invited audience. Appended last.\n" +
+          "  'mcp__hiveku__marketing_webinar_update',"
       ),
-      'the newest ask rules, the Meet and Discussions sends, shares and deletes, go at the END, after the Mission Control person actions',
+      'the newest ask rule, the webinar edit, goes at the END, after the Meet and Discussions sends, shares and deletes',
     );
   });
 
