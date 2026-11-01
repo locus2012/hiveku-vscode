@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.47
+- **A person's Mission Control claim, release and decision always ask.** Claude Code in your project folders asks before `mc_task_claim`, `mc_task_release` and `mc_task_answer`, in every permission mode, as the Claude Code and Codex plugins do. They come with the Hiveku desktop app's Mission Control cards and each acts as you: a claim shows the team you are deciding a card, and with force takes it over from the teammate who holds it; a release lets your own claim go; an answer records your decision on a card, marks it done, and is what an agent waiting on the card acts on. Reading a card needs no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
+
 ## 0.91.46
 - **The workflow grid's deletes, AI formula writer, imports and auto-run always ask.** Claude Code in your project folders asks before `outbound_lead_grid_delete`, `outbound_lead_grid_rows_delete`, `outbound_lead_grid_rows_hold`, `outbound_lead_grid_formula_write`, `outbound_lead_grid_import_start`, `outbound_lead_grid_import_auto_run`, `outbound_lead_grid_auto_run_enable` and `outbound_lead_grid_auto_run_control`, in every permission mode, as the Claude Code and Codex plugins do. Deleting a list or rows cannot be undone, releasing held rows makes them new to auto-run, the formula writer spends AI, and auto-run spends every month. The grid's reads, saved views and export need no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
 

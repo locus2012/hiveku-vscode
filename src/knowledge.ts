@@ -1063,6 +1063,14 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__outbound_lead_grid_import_auto_run',
   'mcp__hiveku__outbound_lead_grid_auto_run_enable',
   'mcp__hiveku__outbound_lead_grid_auto_run_control',
+  // The desktop app's Mission Control person actions (2026-11-01, MCP #370). Each acts as the person whose key makes the
+  // call: claiming a card (with force, taking it over from the teammate who holds it), letting your own claim go, and
+  // recording your own decision on a card, which marks it done and is what an agent waiting on the card acts on. Every
+  // call asks, as in the Claude Code and Codex plugins. No name ends in _get or _list or holds _list_, so no read glob
+  // above approves one. Reading a card stays unasked. Appended last, in this order.
+  'mcp__hiveku__mc_task_claim',
+  'mcp__hiveku__mc_task_release',
+  'mcp__hiveku__mc_task_answer',
 ];
 
 /**
