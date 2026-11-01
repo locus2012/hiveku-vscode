@@ -37,6 +37,9 @@ capability does not exist, and never invent a name.
 | Webhooks | `voice_webhooks_list`, `voice_webhook_create`, `voice_webhook_update`, `voice_webhook_delete` | - | - |
 | Desk phones | `voice_desk_phones_get`, `voice_desk_phone_set` | - | the line's SIP password (never returned to a key) |
 | Sites, roles, API keys | `voice_sites_list`, `voice_site_create`, `voice_roles_list`, `voice_role_assign`, `voice_role_remove`, `voice_api_keys_list`, `voice_api_key_create`, `voice_api_key_revoke` | - | - |
+| Pronunciation and speaking speed | `voice_pronunciations_get`, `voice_pronunciations_save` | - | - |
+
+Pronunciation and speaking speed (live 2026-10-31, the Memory page's Voice and pronunciation): `voice_pronunciations_get` reads how the voice agents say the words on the list and how fast they speak; `voice_pronunciations_save` replaces the whole list and the pace (it asks first). Both act as the person who made the key, under their CRM contacts rights.
 
 The phone system admin tools (live 2026-10-29): sites are the account's locations, each with its
 911 address; roles say who holds which phone role (`voice_role_assign` and `voice_role_remove` change
