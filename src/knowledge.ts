@@ -1071,6 +1071,23 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__mc_task_claim',
   'mcp__hiveku__mc_task_release',
   'mcp__hiveku__mc_task_answer',
+  // Hiveku Meet and Discussions (2026-11-01, MCP #374, #367, #349 and #227, all served), in three groups. A webinar's
+  // invites, cancel and delete follow Hiveku Meet decision 2: agents may list, create and edit Marketing webinars, but
+  // sending the invites, cancelling and deleting ask first, since invites and a cancel email real people and a cancel or
+  // a delete cannot be undone. The meeting and call recording deletes are taken from the Hiveku app's own key alone, so
+  // they ask here as a second guard. A Discussions channel's share, unshare and delete are on the Discussions plan's ask
+  // list: a share or an unshare takes effect at once for another workspace, and a delete takes the channel's whole
+  // history from everyone. Every call asks, as in the Claude Code and Codex plugins. No name ends in _get or _list or
+  // holds _list_, so no read glob above approves one. Their reads and the webinar create and edit stay unasked. Appended
+  // last, in this order.
+  'mcp__hiveku__marketing_webinar_invite',
+  'mcp__hiveku__marketing_webinar_cancel',
+  'mcp__hiveku__marketing_webinar_delete',
+  'mcp__hiveku__meet_recording_delete',
+  'mcp__hiveku__discussion_recording_delete',
+  'mcp__hiveku__discussion_channel_share',
+  'mcp__hiveku__discussion_channel_unshare',
+  'mcp__hiveku__discussion_delete',
 ];
 
 /**

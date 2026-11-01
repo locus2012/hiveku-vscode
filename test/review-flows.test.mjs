@@ -604,9 +604,26 @@ describe('what the extension writes and wires', () => {
           "  // above approves one. Reading a card stays unasked. Appended last, in this order.\n" +
           "  'mcp__hiveku__mc_task_claim',\n" +
           "  'mcp__hiveku__mc_task_release',\n" +
-          "  'mcp__hiveku__mc_task_answer',"
+          "  'mcp__hiveku__mc_task_answer',\n" +
+          "  // Hiveku Meet and Discussions (2026-11-01, MCP #374, #367, #349 and #227, all served), in three groups. A webinar's\n" +
+          "  // invites, cancel and delete follow Hiveku Meet decision 2: agents may list, create and edit Marketing webinars, but\n" +
+          "  // sending the invites, cancelling and deleting ask first, since invites and a cancel email real people and a cancel or\n" +
+          "  // a delete cannot be undone. The meeting and call recording deletes are taken from the Hiveku app's own key alone, so\n" +
+          "  // they ask here as a second guard. A Discussions channel's share, unshare and delete are on the Discussions plan's ask\n" +
+          "  // list: a share or an unshare takes effect at once for another workspace, and a delete takes the channel's whole\n" +
+          "  // history from everyone. Every call asks, as in the Claude Code and Codex plugins. No name ends in _get or _list or\n" +
+          "  // holds _list_, so no read glob above approves one. Their reads and the webinar create and edit stay unasked. Appended\n" +
+          "  // last, in this order.\n" +
+          "  'mcp__hiveku__marketing_webinar_invite',\n" +
+          "  'mcp__hiveku__marketing_webinar_cancel',\n" +
+          "  'mcp__hiveku__marketing_webinar_delete',\n" +
+          "  'mcp__hiveku__meet_recording_delete',\n" +
+          "  'mcp__hiveku__discussion_recording_delete',\n" +
+          "  'mcp__hiveku__discussion_channel_share',\n" +
+          "  'mcp__hiveku__discussion_channel_unshare',\n" +
+          "  'mcp__hiveku__discussion_delete',"
       ),
-      'the newest ask rules, the Mission Control person actions, go at the END, after the workflow grid writes',
+      'the newest ask rules, the Meet and Discussions sends, shares and deletes, go at the END, after the Mission Control person actions',
     );
   });
 
