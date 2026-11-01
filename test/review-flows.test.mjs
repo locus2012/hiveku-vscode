@@ -596,9 +596,17 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__outbound_lead_grid_import_start',\n" +
           "  'mcp__hiveku__outbound_lead_grid_import_auto_run',\n" +
           "  'mcp__hiveku__outbound_lead_grid_auto_run_enable',\n" +
-          "  'mcp__hiveku__outbound_lead_grid_auto_run_control',"
+          "  'mcp__hiveku__outbound_lead_grid_auto_run_control',\n" +
+          "  // The desktop app's Mission Control person actions (2026-11-01, MCP #370). Each acts as the person whose key makes the\n" +
+          "  // call: claiming a card (with force, taking it over from the teammate who holds it), letting your own claim go, and\n" +
+          "  // recording your own decision on a card, which marks it done and is what an agent waiting on the card acts on. Every\n" +
+          "  // call asks, as in the Claude Code and Codex plugins. No name ends in _get or _list or holds _list_, so no read glob\n" +
+          "  // above approves one. Reading a card stays unasked. Appended last, in this order.\n" +
+          "  'mcp__hiveku__mc_task_claim',\n" +
+          "  'mcp__hiveku__mc_task_release',\n" +
+          "  'mcp__hiveku__mc_task_answer',"
       ),
-      'the newest ask rules, the workflow grid writes, go at the END, after the Memory page writes',
+      'the newest ask rules, the Mission Control person actions, go at the END, after the workflow grid writes',
     );
   });
 
