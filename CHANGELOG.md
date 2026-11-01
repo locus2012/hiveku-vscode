@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.49
+- **A webinar's edit always asks.** Claude Code in your project folders asks before `marketing_webinar_update`, in every permission mode, as the Claude Code and Codex plugins do. Moving a webinar's time emails every registrant, and the whole audience once its invites went out. An ask rule names a tool, not what it changes, so every edit asks, a new name as much as a new time. Listing and creating webinars need no ask. Hiveku folders open in VS Code get the new rule when the extension starts.
+
 ## 0.91.48
 - **A webinar's invites, cancel and delete, a recording delete, and a Discussions channel's share, unshare and delete always ask.** Claude Code in your project folders asks before `marketing_webinar_invite`, `marketing_webinar_cancel`, `marketing_webinar_delete`, `meet_recording_delete`, `discussion_recording_delete`, `discussion_channel_share`, `discussion_channel_unshare` and `discussion_delete`, in every permission mode, as the Claude Code and Codex plugins do. Sending a webinar's invites emails its whole audience once, and invites that went out cannot be taken back; a cancel emails every registrant and cannot be undone; a delete takes the webinar's registrations and landing page. Deleting a meeting's or a call's recording takes its transcripts and AI meeting notes with it; Hiveku takes those deletes from the Hiveku app alone, so they ask as a second guard. Sharing a channel into another workspace or stopping a share takes effect at once, and deleting a channel takes its whole history from everyone. Listing, creating and editing webinars, and reading recordings and a channel's sharing, need no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
 

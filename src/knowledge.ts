@@ -1078,7 +1078,7 @@ const HIVEKU_ASK: string[] = [
   // they ask here as a second guard. A Discussions channel's share, unshare and delete are on the Discussions plan's ask
   // list: a share or an unshare takes effect at once for another workspace, and a delete takes the channel's whole
   // history from everyone. Every call asks, as in the Claude Code and Codex plugins. No name ends in _get or _list or
-  // holds _list_, so no read glob above approves one. Their reads and the webinar create and edit stay unasked. Appended
+  // holds _list_, so no read glob above approves one. Their reads and the webinar create stay unasked. Appended
   // last, in this order.
   'mcp__hiveku__marketing_webinar_invite',
   'mcp__hiveku__marketing_webinar_cancel',
@@ -1088,6 +1088,8 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__discussion_channel_share',
   'mcp__hiveku__discussion_channel_unshare',
   'mcp__hiveku__discussion_delete',
+  // A webinar's edit asks (Abe, 2026-11-01): a new time emails its registrants and an invited audience. Appended last.
+  'mcp__hiveku__marketing_webinar_update',
 ];
 
 /**
