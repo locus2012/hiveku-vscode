@@ -560,9 +560,33 @@ describe('what the extension writes and wires', () => {
           "  // step staged, and approving sends or changes for real at once. Every call asks, as in the Claude Code and Codex\n" +
           "  // plugins. The dry run (workflow_test) and the queue's read stay unasked. Appended last, in this order.\n" +
           "  'mcp__hiveku__workflow_node_run',\n" +
-          "  'mcp__hiveku__workflow_pending_action_decide',"
+          "  'mcp__hiveku__workflow_pending_action_decide',\n" +
+          "  // The desktop app's Memory page (2026-10-31, MCP feature/memory-desktop-tools). Each write changes what agents read\n" +
+          "  // and follow, or whether an agent works at all: About your business and its suggestions (Hiveku takes those from\n" +
+          "  // the Hiveku app's own key only, and they ask anyway), an agent's rules, skills and notes, the chief of staff's, a\n" +
+          "  // website's memory files, an agent's profile and its on/off switch, how the phone agents say names, and a\n" +
+          "  // Marketplace install. Every call asks, as in the Claude Code and Codex plugins. No name ends in _get or _list or\n" +
+          "  // holds _list_, so no read glob above approves one. The page's reads stay unasked. Appended last, in this order.\n" +
+          "  'mcp__hiveku__account_memory_save',\n" +
+          "  'mcp__hiveku__account_memory_restore',\n" +
+          "  'mcp__hiveku__account_memory_suggest',\n" +
+          "  'mcp__hiveku__account_memory_suggestion_keep',\n" +
+          "  'mcp__hiveku__account_memory_suggestions_remove',\n" +
+          "  'mcp__hiveku__account_memory_suggestions_restore',\n" +
+          "  'mcp__hiveku__agent_memory_save',\n" +
+          "  'mcp__hiveku__agent_memory_remove',\n" +
+          "  'mcp__hiveku__agent_memory_create',\n" +
+          "  'mcp__hiveku__agent_memory_restore',\n" +
+          "  'mcp__hiveku__chief_of_staff_memory_save',\n" +
+          "  'mcp__hiveku__chief_of_staff_memory_remove',\n" +
+          "  'mcp__hiveku__website_memory_file_save',\n" +
+          "  'mcp__hiveku__website_memory_file_restore',\n" +
+          "  'mcp__hiveku__agent_profile_save',\n" +
+          "  'mcp__hiveku__agent_switch_set',\n" +
+          "  'mcp__hiveku__voice_pronunciations_save',\n" +
+          "  'mcp__hiveku__marketplace_template_install',"
       ),
-      'the newest ask rules, the Automations step run and the staged action decision, go at the END, after the SEO area writes',
+      'the newest ask rules, the Memory page writes, go at the END, after the Automations step run and the staged action decision',
     );
   });
 

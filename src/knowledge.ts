@@ -1027,6 +1027,30 @@ const HIVEKU_ASK: string[] = [
   // plugins. The dry run (workflow_test) and the queue's read stay unasked. Appended last, in this order.
   'mcp__hiveku__workflow_node_run',
   'mcp__hiveku__workflow_pending_action_decide',
+  // The desktop app's Memory page (2026-10-31, MCP feature/memory-desktop-tools). Each write changes what agents read
+  // and follow, or whether an agent works at all: About your business and its suggestions (Hiveku takes those from
+  // the Hiveku app's own key only, and they ask anyway), an agent's rules, skills and notes, the chief of staff's, a
+  // website's memory files, an agent's profile and its on/off switch, how the phone agents say names, and a
+  // Marketplace install. Every call asks, as in the Claude Code and Codex plugins. No name ends in _get or _list or
+  // holds _list_, so no read glob above approves one. The page's reads stay unasked. Appended last, in this order.
+  'mcp__hiveku__account_memory_save',
+  'mcp__hiveku__account_memory_restore',
+  'mcp__hiveku__account_memory_suggest',
+  'mcp__hiveku__account_memory_suggestion_keep',
+  'mcp__hiveku__account_memory_suggestions_remove',
+  'mcp__hiveku__account_memory_suggestions_restore',
+  'mcp__hiveku__agent_memory_save',
+  'mcp__hiveku__agent_memory_remove',
+  'mcp__hiveku__agent_memory_create',
+  'mcp__hiveku__agent_memory_restore',
+  'mcp__hiveku__chief_of_staff_memory_save',
+  'mcp__hiveku__chief_of_staff_memory_remove',
+  'mcp__hiveku__website_memory_file_save',
+  'mcp__hiveku__website_memory_file_restore',
+  'mcp__hiveku__agent_profile_save',
+  'mcp__hiveku__agent_switch_set',
+  'mcp__hiveku__voice_pronunciations_save',
+  'mcp__hiveku__marketplace_template_install',
 ];
 
 /**
