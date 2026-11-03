@@ -221,7 +221,8 @@ wipes it all).
    - Authority: `backlinks_summary({ target })` [SPENDS D x1] vs last month's stored figure,
      `referring_domains` first; links won from tasks; losses from Recipe 3 step 4.
    - Local (clients with locations): `seo_gbp_overview({ connection_id, days: 30 })` per location,
-     `seo_local_compare_periods({ days: 56, source: 'all' })` (it halves the window).
+     `seo_local_compare_periods({ days: 56, source: 'all' })` (it splits the window into two unequal
+     sides: a change only when both have the same `data_points`, else both totals with their day counts).
    - AI visibility: `seo_rankings_list({ domain, search_engine: 'ai_overview' })` (also `chatgpt`,
      `perplexity`, `claude`, `gemini`; blank = untracked) plus `seo_aeo_audit_get({ domain })`
      coverage and citation rate.
