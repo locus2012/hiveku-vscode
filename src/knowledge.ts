@@ -1090,11 +1090,33 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__discussion_delete',
   // A webinar's edit asks (Abe, 2026-11-01): a new time emails its registrants and an invited audience. Appended last.
   'mcp__hiveku__marketing_webinar_update',
-  // An email webhook's delete (2026-11-03, HK-1083): with permanent: true it deletes the webhook and its delivery
-  // history for good, as the dashboard's Delete does; without it, it switches the webhook off. An ask rule names a
-  // tool, not its arguments, so every call asks, as in the Claude Code and Codex plugins. The webhook reads stay
-  // unasked. Appended last.
+  // An email webhook's delete (2026-11-03, HK-1083): today it switches the webhook off (it stops getting events, and
+  // email_webhook_update can turn it back on). Once Hiveku serves permanent: true, a call with it deletes the webhook
+  // and its delivery history for good, as the dashboard's Delete does. An ask rule names a tool, not its arguments, so
+  // every call asks, as in the Claude Code and Codex plugins. The webhook reads stay unasked. Appended last.
   'mcp__hiveku__email_webhook_delete',
+  // Projects (2026-11-03, MCP #387 and #391, served). Taking this workspace out of a project another workspace shares
+  // with it, and a person's own comment delete and reaction (Hiveku takes these three from a person's own key only); a
+  // project's Slack test post, its GitHub issues sync, its billing client and rate, the import of its logged hours onto
+  // Commerce > Usage, where it posts its updates, and a new workflow from a recipe (made switched off). Then a
+  // project's share and unshare with another workspace (at once, for that workspace's people), an archived project's
+  // permanent delete and a task's permanent delete. Every call asks. The Codex plugin prompts for all thirteen and the
+  // Claude Code plugin lists them on its ask list; its hook forces the leave, the comment delete, the share, the
+  // unshare and the project delete. No name ends in _get or _list or holds _list_, so no read glob above approves one.
+  // The Projects reads stay off this list. Appended last, in this order.
+  'mcp__hiveku__pm_project_leave',
+  'mcp__hiveku__pm_task_comment_delete',
+  'mcp__hiveku__pm_task_comment_react',
+  'mcp__hiveku__pm_project_slack_test',
+  'mcp__hiveku__pm_project_github_sync_run',
+  'mcp__hiveku__pm_project_billing_update',
+  'mcp__hiveku__pm_project_billing_import',
+  'mcp__hiveku__pm_project_integrations_update',
+  'mcp__hiveku__pm_project_automation_create',
+  'mcp__hiveku__pm_project_share',
+  'mcp__hiveku__pm_project_unshare',
+  'mcp__hiveku__pm_projects_delete',
+  'mcp__hiveku__pm_tasks_delete',
 ];
 
 /**
