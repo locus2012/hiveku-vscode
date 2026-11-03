@@ -623,9 +623,14 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__discussion_channel_unshare',\n" +
           "  'mcp__hiveku__discussion_delete',\n" +
           "  // A webinar's edit asks (Abe, 2026-11-01): a new time emails its registrants and an invited audience. Appended last.\n" +
-          "  'mcp__hiveku__marketing_webinar_update',"
+          "  'mcp__hiveku__marketing_webinar_update',\n" +
+          "  // An email webhook's delete (2026-11-03, HK-1083): with permanent: true it deletes the webhook and its delivery\n" +
+          "  // history for good, as the dashboard's Delete does; without it, it switches the webhook off. An ask rule names a\n" +
+          "  // tool, not its arguments, so every call asks, as in the Claude Code and Codex plugins. The webhook reads stay\n" +
+          "  // unasked. Appended last.\n" +
+          "  'mcp__hiveku__email_webhook_delete',"
       ),
-      'the newest ask rule, the webinar edit, goes at the END, after the Meet and Discussions sends, shares and deletes',
+      'the newest ask rule, the email webhook delete, goes at the END, after the webinar edit',
     );
   });
 

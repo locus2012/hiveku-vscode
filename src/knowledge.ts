@@ -1090,6 +1090,11 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__discussion_delete',
   // A webinar's edit asks (Abe, 2026-11-01): a new time emails its registrants and an invited audience. Appended last.
   'mcp__hiveku__marketing_webinar_update',
+  // An email webhook's delete (2026-11-03, HK-1083): with permanent: true it deletes the webhook and its delivery
+  // history for good, as the dashboard's Delete does; without it, it switches the webhook off. An ask rule names a
+  // tool, not its arguments, so every call asks, as in the Claude Code and Codex plugins. The webhook reads stay
+  // unasked. Appended last.
+  'mcp__hiveku__email_webhook_delete',
 ];
 
 /**
