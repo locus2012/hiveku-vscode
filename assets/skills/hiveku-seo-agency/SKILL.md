@@ -207,7 +207,7 @@ check day. `check_frequency` defaults to weekly.
 | Rolling ~16-month retention | the baseline rolls off; capture it in month 1 |
 | Five stored dimension signatures (date-only, query, page, device, country) | never sum across them, nor across GSC, Bing, the tracker, vendor estimates and GA4 |
 | `date,query,page` lives only in the permanent archive | read it with `seo_query_page_metrics` (`references/rankings-and-search-console.md`); `seo_gsc_search_analytics` covers only Google's 16 months |
-| `seo_local_*` tools halve the window you pass | pass 180 for a 90-vs-90 |
+| `seo_local_rank_changes` and `seo_local_compare_periods` split the window you pass into unequal sides (the current one runs through today) | pass double (180 gives the 91 dates through today against the 90 before); compare totals only on equal `data_points` |
 
 **Id spaces.**
 

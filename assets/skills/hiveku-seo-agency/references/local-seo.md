@@ -23,7 +23,7 @@ per request per location; I = one Business Listings search with a 24h cooldown.
 | `seo_gbp_overview`, `seo_gbp_listing`, `seo_gbp_insights`, `seo_gbp_reviews` | LIVE | A | cached snapshot on a 6-hour cron; over 26h old is stale, not fact |
 | `seo_gbp_location`, `seo_gbp_attributes`, `seo_gbp_services`, `seo_gbp_media`, `seo_gbp_discover_locations` | LIVE | live | `gbp_quota_exceeded` = wait a minute; `gbp_quota_not_approved` = the Cloud project never passed review, waiting cannot help |
 | `seo_gbp_location_update`, `seo_gbp_attributes_update`, `seo_gbp_services_update`, `seo_gbp_media_add`, `seo_gbp_media_delete`, `seo_gbp_review_reply`, `seo_gbp_review_reply_delete`, `seo_gbp_post_create`, `seo_gbp_post_update`, `seo_gbp_post_delete` | LIVE | write | all ten: first call previews with `requires_confirm: true`, identical call with `confirm: true` publishes |
-| `seo_local_search_performance`, `seo_local_top_queries`, `seo_local_top_pages`, `seo_local_rank_changes`, `seo_local_rank_history`, `seo_local_compare_periods` | LIVE | A | account-scoped; every `days` you pass is HALVED into two windows |
+| `seo_local_search_performance`, `seo_local_top_queries`, `seo_local_top_pages`, `seo_local_rank_changes`, `seo_local_rank_history`, `seo_local_compare_periods` | LIVE | A | account-scoped; `seo_local_rank_changes` and `seo_local_compare_periods` split the `days` you pass into two sides that are NOT the same length (the current one runs through today), the others read the whole window |
 | `seo_citations_get` | LIVE | A | the stored citation audit; `basis: 'no_signal'` = UNVERIFIED |
 | `seo_citations_audit` | LIVE | I | 429 inside the cooldown returns the stored audit; no confirm step of its own |
 | `business_data_business_listings_search` | LIVE | I-class per search | the engine behind `seo_citations_audit`: Google Maps business entities by category and location, NAP, rating, hours; a competitor's local footprint |
@@ -186,7 +186,8 @@ The first-session chain is `/hiveku:local` (commands/local.md), step for step: c
 free DB reads for every location (`seo_gbp_listing({})` with no `connection_id` for one row per
 connection, `seo_gbp_overview` at 90 days, `seo_citations_get({})`), then the live reads once per
 location (`seo_gbp_attributes`, `seo_gbp_media`, `seo_gbp_services`), then local organic at 90 days
-with `seo_local_compare_periods({ days: 180 })` for a true 90-vs-90. It drives a ranked defect list
+with `seo_local_compare_periods({ days: 180 })` for about 90 days against 90 (91 dates through today
+against the 90 before; a change only when both sides have the same `data_points`). It drives a ranked defect list
 per location and closes with `memory_create` (connection ids and branches, canonical NAP exactly as
 published, categories, service area, baseline Listing Score, review count and average rating with
 the date) plus `pm_tasks_create` per accepted fix. Plays L2 to L10 are what each defect turns into.
@@ -310,9 +311,9 @@ decisions (agreed template, escalation contact, topics off limits publicly).
 
 ### Play L5: Weekly local rank watch
 
-1. `seo_local_rank_changes({ days: 28, min_drop: 2 })`. Defaults are `days: 7` / `min_drop: 3`; a 28-day
-   window (two 14-day halves) is far less noisy and `min_drop: 2` catches pack-boundary movement a
-   3-position floor hides. Read `drops[]`: `domain`, `keyword`, `previous`, `current`, `drop`, worst
+1. `seo_local_rank_changes({ days: 28, min_drop: 2 })`. Defaults are `days: 30` / `min_drop: 3`; 28 days
+   split into the 15 dates through today against the 14 before (`data.window` names them, and a shorter
+   window is noisy), and `min_drop: 2` catches pack-boundary movement a 3-position floor hides. Read `drops[]`: `domain`, `keyword`, `previous`, `current`, `drop`, worst
    first.
 2. For each drop clearing the 2.2 gates, `seo_local_rank_history({ keyword, domain, days: 90 })` and read
    raw rows: `location_code`, `device`, `position`, `ranking_url`, `serp_features`, `checked_at`. A changed
@@ -324,7 +325,8 @@ decisions (agreed template, escalation contact, topics off limits publicly).
    returns the Google Maps SERP at that location code (`local-finder-serp` is the local-finder
    variation). It is a point-in-time read at ONE location code, not a grid, and it spends research
    credits - say both in the report. Then `seo_local_compare_periods({ days: 56, source: 'all' })` for
-   28-vs-28 context.
+   context on about 28 days against 28 (29 dates through today against the 28 before: compare totals only
+   when both sides have the same `data_points`).
 
 **The blind spot to state out loud.** A drop is reported only when both halves have a position greater
 than zero, so a keyword that fell out of the result set entirely, the worst outcome available, produces
@@ -462,9 +464,12 @@ same category of visibility lever as attributes (Play L3), and just as commonly 
 
 ## 5. Diagnosis: when the data looks wrong
 
-- **The half-window trap.** `seo_local_compare_periods({ days: 30 })` compares the last 15 days against
-  the 15 before, not 30 against 30, and `seo_local_rank_changes({ days: 7 })` is a 3-to-4-day comparison.
-  **Pass double the period you want on both.** This one misreading has produced more wrong
+- **The half-window trap.** `seo_local_compare_periods({ days: 30 })` compares the 16 dates through today
+  against the 15 before, not 30 against 30, and `seo_local_rank_changes({ days: 7 })` compares 4 dates
+  against 3. **Pass double the period you want on both.** The sides are never the same length, and the
+  current one ends today, whose newest days Search Console has not reported yet, so it reads short. Give
+  a change only when `current.data_points` equals `previous.data_points`; otherwise report both totals
+  with their day counts, never a percent change. This one misreading has produced more wrong
   month-over-month narratives than anything else in this lane.
 - **`seo_gbp_insights` returns nothing.** Is the connection bound to a location, or sitting in
   `needs_setup` with no `gbp_location_id`? Has a sync ever run? Insights are synced rows, not a live read,
@@ -543,7 +548,8 @@ An audit without tickets is a PDF.
 `references/reporting-and-delivery.md`: Listing Score vs last month per location from `score_history` with
 the fixed fields named; GBP actions from `seo_gbp_overview` month over month and year over year; review
 count, average, reply coverage percent; local organic from `seo_local_compare_periods` (double the `days`
-you want per side) plus climbers and droppers from `seo_local_rank_changes`; photo count and gaps from
+you want per side; a change only when both sides have the same `data_points`, otherwise both totals with
+their day counts) plus climbers and droppers from `seo_local_rank_changes`; photo count and gaps from
 `seo_gbp_media` and service-menu count from `seo_gbp_services` when either changed this month; citation
 consistency from the stored `seo_citations_get` snapshot with its `audited_at` date, reporting
 `basis: 'no_signal'` directories as unverified rather than absent; work shipped from completed PM tasks

@@ -23,7 +23,7 @@ cross-referenced here.
 | `seo_ranking_predictions` | LIVE | A (free DB read) | args `domain`, `keyword` (contains), `risk_level` (high, medium, low), `max_confidence`, `page`, `limit` (max 100); linear trend extrapolation over rank-check history, computed Sundays; `confidence_score` = R-squared x 100; `backlinks_needed` and `requirements` NOT computed |
 | `seo_gsc_time_series` | LIVE | A | `site_url`, `start`, `end`, `filters[]`; daily clicks, impressions, CTR, position; the YoY and seasonal-index source |
 | `seo_gsc_period_comparison` | LIVE | A | `site_url`, `period_a`, `period_b` (each `start`, `end`); winners, losers, climbers, droppers |
-| `seo_local_compare_periods` | LIVE | A | `days`, `source`; halves the window you pass (180 for a 90-vs-90) |
+| `seo_local_compare_periods` | LIVE | A | `days`, `source`; splits the window you pass into two sides that are not the same length (180 gives 91 dates through today against 90); compare totals only when both sides have the same `data_points` |
 | `seo_tracked_keywords_list` | LIVE | A | tracking start dates for the history gate |
 | `seo_rankings_list` | LIVE | A | `view: 'history'` per keyword; `group_by_keyword: true` for the honest keyword count |
 | `keywords_data_google_trends_explore` | LIVE | B | relative 0-100 interest, up to five years; the seasonal-index source when GSC history is short |
@@ -191,7 +191,7 @@ estimate even when asked for one; give the band and the midpoint labeled midpoin
 | seasonal index peak in an odd month | brand terms in the series, a one-off event (PR, an outage, a launch), Pacific-day boundary on a month edge | rebuild non-brand; check the event in memory; accept the index only if two cycles agree |
 | YoY is down but every ranking is up | demand fell (index), a measurement artifact (property change, filter change), or an intent shift | `rankings-and-search-console.md` artifact ladder first, then the index, then intent |
 | forecast band missed by more than 50 percent | plan shipped late, a SERP feature appeared, CTR assumed for position 1 | reconcile in the report row by row; the miss is a finding |
-| `seo_local_compare_periods` windows look halved | they are; the tool halves what you pass | pass double |
+| `seo_local_compare_periods` windows look halved | they are, and unequal: the current side runs through today, whose newest days are not reported yet | pass double; compare totals only on equal `data_points` |
 
 ## Edge cases and failure modes
 
