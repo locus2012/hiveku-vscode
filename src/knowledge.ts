@@ -857,11 +857,13 @@ const HIVEKU_ASK: string[] = [
   // Mobile (Expo) app settings (2026-10-12, MCP #167, #170, #195). The SDK upgrade rewrites the app's package
   // files, app config and untouched template files in one go (a checkpoint is saved first) and restarts its
   // preview; the store identity (iOS bundle ID, Android package, link scheme) becomes permanent once a build is
-  // uploaded to a store; the Apple account decides which developer account builds and submits the app. Every call
+  // uploaded to a store; the Apple account decides which developer account builds and submits the app; the Expo
+  // project (2026-11-04, MCP S3b) decides where every build and over-the-air update of the app goes. Every call
   // asks, in auto mode too, as in the plugin and Codex. Their reads stay unasked. Appended last, in this order.
   'mcp__hiveku__mobile_app_sdk_upgrade',
   'mcp__hiveku__mobile_app_identity_set',
   'mcp__hiveku__mobile_app_apple_account_set',
+  'mcp__hiveku__mobile_app_expo_project_choose',
   // The PPC change ledger's override (2026-10-13, MCP #211, builder #1246): its answer is a person's yes
   // to going over someone else's recent change to the same budget, bid or setting, so the model must
   // never give it on its own. Every call asks, in auto mode too, as in the plugin and Codex; the MCP

@@ -111,6 +111,7 @@ const MOBILE = [
   'mcp__hiveku__mobile_app_sdk_upgrade',
   'mcp__hiveku__mobile_app_identity_set',
   'mcp__hiveku__mobile_app_apple_account_set',
+  'mcp__hiveku__mobile_app_expo_project_choose',
 ];
 
 /** The PPC change ledger's override (2026-10-13, MCP #211): a person's yes to going over someone else's recent change always asks. */
