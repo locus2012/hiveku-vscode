@@ -1127,6 +1127,17 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__seo_plan_phrase_set',
   'mcp__hiveku__seo_plan_suggest_phrases',
   'mcp__hiveku__seo_plan_suggest_links',
+  // Brand guides and customer journeys (2026-11-04): the brand guide's narrators, the voice every new video speaks in
+  // for the whole account; a journey made from a template and "Finish the missing pieces" (each a billed AI run); the
+  // key-stage videos (billed clips); a journey's published version (cannot be undone); and a simulator projection on
+  // the journey's public page, as in the Claude Code and Codex plugins. No name ends in _get or _list or holds _list_.
+  // Appended last, in this order.
+  'mcp__hiveku__brand_guide_voiceovers_set',
+  'mcp__hiveku__customer_journey_create_from_template',
+  'mcp__hiveku__customer_journey_repopulate',
+  'mcp__hiveku__customer_journey_videos_generate',
+  'mcp__hiveku__customer_journey_iteration_publish',
+  'mcp__hiveku__customer_journey_simulation_publish',
 ];
 
 /**

@@ -358,6 +358,19 @@ const MEET_CALENDAR_SEO_PLAN = [
   'mcp__hiveku__seo_plan_suggest_links',
 ];
 /**
+ * Brand guides and customer journeys (2026-11-04): the brand guide's narrators, the billed AI fills, the key-stage
+ * videos, a published version and a projection on the public page, as in the Claude Code and Codex plugins. Appended
+ * last, in this order.
+ */
+const MARKETING_IDENTITY = [
+  'mcp__hiveku__brand_guide_voiceovers_set',
+  'mcp__hiveku__customer_journey_create_from_template',
+  'mcp__hiveku__customer_journey_repopulate',
+  'mcp__hiveku__customer_journey_videos_generate',
+  'mcp__hiveku__customer_journey_iteration_publish',
+  'mcp__hiveku__customer_journey_simulation_publish',
+];
+/**
  * The Projects asks the Claude Code plugin makes through its ask list (the settings block INSTALL.md has each person
  * paste) and inside a batch, while its hook leaves the direct call to those settings: the plugin's hook forces only the
  * leave, the comment delete, the share, the unshare and the project delete. Checked against the plugin below.
@@ -373,7 +386,7 @@ const PLUGIN_ASK_LIST_ONLY = [
   'mcp__hiveku__pm_tasks_delete',
 ];
 
-const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN];
+const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY];
 const without = (...names) => EXPECTED_ASK.filter((name) => !names.includes(name));
 
 const dirs = [];
@@ -518,10 +531,10 @@ describe('Scaffolded settings: ask rules for the tools that switch ads or workfl
       [['mcp__hiveku__*'], []],
       [['mcp__*'], []],
       [['*'], []],
-      [['mcp__hiveku__ppc_*'], ['mcp__hiveku__workflow_enable', 'mcp__hiveku__workflow_resume', 'mcp__hiveku__hiveku_batch', ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN]],
+      [['mcp__hiveku__ppc_*'], ['mcp__hiveku__workflow_enable', 'mcp__hiveku__workflow_resume', 'mcp__hiveku__hiveku_batch', ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY]],
       [['mcp__hiveku__workflow_*'], EXPECTED_ASK.filter((name) => !name.startsWith('mcp__hiveku__workflow_'))],
-      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*'], ['mcp__hiveku__hiveku_batch', ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN]],
-      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*', 'mcp__hiveku__hiveku_batch'], [...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN]],
+      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*'], ['mcp__hiveku__hiveku_batch', ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY]],
+      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*', 'mcp__hiveku__hiveku_batch'], [...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY]],
       // A user who keeps every marketing tool from Claude Code: the deny covers the lead-email change, the record-again
       // send, the site inbox delete and test lead email, wave B's approval and conversion-upload writes, and the webinar
       // invites, cancel, delete and edit.
@@ -608,35 +621,44 @@ describe('ensureSpendAskRules: a folder scaffolded before the ask rules', () => 
     const dir = await tmp('hk-ensure-085-');
     const before = { ...OLD, permissions: { ...OLD.permissions, ask: ['WebFetch', ...FIRST_FOUR] } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY]);
     const after = await readSettings(dir);
-    assert.deepEqual(after, { ...before, permissions: { ...before.permissions, ask: ['WebFetch', ...FIRST_FOUR, ...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN] } });
+    assert.deepEqual(after, { ...before, permissions: { ...before.permissions, ask: ['WebFetch', ...FIRST_FOUR, ...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY] } });
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.48 rules gets only the webinar edit, the webhook delete, the Projects asks and the newer rules, appended last, so it asks in a fresh folder\'s order', async () => {
     const dir = await tmp('hk-ensure-09148-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.49 rules gets only the email webhook delete, the Projects asks and the newer rules, appended last, so it asks in a fresh folder\'s order', async () => {
     const dir = await tmp('hk-ensure-09149-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
-  test('a folder that holds the 0.91.50 rules gets only the Meet calendar sends and the SEO plan writes, appended last', async () => {
+  test('a folder that holds the 0.91.50 rules gets only the Meet calendar sends, the SEO plan writes and the newer rules, appended last', async () => {
     const dir = await tmp('hk-ensure-09150-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...MEET_CALENDAR_SEO_PLAN) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), MEET_CALENDAR_SEO_PLAN);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY]);
+    assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
+  });
+
+  test('a folder that holds the 0.91.51 rules gets only the brand guide and journey asks, appended last', async () => {
+    const dir = await tmp('hk-ensure-09151-');
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...MARKETING_IDENTITY) } };
+    await seedSettings(dir, before);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), MARKETING_IDENTITY);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
