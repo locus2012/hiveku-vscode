@@ -781,7 +781,7 @@ describe('The ask list gates what the plugins gate', () => {
     }
     // The Projects asks go through the same strict checks (the 0.27.163 review): plugin 0.27.163 had eight of them on
     // its ask list only, which an install pasted before that list never got, so they ran unasked under the plugin's
-    // blanket allow. From plugin 0.27.164 its hook forces all thirteen, as it does every other rule checked below.
+    // blanket allow. From plugin 0.27.165 its hook forces all thirteen, as it does every other rule checked below.
     const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch' && !VERSION_TOOLS.includes(name) && !GATED_READS.includes(name) && !GLOB_ONLY.includes(name));
     // The version tools are judged by the plugin hook's version rules (lib/vcs-tool-rules.mjs),
     // not its always-ask maps: a rollback dry run is allowed and an apply asks (an ask rule here
