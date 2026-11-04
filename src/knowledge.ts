@@ -1101,8 +1101,8 @@ const HIVEKU_ASK: string[] = [
   // Commerce > Usage, where it posts its updates, and a new workflow from a recipe (made switched off). Then a
   // project's share and unshare with another workspace (at once, for that workspace's people), an archived project's
   // permanent delete and a task's permanent delete. Every call asks. The Codex plugin prompts for all thirteen and the
-  // Claude Code plugin lists them on its ask list; its hook forces the leave, the comment delete, the share, the
-  // unshare and the project delete. No name ends in _get or _list or holds _list_, so no read glob above approves one.
+  // Claude Code plugin lists them on its ask list, and from 0.27.164 its hook forces every one of them too. No name
+  // ends in _get or _list or holds _list_, so no read glob above approves one.
   // The Projects reads stay off this list. Appended last, in this order.
   'mcp__hiveku__pm_project_leave',
   'mcp__hiveku__pm_task_comment_delete',
