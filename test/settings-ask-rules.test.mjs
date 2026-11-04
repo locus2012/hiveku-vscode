@@ -121,7 +121,7 @@ const PPC_OVERRIDE = ['mcp__hiveku__ppc_recent_change_override'];
 const LEAD_EMAILS = ['mcp__hiveku__marketing_form_notifications_update'];
 
 /** The account's timezone and where the website assistant looks answers up (2026-10-19, plugin 0.27.58): every call asks, in this order. */
-const ASSISTANT_TZ = ['mcp__hiveku__account_timezone_set', 'mcp__hiveku__helpdesk_assistant_knowledge_sources_update'];
+const ASSISTANT_TZ = ['mcp__hiveku__account_settings_update', 'mcp__hiveku__account_settings_logo_set', 'mcp__hiveku__account_settings_logo_remove', 'mcp__hiveku__account_timezone_set', 'mcp__hiveku__helpdesk_assistant_knowledge_sources_update'];
 
 /** An account's environment groups (2026-10-17, plan B4, MCP #236): every write asks, in this order; the reads do not. */
 const ENV_GROUPS = [
