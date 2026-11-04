@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.91.51
+## 0.91.52
 - **Plainer wording in the extension's description and settings.** The Marketplace description, the Push Local Changes command, the welcome text, the server address settings, the Autonomous permission mode and the Codex support and sandbox settings no longer use long dashes. The words are the same, and nothing else changes for you.
 
 ## 0.91.51
