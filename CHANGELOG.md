@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.52
+- **Plainer wording in the extension's description and settings.** The Marketplace description, the Push Local Changes command, the welcome text, the server address settings, the Autonomous permission mode and the Codex support and sandbox settings no longer use long dashes. The words are the same, and nothing else changes for you.
+
 ## 0.91.51
 - **Booking links, booked meetings and the SEO plan's writes always ask.** Claude Code in your project folders asks before `crm_contact_booking_link_send` (emails or texts a contact a booking link from a connected inbox or the account's number, signed with your name), `calendar_booking_create` (books a contact into a meeting; Hiveku takes it from the Hiveku app's own key alone, so this is a second guard), and Content's SEO plan writes `seo_plan_phrase_set`, `seo_plan_suggest_phrases` and `seo_plan_suggest_links`, in every permission mode, as the Claude Code and Codex plugins do. Reading bookings, meeting types and lead replies needs no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
 
