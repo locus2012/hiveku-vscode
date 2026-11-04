@@ -1,7 +1,7 @@
 {
   "name": "hiveku-vscode",
   "displayName": "Hiveku",
-  "description": "Run entire Hiveku accounts from VS Code with Claude Code — role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
+  "description": "Run entire Hiveku accounts from VS Code with Claude Code: role-based consoles for SEO, PPC, content, sales, outbound and bookkeeping; agency-grade methodology skills; site projects with native source control, deploys and previews; local automations and scheduled briefs.",
   "version": "0.91.50",
   "publisher": "hiveku",
   "license": "MIT",
@@ -83,7 +83,7 @@
       },
       {
         "command": "hiveku.pushLocal",
-        "title": "Hiveku: Push Local Changes (reliable — assets + code)",
+        "title": "Hiveku: Push Local Changes (reliable: assets + code)",
         "icon": "$(cloud-upload)"
       },
       {
@@ -492,7 +492,7 @@
     "viewsWelcome": [
       {
         "view": "hiveku.projects",
-        "contents": "Run your Hiveku accounts from the editor — projects, departments, media, and Claude scoped per account.\n[Guided Setup](command:hiveku.setup)\n\n[Connect Hiveku](command:hiveku.connect)\n\nPrefer to paste an API key?\n[Sign in with a key](command:hiveku.signIn)",
+        "contents": "Run your Hiveku accounts from the editor: projects, departments, media, and Claude scoped per account.\n[Guided Setup](command:hiveku.setup)\n\n[Connect Hiveku](command:hiveku.connect)\n\nPrefer to paste an API key?\n[Sign in with a key](command:hiveku.signIn)",
         "when": "!hiveku.signedIn"
       },
       {
@@ -1014,13 +1014,13 @@
         "hiveku.baseUrl": {
           "type": "string",
           "default": "https://core.hiveku.com",
-          "description": "Base URL of the Hiveku MCP server (the /mcp endpoint is appended). SECURITY: machine-scoped on purpose — this decides where the account Bearer key is sent, so a workspace .vscode/settings.json must NOT be able to override it and redirect keys to another host.",
+          "description": "Base URL of the Hiveku MCP server (the /mcp endpoint is appended). SECURITY: machine-scoped on purpose. This decides where the account Bearer key is sent, so a workspace .vscode/settings.json must NOT be able to override it and redirect keys to another host.",
           "scope": "machine"
         },
         "hiveku.appUrl": {
           "type": "string",
           "default": "https://app.hiveku.com",
-          "description": "Base URL of the Hiveku web app (used by the browser Connect flow). SECURITY: machine-scoped on purpose — this decides where the account Bearer key is sent, so a workspace .vscode/settings.json must NOT be able to override it and redirect keys to another host.",
+          "description": "Base URL of the Hiveku web app (used by the browser Connect flow). SECURITY: machine-scoped on purpose. This decides where the account Bearer key is sent, so a workspace .vscode/settings.json must NOT be able to override it and redirect keys to another host.",
           "scope": "machine"
         },
         "hiveku.includeAssetsOnDownload": {
@@ -1062,7 +1062,7 @@
           ],
           "enumDescriptions": [
             "Auto-approve file edits and safe in-folder commands; still ask before deploys, git push, network, and Hiveku writes. Recommended.",
-            "Autonomous — skip permission prompts (Claude Code runs account/site work without asking), except the tools that turn ads on or restart them and the ones that switch a workflow on, which always ask. Your .env*.local deny rule still blocks secret reads. Use when you trust Claude Code to operate an account end-to-end.",
+            "Autonomous: skip permission prompts (Claude Code runs account/site work without asking), except the tools that turn ads on or restart them and the ones that switch a workflow on, which always ask. Your .env*.local deny rule still blocks secret reads. Use when you trust Claude Code to operate an account end-to-end.",
             "Ask before every edit and command (most cautious)."
           ],
           "default": "acceptEdits",
@@ -1071,12 +1071,12 @@
         "hiveku.codexSupport": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Also scaffold OpenAI Codex support into Hiveku folders: `AGENTS.md`, a project-scoped `.codex/config.toml` carrying the folder's Hiveku MCP server + account key, and `.agents/skills/*` mirrors of every /hiveku-* command — so the Codex CLI / IDE extension works the same as Claude Code. Enable via **Hiveku: Set Up Codex Support** (it also offers to pre-trust your folders in `~/.codex/config.toml`, which Codex requires before loading project config)."
+          "markdownDescription": "Also scaffold OpenAI Codex support into Hiveku folders: `AGENTS.md`, a project-scoped `.codex/config.toml` carrying the folder's Hiveku MCP server + account key, and `.agents/skills/*` mirrors of every /hiveku-* command, so the Codex CLI / IDE extension works the same as Claude Code. Enable via **Hiveku: Set Up Codex Support** (it also offers to pre-trust your folders in `~/.codex/config.toml`, which Codex requires before loading project config)."
         },
         "hiveku.sandboxWorkspace": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Sandbox each Hiveku account folder at the OS level, so Claude Code's **terminal commands physically cannot write outside that account's folder** (the per-session temp and the package caches `~/.npm`, `~/.cache`, `~/Library/Caches` stay writable so installs still work).\n\nThis is the only hard guarantee of per-account siloing: permission rules bind the edit tools, but a shell command like `tar czf /tmp/x.tar.gz` is only stopped by the sandbox. Recommended when one machine works many accounts.\n\nOff by default because it constrains every subprocess — turn it on, then run **Hiveku: Refresh Setup** and confirm your builds still pass."
+          "markdownDescription": "Sandbox each Hiveku account folder at the OS level, so Claude Code's **terminal commands physically cannot write outside that account's folder** (the per-session temp and the package caches `~/.npm`, `~/.cache`, `~/Library/Caches` stay writable so installs still work).\n\nThis is the only hard guarantee of per-account siloing: permission rules bind the edit tools, but a shell command like `tar czf /tmp/x.tar.gz` is only stopped by the sandbox. Recommended when one machine works many accounts.\n\nOff by default because it constrains every subprocess. Turn it on, then run **Hiveku: Refresh Setup** and confirm your builds still pass."
         }
       }
     },
