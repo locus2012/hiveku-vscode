@@ -1,7 +1,15 @@
 # Changelog
 
+<<<<<<< HEAD
 ## 0.91.52
 - **Brand guide narrators and the billed, published and public journey writes always ask.** Claude Code in your project folders asks before `brand_guide_voiceovers_set` (the voice every new video speaks in, for the whole account), `customer_journey_create_from_template` and `customer_journey_repopulate` (each starts a billed AI run), `customer_journey_videos_generate` (billed clips from the month's allowance), `customer_journey_iteration_publish` (a published version cannot be undone) and `customer_journey_simulation_publish` (a projection on the journey's public page), in every permission mode, as the Claude Code and Codex plugins do. Running the simulator, canvas positions, stage links, font uploads and ICP pictures need no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
+=======
+## 0.91.54
+- **Account settings changes ask first.** Changing the shared account name or timezone, replacing the logo, or removing it asks for confirmation in every permission mode.
+
+## 0.91.52
+- **Plainer wording in the extension's description and settings.** The Marketplace description, the Push Local Changes command, the welcome text, the server address settings, the Autonomous permission mode and the Codex support and sandbox settings no longer use long dashes. The words are the same, and nothing else changes for you.
+>>>>>>> origin/main
 
 ## 0.91.51
 - **Booking links, booked meetings and the SEO plan's writes always ask.** Claude Code in your project folders asks before `crm_contact_booking_link_send` (emails or texts a contact a booking link from a connected inbox or the account's number, signed with your name), `calendar_booking_create` (books a contact into a meeting; Hiveku takes it from the Hiveku app's own key alone, so this is a second guard), and Content's SEO plan writes `seo_plan_phrase_set`, `seo_plan_suggest_phrases` and `seo_plan_suggest_links`, in every permission mode, as the Claude Code and Codex plugins do. Reading bookings, meeting types and lead replies needs no ask. Hiveku folders open in VS Code get the new rules when the extension starts.

@@ -635,8 +635,8 @@ describe('what the extension writes and wires', () => {
           "  // Commerce > Usage, where it posts its updates, and a new workflow from a recipe (made switched off). Then a\n" +
           "  // project's share and unshare with another workspace (at once, for that workspace's people), an archived project's\n" +
           "  // permanent delete and a task's permanent delete. Every call asks. The Codex plugin prompts for all thirteen and the\n" +
-          "  // Claude Code plugin lists them on its ask list; its hook forces the leave, the comment delete, the share, the\n" +
-          "  // unshare and the project delete. No name ends in _get or _list or holds _list_, so no read glob above approves one.\n" +
+          "  // Claude Code plugin lists them on its ask list, and from 0.27.165 its hook forces every one of them too. No name\n" +
+          "  // ends in _get or _list or holds _list_, so no read glob above approves one.\n" +
           "  // The Projects reads stay off this list. Appended last, in this order.\n" +
           "  'mcp__hiveku__pm_project_leave',\n" +
           "  'mcp__hiveku__pm_task_comment_delete',\n" +

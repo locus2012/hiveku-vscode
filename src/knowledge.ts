@@ -857,11 +857,13 @@ const HIVEKU_ASK: string[] = [
   // Mobile (Expo) app settings (2026-10-12, MCP #167, #170, #195). The SDK upgrade rewrites the app's package
   // files, app config and untouched template files in one go (a checkpoint is saved first) and restarts its
   // preview; the store identity (iOS bundle ID, Android package, link scheme) becomes permanent once a build is
-  // uploaded to a store; the Apple account decides which developer account builds and submits the app. Every call
+  // uploaded to a store; the Apple account decides which developer account builds and submits the app; the Expo
+  // project (2026-11-04, MCP S3b) decides where every build and over-the-air update of the app goes. Every call
   // asks, in auto mode too, as in the plugin and Codex. Their reads stay unasked. Appended last, in this order.
   'mcp__hiveku__mobile_app_sdk_upgrade',
   'mcp__hiveku__mobile_app_identity_set',
   'mcp__hiveku__mobile_app_apple_account_set',
+  'mcp__hiveku__mobile_app_expo_project_choose',
   // The PPC change ledger's override (2026-10-13, MCP #211, builder #1246): its answer is a person's yes
   // to going over someone else's recent change to the same budget, bid or setting, so the model must
   // never give it on its own. Every call asks, in auto mode too, as in the plugin and Codex; the MCP
@@ -878,6 +880,9 @@ const HIVEKU_ASK: string[] = [
   // website assistant may tell anyone who opens the chat, and the builder holds it for agents
   // (403 agent_changes_not_enabled) until these releases are out. Every call asks, in auto mode too, as in
   // the plugin and Codex; their reads stay unasked. Appended after the lead emails, in this order.
+  'mcp__hiveku__account_settings_update',
+  'mcp__hiveku__account_settings_logo_set',
+  'mcp__hiveku__account_settings_logo_remove',
   'mcp__hiveku__account_timezone_set',
   'mcp__hiveku__helpdesk_assistant_knowledge_sources_update',
   // An account's environment groups (2026-10-17, plan B4, MCP #236, builder #1517): variables several sites
@@ -1101,8 +1106,8 @@ const HIVEKU_ASK: string[] = [
   // Commerce > Usage, where it posts its updates, and a new workflow from a recipe (made switched off). Then a
   // project's share and unshare with another workspace (at once, for that workspace's people), an archived project's
   // permanent delete and a task's permanent delete. Every call asks. The Codex plugin prompts for all thirteen and the
-  // Claude Code plugin lists them on its ask list; its hook forces the leave, the comment delete, the share, the
-  // unshare and the project delete. No name ends in _get or _list or holds _list_, so no read glob above approves one.
+  // Claude Code plugin lists them on its ask list, and from 0.27.165 its hook forces every one of them too. No name
+  // ends in _get or _list or holds _list_, so no read glob above approves one.
   // The Projects reads stay off this list. Appended last, in this order.
   'mcp__hiveku__pm_project_leave',
   'mcp__hiveku__pm_task_comment_delete',

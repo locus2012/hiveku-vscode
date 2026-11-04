@@ -111,6 +111,7 @@ const MOBILE = [
   'mcp__hiveku__mobile_app_sdk_upgrade',
   'mcp__hiveku__mobile_app_identity_set',
   'mcp__hiveku__mobile_app_apple_account_set',
+  'mcp__hiveku__mobile_app_expo_project_choose',
 ];
 
 /** The PPC change ledger's override (2026-10-13, MCP #211): a person's yes to going over someone else's recent change always asks. */
@@ -120,7 +121,7 @@ const PPC_OVERRIDE = ['mcp__hiveku__ppc_recent_change_override'];
 const LEAD_EMAILS = ['mcp__hiveku__marketing_form_notifications_update'];
 
 /** The account's timezone and where the website assistant looks answers up (2026-10-19, plugin 0.27.58): every call asks, in this order. */
-const ASSISTANT_TZ = ['mcp__hiveku__account_timezone_set', 'mcp__hiveku__helpdesk_assistant_knowledge_sources_update'];
+const ASSISTANT_TZ = ['mcp__hiveku__account_settings_update', 'mcp__hiveku__account_settings_logo_set', 'mcp__hiveku__account_settings_logo_remove', 'mcp__hiveku__account_timezone_set', 'mcp__hiveku__helpdesk_assistant_knowledge_sources_update'];
 
 /** An account's environment groups (2026-10-17, plan B4, MCP #236): every write asks, in this order; the reads do not. */
 const ENV_GROUPS = [
@@ -369,21 +370,6 @@ const MARKETING_IDENTITY = [
   'mcp__hiveku__customer_journey_videos_generate',
   'mcp__hiveku__customer_journey_iteration_publish',
   'mcp__hiveku__customer_journey_simulation_publish',
-];
-/**
- * The Projects asks the Claude Code plugin makes through its ask list (the settings block INSTALL.md has each person
- * paste) and inside a batch, while its hook leaves the direct call to those settings: the plugin's hook forces only the
- * leave, the comment delete, the share, the unshare and the project delete. Checked against the plugin below.
- */
-const PLUGIN_ASK_LIST_ONLY = [
-  'mcp__hiveku__pm_task_comment_react',
-  'mcp__hiveku__pm_project_slack_test',
-  'mcp__hiveku__pm_project_github_sync_run',
-  'mcp__hiveku__pm_project_billing_update',
-  'mcp__hiveku__pm_project_billing_import',
-  'mcp__hiveku__pm_project_integrations_update',
-  'mcp__hiveku__pm_project_automation_create',
-  'mcp__hiveku__pm_tasks_delete',
 ];
 
 const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY];
@@ -816,19 +802,10 @@ describe('The ask list gates what the plugins gate', () => {
       });
       assert.equal(direct?.hookSpecificOutput?.permissionDecision, 'ask', `the plugin hook does not ask on a direct call to ${name}`);
     }
-    // Eight Projects asks are on the plugin's ask list, not its hook (plugin 0.27.163): a direct call asks through
-    // the settings block INSTALL.md has each person paste, and a batch carrying one asks through the hook. Here every
-    // call asks. So each must be on that list, asked inside a batch, and never approved by the hook.
-    const ASK_LIST_ONLY = PLUGIN_ASK_LIST_ONLY.map(bare);
-    assert.deepEqual(PLUGIN_ASK_LIST_ONLY.filter((rule) => !EXPECTED_ASK.includes(rule)), [], 'the exemption names a rule this list does not hold');
-    for (const name of ASK_LIST_ONLY) {
-      assert.ok(onAskList.has(name), `${name} is not on the plugin's permission-critical ask list`);
-      const direct = decideForPayload({ tool_name: `mcp__plugin_hiveku_hk__${name}`, tool_input: {} });
-      assert.notEqual(direct?.hookSpecificOutput?.permissionDecision, 'allow', `the plugin hook approves ${name} unasked`);
-      const batched = decideForPayload({ tool_name: 'mcp__plugin_hiveku_hk__hiveku_batch', tool_input: { calls: [{ tool: name, args: {} }] } });
-      assert.equal(batched?.hookSpecificOutput?.permissionDecision, 'ask', `the plugin hook does not ask on a batch carrying ${name}`);
-    }
-    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch' && !VERSION_TOOLS.includes(name) && !GATED_READS.includes(name) && !GLOB_ONLY.includes(name) && !ASK_LIST_ONLY.includes(name));
+    // The Projects asks go through the same strict checks (the 0.27.163 review): plugin 0.27.163 had eight of them on
+    // its ask list only, which an install pasted before that list never got, so they ran unasked under the plugin's
+    // blanket allow. From plugin 0.27.165 its hook forces all thirteen, as it does every other rule checked below.
+    const gated = EXPECTED_ASK.map(bare).filter((name) => name !== 'hiveku_batch' && !VERSION_TOOLS.includes(name) && !GATED_READS.includes(name) && !GLOB_ONLY.includes(name));
     // The version tools are judged by the plugin hook's version rules (lib/vcs-tool-rules.mjs),
     // not its always-ask maps: a rollback dry run is allowed and an apply asks (an ask rule here
     // cannot read dry_run, so it asks always), and a conflict resolve always asks.
