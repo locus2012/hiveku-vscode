@@ -650,9 +650,19 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__pm_project_share',\n" +
           "  'mcp__hiveku__pm_project_unshare',\n" +
           "  'mcp__hiveku__pm_projects_delete',\n" +
-          "  'mcp__hiveku__pm_tasks_delete',"
+          "  'mcp__hiveku__pm_tasks_delete',\n" +
+          "  // Hiveku Meet's calendar sends (2026-11-03): a booking link emailed or texted to a contact from a connected inbox or\n" +
+          "  // the account's number, and a meeting booked for a contact (the Hiveku app's own key alone on the server, so it asks\n" +
+          "  // here as a second guard). Content's SEO plan writes ask too, as in the Claude Code and Codex plugins (SEO wave F):\n" +
+          "  // saving a post's search phrase can start billed rank checks, and the suggestions spend AI credit. No name ends in\n" +
+          "  // _get or _list or holds _list_. Appended last, in this order.\n" +
+          "  'mcp__hiveku__crm_contact_booking_link_send',\n" +
+          "  'mcp__hiveku__calendar_booking_create',\n" +
+          "  'mcp__hiveku__seo_plan_phrase_set',\n" +
+          "  'mcp__hiveku__seo_plan_suggest_phrases',\n" +
+          "  'mcp__hiveku__seo_plan_suggest_links',"
       ),
-      'the newest ask rules, the Projects asks, go at the END, after the email webhook delete',
+      'the newest ask rules, the Meet calendar sends and the SEO plan writes, go at the END, after the Projects asks',
     );
   });
 
