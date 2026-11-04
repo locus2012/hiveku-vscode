@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.55
+- **Brand guide narrators and the billed, published and public journey writes always ask.** Claude Code in your project folders asks before `brand_guide_voiceovers_set` (the voice every new video speaks in, for the whole account), `customer_journey_create_from_template` and `customer_journey_repopulate` (each starts a billed AI run), `customer_journey_videos_generate` (billed clips from the month's allowance), `customer_journey_iteration_publish` (a published version cannot be undone) and `customer_journey_simulation_publish` (a projection on the journey's public page), in every permission mode, as the Claude Code and Codex plugins do. Running the simulator, canvas positions, stage links, font uploads and ICP pictures need no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
+
 ## 0.91.54
 - **Account settings changes ask first.** Changing the shared account name or timezone, replacing the logo, or removing it asks for confirmation in every permission mode.
 

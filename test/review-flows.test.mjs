@@ -660,9 +660,20 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__calendar_booking_create',\n" +
           "  'mcp__hiveku__seo_plan_phrase_set',\n" +
           "  'mcp__hiveku__seo_plan_suggest_phrases',\n" +
-          "  'mcp__hiveku__seo_plan_suggest_links',"
+          "  'mcp__hiveku__seo_plan_suggest_links',\n" +
+          "  // Brand guides and customer journeys (2026-11-04): the brand guide's narrators, the voice every new video speaks in\n" +
+          "  // for the whole account; a journey made from a template and \"Finish the missing pieces\" (each a billed AI run); the\n" +
+          "  // key-stage videos (billed clips); a journey's published version (cannot be undone); and a simulator projection on\n" +
+          "  // the journey's public page, as in the Claude Code and Codex plugins. No name ends in _get or _list or holds _list_.\n" +
+          "  // Appended last, in this order.\n" +
+          "  'mcp__hiveku__brand_guide_voiceovers_set',\n" +
+          "  'mcp__hiveku__customer_journey_create_from_template',\n" +
+          "  'mcp__hiveku__customer_journey_repopulate',\n" +
+          "  'mcp__hiveku__customer_journey_videos_generate',\n" +
+          "  'mcp__hiveku__customer_journey_iteration_publish',\n" +
+          "  'mcp__hiveku__customer_journey_simulation_publish',"
       ),
-      'the newest ask rules, the Meet calendar sends and the SEO plan writes, go at the END, after the Projects asks',
+      'the newest ask rules, the brand guide narrators and the billed, published and public journey writes, go at the END, after the Meet calendar sends and the SEO plan writes',
     );
   });
 
