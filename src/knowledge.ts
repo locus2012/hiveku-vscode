@@ -1117,6 +1117,16 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__pm_project_unshare',
   'mcp__hiveku__pm_projects_delete',
   'mcp__hiveku__pm_tasks_delete',
+  // Hiveku Meet's calendar sends (2026-11-03): a booking link emailed or texted to a contact from a connected inbox or
+  // the account's number, and a meeting booked for a contact (the Hiveku app's own key alone on the server, so it asks
+  // here as a second guard). Content's SEO plan writes ask too, as in the Claude Code and Codex plugins (SEO wave F):
+  // saving a post's search phrase can start billed rank checks, and the suggestions spend AI credit. No name ends in
+  // _get or _list or holds _list_. Appended last, in this order.
+  'mcp__hiveku__crm_contact_booking_link_send',
+  'mcp__hiveku__calendar_booking_create',
+  'mcp__hiveku__seo_plan_phrase_set',
+  'mcp__hiveku__seo_plan_suggest_phrases',
+  'mcp__hiveku__seo_plan_suggest_links',
 ];
 
 /**
