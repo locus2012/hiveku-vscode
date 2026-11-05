@@ -1143,6 +1143,14 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__customer_journey_videos_generate',
   'mcp__hiveku__customer_journey_iteration_publish',
   'mcp__hiveku__customer_journey_simulation_publish',
+  // The Publish and hosting writes (2026-11-05, wave S2b of the desktop's website parity): taking an environment
+  // offline or back, its hosting, and putting files and images back, where an image stored at its live address
+  // changes on the live site without a publish. Every call asks, in auto mode too, as in the plugin and Codex.
+  // Their reads stay unasked. Appended last, in this order.
+  'mcp__hiveku__project_publish_state_set',
+  'mcp__hiveku__project_hosting_lane_set',
+  'mcp__hiveku__project_hosting_lane_move',
+  'mcp__hiveku__deploy_restore_files',
 ];
 
 /**

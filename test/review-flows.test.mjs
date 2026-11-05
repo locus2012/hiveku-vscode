@@ -671,7 +671,15 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__customer_journey_repopulate',\n" +
           "  'mcp__hiveku__customer_journey_videos_generate',\n" +
           "  'mcp__hiveku__customer_journey_iteration_publish',\n" +
-          "  'mcp__hiveku__customer_journey_simulation_publish',"
+          "  'mcp__hiveku__customer_journey_simulation_publish',\n" +
+          "  // The Publish and hosting writes (2026-11-05, wave S2b of the desktop's website parity): taking an environment\n" +
+          "  // offline or back, its hosting, and putting files and images back, where an image stored at its live address\n" +
+          "  // changes on the live site without a publish. Every call asks, in auto mode too, as in the plugin and Codex.\n" +
+          "  // Their reads stay unasked. Appended last, in this order.\n" +
+          "  'mcp__hiveku__project_publish_state_set',\n" +
+          "  'mcp__hiveku__project_hosting_lane_set',\n" +
+          "  'mcp__hiveku__project_hosting_lane_move',\n" +
+          "  'mcp__hiveku__deploy_restore_files',"
       ),
       'the newest ask rules, the brand guide narrators and the billed, published and public journey writes, go at the END, after the Meet calendar sends and the SEO plan writes',
     );
