@@ -671,7 +671,10 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__customer_journey_repopulate',\n" +
           "  'mcp__hiveku__customer_journey_videos_generate',\n" +
           "  'mcp__hiveku__customer_journey_iteration_publish',\n" +
-          "  'mcp__hiveku__customer_journey_simulation_publish',"
+          "  'mcp__hiveku__customer_journey_simulation_publish',\n" +
+          "  // Bringing deleted contacts back (2026-11-04): a contact may have been deleted on purpose, so every call asks, as in\n" +
+          "  // the Claude Code and Codex plugins. Appended last.\n" +
+          "  'mcp__hiveku__crm_contacts_restore',"
       ),
       'the newest ask rules, the brand guide narrators and the billed, published and public journey writes, go at the END, after the Meet calendar sends and the SEO plan writes',
     );
