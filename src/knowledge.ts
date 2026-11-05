@@ -1228,6 +1228,16 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__dashboards_page_data_tally_settings_save',
   'mcp__hiveku__dashboards_page_data_tally_start_from_zero',
   'mcp__hiveku__dashboards_page_data_workflow_writer_stop',
+  // Reads that bill the account (2026-11-05, HK-1155). The '*_summary' read glob above approved these six unasked, while
+  // the Claude Code plugin asks first, because each call costs the account money. Asking beats that glob. The SEO data
+  // service registers them at run time, so no local tool build lists them: check-permission-rules.mjs reads the plugin's
+  // list of paid reads for that. Appended last, in this order.
+  'mcp__hiveku__backlinks_summary',
+  'mcp__hiveku__backlinks_bulk_pages_summary',
+  'mcp__hiveku__backlinks_domain_pages_summary',
+  'mcp__hiveku__backlinks_timeseries_summary',
+  'mcp__hiveku__backlinks_timeseries_new_lost_summary',
+  'mcp__hiveku__content_analysis_summary',
 ];
 
 /**

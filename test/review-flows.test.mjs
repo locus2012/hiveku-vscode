@@ -756,9 +756,19 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__dashboards_page_data_tally_add_remove',\n" +
           "  'mcp__hiveku__dashboards_page_data_tally_settings_save',\n" +
           "  'mcp__hiveku__dashboards_page_data_tally_start_from_zero',\n" +
-          "  'mcp__hiveku__dashboards_page_data_workflow_writer_stop',"
+          "  'mcp__hiveku__dashboards_page_data_workflow_writer_stop',\n" +
+          "  // Reads that bill the account (2026-11-05, HK-1155). The '*_summary' read glob above approved these six unasked, while\n" +
+          "  // the Claude Code plugin asks first, because each call costs the account money. Asking beats that glob. The SEO data\n" +
+          "  // service registers them at run time, so no local tool build lists them: check-permission-rules.mjs reads the plugin's\n" +
+          "  // list of paid reads for that. Appended last, in this order.\n" +
+          "  'mcp__hiveku__backlinks_summary',\n" +
+          "  'mcp__hiveku__backlinks_bulk_pages_summary',\n" +
+          "  'mcp__hiveku__backlinks_domain_pages_summary',\n" +
+          "  'mcp__hiveku__backlinks_timeseries_summary',\n" +
+          "  'mcp__hiveku__backlinks_timeseries_new_lost_summary',\n" +
+          "  'mcp__hiveku__content_analysis_summary',"
       ),
-      'the newest ask rules, the dashboards asks, go at the END, after the Referrals asks',
+      'the newest ask rules, the reads that bill the account, go at the END, after the dashboards asks',
     );
   });
 
