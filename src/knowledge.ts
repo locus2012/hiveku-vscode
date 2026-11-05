@@ -1154,6 +1154,15 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__project_hosting_lane_set',
   'mcp__hiveku__project_hosting_lane_move',
   'mcp__hiveku__deploy_restore_files',
+  // Marketing > Referrals (2026-11-04, the desktop app's Referrals page): sending invites texts or emails customers, a
+  // pause stops every link a campaign handed out (an activate turns them back on), an archive stops them for good, and
+  // an edit changes the friend's reward on the page every friend opens at once. Every call asks, as in the Claude Code
+  // and Codex plugins. A new campaign, links only, a lead's status and the reads stay unasked. Appended last, in this
+  // order.
+  'mcp__hiveku__marketing_referral_invite',
+  'mcp__hiveku__marketing_referral_status_set',
+  'mcp__hiveku__marketing_referral_archive',
+  'mcp__hiveku__marketing_referral_update',
 ];
 
 /**

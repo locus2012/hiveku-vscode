@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.58
+- **A referral campaign's invites, pause, archive and edits always ask.** Claude Code in your project folders asks before `marketing_referral_invite` (texts or emails your customers), `marketing_referral_status_set` (a pause stops every link the campaign handed out, and an activate turns them back on), `marketing_referral_archive` (the links stop for good) and `marketing_referral_update` (changes what friends read on the page they open), in every permission mode, as the Claude Code and Codex plugins do. A new campaign, links only, a lead's status and the reads stay unasked.
+
 ## 0.91.55
 - **Brand guide narrators and the billed, published and public journey writes always ask.** Claude Code in your project folders asks before `brand_guide_voiceovers_set` (the voice every new video speaks in, for the whole account), `customer_journey_create_from_template` and `customer_journey_repopulate` (each starts a billed AI run), `customer_journey_videos_generate` (billed clips from the month's allowance), `customer_journey_iteration_publish` (a published version cannot be undone) and `customer_journey_simulation_publish` (a projection on the journey's public page), in every permission mode, as the Claude Code and Codex plugins do. Running the simulator, canvas positions, stage links, font uploads and ICP pictures need no ask. Hiveku folders open in VS Code get the new rules when the extension starts.
 
