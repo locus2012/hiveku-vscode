@@ -1143,6 +1143,9 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__customer_journey_videos_generate',
   'mcp__hiveku__customer_journey_iteration_publish',
   'mcp__hiveku__customer_journey_simulation_publish',
+  // Bringing deleted contacts back (2026-11-04): a contact may have been deleted on purpose, so every call asks, as in
+  // the Claude Code and Codex plugins. Appended last.
+  'mcp__hiveku__crm_contacts_restore',
 ];
 
 /**
