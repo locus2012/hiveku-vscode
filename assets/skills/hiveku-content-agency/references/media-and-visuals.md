@@ -105,8 +105,9 @@ brand consistency, and are invisible to `media_library_list` audits. The right r
 depends on what you are holding: generated images register themselves, a hosted URL goes through
 `marketing_media_register_external_url`, and only raw bytes go through `media_upload`. Set
 `media_update({ asset_id, alt_text, tags })` on what you file. Before any `media_delete`, run
-`media_usage_get({ asset_id })` - it lists every email, page section, and CMS entry that would
-break; the delete is a hard delete plus S3 purge, and `force: true` orphans live content.
+`media_usage_get({ asset_id })` - it lists the social posts, designs, email templates and content
+items that would break, but not a website's own code, CMS entries or testimonials, so an empty list
+does not mean unused; the delete is a hard delete plus S3 purge, and `force: true` orphans live content.
 
 ## Attaching media to a content item - know what it does NOT do
 
