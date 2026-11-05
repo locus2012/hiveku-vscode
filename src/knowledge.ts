@@ -1238,6 +1238,14 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__backlinks_timeseries_summary',
   'mcp__hiveku__backlinks_timeseries_new_lost_summary',
   'mcp__hiveku__content_analysis_summary',
+  // The desktop app's Domains, settings and store writes (2026-11-05, waves S3c and S3d): they change what a live
+  // address serves, what a site's code reads or what the site is, and the Claude Code and Codex plugins ask first. Their
+  // reads stay unasked. Appended last, in this order.
+  'mcp__hiveku__project_domain_auto_configure',
+  'mcp__hiveku__project_domain_transfer',
+  'mcp__hiveku__project_secrets_rename',
+  'mcp__hiveku__site_convert_to_hosted',
+  'mcp__hiveku__shopify_project_settings_set',
 ];
 
 /**

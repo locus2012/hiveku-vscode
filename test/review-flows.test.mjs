@@ -766,9 +766,17 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__backlinks_domain_pages_summary',\n" +
           "  'mcp__hiveku__backlinks_timeseries_summary',\n" +
           "  'mcp__hiveku__backlinks_timeseries_new_lost_summary',\n" +
-          "  'mcp__hiveku__content_analysis_summary',"
+          "  'mcp__hiveku__content_analysis_summary',\n" +
+          "  // The desktop app's Domains, settings and store writes (2026-11-05, waves S3c and S3d): they change what a live\n" +
+          "  // address serves, what a site's code reads or what the site is, and the Claude Code and Codex plugins ask first. Their\n" +
+          "  // reads stay unasked. Appended last, in this order.\n" +
+          "  'mcp__hiveku__project_domain_auto_configure',\n" +
+          "  'mcp__hiveku__project_domain_transfer',\n" +
+          "  'mcp__hiveku__project_secrets_rename',\n" +
+          "  'mcp__hiveku__site_convert_to_hosted',\n" +
+          "  'mcp__hiveku__shopify_project_settings_set',"
       ),
-      'the newest ask rules, the reads that bill the account, go at the END, after the dashboards asks',
+      'the newest ask rules, the Domains, settings and store writes, go at the END, after the reads that bill the account',
     );
   });
 
