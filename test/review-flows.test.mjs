@@ -674,7 +674,15 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__customer_journey_simulation_publish',\n" +
           "  // Bringing deleted contacts back (2026-11-04): a contact may have been deleted on purpose, so every call asks, as in\n" +
           "  // the Claude Code and Codex plugins. Appended last.\n" +
-          "  'mcp__hiveku__crm_contacts_restore',"
+          "  'mcp__hiveku__crm_contacts_restore',\n" +
+          "  // The Publish and hosting writes (2026-11-05, wave S2b of the desktop's website parity): taking an environment\n" +
+          "  // offline or back, its hosting, and putting files and images back, where an image stored at its live address\n" +
+          "  // changes on the live site without a publish. Every call asks, in auto mode too, as in the plugin and Codex.\n" +
+          "  // Their reads stay unasked. Appended last, in this order.\n" +
+          "  'mcp__hiveku__project_publish_state_set',\n" +
+          "  'mcp__hiveku__project_hosting_lane_set',\n" +
+          "  'mcp__hiveku__project_hosting_lane_move',\n" +
+          "  'mcp__hiveku__deploy_restore_files',"
       ),
       'the newest ask rules, the brand guide narrators and the billed, published and public journey writes, go at the END, after the Meet calendar sends and the SEO plan writes',
     );
