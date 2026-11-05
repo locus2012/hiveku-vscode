@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.59
+- **The Hiveku app's account home, agency dashboard and Your data writes always ask.** Claude Code in your project folders asks before each of these tools, as the Claude Code and Codex plugins do. Hiveku takes them from the Hiveku app's own key alone, so an assistant is refused anyway; the ask stays in place should that ever widen.
+
 ## 0.91.58
 - **A referral campaign's invites, pause, archive and edits always ask.** Claude Code in your project folders asks before `marketing_referral_invite` (texts or emails your customers), `marketing_referral_status_set` (a pause stops every link the campaign handed out, and an activate turns them back on), `marketing_referral_archive` (the links stop for good) and `marketing_referral_update` (changes what friends read on the page they open), in every permission mode, as the Claude Code and Codex plugins do. A new campaign, links only, a lead's status and the reads stay unasked.
 
