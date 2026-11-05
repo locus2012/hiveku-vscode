@@ -672,6 +672,9 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__customer_journey_videos_generate',\n" +
           "  'mcp__hiveku__customer_journey_iteration_publish',\n" +
           "  'mcp__hiveku__customer_journey_simulation_publish',\n" +
+          "  // Bringing deleted contacts back (2026-11-04): a contact may have been deleted on purpose, so every call asks, as in\n" +
+          "  // the Claude Code and Codex plugins. Appended last.\n" +
+          "  'mcp__hiveku__crm_contacts_restore',\n" +
           "  // The Publish and hosting writes (2026-11-05, wave S2b of the desktop's website parity): taking an environment\n" +
           "  // offline or back, its hosting, and putting files and images back, where an image stored at its live address\n" +
           "  // changes on the live site without a publish. Every call asks, in auto mode too, as in the plugin and Codex.\n" +
