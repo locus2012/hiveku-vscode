@@ -691,9 +691,74 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__marketing_referral_invite',\n" +
           "  'mcp__hiveku__marketing_referral_status_set',\n" +
           "  'mcp__hiveku__marketing_referral_archive',\n" +
-          "  'mcp__hiveku__marketing_referral_update',"
+          "  'mcp__hiveku__marketing_referral_update',\n" +
+          "  // The desktop app's account home, agency dashboard and Your data pages (2026-11-05). Hiveku takes each from the Hiveku\n" +
+          "  // app's own key alone, so from an assistant it is refused anyway; they ask, as in the Claude Code and Codex plugins, so\n" +
+          "  // a later widening on the server never meets a folder unasked. Their reads stay unasked. Appended last, in this order.\n" +
+          "  'mcp__hiveku__dashboards_page_create',\n" +
+          "  'mcp__hiveku__dashboards_page_home_set',\n" +
+          "  'mcp__hiveku__dashboards_page_shared_home_save',\n" +
+          "  'mcp__hiveku__dashboards_page_update',\n" +
+          "  'mcp__hiveku__dashboards_page_delete',\n" +
+          "  'mcp__hiveku__dashboards_page_publish',\n" +
+          "  'mcp__hiveku__dashboards_page_restore',\n" +
+          "  'mcp__hiveku__dashboards_page_sharing_set',\n" +
+          "  'mcp__hiveku__dashboards_page_editor_add',\n" +
+          "  'mcp__hiveku__dashboards_page_editor_remove',\n" +
+          "  'mcp__hiveku__dashboards_page_version_restore',\n" +
+          "  'mcp__hiveku__dashboards_page_copy',\n" +
+          "  'mcp__hiveku__dashboards_page_action_run',\n" +
+          "  'mcp__hiveku__dashboards_page_workflow_button_run',\n" +
+          "  'mcp__hiveku__dashboards_page_widget_describe',\n" +
+          "  'mcp__hiveku__dashboards_page_rows_send',\n" +
+          "  'mcp__hiveku__dashboards_page_tally_add',\n" +
+          "  'mcp__hiveku__workspaces_page_prefs_save',\n" +
+          "  'mcp__hiveku__workspaces_page_view_create',\n" +
+          "  'mcp__hiveku__workspaces_page_view_from_template',\n" +
+          "  'mcp__hiveku__workspaces_page_view_update',\n" +
+          "  'mcp__hiveku__workspaces_page_view_delete',\n" +
+          "  'mcp__hiveku__workspaces_page_view_grants_set',\n" +
+          "  'mcp__hiveku__workspaces_page_pm_project_update',\n" +
+          "  'mcp__hiveku__workspaces_page_pm_task_create',\n" +
+          "  'mcp__hiveku__workspaces_page_pm_task_update',\n" +
+          "  'mcp__hiveku__workspaces_page_mc_lane_create',\n" +
+          "  'mcp__hiveku__workspaces_page_mc_lane_update',\n" +
+          "  'mcp__hiveku__workspaces_page_mc_lane_delete',\n" +
+          "  'mcp__hiveku__workspaces_page_mc_task_update',\n" +
+          "  'mcp__hiveku__workspaces_page_mc_task_answer',\n" +
+          "  'mcp__hiveku__workspaces_page_mc_task_claim',\n" +
+          "  'mcp__hiveku__workspaces_page_mc_task_release',\n" +
+          "  'mcp__hiveku__workspaces_page_mc_task_comment',\n" +
+          "  'mcp__hiveku__workspaces_page_mc_task_transition',\n" +
+          "  'mcp__hiveku__workspaces_page_custom_field_create',\n" +
+          "  'mcp__hiveku__workspaces_page_custom_field_value_set',\n" +
+          "  'mcp__hiveku__workspaces_page_custom_field_update',\n" +
+          "  'mcp__hiveku__workspaces_page_custom_field_delete',\n" +
+          "  'mcp__hiveku__workspaces_page_custom_field_grants_set',\n" +
+          "  'mcp__hiveku__workspaces_page_dashboard_create',\n" +
+          "  'mcp__hiveku__workspaces_page_dashboard_home_set',\n" +
+          "  'mcp__hiveku__workspaces_page_dashboard_update',\n" +
+          "  'mcp__hiveku__workspaces_page_dashboard_delete',\n" +
+          "  'mcp__hiveku__workspaces_page_dashboard_restore',\n" +
+          "  'mcp__hiveku__workspaces_page_dashboard_version_restore',\n" +
+          "  'mcp__hiveku__workspaces_page_partner_account_create',\n" +
+          "  'mcp__hiveku__workspaces_page_partner_branding_save',\n" +
+          "  'mcp__hiveku__workspaces_page_partner_payout_details_save',\n" +
+          "  'mcp__hiveku__dashboards_page_data_table_create',\n" +
+          "  'mcp__hiveku__dashboards_page_data_table_update',\n" +
+          "  'mcp__hiveku__dashboards_page_data_table_delete',\n" +
+          "  'mcp__hiveku__dashboards_page_data_table_restore',\n" +
+          "  'mcp__hiveku__dashboards_page_data_row_update',\n" +
+          "  'mcp__hiveku__dashboards_page_data_rows_delete',\n" +
+          "  'mcp__hiveku__dashboards_page_data_rows_restore',\n" +
+          "  'mcp__hiveku__dashboards_page_data_column_change',\n" +
+          "  'mcp__hiveku__dashboards_page_data_column_undo',\n" +
+          "  'mcp__hiveku__dashboards_page_data_tally_add_remove',\n" +
+          "  'mcp__hiveku__dashboards_page_data_tally_settings_save',\n" +
+          "  'mcp__hiveku__dashboards_page_data_tally_start_from_zero',\n" +
+          "  'mcp__hiveku__dashboards_page_data_workflow_writer_stop',"
       ),
-      'the newest ask rules, the Referrals asks, go at the END, after the Publish and hosting writes',
+      'the newest ask rules, the dashboards asks, go at the END, after the Referrals asks',
     );
   });
 
