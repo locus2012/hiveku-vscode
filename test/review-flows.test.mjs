@@ -682,9 +682,18 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__project_publish_state_set',\n" +
           "  'mcp__hiveku__project_hosting_lane_set',\n" +
           "  'mcp__hiveku__project_hosting_lane_move',\n" +
-          "  'mcp__hiveku__deploy_restore_files',"
+          "  'mcp__hiveku__deploy_restore_files',\n" +
+          "  // Marketing > Referrals (2026-11-04, the desktop app's Referrals page): sending invites texts or emails customers, a\n" +
+          "  // pause stops every link a campaign handed out (an activate turns them back on), an archive stops them for good, and\n" +
+          "  // an edit changes the friend's reward on the page every friend opens at once. Every call asks, as in the Claude Code\n" +
+          "  // and Codex plugins. A new campaign, links only, a lead's status and the reads stay unasked. Appended last, in this\n" +
+          "  // order.\n" +
+          "  'mcp__hiveku__marketing_referral_invite',\n" +
+          "  'mcp__hiveku__marketing_referral_status_set',\n" +
+          "  'mcp__hiveku__marketing_referral_archive',\n" +
+          "  'mcp__hiveku__marketing_referral_update',"
       ),
-      'the newest ask rules, the brand guide narrators and the billed, published and public journey writes, go at the END, after the Meet calendar sends and the SEO plan writes',
+      'the newest ask rules, the Referrals asks, go at the END, after the Publish and hosting writes',
     );
   });
 
