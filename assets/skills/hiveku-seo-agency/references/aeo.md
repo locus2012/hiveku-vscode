@@ -246,7 +246,8 @@ to a plain fetch, which is itself a finding.
 3. `seo_aeo_brand_profile_upsert({ brand_name, domain, category, industry, region, competitors })`.
    Full-replace: the first three are required every call, so carry forward what you are not changing.
    Max 10 competitors, each `{ name, domain? }`. Omit them on the first write, let the audit seed
-   them, then curate.
+   them, then curate. `known_facts` (up to 25 short statements, each under 300 characters) is what
+   the owner has confirmed, for example "Founded in 1908": see 5.1.
 4. Confirm the spend, then `seo_aeo_brand_audit({})`.
 
 **Read out:** `overallAvg` (mean of provider overalls) and per provider (`openai`, `perplexity`,
@@ -258,7 +259,12 @@ area or safety is a live business problem and outranks score work. Then use 1.4 
 then read `competitors_mentioned` against the profile list: names that are not in the profile are the
 competitive set as the models see it, often not the set the client believes in.
 **Closing write:** `memory_create` the baseline (date, overallAvg, per-provider overalls, provider
-count, exact category string); `pm_tasks_create` one ticket per inaccuracy.
+count, exact category string); `pm_tasks_create` one ticket per inaccuracy. An inaccuracy that is
+actually true is not a ticket: confirm it with the owner, then add it to `known_facts` so the next
+audit stops flagging it. An audit takes each fact as true, so a line that contradicts one names the
+fact, and a wrong fact makes a right answer read as an inaccuracy. Each assistant lists at most
+three. Past audits are not re-scored, so the next score can rise with no change in what the
+assistants said: say so before the client reads it as progress.
 **Trending it, free:** `seo_aeo_brand_audit_history({ history: 12 })` returns the latest audit plus
 up to 12 prior runs (default 12, max 100), populated by the weekly sweep cron. Read `overall_avg`
 movement, per-provider `provider_scores` drift, `competitors_mentioned` churn, and whether ticketed
@@ -359,9 +365,11 @@ personalized and volatile, so never overturn stored data with one browser check.
 
 **5.1 `seo_aeo_brand_profile_upsert` is a full replace, not a patch.** The most dangerous write here:
 `brand_name`, `domain` and `category` are required every call, and omitted optional fields (industry,
-region, competitors) are replaced, not preserved. Always `seo_aeo_brand_profile_get` first, echo the
-merged object, then write. Never loop it, and never change `category` without telling the client the
-trend baseline resets. A silently rewritten category is the usual cause of an unexplained
+region, competitors) are replaced, not preserved. `known_facts` and `weekly` are the exceptions: left
+out, each stays as it is. A `known_facts` list you send replaces the saved one, so read it first and
+send all of it; `[]` clears it, and `seo_aeo_brand_profile_delete` deletes it with the brand. Always
+`seo_aeo_brand_profile_get` first, echo the merged object, then write. Never loop it, and never change
+`category` without telling the client the trend baseline resets. A silently rewritten category is the usual cause of an unexplained
 share-of-voice collapse: check it against the baseline memory record before diagnosing.
 
 **5.2 Do not present `perplexity` rankings-sync data as Perplexity.** That engine key currently

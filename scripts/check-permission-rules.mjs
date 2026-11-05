@@ -41,6 +41,11 @@ const REGISTRY = new URL(
   '../../hiveku-mcp-api-server/dist/tools/olympus-tools.js',
   import.meta.url,
 ).pathname;
+// The Claude Code plugin's list of the reads that bill the account, when it is checked out beside this repo.
+const PAID_READS_LIST = new URL(
+  '../../hiveku-claude-plugin/data/vendor-tool-classification.json',
+  import.meta.url,
+).pathname;
 
 const src = readFileSync(SRC, 'utf8');
 
@@ -151,7 +156,29 @@ for (const name of asked) {
   }
 }
 
-// ── (b) reads only ────────────────────────────────────────────────────────
+// ── (b) reads that bill the account ───────────────────────────────────────
+// The SEO data service registers these at run time, so the registry build below
+// never lists them and the reads-only pass cannot see a glob approving one
+// (HK-1155: '*_summary' approved six for months). The plugin's list names them:
+// each must ask, or be denied, here too.
+let paidReads = [];
+if (!existsSync(PAID_READS_LIST)) {
+  console.warn('⚠ hiveku-claude-plugin not beside this repo — the reads that bill the account NOT checked.');
+} else {
+  const classes = JSON.parse(readFileSync(PAID_READS_LIST, 'utf8'));
+  paidReads = [...classes._lists.metered, ...classes._lists.neverAutoApprove].flatMap((key) => classes[key]);
+  for (const name of paidReads) {
+    if (asked.has(name) || denied.has(name)) continue;
+    const approving = rules.filter((rule) => toRe(rule.replace('mcp__hiveku__', '')).test(name));
+    if (approving.length) {
+      problems.push(
+        `${name} bills the account and ${approving.join(', ')} approves it unasked — add it to the end of HIVEKU_ASK.`,
+      );
+    }
+  }
+}
+
+// ── (c) reads only ────────────────────────────────────────────────────────
 if (!existsSync(REGISTRY)) {
   console.warn(
     '⚠ tool registry not built (../hiveku-mcp-api-server/dist) — syntax checked, ' +
@@ -174,8 +201,8 @@ if (!existsSync(REGISTRY)) {
   // An ask rule naming no tool gates nothing, silently. A warning, not a
   // failure: the local registry build can predate a tool the server has.
   // hiveku_batch is served by the MCP server's own handler (src/tools/local-tools.ts),
-  // not the Olympus registry this reads, so name it here as known.
-  const known = new Set([...all.map((t) => t.name), 'hiveku_batch']);
+  // not the Olympus registry this reads, so name it here as known, as the reads that bill above are.
+  const known = new Set([...all.map((t) => t.name), 'hiveku_batch', ...paidReads]);
   const unknownAsk = [...asked].filter((n) => !known.has(n));
   if (unknownAsk.length) {
     console.warn(

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.91.61
+- **The Domains, settings and store writes always ask.** Claude Code in your project folders asks before `project_domain_auto_configure` (adds live DNS records for a domain Hiveku runs), `project_domain_transfer` (moves a site's domains to another site), `project_secrets_rename` (code reading the old name stops getting it), `site_convert_to_hosted` (a tracked site becomes a hosted one, and it can never go back) and `shopify_project_settings_set` (which store a website uses), as the Claude Code and Codex plugins do.
+
+## 0.91.60
+- **Six reads that bill the account always ask.** Claude Code in your project folders asks before `backlinks_summary`, `backlinks_bulk_pages_summary`, `backlinks_domain_pages_summary`, `backlinks_timeseries_summary`, `backlinks_timeseries_new_lost_summary` and `content_analysis_summary`, in every permission mode, as the Claude Code plugin does. They were approved without a question, and each call costs the account money. A folder made earlier gets the new rules the next time the extension opens it.
+- **The content skill matches the Claude Code plugin's again.** Its note on deleting a media file now says what the usage check covers and what it cannot see.
+- This release also carries 0.91.59, which was not published on its own.
+
 ## 0.91.59
 - **The Hiveku app's account home, agency dashboard and Your data writes always ask.** Claude Code in your project folders asks before each of these tools, as the Claude Code and Codex plugins do. Hiveku takes them from the Hiveku app's own key alone, so an assistant is refused anyway; the ask stays in place should that ever widen.
 
