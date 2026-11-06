@@ -89,7 +89,7 @@ values: `fade-in`, `fade-up`, `fade-down`, `fade-left`, `fade-right`, `scale-in`
 one of `cubic-out`, `quart-out`, `expo-out`, `back-out`, `ease-in-out`, `elastic`. `loop` is one of
 `pulse`, `wiggle`, `rotate-slow`, `breathe`, `float`, `shimmer` - a SEPARATE field from `enter`, never an
 entrance value. Defaults: `enter_delay_ms` 0, `enter_duration_ms` 800, `enter_distance_px` 60,
-`exit_duration_ms` 600. At the root: `_animation: { duration_ms, fps, loop }`. That is the whole
+`exit_duration_ms` 600. At the root: `animation: { duration_ms, fps, loop }`. That is the whole
 vocabulary - entrances, exits, ambient loops, and a per-layer easing. Still no keyframes and no custom
 motion path: if the ask needs one, say so rather than faking it.
 

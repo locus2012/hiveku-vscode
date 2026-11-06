@@ -3,6 +3,7 @@
 ## 0.91.64
 - **All-day events show on their own day.** In the CRM and Social calendars, an event with a date and no time of day used to show a day early in US time zones. It now shows on the day it is for.
 - **The Social calendar says when it may be cut short.** It lists at most 100 items, and when it reaches 100 it now says there may be more.
+- **The creative skills match the Claude Code plugin 0.27.194.** A design's timing is written as `animation` on the canvas, the key the editor and the renderer read, and the short-form guide gives the current Shorts and Reels limits, including the 300 MB file cap on a Reels post.
 
 ## 0.91.63
 - **Analytics conversion and tracking settings writes always ask.** Claude Code in your project folders asks before `analytics_conversion_create`, `analytics_conversion_delete` and `analytics_tracking_settings_update`, as the Claude Code and Codex plugins do.

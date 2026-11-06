@@ -28,7 +28,7 @@ exit_duration_ms?, loop? }`. `enter` and `exit` each take one of the 15 presets 
 `slide-right`, `wipe-up`, `wipe-down`, `blur-in`, `rotate-in`; `easing` is one of `cubic-out`,
 `quart-out`, `expo-out`, `back-out`, `ease-in-out`, `elastic`; `loop` is a SEPARATE field taking `pulse`,
 `wiggle`, `rotate-slow`, `breathe`, `float`, `shimmer` - a loop value placed in `enter` produces no
-entrance at all. Canvas motion is `_animation: { duration_ms, fps, loop }` on the root. THE KEYS ARE
+entrance at all. Canvas motion is `animation: { duration_ms, fps, loop }` on the root. THE KEYS ARE
 EXACT and an unknown key is ignored in silence: a design saved with the retired keys `preset` /
 `delay_ms` / `duration_ms` renders completely static while every tool reports success (full model:
 `references/design-canvas.md`). Text and logos are canvas layers, always.
@@ -115,7 +115,7 @@ design whose `canvasData` is `{ pages: [{ id, name, canvasData }] }`, read per p
 `design_state_get({ id, page_id })`. `design_from_testimonial` opens a free draft on an approved clip.
 
 **4. Motion design.** Branded cards, type, and layout that move: same design project plus the section 1
-`animation` and `_animation` fields, rendered with `design_export_mp4` (MP4 or GIF). No generation cost,
+per-layer `animation` and the root `animation` block, rendered with `design_export_mp4` (MP4 or GIF). No generation cost,
 output matches the in-editor preview; SYNCHRONOUS, blocks up to 280s, refuses on an empty canvas - say so
 first. On a dead call the JOB survives: poll the returned `jobId` with `design_render_job_get` before ever
 re-rendering. `design_voiceover_estimate` prices free; `design_voiceover_create` SPENDS MONEY (`references/video.md`).
@@ -357,7 +357,7 @@ is offline. An unapproved board is a deliverable that is not shipping, and that 
 - Type on 1080: headline 72-120, subhead 40-56, body 28-36, caption floor 20-24. Email header body 28+.
 - Contrast: 4.5:1 body, 3:1 large text, measured against the range behind the text, not the average.
 - Motion: entrances staggered 100-200ms; the last `enter_delay_ms + enter_duration_ms` lands by about 60%
-  of `_animation.duration_ms` with at least 800ms of hold; two loops on one artboard is already noise.
+  of the root `animation.duration_ms` with at least 800ms of hold; two loops on one artboard is already noise.
 - Renders: keep `design_export_mp4` at or under 20s, 1080p, 30fps before splitting into two designs.
 - Spend: clip about $1, 20 per account per month; storyboard priced at create, billed at approval;
   voiceover estimate before create; images metered per account (`media_image_quota` before a set or an

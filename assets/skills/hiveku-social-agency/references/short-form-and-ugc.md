@@ -131,9 +131,10 @@ kind. A Reel or TikTok ships through the standard rail with the standard invaria
   surface it as a task with the rendered 9:16 asset attached, and say plainly that
   this rail does not carry it.
 - Format: vertical 9:16 for Reels/TikTok/Stories (references/creative-and-video.md).
-  Platform duration ceilings apply at post time (Reels 90s, Shorts 60s per the video
-  tool's own limits) - a storyboard should be planned to fit before approval, not
-  trimmed after render (no tool here trims an MP4).
+  Platform ceilings apply at post time (Shorts up to 3 minutes, Reels up to
+  15 minutes in a file of at most 300 MB, and a reel over 3 minutes is not shown to
+  new people) - a storyboard should be planned to fit before approval, not trimmed
+  after render (no tool here trims an MP4).
 - Cadence: TikTok and Reels run at two to four per week; consistency beats volume, but
   these algorithms reward frequency more than the feed platforms do
   (references/platform-playbooks.md).
