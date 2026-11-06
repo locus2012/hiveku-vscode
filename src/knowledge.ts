@@ -1307,6 +1307,11 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__account_app_stores_apple_disconnect',
   'mcp__hiveku__account_app_stores_expo_connect',
   'mcp__hiveku__account_app_stores_expo_disconnect',
+  // A phone line's password (2026-11-06, HK-1297; MCP #441): voice_sip_credentials_get is a read, but its answer is the
+  // calling person's SIP password, which lets whoever reads it sign in as their extension and place calls. The desktop
+  // app reads it by itself, so an assistant never needs it. Every call asks, as in the Claude Code plugin
+  // (NEVER_AUTO_APPROVE, 0.27.197) and Codex (0.3.79). Appended last.
+  'mcp__hiveku__voice_sip_credentials_get',
 ];
 
 /**

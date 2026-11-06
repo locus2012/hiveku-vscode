@@ -27,6 +27,7 @@ capability does not exist, and never invent a name.
 |---|---|---|---|
 | Diagnostics | `voice_diagnose_setup`, `voice_tenant_healthcheck`, `voice_presence_get`, `voice_extension_status`, `voice_audit_export_csv`, `voice_tenant_repair` | - | - |
 | Extensions | `voice_extensions_list`, `voice_extension_get`, `voice_extension_create`, `voice_extension_update`, `voice_extension_delete`, `voice_extension_greeting_upload` | - | device/handset provisioning (the SIP password exists exactly once, dashboard-side) |
+| The caller's own computer or phone line | `voice_extension_ensure_mine`, `voice_sip_credentials_get` (asks every time, see below) | - | - |
 | Ring groups | `voice_ring_groups_list`, `voice_ring_group_get`, `voice_ring_group_create`, `voice_ring_group_update`, `voice_ring_group_delete` | - | - |
 | IVRs | `voice_ivrs_list`, `voice_ivr_walk`, `voice_ivr_create`, `voice_ivr_update`, `voice_ivr_delete`, `voice_default_greetings_get`, `voice_tts_voices_list`, `voice_ivrs_reprovision`, `voice_tts_preview` | - | - |
 | Queues | `voice_queues_list`, `voice_queue_get`, `voice_queue_create`, `voice_queue_update`, `voice_queue_delete` | - | queue-agent state reset (no path anywhere - see section 6) |
@@ -38,6 +39,8 @@ capability does not exist, and never invent a name.
 | Desk phones | `voice_desk_phones_get`, `voice_desk_phone_set` | - | the line's SIP password (never returned to a key) |
 | Sites, roles, API keys | `voice_sites_list`, `voice_site_create`, `voice_roles_list`, `voice_role_assign`, `voice_role_remove`, `voice_api_keys_list`, `voice_api_key_create`, `voice_api_key_revoke` | - | - |
 | Pronunciation and speaking speed | `voice_pronunciations_get`, `voice_pronunciations_save` | - | - |
+
+The caller's own line (live 2026-11-06): `voice_extension_ensure_mine` finds or sets up the calling person's own computer or phone line, and asks first when it would create one. `voice_sip_credentials_get` answers with that line's password, which lets whoever reads it sign in as the extension and place calls, so this plugin asks before every call (HK-1297). The desktop app reads it by itself to connect its dialer, so an assistant never needs it, never repeats it and never writes it to a file. To tell someone whether their computer line is ready, give the extension number from `voice_extension_ensure_mine` or `voice_extensions_list`.
 
 Pronunciation and speaking speed (live 2026-10-31, the Memory page's Voice and pronunciation): `voice_pronunciations_get` reads how the voice agents say the words on the list and how fast they speak; `voice_pronunciations_save` replaces the whole list and the pace (it asks first). Both act as the person who made the key, under their CRM contacts rights.
 
