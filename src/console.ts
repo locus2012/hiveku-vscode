@@ -1573,7 +1573,7 @@ export function openAccountConsole(
             const m = err instanceof Error ? err.message : String(err);
             if (/in_use|409/i.test(m)) {
               const force = await vscode.window.showWarningMessage(
-                'This asset is referenced by content (emails, pages, CMS entries). Delete anyway and leave those references broken?',
+                'This file is still in use, for example in a design, an email or a post waiting to go out. Delete anyway and leave those places with a broken file?',
                 { modal: true },
                 'Delete anyway',
               );
