@@ -2647,14 +2647,22 @@ is in \`.hiveku/project.json\` (\`project_id\`).
      removable and are refused if you name them.
   5. \`project_cdn_invalidate\`, then re-test. Allow a few minutes for CloudFront to propagate.
   If a pattern comes back after all this, re-read \`backed_by\` — something is still supplying it.
-- **Deployed but the live site still shows the OLD version?** Asset behaviors cache
-  (Managed-CachingOptimized), so a file replaced at the SAME path serves stale bytes until TTL, and
-  deploying does NOT invalidate. Use
-  \`project_cdn_invalidate({ project_id, environment, action: "invalidate" })\` — it defaults to
-  \`/*\`, which is ONE billable path and covers everything. Invalidation is billed past 1,000 paths
-  per month per ACCOUNT: send \`/*\` rather than enumerating, never loop it, and give it a minute to
-  propagate. Hashed bundles (\`_next/static\`) never need this; images, fonts and documents replaced
-  in place do.
+- **Deployed but the live site still shows the OLD version?** A publish that finishes asks for a
+  full clear of that environment's CDN cache at its end, usually done within a few minutes, so do
+  not clear right after a publish. Clear only for a file that is still old a few minutes after the
+  publish finished, or for a change made WITHOUT a publish: the CDN keeps files, so a file replaced
+  at the SAME path keeps serving its old bytes until the kept copy expires. Use
+  \`project_cache_clear({ project_id, environment })\`: the whole site by default (\`/*\`, which
+  counts as one path), and its answer's \`pages_kept_at_edge\` says whether pages outside the asset
+  folders are kept (when it is false, never tell the person those pages were cleared). Where it is
+  not offered yet, \`project_cdn_invalidate({ project_id, environment, action: "invalidate" })\` is
+  the same clear under its older name. ASK THE PERSON FIRST: each clear costs money and is limited
+  to 6 an hour per environment and 40 a day per account, so never call it in a loop; to see whether
+  one finished, use \`project_cache_clear_status\`. A clear while a deploy of that environment runs is
+  refused (\`deploy_in_progress\`): wait, since that deploy asks for a full clear when it finishes.
+  On \`429 rate_limited\`, wait \`retry_after_seconds\` and never publish instead: a publish also
+  puts live everything saved since the last one. Hashed bundles (\`_next/static\`) never need a
+  clear, and no clear reaches a browser that already holds a file.
 - **EVERY page route 404s but /_next/ chunks and assets load fine?** A viewer-request function
   written for static URL routing is rewriting paths against a Lambda/SSR origin — classic after
   converting a static project to a framework. Confirm with
