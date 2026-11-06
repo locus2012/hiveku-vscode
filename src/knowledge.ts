@@ -1257,6 +1257,12 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__analytics_conversion_create',
   'mcp__hiveku__analytics_conversion_delete',
   'mcp__hiveku__analytics_tracking_settings_update',
+  // A site's cache clear (2026-11-06, HK-1166): project_cache_clear, and project_cdn_invalidate, the same clear under its
+  // older name. Each costs money past the free allowance and spends the limit of 6 an hour per environment and 40 a day
+  // per account. Every call asks, in auto mode too, as in the Claude Code and Codex plugins. The read of a clear,
+  // project_cache_clear_status, is not on this list. Appended last, in this order.
+  'mcp__hiveku__project_cache_clear',
+  'mcp__hiveku__project_cdn_invalidate',
 ];
 
 /**

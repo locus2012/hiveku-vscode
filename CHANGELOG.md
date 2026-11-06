@@ -3,6 +3,7 @@
 ## 0.91.64
 - **All-day events show on their own day.** In the CRM and Social calendars, an event with a date and no time of day used to show a day early in US time zones. It now shows on the day it is for.
 - **The Social calendar says when it may be cut short.** It lists at most 100 items, and when it reaches 100 it now says there may be more.
+- **A site's cache clear always asks.** Claude Code in your project folders asks before `project_cache_clear` and `project_cdn_invalidate`, the same clear under its older name, in every permission mode, as the Claude Code and Codex plugins do. Each clear costs money past the free allowance and is limited to 6 an hour per environment and 40 a day per account. A folder made earlier gets the new rules the next time the extension opens it.
 
 ## 0.91.63
 - **Analytics conversion and tracking settings writes always ask.** Claude Code in your project folders asks before `analytics_conversion_create`, `analytics_conversion_delete` and `analytics_tracking_settings_update`, as the Claude Code and Codex plugins do.
