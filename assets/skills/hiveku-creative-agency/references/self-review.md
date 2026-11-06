@@ -76,7 +76,7 @@ A single frame cannot prove a timeline. Before `design_export_mp4`, export three
   important is occluded mid-entrance and the reveal order follows the layer stack.
 - **last frame** - `frame = (duration_ms / 1000) * fps - 1`: the held end state. Every entrance
   finished, every exit done, the CTA readable. Pass `fps` and `duration_frames` on these calls so the
-  export timeline matches the root `_animation`.
+  export timeline matches the root `animation`.
 
 View all three. Only then render the MP4 - and after it completes, read the render job's `warnings`
 (`design_render_job_get` returns them; the poll ADVANCES the job and may prompt for permission, and a
