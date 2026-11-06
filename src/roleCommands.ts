@@ -316,7 +316,8 @@ VIDEO: EXPENSIVE, generate deliberately:
   image-to-video (\`reference_mode: "animate"\`; \`"compose"\` builds a branded still first and spends one
   image credit). Keep the motion prompt gentle (subtle camera drift, ambient motion).
 - Shape by destination: 9:16 → Stories/Reels/TikTok/Shorts; 16:9 → YouTube/X/LinkedIn/site heroes.
-  Duration ceilings at post time: Shorts 60s, Reels 90s, X 140s.
+  Ceilings at post time: Shorts 3 min; Reels 15 min in a file of at most 300 MB (a Reel past about 100 s can
+  be larger, so check its size); X 140 s and 512 MB; LinkedIn 15 min and 200 MB.
 - 429 \`video_quota_exhausted\` = platform capacity, resets overnight: schedule and move on, don't spin.
   A 504 loses the response, not the paid job: \`design_render_job_get({ job_id })\` with the returned
   \`render_job_id\` before any second spend.
