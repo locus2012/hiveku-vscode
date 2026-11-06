@@ -1312,6 +1312,12 @@ const HIVEKU_ASK: string[] = [
   // app reads it by itself, so an assistant never needs it. Every call asks, as in the Claude Code plugin
   // (NEVER_AUTO_APPROVE, 0.27.197) and Codex (0.3.79). Appended last.
   'mcp__hiveku__voice_sip_credentials_get',
+  // Public link switches (2026-11-06, HK-1203): an owner switches a customer journey's, a before and after grid's or
+  // an ICP's public link off or on. On again shows the record to anyone with the address. Every call asks, as in the
+  // Claude Code plugin (LIVE_CHANGE_WRITES, 0.27.200) and Codex (0.3.80). Appended last.
+  'mcp__hiveku__customer_journey_public_link_set',
+  'mcp__hiveku__before_after_grid_public_link_set',
+  'mcp__hiveku__customer_avatar_public_link_set',
 ];
 
 /**
