@@ -111,7 +111,9 @@ it on an existing design, flag it and rewrite it into the shape above - never co
 emphasis is a LATE ENTRANCE instead: `enter: 'pop'` (or `scale-in` with `easing: 'back-out'`) with an
 `enter_delay_ms` that lands after everything else has settled.
 
-**Canvas-level motion** sits on the root: `"_animation": { "duration_ms": 6000, "fps": 30, "loop": true }`.
+**Canvas-level motion** sits on the root: `"animation": { "duration_ms": 6000, "fps": 30, "loop": true }`.
+An old design may hold it as `_animation`, which design_state_get still reads as `canvasAnimation`;
+a save moves it to `animation`, the key the editor and the render read.
 This is what `design_export_mp4` renders and what `design_export_image`'s `frame` indexes into, via
 `frame = seconds * fps`: at `fps: 30`, frame 60 is 2.0s. **Every entrance and exit must land inside
 `duration_ms`.** The last-firing layer's `enter_delay_ms + enter_duration_ms` should land by roughly 60
@@ -435,7 +437,7 @@ through export-then-register.
  - body `{ enter: 'fade-up' }`, delayed until after the headline lands
  - CTA and logo last: `{ enter: 'pop', easing: 'back-out' }` with a late `enter_delay_ms` for once-only
    emphasis - and at most ONE `loop` ambient on the whole artboard.
-4. Root: `_animation: { duration_ms: 6000, fps: 30, loop: true }`. Verify the last layer's
+4. Root: `animation: { duration_ms: 6000, fps: 30, loop: true }`. Verify the last layer's
    `enter_delay_ms + enter_duration_ms` lands by about 3.5s so the finished frame holds before the loop
    restarts.
 5. Preview cheaply with `design_export_image({ id, canvas_json, width: 1080, height: 1920, frame: 45 })`
