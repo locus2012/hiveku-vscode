@@ -474,7 +474,7 @@ no tool can approve a post; cross-channel via `content_create`.
 Decisions worth keeping (aspect ratio, the animation style signed off, the storyboard template that worked)
 go to the branding memory document (read-merge-write per `references/memory-protocol.md`), production
 work items to `pm_tasks_create`. `media_usage_get` says where an asset is
-used; `media_delete` refuses 409 `in_use` when tracked usage exists - never force past it (see the
+used; `media_delete` refuses 409 `in_use` while it knows of a use - never force past it (see the
 brand-and-assets reference).
 
 Naming caution: `marketing_design_*` runs parallel to `design_*` (list, get, export_image, export_mp4,
