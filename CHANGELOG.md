@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.63
+- **Analytics conversion and tracking settings writes always ask.** Claude Code in your project folders asks before `analytics_conversion_create`, `analytics_conversion_delete` and `analytics_tracking_settings_update`, as the Claude Code and Codex plugins do.
+
 ## 0.91.62
 - **Adding leads to a cold campaign always asks.** Claude Code in your project folders asks before `outbound_leads_bulk_create` and `outbound_create_lead`: in a campaign that is sending, a lead starts getting its emails. It asks before `site_firewall_private_set` too, which can lock people out or open an environment to anyone.
 - **The outbound skill loads prospects so they stay prospects.** It matches the Claude Code plugin: mirror to the CRM marked cold, or add the lead first. A business's own contacts go in from an audience, confirmed on the person's phone.
