@@ -15,6 +15,11 @@ export interface FieldSpec {
   money?: boolean;
   /** Value is in integer cents (e.g. total_cents) — divide by 100 before formatting. */
   cents?: boolean;
+  /**
+   * A moment, shown as its day in the viewer's zone. A value that is a plain day
+   * with no time ("2026-11-10", as an all-day calendar event starts) is that day
+   * wherever the viewer is (HK-1231).
+   */
   date?: boolean;
   /**
    * A DATE column (no time of day), serialized as UTC midnight. Rendered in the
@@ -109,6 +114,14 @@ export interface SectionSpec {
    * evaluated, which is extension activation, not the click.
    */
   args?: Record<string, unknown> | (() => Record<string, unknown>);
+  /**
+   * The most rows the tool answers for these args, when it stops there whatever
+   * else there is (calendar_list_events stops at max_results, at most 100). A
+   * list that comes back this long may have been cut short, which its rows alone
+   * cannot tell, so the panel says it may be (cutShortWords), never letting the
+   * first page pass for the whole list (HK-1231).
+   */
+  stopsAt?: number;
   /** pageAccess gate key — section hidden when the account's plan/role doesn't entitle it. */
   gate?: string;
   titleKeys: string[];
@@ -220,6 +233,9 @@ export function pick(row: Row, keys: string[]): unknown {
   }
   return undefined;
 }
+/** A plain day with no time of day: "2026-11-10", as an all-day calendar event starts and ends. */
+const PLAIN_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
 export function fmt(v: unknown, f: FieldSpec): string {
   if (v === undefined || v === null) return '';
   if (f.money) {
@@ -236,8 +252,23 @@ export function fmt(v: unknown, f: FieldSpec): string {
   if ((f.date || f.dateOnly) && (typeof v === 'string' || typeof v === 'number')) {
     const t = Date.parse(String(v));
     if (Number.isNaN(t)) return String(v);
-    return f.dateOnly ? new Date(t).toLocaleDateString(undefined, { timeZone: 'UTC' }) : new Date(t).toLocaleDateString();
+    // A plain day parses as UTC midnight, which the viewer's zone reads as the day
+    // before anywhere west of Greenwich: an all-day event on the 10th showed on the
+    // 9th across the US (HK-1231). It is that day, so it is formatted in UTC.
+    const day = f.dateOnly || (typeof v === 'string' && PLAIN_DAY.test(v));
+    return day ? new Date(t).toLocaleDateString(undefined, { timeZone: 'UTC' }) : new Date(t).toLocaleDateString();
   }
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
   return String(v);
+}
+
+/**
+ * What a list says when it came back as long as its tool ever answers
+ * (SectionSpec.stopsAt): those rows may be the first of more, which they alone
+ * cannot tell (HK-1231). Null when the list is shorter, or its section names no
+ * such limit.
+ */
+export function cutShortWords(section: Pick<SectionSpec, 'stopsAt'>, rows: number): string | null {
+  if (!section.stopsAt || rows < section.stopsAt) return null;
+  return `Showing the first ${rows}. The list stops there, so there may be more.`;
 }

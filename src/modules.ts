@@ -827,12 +827,13 @@ export const MODULES: ModuleSpec[] = [
         label: 'Calendar (next 60 days)',
         tool: 'social_calendar_list',
         // Evaluated on every load so the window rolls with the clock. The route
-        // caps limit at 100 (and the panel shows at most 100 rows).
+        // caps limit at 100, so 100 back may be the first 100 of more (HK-1231).
         args: () => {
           const from = new Date();
           const to = new Date(from.getTime() + 60 * 24 * 60 * 60 * 1000);
           return { from_date: localDateOnly(from), to_date: localDateOnly(to), limit: 100 };
         },
+        stopsAt: 100,
         titleKeys: ['title'],
         fields: [
           { keys: ['event_type'], label: 'type' },
@@ -930,15 +931,17 @@ export const MODULES: ModuleSpec[] = [
         // Evaluated on every load so the window rolls with the clock. With no
         // start, Google lists a calendar from its oldest event and the route
         // stops at max_results, so a calendar with years behind it never got
-        // to this week (HK-1124). The route caps max_results at 100, and the
-        // panel shows at most 100 rows.
+        // to this week (HK-1124). The route caps max_results at 100 and answers
+        // no total, so 100 back may be the soonest 100 of more (HK-1231).
         args: () => {
           const from = new Date();
           from.setHours(0, 0, 0, 0);
           const to = new Date(from.getTime() + 60 * 24 * 60 * 60 * 1000);
           return { time_min: from.toISOString(), time_max: to.toISOString(), max_results: 100 };
         },
+        stopsAt: 100,
         titleKeys: ['title', 'summary', 'name'],
+        // An all-day event starts on a plain day ("2026-11-10"), shown as that day (fmt).
         fields: [{ keys: ['start', 'start_time', 'starts_at'], date: true }],
         empty: 'No events in the next 60 days.',
       },
