@@ -20,6 +20,15 @@ Required: `campaign_id`, `email` per lead. Know the real behavior before loading
   Hiveku's rule is never to skip the block list or the unsubscribe list, and an opt-out holds for
   good (say why). `ignore_duplicate_leads_in_other_campaign` widens who receives cold email, so it
   is set only when the user asks for it by name and hears what it skips.
+- **This business's own contacts are left out. That is the rule, not a bug.** Adding an audience
+  to a cold campaign waits for the person's phone, so a key does not reach the same people by
+  adding them one by one. Own contact: a CRM contact, deleted ones too, that a cold list or
+  Outbound did not bring in, and that no live campaign holds as a lead already. The bulk add
+  lists them in `skipped_own_contacts` with `skipped_own_contacts_note`, a batch of only them
+  answers 409 `all_leads_left_out`, and a single add or a lead's new address answers 409
+  `lead_is_own_contact`. Say how many and why, and that their way in is an audience, confirmed on
+  the person's phone (Marketing > Audiences, Use audience). Prospects are not touched. Never work
+  around it: no re-spelled addresses, no deleting the contact first.
 - **Bulk results: report what the provider said, and no more.** Its answer gives no lead ids.
   When it names the leads it skipped, they come back in `not_accepted` and get no row; report
   them by address. When it gives counts only, every lead gets a `pending_sync` placeholder and

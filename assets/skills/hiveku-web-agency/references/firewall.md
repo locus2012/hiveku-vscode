@@ -107,6 +107,14 @@ evidence, allow, remove.
   customer's site: confirm with the user first, the way every other site write is confirmed.
 - `site_firewall_remove({ project_id, exception_id })` - removes one allowance (the id comes
   from `site_firewall_get`) and pushes the change to the edge.
+- `site_firewall_private_set({ project_id, environment, mode, allowed_cidrs?, exempt_paths?, note?, dry_run? })` -
+  makes one environment private, changes what it lets in, or makes it public again (`mode: 'public'`).
+  Send `dry_run: true` first: it changes nothing and answers every switch-on check that does not pass.
+  Each entry in `exempt_paths` opens exactly that path, and must be a route of the site that takes
+  data, never a page. An agent never sets the password; the owner does, in Site > Hosting > Firewall.
+  After a turn-on the server lock reads `locking` for about 15 minutes, then `on`. Confirm with the
+  user first: making an environment private can lock their own people out, and making it public
+  opens it to anyone.
 
 The same four operations are `GET`, `GET .../firewall/clients/detail`, `POST` and `DELETE` on
 `/api/olympus/builder/projects/{projectId}/firewall[...]` for a script that talks to Olympus

@@ -1246,6 +1246,12 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__project_secrets_rename',
   'mcp__hiveku__site_convert_to_hosted',
   'mcp__hiveku__shopify_project_settings_set',
+  // Adding leads to a cold campaign (2026-11-05) and an environment's private mode (2026-11-06): in a campaign that is
+  // sending a lead starts getting its emails, and private mode can lock people out or open an environment. The Claude
+  // Code and Codex plugins ask first. Appended last, in this order.
+  'mcp__hiveku__outbound_leads_bulk_create',
+  'mcp__hiveku__outbound_create_lead',
+  'mcp__hiveku__site_firewall_private_set',
 ];
 
 /**

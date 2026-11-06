@@ -774,9 +774,15 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__project_domain_transfer',\n" +
           "  'mcp__hiveku__project_secrets_rename',\n" +
           "  'mcp__hiveku__site_convert_to_hosted',\n" +
-          "  'mcp__hiveku__shopify_project_settings_set',"
+          "  'mcp__hiveku__shopify_project_settings_set',\n" +
+          "  // Adding leads to a cold campaign (2026-11-05) and an environment's private mode (2026-11-06): in a campaign that is\n" +
+          "  // sending a lead starts getting its emails, and private mode can lock people out or open an environment. The Claude\n" +
+          "  // Code and Codex plugins ask first. Appended last, in this order.\n" +
+          "  'mcp__hiveku__outbound_leads_bulk_create',\n" +
+          "  'mcp__hiveku__outbound_create_lead',\n" +
+          "  'mcp__hiveku__site_firewall_private_set',"
       ),
-      'the newest ask rules, the Domains, settings and store writes, go at the END, after the reads that bill the account',
+      'the newest ask rules, the cold lead adds and private mode, go at the END, after the Domains, settings and store writes',
     );
   });
 

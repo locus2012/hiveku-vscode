@@ -107,6 +107,8 @@ const POST_READS = new Set([
   'ppc_experiments_list', 'marketing_offline_conversion_actions_list',
   'marketing_call_attribution_list', 'marketing_call_transcript_get',
   'email_campaign_metrics', 'content_page_views_get',
+  // Hearing a narrator: a fixed sentence, nothing charged, and the route asks for read (voiceovers/preview).
+  'brand_voice_sample_get',
 ]);
 
 /**

@@ -348,11 +348,14 @@ underneath it.
    Gmail/Outlook thread for a contact) or `crm_email_thread_search` (subject/body search over
    synced email activities) - cold-enrolling someone mid-discussion with the account is a
    reputation incident no suppression list catches.
-7. **Mirror everything:** the approved list loads in batches via
-   `outbound_leads_bulk_create({ campaign_id, leads })` - up to 100 leads per call (the
-   SmartLead batch cap; 400 above it), emails deduped case-insensitively within the batch -
-   plus `crm_contact_upsert_by_email` per contact; `outbound_create_lead` stays for one-off
-   adds only. Bulk results are COUNTS-ONLY: SmartLead returns { uploaded, not_uploaded } with
+7. **Mirror everything, marked cold, then load:** mirror the list to the CRM with
+   `crm_contacts_bulk_create` and a cold `list_source` (as `/hiveku:prospect` does), then the
+   approved list loads in batches via `outbound_leads_bulk_create({ campaign_id, leads })` - up
+   to 100 leads per call (the SmartLead batch cap; 400 above it), emails deduped
+   case-insensitively within the batch; `outbound_create_lead` stays for one-off adds only.
+   Never mirror a prospect with `crm_contact_upsert_by_email` first: it saves them with no cold
+   mark, so they read as this business's own contact and the load leaves them out
+   (`skipped_own_contacts`). Bulk results are COUNTS-ONLY: SmartLead returns { uploaded, not_uploaded } with
    no per-lead outcomes, so never report WHICH leads were rejected until the next stats sync
    reconciles the `pending_sync` placeholders - and a wall of `pending_sync` rows is a HEALTHY
    load. Checkpoint each batch locally so a crashed loader resumes instead of re-walking the
@@ -505,8 +508,10 @@ engagement. Warmer than any cold list - reference what they viewed, never that t
 tracked. Warm means intent, not permission: a visitor who never signed up, bought or asked to be
 contacted is still cold for email (1a), so the first touch goes through Outbound as below -
 never Hiveku email marketing, never the business's everyday inbox. Identified (email present):
-`crm_contact_upsert_by_email` -> personalized first touch via `talk_to_department` ->
-`outbound_create_lead` + activity log. Hot-but-anonymous matches
+personalized first touch via `talk_to_department` -> `outbound_create_lead` ->
+`outbound_push_lead_to_crm({ lead_id })` + activity log. Add the lead BEFORE the CRM write: the
+push marks them as from Outbound, and a contact saved first reads as this business's own, so the
+add refuses it (409 `lead_is_own_contact`). Hot-but-anonymous matches
 tell you which segments to prospect harder. (`analytics_`: marketing profiles, not sales.)
 
 ## 6. Reply handling (the daily loop)

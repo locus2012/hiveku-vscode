@@ -128,10 +128,13 @@ These call api.linkedin.com live and answer questions the stored snapshots canno
 Know which connection type you hold - the org endpoints refuse personal profiles:
 - `social_linkedin_share_stats({ social_account_id, from_date, to_date })` - LIVE
   organization share statistics: impressions, unique impressions, clicks, likes,
-  comments, shares and engagement for the page as a whole, with organic-only figures
-  alongside the totals so paid amplification does not read as organic reach.
+  comments, shares and engagement for the page as a whole. ORGANIC ONLY: LinkedIn
+  leaves sponsored activity out of this read, so paid amplification is not in these
+  figures and there is no paid or combined total to set beside them.
   ORGANIZATION CONNECTIONS ONLY - a personal profile returns 400. Supply `from_date`
-  and `to_date` TOGETHER for a per-day breakdown; one alone is rejected.
+  and `to_date` TOGETHER for one row per day; one alone is rejected. A plain `to_date`
+  includes that day, a window needs at least one finished UTC day, and `from_date`
+  must be within the past 12 months.
 - `social_linkedin_follower_stats({ social_account_id })` - LIVE follower composition:
   organic vs paid, by association type (employee, member) and job function. This is
   WHO follows the page, not a count over time - for the trend use
