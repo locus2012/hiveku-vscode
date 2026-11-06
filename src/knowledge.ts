@@ -1257,6 +1257,56 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__analytics_conversion_create',
   'mcp__hiveku__analytics_conversion_delete',
   'mcp__hiveku__analytics_tracking_settings_update',
+  // A site's cache clear (2026-11-06, HK-1166): project_cache_clear, and project_cdn_invalidate, the same clear under its
+  // older name. Each costs money past the free allowance and spends the limit of 6 an hour per environment and 40 a day
+  // per account. Every call asks, in auto mode too, as in the Claude Code and Codex plugins. The read of a clear,
+  // project_cache_clear_status, is not on this list. Appended last, in this order.
+  'mcp__hiveku__project_cache_clear',
+  'mcp__hiveku__project_cdn_invalidate',
+  // Account settings writes (2026-11-06): 40 tools that went live on the Hiveku MCP (412b947e) with no ask rule:
+  // billing plan, credits and cancel, domain register and transfer, DNS records, password and two-factor, sessions
+  // and computers, team invites, members, roles and ownership, API and AI provider keys, app store connections, team
+  // activity, profile, notifications and exports. They ask, as in the Claude Code and Codex plugins. Appended last.
+  'mcp__hiveku__account_profile_update',
+  'mcp__hiveku__account_profile_avatar_set',
+  'mcp__hiveku__account_profile_avatar_remove',
+  'mcp__hiveku__account_notifications_update',
+  'mcp__hiveku__account_notifications_test_send',
+  'mcp__hiveku__account_team_invite_send',
+  'mcp__hiveku__account_team_invitation_resend',
+  'mcp__hiveku__account_team_invitation_cancel',
+  'mcp__hiveku__account_team_member_role_update',
+  'mcp__hiveku__account_team_member_remove',
+  'mcp__hiveku__account_team_ownership_transfer',
+  'mcp__hiveku__account_team_computer_revoke',
+  'mcp__hiveku__account_role_create',
+  'mcp__hiveku__account_role_update',
+  'mcp__hiveku__account_role_delete',
+  'mcp__hiveku__account_team_activity_settings_update',
+  'mcp__hiveku__account_team_activity_test_email_send',
+  'mcp__hiveku__account_team_activity_data_delete',
+  'mcp__hiveku__account_domain_register',
+  'mcp__hiveku__account_domain_transfer',
+  'mcp__hiveku__account_domain_dns_record_create',
+  'mcp__hiveku__account_domain_dns_record_delete',
+  'mcp__hiveku__account_security_password_update',
+  'mcp__hiveku__account_security_2fa_update',
+  'mcp__hiveku__account_security_computer_revoke',
+  'mcp__hiveku__account_security_session_revoke',
+  'mcp__hiveku__account_export_start',
+  'mcp__hiveku__account_billing_plan_update',
+  'mcp__hiveku__account_billing_credits_update',
+  'mcp__hiveku__account_billing_credits_purchase',
+  'mcp__hiveku__account_billing_subscription_cancel',
+  'mcp__hiveku__account_mcp_key_create',
+  'mcp__hiveku__account_mcp_key_revoke',
+  'mcp__hiveku__account_byok_set',
+  'mcp__hiveku__account_byok_delete',
+  'mcp__hiveku__account_app_stores_apple_connect',
+  'mcp__hiveku__account_app_stores_apple_share_update',
+  'mcp__hiveku__account_app_stores_apple_disconnect',
+  'mcp__hiveku__account_app_stores_expo_connect',
+  'mcp__hiveku__account_app_stores_expo_disconnect',
 ];
 
 /**
@@ -2641,14 +2691,22 @@ is in \`.hiveku/project.json\` (\`project_id\`).
      removable and are refused if you name them.
   5. \`project_cdn_invalidate\`, then re-test. Allow a few minutes for CloudFront to propagate.
   If a pattern comes back after all this, re-read \`backed_by\` — something is still supplying it.
-- **Deployed but the live site still shows the OLD version?** Asset behaviors cache
-  (Managed-CachingOptimized), so a file replaced at the SAME path serves stale bytes until TTL, and
-  deploying does NOT invalidate. Use
-  \`project_cdn_invalidate({ project_id, environment, action: "invalidate" })\` — it defaults to
-  \`/*\`, which is ONE billable path and covers everything. Invalidation is billed past 1,000 paths
-  per month per ACCOUNT: send \`/*\` rather than enumerating, never loop it, and give it a minute to
-  propagate. Hashed bundles (\`_next/static\`) never need this; images, fonts and documents replaced
-  in place do.
+- **Deployed but the live site still shows the OLD version?** A publish that finishes asks for a
+  full clear of that environment's CDN cache at its end, usually done within a few minutes, so do
+  not clear right after a publish. Clear only for a file that is still old a few minutes after the
+  publish finished, or for a change made WITHOUT a publish: the CDN keeps files, so a file replaced
+  at the SAME path keeps serving its old bytes until the kept copy expires. Use
+  \`project_cache_clear({ project_id, environment })\`: the whole site by default (\`/*\`, which
+  counts as one path), and its answer's \`pages_kept_at_edge\` says whether pages outside the asset
+  folders are kept (when it is false, never tell the person those pages were cleared). Where it is
+  not offered yet, \`project_cdn_invalidate({ project_id, environment, action: "invalidate" })\` is
+  the same clear under its older name. ASK THE PERSON FIRST: each clear costs money and is limited
+  to 6 an hour per environment and 40 a day per account, so never call it in a loop; to see whether
+  one finished, use \`project_cache_clear_status\`. A clear while a deploy of that environment runs is
+  refused (\`deploy_in_progress\`): wait, since that deploy asks for a full clear when it finishes.
+  On \`429 rate_limited\`, wait \`retry_after_seconds\` and never publish instead: a publish also
+  puts live everything saved since the last one. Hashed bundles (\`_next/static\`) never need a
+  clear, and no clear reaches a browser that already holds a file.
 - **EVERY page route 404s but /_next/ chunks and assets load fine?** A viewer-request function
   written for static URL routing is rewriting paths against a Lambda/SSR origin — classic after
   converting a static project to a framework. Confirm with
