@@ -117,6 +117,11 @@ const FIELD_SUFFIXES = new Set([
  * cannot rot into cover for a growing problem.
  */
 const KNOWN_NOT_TOOLS = new Set([
+  // An argument and a field named in the prose, which look like tools since the server declared
+  // platform_feedback_requests_list (MCP 412b947e, 2026-11-06): social_post_create's platform_overrides
+  // and the platform_rules account_context_get returns.
+  'platform_overrides',
+  'platform_rules',
   // Database tables named in the prose ("a `workflow_triggers` row").
   'workflow_triggers',
   'account_integrations',
