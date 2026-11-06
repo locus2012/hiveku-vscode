@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.62
+- **Adding leads to a cold campaign always asks.** Claude Code in your project folders asks before `outbound_leads_bulk_create` and `outbound_create_lead`: in a campaign that is sending, a lead starts getting its emails. It asks before `site_firewall_private_set` too, which can lock people out or open an environment to anyone.
+- **The outbound skill loads prospects so they stay prospects.** It matches the Claude Code plugin: mirror to the CRM marked cold, or add the lead first. A business's own contacts go in from an audience, confirmed on the person's phone.
+
 ## 0.91.61
 - **The Domains, settings and store writes always ask.** Claude Code in your project folders asks before `project_domain_auto_configure` (adds live DNS records for a domain Hiveku runs), `project_domain_transfer` (moves a site's domains to another site), `project_secrets_rename` (code reading the old name stops getting it), `site_convert_to_hosted` (a tracked site becomes a hosted one, and it can never go back) and `shopify_project_settings_set` (which store a website uses), as the Claude Code and Codex plugins do.
 
