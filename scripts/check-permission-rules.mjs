@@ -46,6 +46,10 @@ const PAID_READS_LIST = new URL(
   '../../hiveku-claude-plugin/data/vendor-tool-classification.json',
   import.meta.url,
 ).pathname;
+const PENDING_TOOLS_MODULE = new URL(
+  '../../hiveku-claude-plugin/test/pending-tools.mjs',
+  import.meta.url,
+);
 
 const src = readFileSync(SRC, 'utf8');
 
@@ -204,7 +208,10 @@ if (!existsSync(REGISTRY)) {
   // failure: the local registry build can predate a tool the server has.
   // hiveku_batch is served by the MCP server's own handler (src/tools/local-tools.ts),
   // not the Olympus registry this reads, so name it here as known, as the reads that bill above are.
-  const known = new Set([...all.map((t) => t.name), 'hiveku_batch', ...paidReads]);
+  const pendingTools = existsSync(PENDING_TOOLS_MODULE.pathname)
+    ? [...((await import(PENDING_TOOLS_MODULE.href)).PENDING_TOOLS?.keys() ?? [])]
+    : [];
+  const known = new Set([...all.map((t) => t.name), 'hiveku_batch', ...paidReads, ...pendingTools]);
   const unknownAsk = [...asked].filter((n) => !known.has(n));
   if (unknownAsk.length) {
     console.warn(

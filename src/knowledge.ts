@@ -1252,6 +1252,11 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__outbound_leads_bulk_create',
   'mcp__hiveku__outbound_create_lead',
   'mcp__hiveku__site_firewall_private_set',
+  // Marketing Analytics conversion and tracking settings writes (2026-11-05): the Claude Code and Codex plugins ask first.
+  // Appended last, in this order.
+  'mcp__hiveku__analytics_conversion_create',
+  'mcp__hiveku__analytics_conversion_delete',
+  'mcp__hiveku__analytics_tracking_settings_update',
 ];
 
 /**
