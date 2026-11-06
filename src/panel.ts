@@ -19,6 +19,7 @@ import { accountMemoryDashboardUrl } from './accountMemory';
 import { memoryWriteRefused } from './memoryLog';
 import { showMemoryWriteRefusal } from './platformFs';
 import {
+  cutShortWords,
   extractRows,
   fmt,
   isEntitled,
@@ -154,6 +155,8 @@ export function openModulePanel(
         section: sectionId,
         // Never present a capped page as the whole truth.
         capped: rows.length > CAP ? { shown: CAP, of: rows.length } : undefined,
+        // Nor a list the tool stopped at the most it answers (SectionSpec.stopsAt, HK-1231).
+        cutShort: rows.length > CAP ? undefined : (cutShortWords(section, rows.length) ?? undefined),
         empty: section.empty ?? 'Nothing here.',
         detail: !!section.detail,
         header: (section.headerActions ?? []).map((a) => ({ id: a.id, label: a.label })),
@@ -352,7 +355,7 @@ function panelHtml(webview: vscode.Webview, spec: ModuleSpec): string {
   var tabsEl = document.getElementById('tabs');
   var content = document.getElementById('content');
   var searchEl = document.getElementById('search');
-  var lastRows = [], lastHeader = [], lastDetail = false, lastEmpty = 'Nothing here.', lastCapped = null;
+  var lastRows = [], lastHeader = [], lastDetail = false, lastEmpty = 'Nothing here.', lastCapped = null, lastCutShort = null;
   function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!==undefined)e.textContent=x;return e;}
   function clear(n){while(n.firstChild)n.removeChild(n.firstChild);}
   function btn(label,cls,fn){var b=el('button',cls,label);b.addEventListener('click',fn);return b;}
@@ -368,6 +371,7 @@ function panelHtml(webview: vscode.Webview, spec: ModuleSpec): string {
     var rows=lastRows.filter(function(r){if(!f)return true;var hay=r.title+' '+(r.fields||[]).map(function(x){return x.value;}).join(' ');return hay.toLowerCase().indexOf(f)>=0;});
     if(!rows.length){content.appendChild(el('div','muted',f?'No matches.':lastEmpty));return;}
     if(lastCapped){content.appendChild(el('div','muted','Showing '+lastCapped.shown+' of '+lastCapped.of+' — this list is capped. Use the dashboard for the full set.'));}
+    if(lastCutShort){content.appendChild(el('div','muted',lastCutShort+' Use the dashboard for the full set.'));}
     rows.forEach(function(r){
       var row=el('div','row');
       var main=el('div','main');
@@ -393,7 +397,7 @@ function panelHtml(webview: vscode.Webview, spec: ModuleSpec): string {
       return;
     }
     if(m.type!=='rows')return;
-    lastRows=m.rows||[]; lastHeader=m.header||[]; lastDetail=!!m.detail; lastEmpty=m.empty||'Nothing here.'; lastCapped=m.capped||null;
+    lastRows=m.rows||[]; lastHeader=m.header||[]; lastDetail=!!m.detail; lastEmpty=m.empty||'Nothing here.'; lastCapped=m.capped||null; lastCutShort=m.cutShort||null;
     renderRows(searchEl.value);
   });
   renderTabs(); if(current) select(current);
