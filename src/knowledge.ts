@@ -1834,11 +1834,12 @@ Get build/deploy logs for THIS project's **$ARGUMENTS** environment (default dev
 1. If \`.hiveku/logs/$ARGUMENTS.log\` exists (written by the VS Code "show logs" action), read it first —
    it's the exact log the user is looking at.
 2. Otherwise fetch fresh:
-   - Failed build → \`project_build_error_get({ project_id: "${pid}" })\` for the extracted real error.
-   - Full tier build log → \`deploy_status({ project_id: "${pid}", environment: "$ARGUMENTS" })\` →
-     take \`.most_recent.deployment_id\` → \`deploy_get({ project_id: "${pid}", deployment_id })\` → \`build_logs\`.
-     If the filtered query returns no rows, retry WITHOUT \`environment\` — legacy deployments store
-     other tokens (e.g. "cloudfront") and the filter misses them.
+   - Failed build → \`project_build_error_get({ project_id: "${pid}" })\` for the extracted real error
+     and log of the last failed deploy build.
+   - Any other build's log → \`project_logs_get({ project_id: "${pid}", source: "build", since: "all", environment: "$ARGUMENTS" })\`
+     lists that tier's newest builds of any age → take a \`build_id\` →
+     \`project_build_error_get({ project_id: "${pid}", session_id: <that build_id> })\`. Leave \`environment\`
+     out for every tier. An empty \`deploy_get\` \`build_logs\` means nothing: most publishes never fill it.
    - Live Preview (Fly) → \`preview_logs({ project_id: "${pid}" })\` (runtime; no build phase).
    - RUNTIME logs of a deployed tier (the live site erroring, not the build) →
      \`project_logs_get({ project_id: "${pid}", source: "runtime", level: "error", environment: "$ARGUMENTS" })\`.
@@ -2878,8 +2879,10 @@ installs Chromium via the MCP's \`browser_install\`. \`/hiveku-browser\` wraps t
 ### Deploy / build logs (per environment)
 To debug a failed build/deploy: read \`.hiveku/logs/<env>.log\` if present (written by the VS Code
 "show logs" action so you and the user share it), else fetch fresh — \`project_build_error_get({
-project_id })\` for the extracted real error, \`deploy_status\`→\`deploy_get\` for a tier's full
-\`build_logs\`, or \`preview_logs\` for the running Fly preview. \`/hiveku-logs\` wraps this.
+project_id })\` for the extracted real error, \`project_logs_get\` with \`source: "build", since: "all"\`
+to list a tier's builds and \`project_build_error_get\` with \`session_id\` to read one's log (an empty
+\`deploy_get\` \`build_logs\` means nothing), or \`preview_logs\` for the running Fly preview.
+\`/hiveku-logs\` wraps this.
 
 ### Scheduling / loops / background work
 For any "watch this", "every N minutes", "nightly", or "on a schedule" request, read
