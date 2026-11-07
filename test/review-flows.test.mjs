@@ -786,14 +786,20 @@ describe('what the extension writes and wires', () => {
     );
     assert.ok(
       ask.trimEnd().endsWith(
-        "  'mcp__hiveku__webflow_connection_token_add',\n" +
-          "  'mcp__hiveku__webflow_project_site_bind',\n" +
-          "  'mcp__hiveku__webflow_connection_disconnect',\n" +
-          "  'mcp__hiveku__webflow_webhooks_reregister',\n" +
-          "  'mcp__hiveku__webflow_form_routing_set',\n" +
-          "  'mcp__hiveku__webflow_form_submissions_backfill',",
+        "  'mcp__hiveku__workspace_dashboard_create',\n" +
+          "  'mcp__hiveku__workspace_dashboard_update',\n" +
+          "  'mcp__hiveku__workspace_dashboard_widget_create',\n" +
+          "  'mcp__hiveku__workspace_dashboard_widget_update',\n" +
+          "  'mcp__hiveku__workspace_dashboard_widget_delete',\n" +
+          "  'mcp__hiveku__workspace_dashboard_layout_update',\n" +
+          "  'mcp__hiveku__workspace_dashboard_page_create',\n" +
+          "  'mcp__hiveku__workspace_dashboard_page_update',\n" +
+          "  'mcp__hiveku__workspace_dashboard_page_delete',\n" +
+          "  'mcp__hiveku__workspace_dashboard_restore',\n" +
+          "  'mcp__hiveku__workspace_dashboard_delete',\n" +
+          "  'mcp__hiveku__workspace_dashboard_version_restore',",
       ),
-      'the newest ask rules, the Webflow settings writes, go at the END',
+      'the newest ask rules, the agency dashboard changes, go at the END',
     );
   });
 
