@@ -529,6 +529,7 @@ const ACCOUNT_SETTINGS = [
   'mcp__hiveku__account_team_activity_data_delete',
   'mcp__hiveku__account_domain_register',
   'mcp__hiveku__account_domain_transfer',
+  'mcp__hiveku__account_domain_transfer_submit',
   'mcp__hiveku__account_domain_dns_record_create',
   'mcp__hiveku__account_domain_dns_record_delete',
   'mcp__hiveku__account_security_password_update',
