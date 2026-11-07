@@ -1333,6 +1333,20 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__webflow_webhooks_reregister',
   'mcp__hiveku__webflow_form_routing_set',
   'mcp__hiveku__webflow_form_submissions_backfill',
+  // A person's own AI key building their agency dashboards (2026-11-07): each change to a Workspaces dashboard asks, as in
+  // the Claude Code plugin (0.27.204) and Codex (0.3.83). Their reads stay allowed. Appended last.
+  'mcp__hiveku__workspace_dashboard_create',
+  'mcp__hiveku__workspace_dashboard_update',
+  'mcp__hiveku__workspace_dashboard_widget_create',
+  'mcp__hiveku__workspace_dashboard_widget_update',
+  'mcp__hiveku__workspace_dashboard_widget_delete',
+  'mcp__hiveku__workspace_dashboard_layout_update',
+  'mcp__hiveku__workspace_dashboard_page_create',
+  'mcp__hiveku__workspace_dashboard_page_update',
+  'mcp__hiveku__workspace_dashboard_page_delete',
+  'mcp__hiveku__workspace_dashboard_restore',
+  'mcp__hiveku__workspace_dashboard_delete',
+  'mcp__hiveku__workspace_dashboard_version_restore',
 ];
 
 /**
