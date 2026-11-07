@@ -499,6 +499,9 @@ export function ticketCopyPrompt(row: Record<string, unknown>): string {
   ].join('\n');
 }
 
+// A section's stopsAt is the most rows its tool answers for those args: the limit
+// it asks for or, asking for none, its route's default page, read off each builder
+// route (HK-1257). A list that long says it may go on (panelSpec.ts cutShortWords).
 export const MODULES: ModuleSpec[] = [
   {
     id: 'crm',
@@ -510,6 +513,7 @@ export const MODULES: ModuleSpec[] = [
         label: 'Deals',
         tool: 'crm_list_deals',
         args: { limit: 50 },
+        stopsAt: 50,
         titleKeys: ['name'],
         fields: [
           { keys: ['value'], money: true },
@@ -530,6 +534,7 @@ export const MODULES: ModuleSpec[] = [
         label: 'Contacts',
         tool: 'crm_list_contacts',
         args: { limit: 50 },
+        stopsAt: 50,
         titleKeys: ['first_name', 'last_name', 'email'],
         fields: [
           { keys: ['email'] },
@@ -555,6 +560,7 @@ export const MODULES: ModuleSpec[] = [
         label: 'Companies',
         tool: 'crm_list_companies',
         args: { limit: 50 },
+        stopsAt: 50,
         titleKeys: ['name'],
         fields: [{ keys: ['domain', 'website'], label: 'domain' }, { keys: ['industry'] }, { keys: ['city'] }],
         headerActions: [
@@ -566,7 +572,7 @@ export const MODULES: ModuleSpec[] = [
       },
       { id: 'pipelines', label: 'Pipelines', tool: 'crm_list_pipelines', titleKeys: ['name'], rowActions: [open('Open', 'crm')], empty: 'No pipelines.' },
       { id: 'sequences', label: 'Sequences', tool: 'crm_list_sequences', titleKeys: ['name'], fields: [{ keys: ['is_active'], label: 'active' }, { keys: ['active_enrollments'], label: 'enrolled' }], rowActions: [open('Open', 'crm')], empty: 'No sequences.' },
-      { id: 'activities', label: 'Activity', tool: 'crm_list_activities', args: { limit: 40 }, titleKeys: ['subject', 'type', 'title'], fields: [{ keys: ['created_at'], date: true }], empty: 'No activity.' },
+      { id: 'activities', label: 'Activity', tool: 'crm_list_activities', args: { limit: 40 }, stopsAt: 40, titleKeys: ['subject', 'type', 'title'], fields: [{ keys: ['created_at'], date: true }], empty: 'No activity.' },
     ],
   },
   {
@@ -578,6 +584,7 @@ export const MODULES: ModuleSpec[] = [
         id: 'estimates',
         label: 'Estimates',
         tool: 'crm_estimate_list',
+        stopsAt: 50,
         titleKeys: ['estimate_number'],
         fields: [{ keys: ['status'] }, { keys: ['total_cents'], label: 'total', money: true, cents: true }, { keys: ['expires_at'], label: 'expires', date: true }],
         rowActions: [
@@ -591,6 +598,7 @@ export const MODULES: ModuleSpec[] = [
         id: 'envelopes',
         label: 'Contracts (e-sign)',
         tool: 'crm_envelope_list',
+        stopsAt: 50,
         titleKeys: ['title'],
         fields: [{ keys: ['status'] }, { keys: ['subject_type'], label: 'type' }, { keys: ['expires_at'], label: 'expires', date: true }],
         rowActions: [
@@ -613,6 +621,7 @@ export const MODULES: ModuleSpec[] = [
         label: 'Open tickets',
         tool: 'helpdesk_ticket_list',
         args: { status: 'open' },
+        stopsAt: 50,
         transform: helpdeskTicketRows('helpdesk_ticket_list'),
         titleKeys: TICKET_TITLE_KEYS,
         fields: [
@@ -635,13 +644,14 @@ export const MODULES: ModuleSpec[] = [
         id: 'overdue',
         label: 'Overdue',
         tool: 'helpdesk_tickets_overdue',
+        stopsAt: 100,
         transform: helpdeskTicketRows('helpdesk_tickets_overdue'),
         titleKeys: TICKET_TITLE_KEYS,
         fields: [{ keys: ['priority'] }],
         empty: 'Nothing overdue.',
       },
       { id: 'queues', label: 'Queues', tool: 'helpdesk_queues_list', titleKeys: ['name'], empty: 'No queues.' },
-      { id: 'macros', label: 'Macros', tool: 'helpdesk_macros_list', titleKeys: ['name', 'title'], empty: 'No macros.' },
+      { id: 'macros', label: 'Macros', tool: 'helpdesk_macros_list', stopsAt: 50, titleKeys: ['name', 'title'], empty: 'No macros.' },
       {
         // Read-only: what the website chat assistant can answer from. See assistantKnowledge.ts.
         id: 'assistant',
@@ -675,6 +685,7 @@ export const MODULES: ModuleSpec[] = [
         label: 'Tasks',
         tool: 'pm_tasks_list',
         args: { limit: 80 },
+        stopsAt: 80,
         titleKeys: ['title', 'name'],
         fields: [
           { keys: ['status'] },
@@ -690,7 +701,7 @@ export const MODULES: ModuleSpec[] = [
         empty: 'No tasks.',
       },
       { id: 'projects', label: 'Projects', tool: 'pm_projects_list', titleKeys: ['name'], fields: [{ keys: ['status'] }, { keys: ['task_count'], label: 'tasks' }], empty: 'No projects.' },
-      { id: 'milestones', label: 'Milestones', tool: 'pm_milestones_list', titleKeys: ['name', 'title'], fields: [{ keys: ['due_date'], date: true }], empty: 'No milestones.' },
+      { id: 'milestones', label: 'Milestones', tool: 'pm_milestones_list', stopsAt: 50, titleKeys: ['name', 'title'], fields: [{ keys: ['due_date'], date: true }], empty: 'No milestones.' },
     ],
   },
   {
@@ -702,6 +713,7 @@ export const MODULES: ModuleSpec[] = [
         id: 'workflows',
         label: 'Workflows',
         tool: 'workflow_list',
+        stopsAt: 50,
         titleKeys: ['name'],
         fields: [{ keys: ['is_enabled'], label: 'enabled' }, { keys: ['run_count'], label: 'runs' }, { keys: ['description'] }],
         rowActions: [
@@ -712,7 +724,7 @@ export const MODULES: ModuleSpec[] = [
         detail: { tool: 'workflow_get', idKeys: ['id'] },
         empty: 'No workflows.',
       },
-      { id: 'runs', label: 'Recent runs', tool: 'workflow_runs_recent', titleKeys: ['workflow_name', 'workflow_id'], fields: [{ keys: ['status'] }, { keys: ['started_at', 'created_at'], date: true }], detail: { tool: 'workflow_run_get', argMap: { workflow_id: ['workflow_id'], run_id: ['id', 'run_id'] } }, empty: 'No recent runs.' },
+      { id: 'runs', label: 'Recent runs', tool: 'workflow_runs_recent', stopsAt: 50, titleKeys: ['workflow_name', 'workflow_id'], fields: [{ keys: ['status'] }, { keys: ['started_at', 'created_at'], date: true }], detail: { tool: 'workflow_run_get', argMap: { workflow_id: ['workflow_id'], run_id: ['id', 'run_id'] } }, empty: 'No recent runs.' },
     ],
   },
   {
@@ -724,6 +736,7 @@ export const MODULES: ModuleSpec[] = [
         id: 'campaigns',
         label: 'Campaigns',
         tool: 'email_campaign_list',
+        stopsAt: 50,
         titleKeys: ['name', 'subject'],
         fields: [{ keys: ['status'] }],
         headerActions: [
@@ -744,9 +757,9 @@ export const MODULES: ModuleSpec[] = [
         ],
         empty: 'No campaigns.',
       },
-      { id: 'audiences', label: 'Audiences', tool: 'email_audience_list', titleKeys: ['name'], fields: [{ keys: ['kind'] }, { keys: ['estimated_size'], label: 'size' }], headerActions: [{ id: 'new', label: '+ Audience', kind: 'tool', tool: 'email_audience_create', inputs: [{ key: 'name', label: 'Audience name' }] }], empty: 'No audiences.' },
-      { id: 'sequences', label: 'Sequences', tool: 'email_sequence_list', titleKeys: ['name'], fields: [{ keys: ['is_active'], label: 'active' }, { keys: ['total_enrolled'], label: 'enrolled' }], empty: 'No sequences.' },
-      { id: 'templates', label: 'Templates', tool: 'email_template_list', titleKeys: ['name', 'subject'], empty: 'No templates.' },
+      { id: 'audiences', label: 'Audiences', tool: 'email_audience_list', stopsAt: 50, titleKeys: ['name'], fields: [{ keys: ['kind'] }, { keys: ['estimated_size'], label: 'size' }], headerActions: [{ id: 'new', label: '+ Audience', kind: 'tool', tool: 'email_audience_create', inputs: [{ key: 'name', label: 'Audience name' }] }], empty: 'No audiences.' },
+      { id: 'sequences', label: 'Sequences', tool: 'email_sequence_list', stopsAt: 50, titleKeys: ['name'], fields: [{ keys: ['is_active'], label: 'active' }, { keys: ['total_enrolled'], label: 'enrolled' }], empty: 'No sequences.' },
+      { id: 'templates', label: 'Templates', tool: 'email_template_list', stopsAt: 50, titleKeys: ['name', 'subject'], empty: 'No templates.' },
     ],
   },
   {
@@ -757,8 +770,8 @@ export const MODULES: ModuleSpec[] = [
       // Account-level SEO surface. Audits/keywords are per-SEO-project (the tools
       // server-enforce project_id), so they live under each project via the picker
       // below rather than as account-wide tabs that would hard-error.
-      { id: 'projects', label: 'SEO projects', tool: 'seo_list_projects', titleKeys: ['name', 'domain', 'website_url'], fields: [{ keys: ['domain', 'website_url'] }], rowActions: [chat('seo')], detail: { tool: 'seo_project_get', idKeys: ['id', 'project_id'], idArg: 'project_id' }, empty: 'No SEO projects.' },
-      { id: 'keywords', label: 'Tracked keywords', tool: 'seo_tracked_keywords_list', titleKeys: ['keyword', 'name'], fields: [{ keys: ['position', 'rank'] }],
+      { id: 'projects', label: 'SEO projects', tool: 'seo_list_projects', stopsAt: 20, titleKeys: ['name', 'domain', 'website_url'], fields: [{ keys: ['domain', 'website_url'] }], rowActions: [chat('seo')], detail: { tool: 'seo_project_get', idKeys: ['id', 'project_id'], idArg: 'project_id' }, empty: 'No SEO projects.' },
+      { id: 'keywords', label: 'Tracked keywords', tool: 'seo_tracked_keywords_list', stopsAt: 50, titleKeys: ['keyword', 'name'], fields: [{ keys: ['position', 'rank'] }],
         headerActions: [
           { id: 'track', label: '+ Track keyword', kind: 'tool', tool: 'seo_track_keyword', inputs: [{ key: 'keyword', label: 'Keyword phrase' }, { key: 'target_domain', label: 'Domain to track (e.g. example.com)' }], successReload: true },
         ],
@@ -776,7 +789,7 @@ export const MODULES: ModuleSpec[] = [
           chat('ppc'),
         ],
         empty: 'No ad connections.' },
-      { id: 'campaigns', label: 'Campaigns', tool: 'ppc_campaign_list', titleKeys: ['name', 'platform'], fields: [{ keys: ['status'] }, { keys: ['campaign_type'], label: 'type' }, { keys: ['objective'] }],
+      { id: 'campaigns', label: 'Campaigns', tool: 'ppc_campaign_list', stopsAt: 50, titleKeys: ['name', 'platform'], fields: [{ keys: ['status'] }, { keys: ['campaign_type'], label: 'type' }, { keys: ['objective'] }],
         rowActions: [
           { id: 'pause', label: 'Pause', kind: 'tool', tool: 'ppc_pause_resource', args: (r) => ({ connection_id: r.connection_id, resource_type: 'campaign', resource_id: r.id }), confirm: 'Pause this campaign? (spend stops until re-enabled)', successReload: true },
           { id: 'enable', label: 'Enable', kind: 'tool', tool: 'ppc_enable_resource', args: (r) => ({ connection_id: r.connection_id, resource_type: 'campaign', resource_id: r.id }), confirm: 'Enable this campaign? (spend resumes)', successReload: true },
@@ -795,6 +808,7 @@ export const MODULES: ModuleSpec[] = [
         id: 'posts',
         label: 'Posts',
         tool: 'social_list_posts',
+        stopsAt: 30,
         titleKeys: SOCIAL_POST_TITLE_KEYS,
         fields: [
           { keys: ['status'] },
@@ -812,6 +826,7 @@ export const MODULES: ModuleSpec[] = [
         label: 'Approval queue',
         tool: 'social_list_posts',
         args: { status: 'pending_approval', limit: 100 },
+        stopsAt: 100,
         titleKeys: SOCIAL_POST_TITLE_KEYS,
         fields: [
           { keys: ['approval_status'], label: 'approval' },
@@ -850,6 +865,7 @@ export const MODULES: ModuleSpec[] = [
         label: 'Comments needing a reply',
         tool: 'social_comments_list',
         args: { requires_response: 'true', limit: 100 },
+        stopsAt: 100,
         titleKeys: ['content'],
         fields: [
           { keys: ['author_name', 'author_username'], label: 'from' },
@@ -874,6 +890,7 @@ export const MODULES: ModuleSpec[] = [
         id: 'library',
         label: 'Content',
         tool: 'content_list',
+        stopsAt: 20,
         titleKeys: ['title', 'slug'],
         fields: [{ keys: ['status'] }, { keys: ['content_type'], label: 'type' }, { keys: ['scheduled_publish_at', 'published_at', 'created_at'], label: 'when', date: true }],
         rowActions: [
@@ -882,7 +899,7 @@ export const MODULES: ModuleSpec[] = [
         ],
         empty: 'No content.',
       },
-      { id: 'templates', label: 'Templates', tool: 'marketing_content_templates', titleKeys: ['name', 'title'], empty: 'No templates.' },
+      { id: 'templates', label: 'Templates', tool: 'marketing_content_templates', stopsAt: 20, titleKeys: ['name', 'title'], empty: 'No templates.' },
     ],
   },
   {
@@ -890,10 +907,10 @@ export const MODULES: ModuleSpec[] = [
     label: 'Brand & Creative',
     icon: 'paintcan',
     sections: [
-      { id: 'brand', label: 'Brand guides', tool: 'brand_guide_list', gate: 'marketing_branding', titleKeys: ['name', 'title'], rowActions: [chat('branding')], empty: 'No brand guides.' },
-      { id: 'avatars', label: 'Customer avatars', tool: 'customer_avatar_list', gate: 'marketing_customer_avatar', titleKeys: ['name', 'title'], rowActions: [chat('customer_avatar')], empty: 'No avatars.' },
-      { id: 'journeys', label: 'Customer journeys', tool: 'customer_journey_list', gate: 'marketing_customer_journey', titleKeys: ['name', 'title'], rowActions: [chat('customer_journey')], empty: 'No journeys.' },
-      { id: 'designs', label: 'Designs', tool: 'design_list', gate: 'marketing_designer', titleKeys: ['title'], fields: [{ keys: ['designType'], label: 'type' }, { keys: ['status'] }, { keys: ['updatedAt'], label: 'updated', date: true }], empty: 'No designs.' },
+      { id: 'brand', label: 'Brand guides', tool: 'brand_guide_list', stopsAt: 20, gate: 'marketing_branding', titleKeys: ['name', 'title'], rowActions: [chat('branding')], empty: 'No brand guides.' },
+      { id: 'avatars', label: 'Customer avatars', tool: 'customer_avatar_list', stopsAt: 20, gate: 'marketing_customer_avatar', titleKeys: ['name', 'title'], rowActions: [chat('customer_avatar')], empty: 'No avatars.' },
+      { id: 'journeys', label: 'Customer journeys', tool: 'customer_journey_list', stopsAt: 20, gate: 'marketing_customer_journey', titleKeys: ['name', 'title'], rowActions: [chat('customer_journey')], empty: 'No journeys.' },
+      { id: 'designs', label: 'Designs', tool: 'design_list', stopsAt: 50, gate: 'marketing_designer', titleKeys: ['title'], fields: [{ keys: ['designType'], label: 'type' }, { keys: ['status'] }, { keys: ['updatedAt'], label: 'updated', date: true }], empty: 'No designs.' },
     ],
   },
   {
@@ -901,11 +918,11 @@ export const MODULES: ModuleSpec[] = [
     label: 'Communications (Voice)',
     icon: 'call-outgoing',
     sections: [
-      { id: 'calls', label: 'Recent calls', tool: 'voice_recent_calls', titleKeys: ['from_e164', 'to_e164', 'call_uuid'], fields: [{ keys: ['direction'] }, { keys: ['to_e164'], label: 'to' }, { keys: ['disposition'] }, { keys: ['started_at'], label: 'started', date: true }], empty: 'No recent calls.' },
-      { id: 'numbers', label: 'Numbers', tool: 'voice_numbers_list', titleKeys: ['e164'], fields: [{ keys: ['is_active'], label: 'active' }, { keys: ['provider'] }], empty: 'No numbers.' },
-      { id: 'extensions', label: 'Extensions', tool: 'voice_extensions_list', titleKeys: ['extension', 'display_name'], fields: [{ keys: ['display_name'], label: 'name' }, { keys: ['endpoint_type'], label: 'type' }, { keys: ['presence_state'], label: 'presence' }], empty: 'No extensions.' },
-      { id: 'ringgroups', label: 'Ring groups', tool: 'voice_ring_groups_list', titleKeys: ['name', 'extension'], fields: [{ keys: ['strategy'] }, { keys: ['member_count'], label: 'members' }], empty: 'No ring groups.' },
-      { id: 'ivrs', label: 'IVRs', tool: 'voice_ivrs_list', titleKeys: ['name', 'extension'], fields: [{ keys: ['greeting'] }], empty: 'No IVRs.' },
+      { id: 'calls', label: 'Recent calls', tool: 'voice_recent_calls', stopsAt: 10, titleKeys: ['from_e164', 'to_e164', 'call_uuid'], fields: [{ keys: ['direction'] }, { keys: ['to_e164'], label: 'to' }, { keys: ['disposition'] }, { keys: ['started_at'], label: 'started', date: true }], empty: 'No recent calls.' },
+      { id: 'numbers', label: 'Numbers', tool: 'voice_numbers_list', stopsAt: 50, titleKeys: ['e164'], fields: [{ keys: ['is_active'], label: 'active' }, { keys: ['provider'] }], empty: 'No numbers.' },
+      { id: 'extensions', label: 'Extensions', tool: 'voice_extensions_list', stopsAt: 50, titleKeys: ['extension', 'display_name'], fields: [{ keys: ['display_name'], label: 'name' }, { keys: ['endpoint_type'], label: 'type' }, { keys: ['presence_state'], label: 'presence' }], empty: 'No extensions.' },
+      { id: 'ringgroups', label: 'Ring groups', tool: 'voice_ring_groups_list', stopsAt: 50, titleKeys: ['name', 'extension'], fields: [{ keys: ['strategy'] }, { keys: ['member_count'], label: 'members' }], empty: 'No ring groups.' },
+      { id: 'ivrs', label: 'IVRs', tool: 'voice_ivrs_list', stopsAt: 50, titleKeys: ['name', 'extension'], fields: [{ keys: ['greeting'] }], empty: 'No IVRs.' },
     ],
   },
   {
@@ -915,8 +932,8 @@ export const MODULES: ModuleSpec[] = [
     group: 'Marketing',
     gate: 'marketing_outbound',
     sections: [
-      { id: 'campaigns', label: 'Campaigns', tool: 'outbound_list_campaigns', titleKeys: ['name', 'title'], fields: [{ keys: ['status'] }, { keys: ['channel'] }, { keys: ['created_at'], label: 'created', date: true }], rowActions: [chat('sales')], empty: 'No outbound campaigns.' },
-      { id: 'leads', label: 'Leads', tool: 'outbound_list_leads', titleKeys: ['name', 'email', 'company'], fields: [{ keys: ['status'] }, { keys: ['email'] }], empty: 'No outbound leads.' },
+      { id: 'campaigns', label: 'Campaigns', tool: 'outbound_list_campaigns', stopsAt: 30, titleKeys: ['name', 'title'], fields: [{ keys: ['status'] }, { keys: ['channel'] }, { keys: ['created_at'], label: 'created', date: true }], rowActions: [chat('sales')], empty: 'No outbound campaigns.' },
+      { id: 'leads', label: 'Leads', tool: 'outbound_list_leads', stopsAt: 30, titleKeys: ['name', 'email', 'company'], fields: [{ keys: ['status'] }, { keys: ['email'] }], empty: 'No outbound leads.' },
     ],
   },
   {
@@ -952,8 +969,8 @@ export const MODULES: ModuleSpec[] = [
     label: 'Collaboration',
     icon: 'comment',
     sections: [
-      { id: 'discussions', label: 'Discussions', tool: 'discussion_list', gate: 'discussions', titleKeys: ['title', 'project_name'], fields: [{ keys: ['status'] }, { keys: ['priority'] }, { keys: ['last_activity_at'], label: 'activity', date: true }], empty: 'No discussions.' },
-      { id: 'boards', label: 'Hiveboards', tool: 'hiveboard_list', gate: 'hiveboards', titleKeys: ['name'], fields: [{ keys: ['element_count'], label: 'elements' }, { keys: ['last_edited_at'], label: 'edited', date: true }], rowActions: [open('Open in Hiveku')], empty: 'No boards.' },
+      { id: 'discussions', label: 'Discussions', tool: 'discussion_list', stopsAt: 20, gate: 'discussions', titleKeys: ['title', 'project_name'], fields: [{ keys: ['status'] }, { keys: ['priority'] }, { keys: ['last_activity_at'], label: 'activity', date: true }], empty: 'No discussions.' },
+      { id: 'boards', label: 'Hiveboards', tool: 'hiveboard_list', stopsAt: 50, gate: 'hiveboards', titleKeys: ['name'], fields: [{ keys: ['element_count'], label: 'elements' }, { keys: ['last_edited_at'], label: 'edited', date: true }], rowActions: [open('Open in Hiveku')], empty: 'No boards.' },
     ],
   },
   {
@@ -961,7 +978,7 @@ export const MODULES: ModuleSpec[] = [
     label: 'Integrations',
     icon: 'plug',
     sections: [
-      { id: 'connected', label: 'Connected', tool: 'integration_list', titleKeys: ['provider_name', 'provider_account_identifier'], fields: [{ keys: ['provider_slug'], label: 'provider' }, { keys: ['is_active'], label: 'active' }, { keys: ['last_synced_at'], label: 'synced', date: true }], rowActions: [
+      { id: 'connected', label: 'Connected', tool: 'integration_list', stopsAt: 50, titleKeys: ['provider_name', 'provider_account_identifier'], fields: [{ keys: ['provider_slug'], label: 'provider' }, { keys: ['is_active'], label: 'active' }, { keys: ['last_synced_at'], label: 'synced', date: true }], rowActions: [
         { id: 'test', label: 'Test', kind: 'tool', tool: 'integration_test', args: (r) => ({ id: r.id }), successReload: false },
         { id: 'del', label: 'Delete', kind: 'tool', tool: 'integration_delete', args: (r) => ({ id: r.id }), confirm: 'Delete this integration?' },
       ], empty: 'No integrations.' },
@@ -983,7 +1000,7 @@ export const MODULES: ModuleSpec[] = [
     label: 'Knowledge Bases',
     icon: 'book',
     sections: [
-      { id: 'kbs', label: 'Knowledge bases', tool: 'kb_list', titleKeys: ['name'], fields: [{ keys: ['context_type'], label: 'type' }, { keys: ['updated_at'], label: 'updated', date: true }], rowActions: [chat('knowledge_base')], empty: 'No knowledge bases.' },
+      { id: 'kbs', label: 'Knowledge bases', tool: 'kb_list', stopsAt: 50, titleKeys: ['name'], fields: [{ keys: ['context_type'], label: 'type' }, { keys: ['updated_at'], label: 'updated', date: true }], rowActions: [chat('knowledge_base')], empty: 'No knowledge bases.' },
     ],
   },
   {
@@ -992,13 +1009,13 @@ export const MODULES: ModuleSpec[] = [
     icon: 'dashboard',
     sections: [
       {
-        id: 'tasks', label: 'Tasks', tool: 'mc_tasks_list', titleKeys: ['title'], fields: [{ keys: ['status'] }, { keys: ['priority'] }, { keys: ['assignee'] }],
+        id: 'tasks', label: 'Tasks', tool: 'mc_tasks_list', stopsAt: 50, titleKeys: ['title'], fields: [{ keys: ['status'] }, { keys: ['priority'] }, { keys: ['assignee'] }],
         rowActions: [{ id: 'transition', label: 'Move', kind: 'tool', tool: 'mc_task_transition', args: (r) => ({ id: r.id }), inputs: [{ key: 'to_status', label: 'Move to', options: ['open', 'in_progress', 'awaiting_human', 'awaiting_agent', 'done', 'archived'] }] }],
         detail: { tool: 'mc_task_get', idKeys: ['id'] },
         empty: 'No tasks.',
       },
       { id: 'lanes', label: 'Lanes', tool: 'mc_lanes_list', titleKeys: ['name'], fields: [{ keys: ['display_order'], label: 'order' }], empty: 'No lanes.' },
-      { id: 'sla', label: 'SLA breached', tool: 'mc_sla_breached', titleKeys: ['title'], fields: [{ keys: ['priority'] }, { keys: ['over_by_hours'], label: 'over SLA (h)' }], empty: 'No SLA breaches.' },
+      { id: 'sla', label: 'SLA breached', tool: 'mc_sla_breached', stopsAt: 100, titleKeys: ['title'], fields: [{ keys: ['priority'] }, { keys: ['over_by_hours'], label: 'over SLA (h)' }], empty: 'No SLA breaches.' },
     ],
   },
   {
@@ -1009,7 +1026,7 @@ export const MODULES: ModuleSpec[] = [
     gate: 'accounting',
     sections: [
       {
-        id: 'bills', label: 'Bills (AP)', tool: 'accounting_bill_list', gate: 'accounting_ap',
+        id: 'bills', label: 'Bills (AP)', tool: 'accounting_bill_list', stopsAt: 50, gate: 'accounting_ap',
         titleKeys: ['bill_number', 'vendor.name', 'vendor_name', 'id'],
         fields: [{ keys: ['vendor.name', 'vendor_name'], label: 'vendor' }, { keys: ['status'] }, { keys: ['total_cents', 'amount_cents'], label: 'total', money: true, cents: true }, { keys: ['due_date'], label: 'due', date: true }],
         rowActions: [
@@ -1020,13 +1037,13 @@ export const MODULES: ModuleSpec[] = [
         empty: 'No bills.',
       },
       {
-        id: 'invoices', label: 'Invoices (AR)', tool: 'accounting_invoice_list', gate: 'accounting_ar',
+        id: 'invoices', label: 'Invoices (AR)', tool: 'accounting_invoice_list', stopsAt: 50, gate: 'accounting_ar',
         titleKeys: ['invoice_number', 'id'],
         fields: [{ keys: ['status'] }, { keys: ['total_cents'], label: 'total', money: true, cents: true }, { keys: ['due_date'], label: 'due', date: true }],
         empty: 'No invoices.',
       },
       {
-        id: 'payroll', label: 'Payroll', tool: 'accounting_payroll_run_list', gate: 'accounting_payroll',
+        id: 'payroll', label: 'Payroll', tool: 'accounting_payroll_run_list', stopsAt: 50, gate: 'accounting_payroll',
         titleKeys: ['period', 'pay_period', 'id'], fields: [{ keys: ['status'] }, { keys: ['pay_date', 'created_at'], label: 'date', date: true }],
         empty: 'No payroll runs.',
       },
@@ -1043,9 +1060,9 @@ export const MODULES: ModuleSpec[] = [
     group: 'Commerce',
     gate: 'commerce',
     sections: [
-      { id: 'products', label: 'Products', tool: 'shopify_catalog_list', titleKeys: ['title', 'name'], fields: [{ keys: ['status'] }, { keys: ['price', 'price_cents'], label: 'price', money: true }], empty: 'No products / Shopify not connected.' },
-      { id: 'estimates', label: 'Estimates', tool: 'crm_estimate_list', titleKeys: ['estimate_number'], fields: [{ keys: ['status'] }, { keys: ['total_cents'], label: 'total', money: true, cents: true }], rowActions: [{ id: 'send', label: 'Send', kind: 'tool', tool: 'crm_estimate_send', args: (r) => ({ estimate_id: r.id }), inputs: [{ key: 'channel', label: 'Send via', options: ['email', 'sms', 'both'] }], confirm: 'Send this estimate?' }], empty: 'No estimates.' },
-      { id: 'contracts', label: 'Contracts (e-sign)', tool: 'crm_envelope_list', titleKeys: ['title'], fields: [{ keys: ['status'] }, { keys: ['subject_type'], label: 'type' }], empty: 'No contracts.' },
+      { id: 'products', label: 'Products', tool: 'shopify_catalog_list', stopsAt: 20, titleKeys: ['title', 'name'], fields: [{ keys: ['status'] }, { keys: ['price', 'price_cents'], label: 'price', money: true }], empty: 'No products / Shopify not connected.' },
+      { id: 'estimates', label: 'Estimates', tool: 'crm_estimate_list', stopsAt: 50, titleKeys: ['estimate_number'], fields: [{ keys: ['status'] }, { keys: ['total_cents'], label: 'total', money: true, cents: true }], rowActions: [{ id: 'send', label: 'Send', kind: 'tool', tool: 'crm_estimate_send', args: (r) => ({ estimate_id: r.id }), inputs: [{ key: 'channel', label: 'Send via', options: ['email', 'sms', 'both'] }], confirm: 'Send this estimate?' }], empty: 'No estimates.' },
+      { id: 'contracts', label: 'Contracts (e-sign)', tool: 'crm_envelope_list', stopsAt: 50, titleKeys: ['title'], fields: [{ keys: ['status'] }, { keys: ['subject_type'], label: 'type' }], empty: 'No contracts.' },
       { id: 'shopify', label: 'Shopify status', tool: 'shopify_status', titleKeys: ['shop', 'domain', 'status'], fields: [{ keys: ['connection_status', 'status'] }], empty: 'Shopify not connected.' },
     ],
   },
