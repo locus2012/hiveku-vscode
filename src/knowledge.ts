@@ -1318,6 +1318,12 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__customer_journey_public_link_set',
   'mcp__hiveku__before_after_grid_public_link_set',
   'mcp__hiveku__customer_avatar_public_link_set',
+  // A Meta ad's URL parameters and booking calendars (2026-11-07, HK-1146, HK-1137): ppc_meta_url_tags_set rewrites live
+  // ads in place, and each edited ad very likely moves to a new post; a booking calendar's link is public, and a change
+  // lands on it at once. Every call asks, as in the Claude Code plugin (0.27.202) and Codex (0.3.81). Appended last.
+  'mcp__hiveku__ppc_meta_url_tags_set',
+  'mcp__hiveku__calendar_meeting_type_create',
+  'mcp__hiveku__calendar_meeting_type_update',
 ];
 
 /**
