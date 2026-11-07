@@ -786,20 +786,21 @@ describe('what the extension writes and wires', () => {
     );
     assert.ok(
       ask.trimEnd().endsWith(
-        "  'mcp__hiveku__workspace_dashboard_create',\n" +
-          "  'mcp__hiveku__workspace_dashboard_update',\n" +
-          "  'mcp__hiveku__workspace_dashboard_widget_create',\n" +
-          "  'mcp__hiveku__workspace_dashboard_widget_update',\n" +
-          "  'mcp__hiveku__workspace_dashboard_widget_delete',\n" +
-          "  'mcp__hiveku__workspace_dashboard_layout_update',\n" +
-          "  'mcp__hiveku__workspace_dashboard_page_create',\n" +
-          "  'mcp__hiveku__workspace_dashboard_page_update',\n" +
-          "  'mcp__hiveku__workspace_dashboard_page_delete',\n" +
-          "  'mcp__hiveku__workspace_dashboard_restore',\n" +
-          "  'mcp__hiveku__workspace_dashboard_delete',\n" +
-          "  'mcp__hiveku__workspace_dashboard_version_restore',",
+        "  'mcp__hiveku__project_cookie_banner_set',\n" +
+          "  'mcp__hiveku__project_consent_trackers_add',\n" +
+          "  'mcp__hiveku__project_consent_trackers_update',\n" +
+          "  'mcp__hiveku__project_consent_trackers_remove',\n" +
+          "  'mcp__hiveku__project_annotation_create',\n" +
+          "  'mcp__hiveku__project_annotation_delete',\n" +
+          "  'mcp__hiveku__project_annotation_comment_update',\n" +
+          "  'mcp__hiveku__project_annotation_comment_delete',\n" +
+          "  'mcp__hiveku__project_review_notify_set',\n" +
+          "  'mcp__hiveku__project_review_notify_test',\n" +
+          "  'mcp__hiveku__project_review_session_set',\n" +
+          "  'mcp__hiveku__project_review_session_clear',\n" +
+          "  'mcp__hiveku__project_review_frame_url',",
       ),
-      'the newest ask rules, the agency dashboard changes, go at the END',
+      'the newest ask rules, the cookie banner and Review page writes, go at the END',
     );
   });
 

@@ -1347,6 +1347,22 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__workspace_dashboard_restore',
   'mcp__hiveku__workspace_dashboard_delete',
   'mcp__hiveku__workspace_dashboard_version_restore',
+  // The cookie banner and its trackers, and the Review page (2026-11-07, waves S3i and S3f): a banner or tracker change
+  // reaches visitors with no deploy, a comment reaches a client, and project_review_frame_url's answer holds the saved
+  // reviewer login. Every call asks, as in the Claude Code plugin (0.27.207) and Codex (0.3.84). Appended last.
+  'mcp__hiveku__project_cookie_banner_set',
+  'mcp__hiveku__project_consent_trackers_add',
+  'mcp__hiveku__project_consent_trackers_update',
+  'mcp__hiveku__project_consent_trackers_remove',
+  'mcp__hiveku__project_annotation_create',
+  'mcp__hiveku__project_annotation_delete',
+  'mcp__hiveku__project_annotation_comment_update',
+  'mcp__hiveku__project_annotation_comment_delete',
+  'mcp__hiveku__project_review_notify_set',
+  'mcp__hiveku__project_review_notify_test',
+  'mcp__hiveku__project_review_session_set',
+  'mcp__hiveku__project_review_session_clear',
+  'mcp__hiveku__project_review_frame_url',
 ];
 
 /**
