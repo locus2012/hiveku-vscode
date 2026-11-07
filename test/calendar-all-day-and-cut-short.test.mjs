@@ -11,6 +11,8 @@
  * calendar_list_events stops at max_results (at most 100) and answers no total, and
  * social_calendar_list caps limit at 100, so 100 back may be the first 100 of more:
  * the panel says so (SectionSpec.stopsAt), and says nothing when fewer came back.
+ * Every other list that stops at a fixed number says so too (HK-1257): at the limit
+ * it asks for or, asking for none, at its route's default page.
  *
  * Driven through the real panel engine (openModulePanel) with a stub webview, as
  * calendar-window.test.mjs is, so the assertions are on what a person sees.
@@ -44,6 +46,33 @@ const section = (moduleId, sectionId) =>
   MODULES.find((m) => m.id === moduleId).sections.find((s) => s.id === sectionId);
 const CALENDAR = MODULES.find((m) => m.id === 'calendar');
 const SOCIAL = MODULES.find((m) => m.id === 'social');
+const CRM = MODULES.find((m) => m.id === 'crm');
+const PM = MODULES.find((m) => m.id === 'pm');
+const ACCOUNTING = MODULES.find((m) => m.id === 'accounting');
+
+/** Where each list stops, read off its builder route: the limit it asks for, else the route's default page. */
+const STOPS = {
+  crm: { deals: 50, contacts: 50, companies: 50, activities: 40 },
+  revenue: { estimates: 50, envelopes: 50 },
+  helpdesk: { tickets: 50, overdue: 100, macros: 50 },
+  pm: { tasks: 80, milestones: 50 },
+  workflows: { workflows: 50, runs: 50 },
+  email: { campaigns: 50, audiences: 50, sequences: 50, templates: 50 },
+  seo: { projects: 20, keywords: 50 },
+  ppc: { campaigns: 50 },
+  social: { posts: 30, approvals: 100, calendar: 100, comments: 100 },
+  content: { library: 20, templates: 20 },
+  creative: { brand: 20, avatars: 20, journeys: 20, designs: 50 },
+  voice: { calls: 10, numbers: 50, extensions: 50, ringgroups: 50, ivrs: 50 },
+  outbound: { campaigns: 30, leads: 30 },
+  calendar: { events: 100 },
+  collab: { discussions: 20, boards: 50 },
+  integrations: { connected: 50 },
+  knowledge: { kbs: 50 },
+  mc: { tasks: 50, sla: 100 },
+  accounting: { bills: 50, invoices: 50, payroll: 50 },
+  commerce: { products: 20, estimates: 50, contracts: 50 },
+};
 
 let panelSeq = 0;
 async function open(module, sectionId, answers) {
@@ -125,5 +154,61 @@ describe('a list that stops at the most its tool answers', () => {
     assert.equal(cutShortWords({}, 100), null);
     assert.equal(cutShortWords({ stopsAt: 100 }, 40), null);
     assert.equal(cutShortWords({ stopsAt: 50 }, 50), 'Showing the first 50. The list stops there, so there may be more.');
+  });
+});
+
+describe('every list that stops at a fixed number (HK-1257)', () => {
+  const rows = (n) => Array.from({ length: n }, (_, i) => ({ id: `row-${i}`, title: `Row ${i + 1}`, content: `Row ${i + 1}` }));
+  const says = (n) => `Showing the first ${n}. The list stops there, so there may be more.`;
+
+  test('names where it stops, and no other list does', () => {
+    const named = {};
+    for (const module of MODULES) {
+      for (const list of module.sections) {
+        if (list.stopsAt !== undefined) (named[module.id] ??= {})[list.id] = list.stopsAt;
+      }
+    }
+    assert.deepEqual(named, STOPS);
+  });
+
+  test('a list that asks for a number of rows stops at that number', () => {
+    for (const module of MODULES) {
+      for (const list of module.sections) {
+        const args = typeof list.args === 'function' ? list.args() : (list.args ?? {});
+        const asked = args.limit ?? args.max_results;
+        if (asked !== undefined) assert.equal(list.stopsAt, asked, `${module.id} ${list.id}`);
+      }
+    }
+  });
+
+  test('a stop is one the panel can say: above 100 rows it says the list is capped instead', () => {
+    for (const module of MODULES) {
+      for (const list of module.sections) {
+        if (list.stopsAt !== undefined) assert.ok(list.stopsAt <= 100, `${module.id} ${list.id}`);
+      }
+    }
+  });
+
+  test('comments needing a reply and the approval queue say so at 100, and nothing at 99', async () => {
+    const page = (n) => ({ data: rows(n), pagination: { page: 1, limit: 100, total: 140, total_pages: 2 } });
+    assert.equal((await open(SOCIAL, 'comments', { social_comments_list: page(100) })).cutShort, says(100));
+    assert.equal((await open(SOCIAL, 'comments', { social_comments_list: page(99) })).cutShort, undefined);
+    assert.equal((await open(SOCIAL, 'approvals', { social_list_posts: page(100) })).cutShort, says(100));
+    assert.equal((await open(SOCIAL, 'approvals', { social_list_posts: page(99) })).cutShort, undefined);
+  });
+
+  test('sections asking for 50, 40 and 80 rows say so when they come back full', async () => {
+    const full = async (module, id, tool, n) => (await open(module, id, { [tool]: { data: rows(n), total: 500 } })).cutShort;
+    assert.equal(await full(CRM, 'deals', 'crm_list_deals', 50), says(50));
+    assert.equal(await full(CRM, 'deals', 'crm_list_deals', 49), undefined);
+    assert.equal(await full(CRM, 'activities', 'crm_list_activities', 40), says(40));
+    assert.equal(await full(CRM, 'activities', 'crm_list_activities', 39), undefined);
+    assert.equal(await full(PM, 'tasks', 'pm_tasks_list', 80), says(80));
+    assert.equal(await full(PM, 'tasks', 'pm_tasks_list', 79), undefined);
+  });
+
+  test('a list that asks for no number says so at its route\'s default page', async () => {
+    const answer = { accounting_bill_list: { data: rows(50) } };
+    assert.equal((await open(ACCOUNTING, 'bills', answer)).cutShort, says(50));
   });
 });
