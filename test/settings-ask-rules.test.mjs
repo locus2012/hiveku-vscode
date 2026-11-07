@@ -566,6 +566,15 @@ const PUBLIC_LINKS = [
 /** A Meta ad's URL parameters and booking calendars (2026-11-07, HK-1146, HK-1137). Each call asks. Appended last. */
 const BOOKING_CALENDARS = ['mcp__hiveku__calendar_meeting_type_create', 'mcp__hiveku__calendar_meeting_type_update'];
 const ADS_AND_CALENDARS = ['mcp__hiveku__ppc_meta_url_tags_set', ...BOOKING_CALENDARS];
+/** The Webflow settings writes (2026-11-07, wave S3e). Each call asks. Appended last. */
+const WEBFLOW_SETTINGS = [
+  'mcp__hiveku__webflow_connection_token_add',
+  'mcp__hiveku__webflow_project_site_bind',
+  'mcp__hiveku__webflow_connection_disconnect',
+  'mcp__hiveku__webflow_webhooks_reregister',
+  'mcp__hiveku__webflow_form_routing_set',
+  'mcp__hiveku__webflow_form_submissions_backfill',
+];
 
 const DOMAINS_AND_SETTINGS = [
   'mcp__hiveku__project_domain_auto_configure',
@@ -575,7 +584,7 @@ const DOMAINS_AND_SETTINGS = [
   'mcp__hiveku__shopify_project_settings_set',
 ];
 
-const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS];
+const EXPECTED_ASK = [...FIRST_FOUR, ...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS];
 const without = (...names) => EXPECTED_ASK.filter((name) => !names.includes(name));
 
 const dirs = [];
@@ -723,10 +732,10 @@ describe('Scaffolded settings: ask rules for the tools that switch ads or workfl
       [['mcp__hiveku__*'], []],
       [['mcp__*'], []],
       [['*'], []],
-      [['mcp__hiveku__ppc_*'], ['mcp__hiveku__workflow_enable', 'mcp__hiveku__workflow_resume', 'mcp__hiveku__hiveku_batch', ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...BOOKING_CALENDARS]],
+      [['mcp__hiveku__ppc_*'], ['mcp__hiveku__workflow_enable', 'mcp__hiveku__workflow_resume', 'mcp__hiveku__hiveku_batch', ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...BOOKING_CALENDARS, ...WEBFLOW_SETTINGS]],
       [['mcp__hiveku__workflow_*'], EXPECTED_ASK.filter((name) => !name.startsWith('mcp__hiveku__workflow_'))],
-      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*'], ['mcp__hiveku__hiveku_batch', ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...BOOKING_CALENDARS]],
-      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*', 'mcp__hiveku__hiveku_batch'], [...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...BOOKING_CALENDARS]],
+      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*'], ['mcp__hiveku__hiveku_batch', ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...BOOKING_CALENDARS, ...WEBFLOW_SETTINGS]],
+      [['mcp__hiveku__ppc_*', 'mcp__hiveku__workflow_*', 'mcp__hiveku__hiveku_batch'], [...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B_NOT_PPC, ...CONFIRM_PHONE, ...SEO_AREA, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...BOOKING_CALENDARS, ...WEBFLOW_SETTINGS]],
       // A user who keeps every marketing tool from Claude Code: the deny covers the lead-email change, the record-again
       // send, the site inbox delete and test lead email, wave B's approval and conversion-upload writes, and the webinar
       // invites, cancel, delete and edit.
@@ -813,107 +822,107 @@ describe('ensureSpendAskRules: a folder scaffolded before the ask rules', () => 
     const dir = await tmp('hk-ensure-085-');
     const before = { ...OLD, permissions: { ...OLD.permissions, ask: ['WebFetch', ...FIRST_FOUR] } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     const after = await readSettings(dir);
-    assert.deepEqual(after, { ...before, permissions: { ...before.permissions, ask: ['WebFetch', ...FIRST_FOUR, ...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS] } });
+    assert.deepEqual(after, { ...before, permissions: { ...before.permissions, ask: ['WebFetch', ...FIRST_FOUR, ...ADDED, ...VERSIONS, ...SECRETS, ...AB_TESTS, ...MOBILE, ...PPC_OVERRIDE, ...LEAD_EMAILS, ...ASSISTANT_TZ, ...ENV_GROUPS, ...EMAIL_CONTENT, ...EMAIL_SETUP, ...LEAD_LISTS, ...RERECORD, ...FORMULA_FILL, ...PORT_LOA, ...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...SITE_WRITES, ...EMAIL_CANCEL, ...ADS_WAVE_B, ...CONFIRM_PHONE, ...SEO_AREA, ...AUTOMATIONS_DESKTOP, ...MEMORY_PAGE, ...LEAD_GRID, ...MISSION_CONTROL, ...MEET_DISCUSSIONS, ...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS] } });
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.48 rules gets only the webinar edit, the webhook delete, the Projects asks and the newer rules, appended last, so it asks in a fresh folder\'s order', async () => {
     const dir = await tmp('hk-ensure-09148-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...WEBINAR_EDIT, ...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.49 rules gets only the email webhook delete, the Projects asks and the newer rules, appended last, so it asks in a fresh folder\'s order', async () => {
     const dir = await tmp('hk-ensure-09149-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...EMAIL_WEBHOOK_DELETE, ...PROJECTS_WAVE_2, ...PROJECTS_SHARE_DELETE, ...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.50 rules gets only the Meet calendar sends, the SEO plan writes and the newer rules, appended last', async () => {
     const dir = await tmp('hk-ensure-09150-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...MEET_CALENDAR_SEO_PLAN, ...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.51 rules gets only the brand guide and journey asks, appended last', async () => {
     const dir = await tmp('hk-ensure-09151-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...MARKETING_IDENTITY, ...CONTACT_RESTORE, ...PUBLISH_AND_HOSTING, ...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.57 rules gets only the Referrals asks, appended last', async () => {
     const dir = await tmp('hk-ensure-09157-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...REFERRALS, ...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.58 rules gets only the account home, agency dashboard and Your data asks, appended last', async () => {
     const dir = await tmp('hk-ensure-09158-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...DASHBOARD_PAGES, ...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.59 rules gets the reads that bill the account and what came after them, appended last', async () => {
     const dir = await tmp('hk-ensure-09159-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...PAID_READS, ...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.60 rules gets only the Domains, settings and store writes and what came after, appended last', async () => {
     const dir = await tmp('hk-ensure-09160-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...DOMAINS_AND_SETTINGS, ...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.61 rules gets only the cold lead adds, private mode and what came after, appended last', async () => {
     const dir = await tmp('hk-ensure-09161-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...COLD_LEADS_AND_PRIVATE_MODE, ...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.62 rules gets only the Analytics writes and the cache clear asks, appended last', async () => {
     const dir = await tmp('hk-ensure-09162-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...ANALYTICS, ...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
   test('a folder that holds the 0.91.63 rules gets only the cache clear, account settings, phone line password and public link asks, appended last', async () => {
     const dir = await tmp('hk-ensure-09163-');
-    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS) } };
+    const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS) } };
     await seedSettings(dir, before);
-    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS]);
+    assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [...CACHE_CLEAR, ...ACCOUNT_SETTINGS, ...SIP_PASSWORD, ...PUBLIC_LINKS, ...ADS_AND_CALENDARS, ...WEBFLOW_SETTINGS]);
     assert.deepEqual((await readSettings(dir)).permissions.ask, EXPECTED_ASK, 'an updated folder asks in the order a fresh one does');
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });

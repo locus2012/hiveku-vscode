@@ -786,11 +786,14 @@ describe('what the extension writes and wires', () => {
     );
     assert.ok(
       ask.trimEnd().endsWith(
-        "  'mcp__hiveku__ppc_meta_url_tags_set',\n" +
-          "  'mcp__hiveku__calendar_meeting_type_create',\n" +
-          "  'mcp__hiveku__calendar_meeting_type_update',",
+        "  'mcp__hiveku__webflow_connection_token_add',\n" +
+          "  'mcp__hiveku__webflow_project_site_bind',\n" +
+          "  'mcp__hiveku__webflow_connection_disconnect',\n" +
+          "  'mcp__hiveku__webflow_webhooks_reregister',\n" +
+          "  'mcp__hiveku__webflow_form_routing_set',\n" +
+          "  'mcp__hiveku__webflow_form_submissions_backfill',",
       ),
-      'the newest ask rules, the ad URL parameters and booking calendars, go at the END',
+      'the newest ask rules, the Webflow settings writes, go at the END',
     );
   });
 

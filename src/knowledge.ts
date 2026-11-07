@@ -1324,6 +1324,15 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__ppc_meta_url_tags_set',
   'mcp__hiveku__calendar_meeting_type_create',
   'mcp__hiveku__calendar_meeting_type_update',
+  // The Webflow settings writes (2026-11-07, wave S3e): a pasted site token, a project's Webflow site, a disconnect, a
+  // webhook re-register, a form's routing and a form import each change who or what a project reaches. Every call asks,
+  // as in the Claude Code plugin (0.27.203) and Codex (0.3.82). Appended last.
+  'mcp__hiveku__webflow_connection_token_add',
+  'mcp__hiveku__webflow_project_site_bind',
+  'mcp__hiveku__webflow_connection_disconnect',
+  'mcp__hiveku__webflow_webhooks_reregister',
+  'mcp__hiveku__webflow_form_routing_set',
+  'mcp__hiveku__webflow_form_submissions_backfill',
 ];
 
 /**
