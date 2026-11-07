@@ -3,6 +3,7 @@
 ## 0.91.65
 - **Public links ask first.** Your assistant now asks before it switches the public link of a customer journey, a before and after grid or an ideal customer profile on or off.
 - **Ad links and booking calendars ask first.** It also asks before it changes a Meta ad's URL parameters, and before it creates or changes a booking calendar.
+- **Webflow settings ask first.** It also asks before it saves a Webflow site token, changes which Webflow site a project uses, disconnects a Webflow connection, re-registers Hiveku's webhooks, changes which form submissions reach Hiveku, or imports past form submissions.
 
 ## 0.91.64
 - **All-day events show on their own day.** In the CRM and Social calendars, an event with a date and no time of day used to show a day early in US time zones. It now shows on the day it is for.
