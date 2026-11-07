@@ -431,7 +431,7 @@ describe('what the extension writes and wires', () => {
       'the lead-email change stays on the ask list',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  // asks, as in the plugin (NEVER_AUTO_APPROVE) and Codex (0.3.25). Appended last.\n" +
           "  'mcp__hiveku__email_message_get',\n" +
           "  // The Email Service setup writes (2026-10-25): email_send and email_domain_send_instructions send email to real\n" +
@@ -782,7 +782,15 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__outbound_create_lead',\n" +
           "  'mcp__hiveku__site_firewall_private_set',"
       ),
-      'the newest ask rules, the cold lead adds and private mode, go at the END, after the Domains, settings and store writes',
+      'the cold lead adds and private mode stay after the Domains, settings and store writes, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__customer_journey_public_link_set',\n" +
+          "  'mcp__hiveku__before_after_grid_public_link_set',\n" +
+          "  'mcp__hiveku__customer_avatar_public_link_set',",
+      ),
+      'the newest ask rules, the public link switches, go at the END',
     );
   });
 

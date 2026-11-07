@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.65
+- **Public links ask first.** Your assistant now asks before it switches the public link of a customer journey, a before and after grid or an ideal customer profile on or off.
+
 ## 0.91.64
 - **All-day events show on their own day.** In the CRM and Social calendars, an event with a date and no time of day used to show a day early in US time zones. It now shows on the day it is for.
 - **The Social calendar says when it may be cut short.** It lists at most 100 items, and when it reaches 100 it now says there may be more.
