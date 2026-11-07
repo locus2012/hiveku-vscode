@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.67
+- **Cookie banner and Review writes ask first.** Your assistant now asks before it changes a site's cookie banner or its trackers, before it adds, edits or deletes a review comment or a reply, and before it changes a site's review notifications or its saved reviewer login. It also asks before it reads the address that holds that login.
+
 ## 0.91.66
 - **Agency dashboards ask first.** Your assistant now asks before it makes or changes one of your agency dashboards on Workspaces. Reading them does not ask.
 
