@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.66
+- **Agency dashboards ask first.** Your assistant now asks before it makes or changes one of your agency dashboards on Workspaces. Reading them does not ask.
+
 ## 0.91.65
 - **Public links ask first.** Your assistant now asks before it switches the public link of a customer journey, a before and after grid or an ideal customer profile on or off.
 - **Ad links and booking calendars ask first.** It also asks before it changes a Meta ad's URL parameters, and before it creates or changes a booking calendar.
