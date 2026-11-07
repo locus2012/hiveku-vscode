@@ -36,14 +36,15 @@ preview: the customer's live site is whatever Webflow last published.
 
 ## Availability
 
-Every row is LIVE. The builder's Webflow ops registry holds 111 actions, one `webflow_*`
-tool each, and the index carries all 111: the nine beta SEO actions (page query, bulk
+Every row is LIVE but the six marked INCOMING, which ask from this release on, ahead of
+the server release that serves them. The builder's Webflow ops registry holds 111 actions
+the index carries, one `webflow_*` tool each: the nine beta SEO actions (page query, bulk
 metadata, page schema, llms.txt) landed 2026-09-06 and the content-source switch
 2026-09-08. A name that does not resolve on your key is a server that has not redeployed
 yet, never a missing capability: say so and file the gap. The gates, re-derived from the
-ops modules on 2026-09-10: `confirm` marks the 32 actions that stage a confirmation
-(`412 confirm_required` without `confirm: true`; the plugin ask list carries the same 32
-names); `OAuth` marks the 15 calls a site token cannot make; `Enterprise` marks the 14
+ops modules on 2026-09-10: `confirm` marks the 38 actions that stage a confirmation
+(`412 confirm_required` without `confirm: true`; the plugin ask list carries the same 38
+names); `OAuth` marks the 17 calls a site token cannot make; `Enterprise` marks the 14
 that Webflow serves only to Enterprise workspaces (`402 not_enterprise_plan_site`
 elsewhere); `secondary locale only` marks the 3 DOM writes that refuse the primary
 locale.
@@ -57,6 +58,12 @@ locale.
 | `webflow_token_introspect` | LIVE | - |
 | `webflow_token_authorized_by` | LIVE | OAuth |
 | `webflow_project_cms_provider_set` | LIVE | confirm |
+| `webflow_connection_token_add` | INCOMING | confirm |
+| `webflow_project_site_bind` | INCOMING | confirm |
+| `webflow_connection_disconnect` | INCOMING | confirm |
+| `webflow_webhooks_reregister` | INCOMING | OAuth, confirm |
+| `webflow_form_routing_set` | INCOMING | OAuth, confirm |
+| `webflow_form_submissions_backfill` | INCOMING | confirm |
 | `webflow_page_list` | LIVE | - |
 | `webflow_page_get` | LIVE | - |
 | `webflow_page_metadata_update` | LIVE | - |
@@ -169,7 +176,7 @@ deduped and bound to the project), so reacting to a site event is an automation 
 `webhookTrigger` URL: that creates a second, unverified delivery of an event Hiveku
 already has.
 
-The 32 that ask, since builder 93327517a (2026-09-09): `webflow_asset_delete`,
+The 38 that ask, 32 of them since builder 93327517a (2026-09-09): `webflow_asset_delete`,
 `webflow_cms_collection_delete`, `webflow_cms_field_delete`, `webflow_cms_item_delete`,
 `webflow_cms_item_delete_bulk`, `webflow_cms_item_publish`, `webflow_cms_item_unpublish`,
 `webflow_cms_item_unpublish_bulk`, `webflow_form_submission_delete`,
@@ -181,7 +188,10 @@ The 32 that ask, since builder 93327517a (2026-09-09): `webflow_asset_delete`,
 `webflow_robots_replace`, `webflow_robots_update`, `webflow_site_customcode_delete`,
 `webflow_site_customcode_set`, `webflow_site_publish`, `webflow_webhook_create`,
 `webflow_webhook_delete`, `webflow_webhook_update`, `webflow_wellknown_create`,
-`webflow_wellknown_delete`. In plain terms: item publish and unpublish, the custom code
+`webflow_wellknown_delete`, and the six of the desktop's Webflow settings:
+`webflow_connection_disconnect`, `webflow_connection_token_add`,
+`webflow_form_routing_set`, `webflow_form_submissions_backfill`,
+`webflow_project_site_bind`, `webflow_webhooks_reregister`. In plain terms: item publish and unpublish, the custom code
 and Google tag writes, the Hiveku snippet install, the llms.txt, robots, redirect and
 well-known writes and the content-source switch now ask before running, alongside every
 delete, the site publish and the two money moves that always did. Each answers `412
