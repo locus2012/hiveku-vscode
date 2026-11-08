@@ -29,8 +29,18 @@ function secretKey(accountId: string): string {
   return `${SECRET_PREFIX}${accountId}`;
 }
 
+/** Told when Hiveku refuses a stored account's key: the account, and the key the refused client held. */
+export type KeyRefusedListener = (accountId: string, key: string) => void;
+
 export class AccountStore {
+  private keyRefusedListener: KeyRefusedListener | undefined;
+
   constructor(private readonly ctx: vscode.ExtensionContext) {}
+
+  /** Offboarding O8a (keyStanding.ts): hear about each refusal of a stored account's key. */
+  setKeyRefusedListener(listener: KeyRefusedListener | undefined): void {
+    this.keyRefusedListener = listener;
+  }
 
   list(): AccountRecord[] {
     return this.ctx.globalState.get<AccountRecord[]>(INDEX_KEY, []);
@@ -58,7 +68,12 @@ export class AccountStore {
     if (cached) return cached;
     const key = await this.getKey(accountId);
     if (!key) throw new Error(`No stored key for account ${accountId}. Run "Hiveku: Sign In".`);
-    const client = new HivekuMcpClient({ baseUrl, apiKey: key });
+    const client = new HivekuMcpClient({
+      baseUrl,
+      apiKey: key,
+      // The key this client holds, not the one stored later: a reconnect replaces it, and its refusal says nothing.
+      onKeyRefused: () => this.keyRefusedListener?.(accountId, key),
+    });
     this.clientCache.set(cacheKey, client);
     return client;
   }
@@ -223,6 +238,25 @@ export class AccountStore {
         await this.ctx.globalState.update(key, map);
       }
     }
+  }
+
+  /**
+   * Offboarding O8a: the person lost access to this account. Its key leaves
+   * SecretStorage first, then the account leaves the active list, the archived
+   * list and the per-account maps (signOut), and its cached clients go.
+   */
+  async forgetRemovedAccount(accountId: string): Promise<void> {
+    await this.signOut(accountId);
+    const archived = this.listArchived();
+    if (archived.some((r) => r.accountId === accountId)) {
+      await this.ctx.globalState.update(ARCHIVED_KEY, archived.filter((r) => r.accountId !== accountId));
+    }
+  }
+
+  /** Every account the extension holds, active and archived. */
+  allRecords(): AccountRecord[] {
+    const seen = new Set<string>();
+    return [...this.list(), ...this.listArchived()].filter((r) => (seen.has(r.accountId) ? false : (seen.add(r.accountId), true)));
   }
 
   // ── Archive: hide from the active list but keep the key + record for instant restore ──

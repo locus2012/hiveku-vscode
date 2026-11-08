@@ -458,13 +458,30 @@ export class HivekuMcpClient {
   private nextId = 1;
   private initialized = false;
   private initializing: Promise<void> | undefined;
+  private onKeyRefused: (() => void) | undefined;
 
-  constructor(opts: { baseUrl: string; apiKey: string; profile?: string }) {
+  /**
+   * `onKeyRefused` is told, and never waited on, each time Hiveku itself
+   * refuses this client's key (its own JSON 401, the one isHivekuKeyRefusal
+   * reads; never the web edge's page). The account store passes one for a
+   * stored account's key (offboarding O8a, keyStanding.ts); a pasted key being
+   * checked at sign-in has none.
+   */
+  constructor(opts: { baseUrl: string; apiKey: string; profile?: string; onKeyRefused?: () => void }) {
     if (!opts.baseUrl) throw new Error('baseUrl required');
     if (!opts.apiKey) throw new Error('apiKey required');
     this.baseUrl = opts.baseUrl.replace(/\/+$/, '');
     this.apiKey = opts.apiKey;
     this.profile = opts.profile ?? 'full';
+    this.onKeyRefused = opts.onKeyRefused;
+  }
+
+  private noteKeyRefused(): void {
+    try {
+      this.onKeyRefused?.();
+    } catch {
+      // A listener's failure must never change what this request reports.
+    }
   }
 
   private get endpoint(): string {
@@ -563,6 +580,8 @@ export class HivekuMcpClient {
         if (read === null) throw new McpEdgeRefusalError('unreadable', res.status);
         if (!isHivekuErrorAnswer(read)) throw new McpEdgeRefusalError('edge_blocked', res.status, edgeRayId(res.headers, read));
       }
+      // Hiveku's own refusal of the key (the edge's pages were thrown above).
+      if (res.status === 401) this.noteKeyRefused();
       const text = read ?? '';
       const detail = `MCP HTTP ${res.status}: ${text.slice(0, 500)}`;
       if (res.status === 429) {
