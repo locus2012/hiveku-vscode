@@ -14,7 +14,7 @@ import * as path from 'path';
 import * as cp from 'child_process';
 import * as vscode from 'vscode';
 import { AccountStore, type AccountRecord } from './accounts';
-import { folderIsNewOrEmpty, markFolderAsExtensions } from './accountBinding';
+import { makeAccountFolder } from './accountBinding';
 import { KeyRefusalWatcher, askKeyStanding, type RemovalReason } from './keyStanding';
 import {
   finishPendingRemovals,
@@ -1660,22 +1660,17 @@ async function ensureAccountFolder(account: AccountRecord): Promise<string | und
       return existing; // couldn't move safely — stay consistent at the old path
     }
   }
-  const fresh = await folderIsNewOrEmpty(dir);
-  await fs.mkdir(dir, { recursive: true });
-  if (fresh) await markNewAccountFolder(dir, account);
+  // Offboarding O8a: a folder the extension makes here is marked as its own (accountBinding.ts).
+  noteAccountFolderMark(account, await makeAccountFolder(dir, account));
   await accounts.setFolder(account.accountId, dir);
   return dir;
 }
 
-/**
- * Offboarding O8a: mark a folder the extension has just made as its own
- * (.hiveku/account.json, bound_by "hiveku-vscode"), so a removal on a lost
- * account can tell it apart. Only a folder that was not there or held nothing;
- * never over a binding already there.
- */
-async function markNewAccountFolder(dir: string, account: AccountRecord): Promise<void> {
-  const marked = await markFolderAsExtensions(dir, account).catch(() => 'not_marked' as const);
-  if (marked !== 'marked') log.appendLine(`[folders] ${account.label}: no binding written in its new folder (${marked}).`);
+/** Offboarding O8a: say in the log when a new account folder could not be marked as the extension's. */
+function noteAccountFolderMark(account: AccountRecord, made: Awaited<ReturnType<typeof makeAccountFolder>>): void {
+  if (made === 'already_bound' || made === 'not_marked') {
+    log.appendLine(`[folders] ${account.label}: no binding written in its new folder (${made}).`);
+  }
 }
 
 /**
@@ -1753,9 +1748,8 @@ async function reconcileAccountFolders(): Promise<void> {
         } else {
           // Stale mapping to a deleted folder — forget it; next use recreates under the root.
           pending.push({ accountId: account.accountId, folder: canonical });
-          const fresh = await folderIsNewOrEmpty(canonical);
-          const made = await fs.mkdir(canonical, { recursive: true }).then(() => true, () => false);
-          if (made && fresh) await markNewAccountFolder(canonical, account);
+          const made = await makeAccountFolder(canonical, account).catch(() => undefined);
+          if (made) noteAccountFolderMark(account, made);
         }
       }
     },

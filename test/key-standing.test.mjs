@@ -69,7 +69,7 @@ test('askKeyStanding: anything but exactly one of the four answers is no answer'
     ['an answer with more in it', json(200, { standing: 'removed_from_team', account: A }), 'unreadable'],
     ['a list', json(200, [{ standing: 'removed_from_team' }]), 'unreadable'],
     ['an empty body', { status: 200, body: '' }, 'unreadable'],
-    ['a body far too large', json(200, { standing: 'removed_from_team', pad: 'x'.repeat(8000) }), 'unreadable'],
+    ['a body far too large, though it says one answer', { status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ standing: 'removed_from_team' }) + ' '.repeat(8000) }, 'unreadable'],
     ['500', json(500, { error: 'boom' }), 'unavailable'],
     ['502', { status: 502, headers: { 'content-type': 'text/html' }, body: 'Bad gateway' }, 'unavailable'],
     ['503', json(503, { error: 'unavailable' }), 'unavailable'],

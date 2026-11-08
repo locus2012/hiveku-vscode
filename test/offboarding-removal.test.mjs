@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
-import { lstat, mkdtemp, mkdir, readFile, readdir, readlink, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdtemp, mkdir, readFile, readdir, readlink, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -333,6 +333,20 @@ test("a marked folder that holds another account's folder or site stays", async 
   const second = await off.runAccountRemoval(ctxFor(w2), depsFor(w2));
   assert.deepEqual(second.kept.map((k) => k.why), ['holds_other_account']);
   assert.deepEqual(await snapshot(holdsSite), before2);
+});
+
+test('a marked folder that cannot be read through stays: it might hold another account\'s folder', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, async (t) => {
+  const w = await world(t);
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const locked = path.join(mine, 'sites', 'locked');
+  await mkdir(path.join(locked, 'inner'), { recursive: true });
+  await chmod(locked, 0o000);
+  t.after(() => chmod(locked, 0o700).catch(() => undefined));
+  const result = await off.runAccountRemoval(ctxFor(w), depsFor(w));
+  await chmod(locked, 0o700);
+  assert.deepEqual(result.removed, []);
+  assert.deepEqual(result.kept.map((k) => k.why), ['not_read_through']);
+  assert.equal(await exists(path.join(mine, 'sites', 'main-site', 'index.html')), true);
 });
 
 test("a marked folder that is another account's folder of the extension stays", async (t) => {

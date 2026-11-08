@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { loadOut } from './helpers/load.mjs';
 
-const { readFolderBinding, markFolderAsExtensions, folderIsNewOrEmpty, isAccountUuid, EXTENSION_BINDER } = loadOut('accountBinding');
+const { readFolderBinding, markFolderAsExtensions, makeAccountFolder, folderIsNewOrEmpty, isAccountUuid, EXTENSION_BINDER } = loadOut('accountBinding');
 
 const A = '7f6bb2cf-a04e-4efa-afd0-db6dd3aafd79';
 
@@ -74,6 +74,13 @@ test('readFolderBinding: none, a link, an unreadable file, and whose it says it 
   assert.deepEqual(await readFolderBinding(none), { kind: 'none' });
   assert.deepEqual(await readFolderBinding(path.join(root, 'missing')), { kind: 'none' });
 
+  const linkedDir = path.join(root, 'linked-dir');
+  await mkdir(linkedDir);
+  await mkdir(path.join(root, 'real-hiveku'));
+  await writeFile(path.join(root, 'real-hiveku', 'account.json'), JSON.stringify({ account_id: A, bound_by: 'hiveku-vscode' }));
+  await symlink(path.join(root, 'real-hiveku'), path.join(linkedDir, '.hiveku'));
+  assert.deepEqual(await readFolderBinding(linkedDir), { kind: 'link' });
+
   const linkedFile = path.join(root, 'linked-file');
   await mkdir(path.join(linkedFile, '.hiveku'), { recursive: true });
   await writeFile(path.join(root, 'real.json'), JSON.stringify({ account_id: A, bound_by: 'hiveku-vscode' }));
@@ -110,4 +117,25 @@ test('folderIsNewOrEmpty: true only for a missing or empty real folder', async (
   assert.equal(await folderIsNewOrEmpty(link), false);
   await writeFile(path.join(root, 'a-file'), 'x');
   assert.equal(await folderIsNewOrEmpty(path.join(root, 'a-file')), false);
+});
+
+test('makeAccountFolder marks a folder it makes, and never one that was already there with something in it', async (t) => {
+  const root = await base(t);
+  const made = path.join(root, 'northwind-7f6bb2cf');
+  assert.equal(await makeAccountFolder(made, { accountId: A, label: 'Northwind' }), 'marked');
+  assert.equal((await readFolderBinding(made)).boundBy, 'hiveku-vscode');
+  // Asked again: it is there now, with the mark in it.
+  assert.equal(await makeAccountFolder(made, { accountId: A, label: 'Northwind' }), 'existing');
+
+  const empty = path.join(root, 'empty');
+  await mkdir(empty);
+  assert.equal(await makeAccountFolder(empty, { accountId: A, label: 'Northwind' }), 'marked');
+
+  // Another tool's (or an older version's, or a person's) folder with files and no binding: never marked.
+  const theirs = path.join(root, 'theirs');
+  await mkdir(theirs);
+  await writeFile(path.join(theirs, '.env'), 'OLYMPUS_API_KEY=made-up\n');
+  assert.equal(await makeAccountFolder(theirs, { accountId: A, label: 'Northwind' }), 'existing');
+  assert.deepEqual(await readFolderBinding(theirs), { kind: 'none' });
+  assert.deepEqual(await readdir(theirs), ['.env']);
 });

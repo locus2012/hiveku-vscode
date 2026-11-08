@@ -100,6 +100,23 @@ export async function folderIsNewOrEmpty(folder: string): Promise<boolean> {
 }
 
 /**
+ * Makes an account folder (mkdir -p) and marks it as the extension's only when
+ * it was not there or held nothing. 'existing': it was there with something in
+ * it, which another tool, an older version of the extension or a person may
+ * have made, so it is never marked. The one way the extension makes an account
+ * folder (extension.ts ensureAccountFolder and reconcileAccountFolders).
+ */
+export async function makeAccountFolder(
+  folder: string,
+  account: { accountId: string; label: string },
+): Promise<'marked' | 'already_bound' | 'not_marked' | 'existing'> {
+  const fresh = await folderIsNewOrEmpty(folder);
+  await fs.mkdir(folder, { recursive: true });
+  if (!fresh) return 'existing';
+  return markFolderAsExtensions(folder, account);
+}
+
+/**
  * Writes the extension's mark into a folder it has just made. Never over a file
  * that is there (created exclusively), never through a link, and only for an
  * account id the website names accounts by: the plugin stops at a binding it
