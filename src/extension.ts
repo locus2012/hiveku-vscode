@@ -74,7 +74,7 @@ import { allFailedWarning, clipError, everythingDataNote, type FailedDataset } f
 import { attentionBadgeCount, readFailure, unreachableFromReads, unreachableRow, unreachableWarning, type ReachFailure } from './accountReach';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
 import { setupLocalSupabase } from './localSupabase';
-import { scaffoldLocalAutomations, installAgencyCadence, stopLocalAutomations } from './localAutomations';
+import { scaffoldLocalAutomations, installAgencyCadence, stopLocalAutomations, refreshAutomationScripts } from './localAutomations';
 import {
   captureBaseline,
   materializeTree,
@@ -427,6 +427,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       keyWatcher?.dispose();
     }),
   );
+
+  // Each account's background-job script, brought up to date without touching the job itself.
+  void refreshAutomationScripts(
+    accounts.list().flatMap((account) => accounts.getFolder(account.accountId) ?? []),
+  )
+    .then((refreshed) => {
+      if (refreshed > 0) log.appendLine(`[automations] brought ${refreshed} folder script(s) up to date`);
+    })
+    .catch((e) => log.appendLine(`[automations] script refresh failed: ${String(e)}`));
 
   context.subscriptions.push(
     vscode.commands.registerCommand('hiveku.signIn', () => signIn()),
@@ -1185,9 +1194,10 @@ async function signOut(node?: { record: AccountRecord }): Promise<void> {
     return;
   }
 
-  // stop / delete: tear down this account's local automations first so nothing keeps pinging it.
+  // stop / delete: tear down this account's local automations so nothing keeps pinging it. A
+  // delete waits for its confirmation, so cancelling it leaves the job running.
   const folder = accounts.getFolder(record.accountId);
-  await teardownAccountAutomations(folder);
+  if (choice.value !== 'delete' || !folder) await teardownAccountAutomations(folder);
 
   if (choice.value === 'delete' && folder) {
     // The old copy said "Hiveku still has the projects + data — this only
@@ -1213,6 +1223,7 @@ async function signOut(node?: { record: AccountRecord }): Promise<void> {
       'Move to Trash',
     );
     if (ok !== 'Move to Trash') return;
+    await teardownAccountAutomations(folder);
     // Trash, not rm -rf — recoverable, and it matches how the rest of the
     // toolchain treats deletion.
     try {

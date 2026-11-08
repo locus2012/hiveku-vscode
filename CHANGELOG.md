@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-- **On a Mac, each account's local automations run as their own background job.** Every account on one Mac used to share a single job, so setting up a second account replaced the first account's job, and Stop monitoring or Delete locally on any account stopped them all. A job set up earlier keeps running until that account's automations are next installed, when it moves to a job of its own. Starting, stopping or deleting one account's automations no longer touches any other account's job.
+- **On a Mac, each account's local automations run as their own background job.** Every account on one Mac used to share a single job, so setting up a second account replaced the first account's job, and Stop monitoring or Delete locally on any account stopped them all. A job set up earlier keeps running until that account's automations are next installed, when it moves to a job of its own. Starting, stopping or deleting one account's automations no longer touches any other account's job. Cancelling Delete locally now leaves that account's automations running.
 
 ## 0.91.71
 - **When you lose access to an account, its folders leave this computer.** If you are removed from an account's team, or the account closes, the extension now removes the folders it made for that account and the key it saved, then tells you what went and what stayed. It only acts when Hiveku has said so twice, a few minutes apart, and only for a key you connected from this computer. A key you pasted in removes nothing, and neither does a key that was merely switched off.

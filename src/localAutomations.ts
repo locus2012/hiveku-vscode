@@ -333,7 +333,7 @@ const MANAGE_MJS = `#!/usr/bin/env node
 //   node manage.mjs update --id reply-triage --cron "*/30 9-17 * * 1-5"
 //   node manage.mjs enable|disable|delete|run --id reply-triage
 //   node manage.mjs install | uninstall | status
-import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, unlinkSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { homedir, platform } from 'node:os';
@@ -347,10 +347,13 @@ const args = process.argv.slice(2);
 const cmd = args[0];
 const flag = (n) => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : undefined; };
 const tag = 'hiveku-automations';
+// A path as the disk spells it, so a folder reached with other capitals is still one folder (a
+// Mac's disk ignores case by default). NFC because macOS also treats an accented name's two
+// spellings as one folder, and a path can arrive in either.
+function canonicalPath(p) { try { return realpathSync.native(p).normalize('NFC'); } catch { return p.normalize('NFC'); } }
 // One launchd job per automations folder: the whole path names it, so two accounts on this Mac
-// never share a job. NFC because macOS treats an accented name's two spellings as one folder,
-// and a path can arrive in either.
-const plistLabel = 'com.hiveku.automations.' + createHash('sha256').update(ROOT.normalize('NFC')).digest('hex').slice(0, 12);
+// never share a job.
+const plistLabel = 'com.hiveku.automations.' + createHash('sha256').update(canonicalPath(ROOT)).digest('hex').slice(0, 12);
 const plistPath = join(homedir(), 'Library', 'LaunchAgents', plistLabel + '.plist');
 // The name every job used to get: the first 6 bytes of the path, the same for every folder
 // under /Users. A plist under it can be any folder's, so it is only read, and moved or removed
@@ -364,7 +367,7 @@ const legacyPlistPath = join(homedir(), 'Library', 'LaunchAgents', legacyPlistLa
 function legacyJobIsThisFolders() {
   let plist;
   try { plist = readFileSync(legacyPlistPath, 'utf8'); } catch { return false; }
-  const samePath = (a, b) => a.normalize('NFC') === b.normalize('NFC');
+  const samePath = (a, b) => canonicalPath(a) === canonicalPath(b);
   const workingDir = plist.match(/<key>WorkingDirectory<\\/key>\\s*<string>([\\s\\S]*?)<\\/string>/)?.[1];
   const program = plist.match(/<key>ProgramArguments<\\/key>\\s*<array>([\\s\\S]*?)<\\/array>/)?.[1] ?? '';
   const programArgs = [...program.matchAll(/<string>([\\s\\S]*?)<\\/string>/g)].map((m) => m[1]);
@@ -566,6 +569,27 @@ export async function stopLocalAutomations(baseDir: string): Promise<void> {
   const manage = path.join(autoDir, 'manage.mjs');
   await fs.writeFile(manage, MANAGE_MJS, 'utf8');
   cp.execFileSync(process.execPath, [manage, 'uninstall'], { cwd: autoDir, stdio: 'ignore', timeout: 15000 });
+}
+
+/**
+ * Bring each account folder's manage.mjs up to the current one. A script from before each folder
+ * had its own job replaces or stops whichever account's job holds the one shared name, and the
+ * agent guide has assistants run it by hand. Only a manage.mjs that exists and differs is
+ * rewritten: nothing is installed, started or stopped, and a folder that cannot be read is skipped.
+ */
+export async function refreshAutomationScripts(baseDirs: string[]): Promise<number> {
+  let refreshed = 0;
+  for (const baseDir of baseDirs) {
+    const manage = path.join(baseDir, 'automations', 'manage.mjs');
+    try {
+      if ((await fs.readFile(manage, 'utf8')) === MANAGE_MJS) continue;
+      await fs.writeFile(manage, MANAGE_MJS, 'utf8');
+      refreshed += 1;
+    } catch {
+      // No automations in this folder, or it cannot be read now: the next start tries again.
+    }
+  }
+  return refreshed;
 }
 
 // ── Agency cadence pack: scheduled daily brief / weekly pass / monthly report ──

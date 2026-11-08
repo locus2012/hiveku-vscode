@@ -276,6 +276,9 @@ describe('a job left under the old shared name', () => {
       oldPlist(other).replace(`<key>WorkingDirectory</key><string>${other}</string>`, `<key>WorkingDirectory</key><string>${dir}</string>`),
       oldPlist(other).replace(`<string>${other}/dispatcher.mjs</string>`, `<string>${dir}/dispatcher.mjs</string>`),
       oldPlist(other).replace(`<key>StandardOutPath</key><string>${other}/logs/dispatcher.log</string>`, `<key>StandardOutPath</key><string>${dir}</string>`),
+      // The right script and a sibling's working folder, and the reverse: each path whole, on its own.
+      oldPlist(dir).replace(`<key>WorkingDirectory</key><string>${dir}</string>`, `<key>WorkingDirectory</key><string>${dir}-old</string>`),
+      oldPlist(dir).replace(`<string>${dir}/dispatcher.mjs</string>`, `<string>${dir}-old/dispatcher.mjs</string>`),
     ];
     for (const text of texts) {
       assert.notEqual(text, oldPlist(other), 'the fixture must differ');
@@ -296,6 +299,22 @@ describe('a job left under the old shared name', () => {
     assert.equal(fs.existsSync(old), false);
     assert.ok(calls(s).includes('unload ' + old), calls(s).join('\n'));
   });
+
+  for (const [what, folderForm, plistForm] of [
+    ['decomposed in the plist, composed on disk', 'NFC', 'NFD'],
+    ['composed in the plist, decomposed on disk', 'NFD', 'NFC'],
+  ]) {
+    sandboxed(`an accented folder's two spellings are one folder: ${what}`, (s) => {
+      const dir = automationsFolder(s, 'Caf\u00e9'.normalize(folderForm));
+      const old = plistFile(s, oldLabel(dir));
+      fs.writeFileSync(old, oldPlist(dir.normalize(plistForm)));
+
+      runManage(s, dir, 'uninstall');
+
+      assert.equal(fs.existsSync(old), false);
+      assert.ok(calls(s).includes('unload ' + old), calls(s).join('\n'));
+    });
+  }
 
   sandboxed("status reads this folder's old job as installed, so nothing says stopped right after the update", (s) => {
     const dir = automationsFolder(s, 'acme');
@@ -368,6 +387,51 @@ describe('Stop monitoring and Delete locally', () => {
     const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'extension.ts'), 'utf8');
     assert.match(src, /await stopLocalAutomations\(folder\);/);
     assert.doesNotMatch(src, /\[manage, 'uninstall'\]/);
+  });
+
+  test('Delete locally stops the job only after its confirmation, so cancelling leaves it running', () => {
+    const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'extension.ts'), 'utf8');
+    const confirmed = src.indexOf("if (ok !== 'Move to Trash') return;");
+    assert.ok(confirmed > 0, 'the confirmation is still there');
+    assert.ok(src.slice(confirmed).startsWith("if (ok !== 'Move to Trash') return;\n    await teardownAccountAutomations(folder);"));
+    assert.match(src, /if \(choice\.value !== 'delete' \|\| !folder\) await teardownAccountAutomations\(folder\);/);
+    assert.equal(src.match(/await teardownAccountAutomations\(folder\)/g).length, 2, 'stop, and delete once confirmed');
+  });
+});
+
+describe('a folder set up before each folder had its own job', () => {
+  sandboxed('the same folder reached with other capitals keeps one job', (s) => {
+    const dir = automationsFolder(s, 'Acme');
+    const otherCapitals = path.join(path.dirname(path.dirname(dir)), 'ACME', 'automations');
+    // On a case-sensitive disk these are two folders, and two jobs is right.
+    if (!fs.existsSync(otherCapitals)) return;
+
+    runManage(s, dir, 'install');
+    runManage(s, otherCapitals, 'install');
+
+    assert.deepEqual(jobs(s), [label(dir) + '.plist']);
+  });
+
+  sandboxed('at start-up a stale script is rewritten, and nothing else happens', async (s) => {
+    const stale = automationsFolder(s, 'acme');
+    const current = automationsFolder(s, 'globex');
+    const none = path.join(s.root, 'accounts', 'initech');
+    fs.mkdirSync(none, { recursive: true });
+    fs.writeFileSync(path.join(stale, 'manage.mjs'), '// a script from an earlier version\n');
+    const untouched = fs.statSync(path.join(current, 'manage.mjs')).mtimeMs;
+
+    const refreshed = await la.refreshAutomationScripts([path.dirname(stale), path.dirname(current), none, path.join(s.root, 'gone')]);
+
+    assert.equal(refreshed, 1);
+    assert.equal(fs.readFileSync(path.join(stale, 'manage.mjs'), 'utf8'), MANAGE);
+    assert.equal(fs.statSync(path.join(current, 'manage.mjs')).mtimeMs, untouched, 'a current script is not written again');
+    assert.deepEqual(fs.readdirSync(none), [], 'a folder with no automations gets none');
+    assert.deepEqual(calls(s), [], 'launchctl was never called');
+  });
+
+  test('the extension brings the scripts up to date when it starts', () => {
+    const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'extension.ts'), 'utf8');
+    assert.match(src.slice(src.indexOf('export async function activate(')), /void refreshAutomationScripts\(/);
   });
 });
 
