@@ -19,6 +19,14 @@
  * (offboarding O2a): a passing fault can never delete anyone's work, and a
  * release that keeps saying "remove" is what the website's hourly brake is for.
  *
+ * AND ONLY FOR A KEY CONNECT HIVEKU MADE HERE. The website answers about the
+ * person who made the key: it records who made a key, never who holds it. Connect
+ * Hiveku's exchange makes each key for the person signed in to the browser, so
+ * its keys are the person's own. A key pasted with "Sign in with a key" may be a
+ * teammate's, who left while the person here is still on the team. For such a
+ * key a removal answer removes nothing, and is not repeated to the person (it may
+ * be about someone else): they are told the key stopped working, once.
+ *
  * Asked once per refusal: a burst of refused calls asks one question, and an
  * answer that removes nothing quiets the key for hours.
  */
@@ -145,9 +153,17 @@ export interface KeyRefusalWatcherDeps {
   appUrl: () => string;
   /** The key the extension holds for the account now, if any. */
   storedKey: (accountId: string) => Promise<string | undefined>;
+  /**
+   * Whether this is the key Connect Hiveku handed over for the account on this
+   * computer (AccountStore.keyCameFromConnect). Only such a key's removal answer
+   * is about the person here; any other key's removes nothing.
+   */
+  fromConnect: (accountId: string, key: string) => boolean;
   ask: (opts: { appUrl: string; key: string; accountId: string }) => Promise<StandingReply>;
   /** Remove the account from this computer, for this reason. Called only on the second sighting. */
   remove: (accountId: string, reason: RemovalReason) => Promise<void>;
+  /** A key that did not come from Connect Hiveku will not work again: tell the person, once for that key. */
+  keyStopped?: (accountId: string) => void;
   log: (line: string) => void;
   now?: () => number;
   /** Run `fn` once, `ms` from now; tests pass their own clock. */
@@ -160,6 +176,8 @@ interface AccountWatch {
   quietUntil: number;
   sighting?: { at: number; keyFp: string; reason: RemovalReason };
   confirm?: { cancel(): void };
+  /** The key the person was last told stopped working (a key not from Connect Hiveku). */
+  toldFp?: string;
 }
 
 function defaultSchedule(fn: () => void, ms: number): { cancel(): void } {
@@ -250,6 +268,16 @@ export class KeyRefusalWatcher {
       this.deps.log(`[offboarding] Hiveku says the key is ${reply.standing}; nothing changes on this computer.`);
       return;
     }
+    // A removal answer is about whoever made the key. Only a key Connect Hiveku made here is the person's own.
+    if (!this.cameFromConnect(accountId, key)) {
+      this.forgetSighting(w);
+      w.quietUntil = now + QUIET_AFTER_SWITCHED_OFF_MS;
+      this.deps.log(
+        '[offboarding] Hiveku will not take this key again. It did not come from Connect Hiveku on this computer, so what Hiveku says about it may be about whoever made it: nothing is removed.',
+      );
+      await this.tellKeyStopped(w, accountId, key);
+      return;
+    }
     const fp = fingerprint(key);
     const s = w.sighting;
     const confirms = s !== undefined && s.keyFp === fp && now - s.at >= CONFIRM_AFTER_MS && now - s.at <= SIGHTING_TTL_MS;
@@ -298,5 +326,28 @@ export class KeyRefusalWatcher {
     w.confirm?.cancel();
     w.confirm = undefined;
     w.sighting = undefined;
+  }
+
+  /** Whether the key came from Connect Hiveku here; anything uncertain is no. */
+  private cameFromConnect(accountId: string, key: string): boolean {
+    try {
+      return this.deps.fromConnect(accountId, key) === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Once for each key, and only while it is still the key stored for the account (not one a newer key replaced). */
+  private async tellKeyStopped(w: AccountWatch, accountId: string, key: string): Promise<void> {
+    const fp = fingerprint(key);
+    if (w.toldFp === fp) return;
+    const stored = await this.deps.storedKey(accountId).catch(() => undefined);
+    if (!stored || fingerprint(stored) !== fp || this.disposed) return;
+    w.toldFp = fp;
+    try {
+      this.deps.keyStopped?.(accountId);
+    } catch {
+      // Telling the person never changes what happens.
+    }
   }
 }

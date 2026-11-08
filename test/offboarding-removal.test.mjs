@@ -537,6 +537,8 @@ async function endToEnd(t, answer, opts = {}) {
   const watcher = new ks.KeyRefusalWatcher({
     appUrl: () => route.appUrl,
     storedKey: async (id) => (forgotten.includes(id) ? undefined : key),
+    // The key Connect Hiveku handed over for this account (the pasted-key worlds are in offboarding-pasted-key).
+    fromConnect: (id, k) => id === A && k === key,
     ask: (q) => ks.askKeyStanding({ ...q, timeoutMs: opts.timeoutMs ?? 2000 }),
     remove: async (accountId, reason) => {
       await off.runAccountRemoval(ctxFor(w, { accountId, reason }), {

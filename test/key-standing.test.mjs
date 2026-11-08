@@ -187,7 +187,10 @@ function fakeClock() {
   };
 }
 
-/** A watcher whose website answers from `answers` in turn (the last one repeats). */
+/**
+ * A watcher whose website answers from `answers` in turn (the last one repeats).
+ * Its key came from Connect Hiveku unless `opts.fromConnect` says otherwise.
+ */
 function makeWatcher(answers, opts = {}) {
   const clock = fakeClock();
   const key = opts.key ?? madeUpKey();
@@ -195,9 +198,15 @@ function makeWatcher(answers, opts = {}) {
   const asked = [];
   const removed = [];
   const logs = [];
+  const told = [];
+  const checked = [];
   const watcher = new ks.KeyRefusalWatcher({
     appUrl: () => 'http://127.0.0.1:9',
     storedKey: async () => stored.key,
+    fromConnect: (accountId, k) => {
+      checked.push([accountId, k]);
+      return opts.fromConnect ? opts.fromConnect(accountId, k) : true;
+    },
     ask: async (q) => {
       asked.push(q);
       const a = answers[Math.min(asked.length - 1, answers.length - 1)];
@@ -205,11 +214,12 @@ function makeWatcher(answers, opts = {}) {
       return typeof a === 'string' ? { kind: 'answer', standing: a } : a;
     },
     remove: async (accountId, reason) => { removed.push({ accountId, reason }); },
+    keyStopped: (accountId) => told.push(accountId),
     log: (line) => logs.push(line),
     now: clock.now,
     schedule: clock.schedule,
   });
-  return { watcher, clock, key, stored, asked, removed, logs };
+  return { watcher, clock, key, stored, asked, removed, logs, told, checked };
 }
 
 test('one removal answer removes nothing; the second, two minutes later, removes the account once', async () => {
@@ -421,4 +431,81 @@ test('the watcher never logs a key', async () => {
   await w.clock.advance(ks.CONFIRM_AFTER_MS, w.watcher);
   assert.ok(w.logs.length >= 2);
   for (const line of w.logs) assert.equal(line.includes(w.key), false);
+});
+
+/* ── a key that did not come from Connect Hiveku (O8a review) ───────────── */
+// The website answers about the person who made a key; it cannot know who holds it.
+// Connect Hiveku's exchange makes each key for the person signed in to the browser.
+// A key pasted with "Sign in with a key" may be a teammate's, who left while the
+// person here is still on the team.
+
+test('a key that did not come from Connect Hiveku is never removed, however often Hiveku says so; the person is told once', async () => {
+  for (const standing of ['removed_from_team', 'account_closed']) {
+    const w = makeWatcher([standing], { fromConnect: () => false });
+    const day = 24 * 60 * 60 * 1000;
+    // The sidebar's scan every five minutes for a day, each refused.
+    for (let t = 0; t < day; t += 5 * 60 * 1000) {
+      w.watcher.onRefused(A, w.key);
+      await w.watcher.settled();
+      await w.clock.advance(5 * 60 * 1000, w.watcher);
+    }
+    assert.deepEqual(w.removed, [], standing);
+    assert.equal(w.clock.pending().length, 0, `${standing}: no confirming question is ever set`);
+    assert.equal(w.asked.length, Math.ceil(day / ks.QUIET_AFTER_SWITCHED_OFF_MS), `${standing}: quiet for six hours after each answer`);
+    assert.deepEqual(w.told, [A], `${standing}: told once`);
+    assert.ok(w.checked.length > 0 && w.checked.every(([id, k]) => id === A && k === w.key), `${standing}: the refused key itself is checked`);
+    // The answer may be about someone else: it is not repeated.
+    for (const line of w.logs) assert.doesNotMatch(line, /removed_from_team|account_closed|team|closed/, `${standing}: ${line}`);
+  }
+});
+
+test('the key is checked again on the confirming answer: one that no longer counts as from Connect Hiveku removes nothing', async () => {
+  let fromConnect = true;
+  const w = makeWatcher(['removed_from_team', 'removed_from_team'], { fromConnect: () => fromConnect });
+  w.watcher.onRefused(A, w.key);
+  await w.watcher.settled();
+  assert.equal(w.clock.pending().length, 1, 'a first sighting');
+  // Signed out, and the same key pasted back in with "Sign in with a key".
+  fromConnect = false;
+  await w.clock.advance(ks.CONFIRM_AFTER_MS, w.watcher);
+  assert.equal(w.asked.length, 2);
+  assert.deepEqual(w.removed, []);
+  assert.deepEqual(w.told, [A]);
+});
+
+test('a Connect check that fails counts as a key that did not come from Connect Hiveku', async () => {
+  const w = makeWatcher(['removed_from_team'], { fromConnect: () => { throw new Error('state unreadable'); } });
+  for (let i = 0; i < 3; i++) {
+    w.watcher.onRefused(A, w.key);
+    await w.watcher.settled();
+    await w.clock.advance(ks.QUIET_AFTER_SWITCHED_OFF_MS, w.watcher);
+  }
+  assert.deepEqual(w.removed, []);
+  assert.equal(w.clock.pending().length, 0);
+});
+
+test('the person is told once for each key that stopped working, and never about a key a newer one replaced', async () => {
+  const w = makeWatcher(['removed_from_team'], { fromConnect: () => false });
+  w.watcher.onRefused(A, w.key);
+  await w.watcher.settled();
+  await w.clock.advance(ks.QUIET_AFTER_SWITCHED_OFF_MS, w.watcher);
+  w.watcher.onRefused(A, w.key);
+  await w.watcher.settled();
+  assert.deepEqual(w.told, [A]);
+  assert.equal(w.asked.length, 2);
+
+  // A new key pasted since; a client still holding the old one is refused.
+  const newer = madeUpKey();
+  w.stored.key = newer;
+  await w.clock.advance(ks.QUIET_AFTER_SWITCHED_OFF_MS, w.watcher);
+  w.watcher.onRefused(A, w.key);
+  await w.watcher.settled();
+  assert.deepEqual(w.told, [A], 'nothing about the old key');
+
+  // The new key stops working too: told again, once.
+  await w.clock.advance(ks.QUIET_AFTER_SWITCHED_OFF_MS, w.watcher);
+  w.watcher.onRefused(A, newer);
+  await w.watcher.settled();
+  assert.deepEqual(w.told, [A, A]);
+  assert.deepEqual(w.removed, []);
 });

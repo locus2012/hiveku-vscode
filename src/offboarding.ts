@@ -529,6 +529,20 @@ export function removalNotice(r: RemovalResult, home: string): string {
   return parts.join(' ');
 }
 
+/**
+ * For a key that did not come from Connect Hiveku (pasted with "Sign in with a
+ * key"): it stopped working, nothing was removed, and how to go on. No reason is
+ * given: the website's answer is about whoever made the key, who may be someone
+ * else.
+ */
+export function keyStoppedNotice(label: string): string {
+  const name = label || 'this account';
+  return (
+    `Hiveku no longer accepts the key saved for ${name}. Nothing was removed from this computer: its files and its saved key stay. ` +
+    `If you still have access to ${name}, connect again with "Hiveku: Connect Hiveku" to get a key of your own.`
+  );
+}
+
 /** One line per folder for the output channel: every full path, and why each stayed. */
 export function removalLogLines(r: RemovalResult): string[] {
   return [

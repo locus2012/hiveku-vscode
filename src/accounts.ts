@@ -8,6 +8,7 @@
  * lives in globalState so we can list accounts without unlocking every secret.
  */
 
+import * as crypto from 'crypto';
 import * as vscode from 'vscode';
 import { HivekuMcpClient } from './mcpClient';
 
@@ -16,6 +17,15 @@ const ARCHIVED_KEY = 'hiveku.accounts.archived';
 const FOLDERS_KEY = 'hiveku.accounts.folders';
 const DEPARTMENTS_KEY = 'hiveku.accounts.departments';
 const ROLES_KEY = 'hiveku.accounts.roles';
+/**
+ * Offboarding O8a: per account, a hash of the key Connect Hiveku handed over.
+ * The website's answer about a refused key is about the person who made the key
+ * (it records who made a key, never who holds it), and Connect's exchange makes
+ * every key for the person signed in to the browser. A key pasted with "Sign in
+ * with a key" may be a teammate's. So only a key whose hash is here can remove an
+ * account from this computer (keyCameFromConnect). A hash, never the key.
+ */
+const CONNECT_KEYS_KEY = 'hiveku.accounts.connectKeys';
 const SECRET_PREFIX = 'hiveku.key.';
 
 export interface AccountRecord {
@@ -25,8 +35,16 @@ export interface AccountRecord {
   connectedAs?: string;
 }
 
+/** Where a key came from: 'connect' only for the keys Connect Hiveku's exchange handed over. */
+export type KeyVia = 'connect';
+
 function secretKey(accountId: string): string {
   return `${SECRET_PREFIX}${accountId}`;
+}
+
+/** What is kept of a key Connect Hiveku handed over: a hash of its own kind, not the website's key hash. */
+function connectKeyHash(key: string): string {
+  return crypto.createHash('sha256').update(`hiveku-vscode connect key\n${key.trim()}`, 'utf8').digest('hex');
 }
 
 /** Told when Hiveku refuses a stored account's key: the account, and the key the refused client held. */
@@ -135,16 +153,38 @@ export class AccountStore {
 
   /**
    * Store an account whose key we ALREADY hold (e.g. from the Connect OAuth
-   * flow) without re-validating via get_account_info.
+   * flow) without re-validating via get_account_info. `via: 'connect'` only for
+   * a key Connect Hiveku's exchange handed over (see CONNECT_KEYS_KEY).
    */
-  async addAccount(accountId: string, label: string, key: string, connectedAs?: string): Promise<AccountRecord> {
+  async addAccount(accountId: string, label: string, key: string, connectedAs?: string, via?: KeyVia): Promise<AccountRecord> {
     await this.ctx.secrets.store(secretKey(accountId), key.trim());
     this.invalidateClients(accountId); // the cached client holds the OLD key
     const records = this.list().filter((r) => r.accountId !== accountId);
     const record: AccountRecord = { accountId, label, ...(connectedAs ? { connectedAs } : {}) };
     records.push(record);
     await this.setIndex(records);
+    // After the key is stored: the hash names that key alone, so a failure before here leaves nothing that matches.
+    if (via === 'connect') await this.noteConnectKeys([{ accountId, key }]);
     return record;
+  }
+
+  /**
+   * Offboarding O8a: whether `key` is the key Connect Hiveku handed over for
+   * this account on this computer, made for the person signed in to the browser.
+   * False for a pasted key, for any other key, and for every key stored before
+   * this version.
+   */
+  keyCameFromConnect(accountId: string, key: string): boolean {
+    if (typeof key !== 'string' || !key.trim()) return false;
+    const recorded = this.ctx.globalState.get<Record<string, string>>(CONNECT_KEYS_KEY, {})[accountId];
+    return typeof recorded === 'string' && recorded === connectKeyHash(key);
+  }
+
+  private async noteConnectKeys(entries: Array<{ accountId: string; key: string }>): Promise<void> {
+    if (entries.length === 0) return;
+    const map = this.ctx.globalState.get<Record<string, string>>(CONNECT_KEYS_KEY, {});
+    for (const e of entries) map[e.accountId] = connectKeyHash(e.key);
+    await this.ctx.globalState.update(CONNECT_KEYS_KEY, map);
   }
 
   /**
@@ -161,10 +201,11 @@ export class AccountStore {
    * reject an unbounded parallel burst).
    *
    * Returns the ids that were NOT already present, so the caller can run
-   * first-time setup for just those.
+   * first-time setup for just those. An entry says `via: 'connect'` only when
+   * Connect Hiveku's exchange handed its key over (see CONNECT_KEYS_KEY).
    */
   async addAccounts(
-    incoming: Array<{ accountId: string; label: string; key: string }>,
+    incoming: Array<{ accountId: string; label: string; key: string; via?: KeyVia }>,
     connectedAs?: string,
     departments?: string[],
     onProgress?: (done: number, total: number) => void,
@@ -214,6 +255,10 @@ export class AccountStore {
       onProgress?.(Math.min(i + BATCH, incoming.length), incoming.length);
     }
 
+    // Once every key is stored, and only for the keys Connect Hiveku handed over. A failure above leaves a stored
+    // key with no hash of its own here: it can then never remove anything, which is the safe side.
+    await this.noteConnectKeys(incoming.filter((a) => a.via === 'connect'));
+
     return newIds;
   }
 
@@ -231,7 +276,7 @@ export class AccountStore {
     this.invalidateClients(accountId);
     await this.setIndex(this.list().filter((r) => r.accountId !== accountId));
     // Clean per-account side maps (were previously leaked on removal).
-    for (const key of [FOLDERS_KEY, DEPARTMENTS_KEY, ROLES_KEY]) {
+    for (const key of [FOLDERS_KEY, DEPARTMENTS_KEY, ROLES_KEY, CONNECT_KEYS_KEY]) {
       const map = this.ctx.globalState.get<Record<string, unknown>>(key, {});
       if (accountId in map) {
         delete map[accountId];

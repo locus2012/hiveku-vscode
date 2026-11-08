@@ -18,6 +18,7 @@ import { makeAccountFolder } from './accountBinding';
 import { KeyRefusalWatcher, askKeyStanding, type RemovalReason } from './keyStanding';
 import {
   finishPendingRemovals,
+  keyStoppedNotice,
   removalLogLines,
   removalNotice,
   runAccountRemoval,
@@ -407,12 +408,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // Offboarding O8a: when Hiveku refuses a stored account's key, ask the website
   // why; remove the account from this computer only on two removal answers,
-  // minutes apart (keyStanding.ts, offboarding.ts).
+  // minutes apart, about a key Connect Hiveku made here for the person signed
+  // in (keyStanding.ts, offboarding.ts). A pasted key may be a teammate's: the
+  // website's answer is about whoever made it, so it removes nothing.
   keyWatcher = new KeyRefusalWatcher({
     appUrl,
     storedKey: (accountId) => accounts.getKey(accountId),
+    fromConnect: (accountId, key) => accounts.keyCameFromConnect(accountId, key),
     ask: (opts) => askKeyStanding({ ...opts, userAgent: hivekuUserAgent() }),
     remove: (accountId, reason) => removeAccountForLostAccess(accountId, reason),
+    keyStopped: (accountId) => void tellKeyStopped(accountId).catch(() => undefined),
     log: (line) => log.appendLine(line),
   });
   accounts.setKeyRefusedListener((accountId, key) => keyWatcher?.onRefused(accountId, key));
@@ -1278,6 +1283,13 @@ async function tellRemoval(result: RemovalResult): Promise<void> {
   for (const line of removalLogLines(result)) log.appendLine(line);
   const pick = await vscode.window.showWarningMessage(removalNotice(result, os.homedir()), 'Show details');
   if (pick === 'Show details') log.show(true);
+}
+
+/** A key that did not come from Connect Hiveku will not work again: nothing was removed, and how to go on. */
+async function tellKeyStopped(accountId: string): Promise<void> {
+  const record = accounts.allRecords().find((r) => r.accountId === accountId);
+  const pick = await vscode.window.showWarningMessage(keyStoppedNotice(record?.label ?? ''), 'Connect Hiveku');
+  if (pick === 'Connect Hiveku') await vscode.commands.executeCommand('hiveku.connect');
 }
 
 /**

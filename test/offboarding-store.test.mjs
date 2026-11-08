@@ -4,7 +4,7 @@
 // server is a stub on 127.0.0.1. Every key is made up.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { loadOut } from './helpers/load.mjs';
 import { coreAuthRefusal, REVOKED_KEY_MESSAGE, startStub, rejection } from './helpers/core-stub.mjs';
 
@@ -85,4 +85,71 @@ test("forgetting a removed account takes its key, its rows and its maps, and not
   assert.deepEqual(store.list().map((r) => r.accountId), [B]);
   assert.equal(store.getFolder(B), '/made/up/acme');
   assert.equal(store.getRole(B), 'owner');
+});
+
+/* ── which keys Connect Hiveku handed over (O8a review) ─────────────────── */
+// Only such a key's refusal may remove an account from this computer: the website
+// answers about whoever made a key, and a pasted key may be a teammate's.
+
+const accountInfo = (rpc) => {
+  if (rpc?.method !== 'tools/call') return undefined;
+  const text = JSON.stringify({ data: { account_id: A, name: 'Northwind' } });
+  return { status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: { content: [{ type: 'text', text }] } }) };
+};
+
+test("only the key Connect Hiveku handed over counts as Connect's, and only for its account", async () => {
+  const ctx = fakeContext();
+  const store = new AccountStore(ctx);
+  const keyA = madeUpKey();
+  const keyB = madeUpKey();
+  await store.addAccounts([{ accountId: A, label: 'Northwind', key: keyA, via: 'connect' }, { accountId: B, label: 'Acme', key: keyB }], 'sam@example.com', []);
+  assert.equal(store.keyCameFromConnect(A, keyA), true);
+  assert.equal(store.keyCameFromConnect(A, ` ${keyA}\n`), true, 'as stored, trimmed');
+  assert.equal(store.keyCameFromConnect(A, madeUpKey()), false, 'another key');
+  assert.equal(store.keyCameFromConnect(B, keyA), false, "another account's");
+  assert.equal(store.keyCameFromConnect(B, keyB), false, 'an entry that does not say via connect');
+  for (const nothing of ['', undefined, null]) assert.equal(store.keyCameFromConnect(A, nothing), false);
+
+  const one = new AccountStore(fakeContext());
+  const k = madeUpKey();
+  await one.addAccount(A, 'Northwind', k, 'sam@example.com');
+  assert.equal(one.keyCameFromConnect(A, k), false, 'addAccount without via');
+  await one.addAccount(A, 'Northwind', k, 'sam@example.com', 'connect');
+  assert.equal(one.keyCameFromConnect(A, k), true, "addAccount with via 'connect'");
+});
+
+test("a key pasted with \"Sign in with a key\" never counts as Connect's, even over an account Connect connected", async (t) => {
+  const stub = await startStub(accountInfo);
+  t.after(() => stub.close());
+  const store = new AccountStore(fakeContext());
+  const pastedFirst = madeUpKey();
+  await store.signIn(pastedFirst, stub.base);
+  assert.equal(await store.getKey(A), pastedFirst);
+  assert.equal(store.keyCameFromConnect(A, pastedFirst), false);
+
+  const fromConnect = madeUpKey();
+  await store.addAccounts([{ accountId: A, label: 'Northwind', key: fromConnect, via: 'connect' }], 'sam@example.com', []);
+  assert.equal(store.keyCameFromConnect(A, fromConnect), true);
+
+  const pastedLater = madeUpKey();
+  await store.signIn(pastedLater, stub.base);
+  assert.equal(await store.getKey(A), pastedLater);
+  assert.equal(store.keyCameFromConnect(A, pastedLater), false);
+});
+
+test('the store keeps a hash of a Connect key, never the key, and forgets it with the account', async () => {
+  const ctx = fakeContext();
+  const store = new AccountStore(ctx);
+  const keyA = madeUpKey();
+  const keyB = madeUpKey();
+  await store.addAccounts([{ accountId: A, label: 'Northwind', key: keyA, via: 'connect' }, { accountId: B, label: 'Acme', key: keyB, via: 'connect' }], 'sam@example.com', []);
+  const everything = JSON.stringify(ctx.globalState.get('hiveku.accounts.connectKeys', {}));
+  for (const key of [keyA, keyB]) {
+    assert.equal(everything.includes(key), false);
+    assert.equal(everything.includes(key.slice(4, 20)), false);
+    assert.equal(everything.includes(createHash('sha256').update(key).digest('hex')), false, "not the website's plain hash either");
+  }
+  await store.forgetRemovedAccount(A);
+  assert.equal(store.keyCameFromConnect(A, keyA), false);
+  assert.equal(store.keyCameFromConnect(B, keyB), true, "the other account's stays");
 });

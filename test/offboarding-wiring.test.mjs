@@ -33,6 +33,19 @@ test("the store's refusals go to the watcher, and the watcher asks the website a
   assert.match(SRC, /remove: \(accountId, reason\) => removeAccountForLostAccess\(accountId, reason\)/);
 });
 
+test('the watcher asks the store whether a key came from Connect Hiveku, and only Connect says so (O8a review)', () => {
+  // The one check that keeps a pasted key (maybe a teammate's) from removing anything.
+  assert.match(SRC, /fromConnect: \(accountId, key\) => accounts\.keyCameFromConnect\(accountId, key\),/);
+  assert.equal(SRC.match(/fromConnect:/g)?.length, 1);
+  assert.match(SRC, /keyStopped: \(accountId\) => void tellKeyStopped\(accountId\)\.catch\(\(\) => undefined\),/);
+  assert.match(body('tellKeyStopped'), /keyStoppedNotice\(/);
+  for (const forbidden of [/runAccountRemoval/, /forgetRemovedAccount/, /signOut/, /\bfs\./]) assert.doesNotMatch(body('tellKeyStopped'), forbidden);
+  // Connect's exchange makes every key for the person signed in to the browser: its keys say so, and nothing else does.
+  const CONNECT = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'connect.ts'), 'utf8');
+  assert.match(CONNECT, /key: a\.api_key,\s*via: 'connect' as const,/);
+  assert.doesNotMatch(SRC, /via: 'connect'|'connect' as const/);
+});
+
 test('a removal forgets the key through the store, deletes only through runAccountRemoval, and runs nothing', () => {
   const remove = body('removeAccountForLostAccess');
   assert.match(remove, /await runAccountRemoval\(ctx, \{/);
