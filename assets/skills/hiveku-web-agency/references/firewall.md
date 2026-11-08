@@ -59,7 +59,7 @@ Which Hiveku tools reach the edge, and how:
 Agents get exactly what a person has in Site > Hosting > Firewall: read, read one client's
 evidence, allow, remove.
 
-- `site_firewall_get({ project_id, environment, outcome?, q?, limit?, offset? })` - read-only.
+- `site_firewall_get({ project_id, environment, outcome?, q?, limit?, offset?, refused? })` - read-only.
   The last 7 days for that tier (`production` | `staging` | `development`): `totals`
   (`challenged`, `blocked`, `rateLimited`, `siteRefused`), `window.through` (the latest rolled day; null when
   nothing has rolled yet - the numbers are rolled once a day from the access logs, so today's
@@ -79,6 +79,9 @@ evidence, allow, remove.
     clients.length` is below it there are more, so call again with `offset + limit`.
   - `totals` always count the whole window, whatever `outcome` and `q` say. A 400 names the
     allowed values when a parameter is out of range.
+  - `refused: true`, on a private environment only, adds to `private_access` how many requests
+    the private page turned away in the last 24 hours (`refused24h`). It is one log query of up to
+    about 40 seconds: send it when the user asks, never on a repeated read.
 - `site_firewall_client_get({ project_id, environment, user_agent, asn })` - read-only. The
   evidence behind one `clients[]` row, the same panel a person opens by clicking the row: what
   that client actually got over the window (`totals.served`, `challenged`, `blocked`,
@@ -107,6 +110,12 @@ evidence, allow, remove.
   customer's site: confirm with the user first, the way every other site write is confirmed.
 - `site_firewall_remove({ project_id, exception_id })` - removes one allowance (the id comes
   from `site_firewall_get`) and pushes the change to the edge.
+- `site_firewall_client_report({ project_id, environment, user_agent, asn })` - tells Hiveku
+  about one refused client, the detail's Report to Hiveku button. Use it only when
+  `site_firewall_client_get` answers `actions.report` true, with `user_agent` and `asn` exactly as
+  the row had them (asn 0 when null, an empty user_agent for a client that sent none). It raises
+  one urgent inbox item and a Hiveku operator considers a network block. Nothing at the edge
+  changes, so it does not ask. Once per client: a later call answers `alreadyReported: true`.
 - `site_firewall_private_set({ project_id, environment, mode, allowed_cidrs?, exempt_paths?, note?, dry_run? })` -
   makes one environment private, changes what it lets in, or makes it public again (`mode: 'public'`).
   Send `dry_run: true` first: it changes nothing and answers every switch-on check that does not pass.

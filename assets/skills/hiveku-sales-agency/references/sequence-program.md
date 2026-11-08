@@ -129,8 +129,9 @@ design anything (SKILL.md principle 9; `platform_rules` in `account_context_get`
   400 today. To stop or move a sequence send, pause or unenroll the enrollment (that cancels the
   queued row at dispatch time) or shift the step delay; for a stray one-off row, have the operator
   cancel it in the CRM UI - there is no working MCP cancel for it.
-- Deactivate for surgery: `crm_update_sequence({ id, is_active: false })` blocks new enrolls and
-  freezes the step cron. Prefer this over `crm_delete_sequence` (hard delete cascades enrollments).
+- Deactivate for surgery: `crm_update_sequence({ id, is_active: false })` blocks new enrolls, and
+  nobody in the sequence gets anything until it is on again. Prefer this over `crm_delete_sequence`
+  (hard delete cascades enrollments).
 
 ## Reply handling
 
