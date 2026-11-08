@@ -834,12 +834,22 @@ describe('what the extension writes and wires', () => {
       'the account dashboard and Client health writes stay after the cookie banner and Review page writes, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__analytics_icp_matching_run',\n" +
           "  'mcp__hiveku__marketing_form_capture_purge',\n" +
           "  'mcp__hiveku__analytics_recording_get',",
       ),
-      'the newest ask rules, the S5a analytics and form capture asks, go at the END',
+      'the S5a analytics and form capture asks stay after the account dashboard and Client health writes, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__workspaces_page_attention_lines_set',\n" +
+          "  'mcp__hiveku__workspaces_page_attention_fields_set',\n" +
+          "  'mcp__hiveku__workspaces_page_attention_note_create',\n" +
+          "  'mcp__hiveku__workspaces_page_attention_note_update',\n" +
+          "  'mcp__hiveku__workspaces_page_attention_note_delete',",
+      ),
+      'the newest ask rules, the Client health round 3 writes, go at the END',
     );
   });
 

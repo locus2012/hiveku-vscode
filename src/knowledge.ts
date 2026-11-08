@@ -1404,6 +1404,14 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__analytics_icp_matching_run',
   'mcp__hiveku__marketing_form_capture_purge',
   'mcp__hiveku__analytics_recording_get',
+  // Client health round 3 (2026-11-08): a client's own lines (when a check opens a row for it), its Lead and Backup, and
+  // team notes about it. The MCP serves them to the Hiveku app's own key alone. Every call asks, as in the Claude Code
+  // plugin and Codex. Appended last.
+  'mcp__hiveku__workspaces_page_attention_lines_set',
+  'mcp__hiveku__workspaces_page_attention_fields_set',
+  'mcp__hiveku__workspaces_page_attention_note_create',
+  'mcp__hiveku__workspaces_page_attention_note_update',
+  'mcp__hiveku__workspaces_page_attention_note_delete',
 ];
 
 /**
