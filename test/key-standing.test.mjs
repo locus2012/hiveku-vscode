@@ -12,7 +12,7 @@ import { coreAuthRefusal, REVOKED_KEY_MESSAGE, BLOCK_PAGE, startStub, rejection 
 const ks = loadOut('keyStanding');
 const { HivekuMcpClient } = loadOut('mcpClient');
 
-const A = '7f6bb2cf-a04e-4efa-afd0-db6dd3aafd79';
+const A = 'a0a0a0a0-0b0b-4c0c-8d0d-0e0e0e0e0e0e';
 const madeUpKey = () => `hvk_${randomBytes(32).toString('hex')}`;
 
 /* ── a stand-in for the website's route ─────────────────────────────────── */

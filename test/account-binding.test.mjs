@@ -10,7 +10,7 @@ import { loadOut } from './helpers/load.mjs';
 
 const { readFolderBinding, markFolderAsExtensions, makeAccountFolder, folderIsNewOrEmpty, isAccountUuid, EXTENSION_BINDER } = loadOut('accountBinding');
 
-const A = '7f6bb2cf-a04e-4efa-afd0-db6dd3aafd79';
+const A = 'a0a0a0a0-0b0b-4c0c-8d0d-0e0e0e0e0e0e';
 
 async function base(t) {
   const dir = await mkdtemp(path.join(tmpdir(), 'hiveku-o8a-binding-'));
@@ -19,7 +19,7 @@ async function base(t) {
 }
 
 test('a new folder gets the extension\'s mark, naming the account, with no key in it', async (t) => {
-  const dir = path.join(await base(t), 'northwind-7f6bb2cf');
+  const dir = path.join(await base(t), 'northwind-a0a0a0a0');
   await mkdir(dir);
   assert.equal(await markFolderAsExtensions(dir, { accountId: A, label: 'Northwind' }, new Date('2026-11-08T00:00:00Z')), 'marked');
   const text = await readFile(path.join(dir, '.hiveku', 'account.json'), 'utf8');
@@ -121,7 +121,7 @@ test('folderIsNewOrEmpty: true only for a missing or empty real folder', async (
 
 test('makeAccountFolder marks a folder it makes, and never one that was already there with something in it', async (t) => {
   const root = await base(t);
-  const made = path.join(root, 'northwind-7f6bb2cf');
+  const made = path.join(root, 'northwind-a0a0a0a0');
   assert.equal(await makeAccountFolder(made, { accountId: A, label: 'Northwind' }), 'marked');
   assert.equal((await readFolderBinding(made)).boundBy, 'hiveku-vscode');
   // Asked again: it is there now, with the mark in it.

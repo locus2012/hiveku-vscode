@@ -10,7 +10,7 @@ import { coreAuthRefusal, REVOKED_KEY_MESSAGE, startStub, rejection } from './he
 
 const { AccountStore } = loadOut('accounts');
 
-const A = '7f6bb2cf-a04e-4efa-afd0-db6dd3aafd79';
+const A = 'a0a0a0a0-0b0b-4c0c-8d0d-0e0e0e0e0e0e';
 const B = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
 const madeUpKey = () => `hvk_${randomBytes(32).toString('hex')}`;
 

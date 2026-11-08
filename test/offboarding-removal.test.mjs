@@ -17,7 +17,7 @@ import { loadOut } from './helpers/load.mjs';
 const off = loadOut('offboarding');
 const ks = loadOut('keyStanding');
 
-const A = '7f6bb2cf-a04e-4efa-afd0-db6dd3aafd79';
+const A = 'a0a0a0a0-0b0b-4c0c-8d0d-0e0e0e0e0e0e';
 const B = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
 const madeUpKey = () => `hvk_${randomBytes(32).toString('hex')}`;
 
@@ -83,8 +83,8 @@ function ctxFor(w, extra = {}) {
     label: 'Northwind',
     reason: 'removed_from_team',
     root: w.root,
-    recordedFolder: path.join(w.root, 'northwind-7f6bb2cf'),
-    canonicalFolder: path.join(w.root, 'northwind-7f6bb2cf'),
+    recordedFolder: path.join(w.root, 'northwind-a0a0a0a0'),
+    canonicalFolder: path.join(w.root, 'northwind-a0a0a0a0'),
     otherAccountFolders: [path.join(w.root, 'acme-1a2b3c4d')],
     home: w.home,
     ...extra,
@@ -112,7 +112,7 @@ function depsFor(w) {
 
 test("the account's own folder goes, with its downloads, .env and .mcp.json; the key goes first", async (t) => {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const deps = depsFor(w);
   let folderThereWhenKeyWent = null;
   deps.forgetAccount = async (id) => {
@@ -134,7 +134,7 @@ test("the account's own folder goes, with its downloads, .env and .mcp.json; the
 
 test('the journal names the folders before anything is deleted', async (t) => {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const deps = depsFor(w);
   let journaled = null;
   deps.forgetAccount = async () => { journaled = JSON.parse(JSON.stringify(deps.journal.entries)); };
@@ -149,7 +149,7 @@ test('the journal names the folders before anything is deleted', async (t) => {
 
 test("another account's folder stays, byte for byte, whatever made it", async (t) => {
   const w = await world(t);
-  await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const acme = await plantAccountFolder(path.join(w.root, 'acme-1a2b3c4d'), { accountId: B });
   const acmeByApp = await plantAccountFolder(path.join(w.root, 'acme-1a2b3c4d-2'), { accountId: B, boundBy: 'hiveku-desktop' });
   const before = [await snapshot(acme), await snapshot(acmeByApp)];
@@ -160,14 +160,14 @@ test("another account's folder stays, byte for byte, whatever made it", async (t
 
 test("the account's folder made by the Hiveku app stays; so does one another Hiveku tool made", async (t) => {
   const w = await world(t);
-  const byApp = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A, boundBy: 'hiveku-desktop' });
-  const byPlugin = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf-2'), { accountId: A, boundBy: 'hiveku-claude-plugin' });
+  const byApp = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A, boundBy: 'hiveku-desktop' });
+  const byPlugin = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0-2'), { accountId: A, boundBy: 'hiveku-claude-plugin' });
   const before = [await snapshot(byApp), await snapshot(byPlugin)];
   const result = await off.runAccountRemoval(ctxFor(w), depsFor(w));
   assert.deepEqual(result.removed, []);
   assert.deepEqual(result.kept.map((k) => [path.basename(k.path), k.why]).sort(), [
-    ['northwind-7f6bb2cf', 'desktop'],
-    ['northwind-7f6bb2cf-2', 'other_tool'],
+    ['northwind-a0a0a0a0', 'desktop'],
+    ['northwind-a0a0a0a0-2', 'other_tool'],
   ]);
   assert.deepEqual([await snapshot(byApp), await snapshot(byPlugin)], before);
   assert.equal(result.keyRemoved, true, 'the key still goes');
@@ -175,7 +175,7 @@ test("the account's folder made by the Hiveku app stays; so does one another Hiv
 
 test('an old folder without the mark stays, and the notice says where it is and why', async (t) => {
   const w = await world(t);
-  const old = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A, boundBy: null });
+  const old = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A, boundBy: null });
   const before = await snapshot(old);
   const result = await off.runAccountRemoval(ctxFor(w), depsFor(w));
   assert.deepEqual(result.removed, []);
@@ -184,25 +184,25 @@ test('an old folder without the mark stays, and the notice says where it is and 
   const notice = off.removalNotice(result, w.home);
   assert.match(notice, /You no longer have access to Northwind: you were removed from its team\./);
   assert.match(notice, /Removed from this computer: its saved key\./);
-  assert.match(notice, /Left in place: ~\/Hiveku-Accounts\/northwind-7f6bb2cf \(it was made before this version of the extension, so it cannot tell it made it; delete it yourself if you no longer need it\)\./);
+  assert.match(notice, /Left in place: ~\/Hiveku-Accounts\/northwind-a0a0a0a0 \(it was made before this version of the extension, so it cannot tell it made it; delete it yourself if you no longer need it\)\./);
 });
 
 test('a link stays: the link itself, and what it points at', async (t) => {
   const w = await world(t);
   // The account's folder is a link to a marked folder outside the root.
   const target = await plantAccountFolder(path.join(w.outside, 'northwind-real'), { accountId: A });
-  await symlink(target, path.join(w.root, 'northwind-7f6bb2cf'));
+  await symlink(target, path.join(w.root, 'northwind-a0a0a0a0'));
   const before = await snapshot(target);
   const result = await off.runAccountRemoval(ctxFor(w), depsFor(w));
   assert.deepEqual(result.removed, []);
   assert.deepEqual(result.kept.map((k) => k.why), ['link']);
-  assert.equal((await lstat(path.join(w.root, 'northwind-7f6bb2cf'))).isSymbolicLink(), true);
+  assert.equal((await lstat(path.join(w.root, 'northwind-a0a0a0a0'))).isSymbolicLink(), true);
   assert.deepEqual(await snapshot(target), before);
 });
 
 test('a link inside the folder goes with it, and what it points at stays', async (t) => {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const precious = path.join(w.outside, 'precious');
   await mkdir(precious);
   await writeFile(path.join(precious, 'keep.txt'), 'mine, not the account\'s\n');
@@ -220,9 +220,9 @@ test('a marked folder reached through a linked folder under the root stays', asy
   const realParent = path.join(w.outside, 'real-parent');
   await mkdir(realParent);
   await symlink(realParent, path.join(w.root, 'linked-parent'));
-  const target = await plantAccountFolder(path.join(realParent, 'northwind-7f6bb2cf'), { accountId: A });
+  const target = await plantAccountFolder(path.join(realParent, 'northwind-a0a0a0a0'), { accountId: A });
   const before = await snapshot(target);
-  const result = await off.runAccountRemoval(ctxFor(w, { recordedFolder: path.join(w.root, 'linked-parent', 'northwind-7f6bb2cf') }), depsFor(w));
+  const result = await off.runAccountRemoval(ctxFor(w, { recordedFolder: path.join(w.root, 'linked-parent', 'northwind-a0a0a0a0') }), depsFor(w));
   assert.deepEqual(result.removed, []);
   assert.deepEqual(result.kept.map((k) => k.why), ['link']);
   assert.deepEqual(await snapshot(target), before);
@@ -230,19 +230,19 @@ test('a marked folder reached through a linked folder under the root stays', asy
 
 test('a path outside the root that leads into it through a link is never followed in', async (t) => {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   await symlink(w.root, path.join(w.outside, 'into-root'));
   const before = await snapshot(mine);
-  const ctx = ctxFor(w, { recordedFolder: path.join(w.outside, 'into-root', 'northwind-7f6bb2cf'), canonicalFolder: undefined });
-  assert.deepEqual(await off.checkRemovable(path.join(w.outside, 'into-root', 'northwind-7f6bb2cf'), ctx), { ok: false, why: 'outside_root' });
-  const done = await off.deleteFolderForGood(path.join(w.outside, 'into-root', 'northwind-7f6bb2cf'), ctx, w.storage);
+  const ctx = ctxFor(w, { recordedFolder: path.join(w.outside, 'into-root', 'northwind-a0a0a0a0'), canonicalFolder: undefined });
+  assert.deepEqual(await off.checkRemovable(path.join(w.outside, 'into-root', 'northwind-a0a0a0a0'), ctx), { ok: false, why: 'outside_root' });
+  const done = await off.deleteFolderForGood(path.join(w.outside, 'into-root', 'northwind-a0a0a0a0'), ctx, w.storage);
   assert.deepEqual(done, { outcome: 'refused', why: 'outside_root' });
   assert.deepEqual(await snapshot(mine), before);
 });
 
 test('a folder replaced by a link after it was planned stays, and so does what the link points at', async (t) => {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const decoy = await plantAccountFolder(path.join(w.outside, 'decoy'), { accountId: A });
   const before = await snapshot(decoy);
   const deps = depsFor(w);
@@ -260,7 +260,7 @@ test('a folder replaced by a link after it was planned stays, and so does what t
 test('a link that appears between the link checks and the delete is still caught by the real path', async (t) => {
   const w = await world(t);
   const realParent = path.join(w.outside, 'real-parent');
-  const target = await plantAccountFolder(path.join(realParent, 'northwind-7f6bb2cf'), { accountId: A });
+  const target = await plantAccountFolder(path.join(realParent, 'northwind-a0a0a0a0'), { accountId: A });
   const linkedParent = path.join(w.root, 'parent');
   await symlink(realParent, linkedParent);
   const before = await snapshot(target);
@@ -269,7 +269,7 @@ test('a link that appears between the link checks and the delete is still caught
   const realLstat = fsp.lstat;
   fsp.lstat = async (p, ...rest) => (p === linkedParent ? realLstat(realParent, ...rest) : realLstat(p, ...rest));
   t.after(() => { fsp.lstat = realLstat; });
-  const folder = path.join(linkedParent, 'northwind-7f6bb2cf');
+  const folder = path.join(linkedParent, 'northwind-a0a0a0a0');
   const verdict = await off.checkRemovable(folder, ctxFor(w));
   fsp.lstat = realLstat;
   assert.deepEqual(verdict, { ok: false, why: 'outside_root' });
@@ -278,7 +278,7 @@ test('a link that appears between the link checks and the delete is still caught
 
 test('a marked folder outside the root stays', async (t) => {
   const w = await world(t);
-  const away = await plantAccountFolder(path.join(w.outside, 'northwind-7f6bb2cf'), { accountId: A });
+  const away = await plantAccountFolder(path.join(w.outside, 'northwind-a0a0a0a0'), { accountId: A });
   const before = await snapshot(away);
   const result = await off.runAccountRemoval(ctxFor(w, { recordedFolder: away }), depsFor(w));
   assert.deepEqual(result.removed, []);
@@ -288,7 +288,7 @@ test('a marked folder outside the root stays', async (t) => {
 
 test('with no Hiveku root set, nothing is deleted', async (t) => {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const before = await snapshot(mine);
   const result = await off.runAccountRemoval(ctxFor(w, { root: undefined, canonicalFolder: undefined }), depsFor(w));
   assert.deepEqual(result.removed, []);
@@ -319,7 +319,7 @@ test('the root itself and the home folder are never deleted, even marked', async
 
 test("a marked folder that holds another account's folder or site stays", async (t) => {
   const w = await world(t);
-  const holdsBound = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const holdsBound = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   await mkdir(path.join(holdsBound, 'clients', 'acme', '.hiveku'), { recursive: true });
   await writeFile(path.join(holdsBound, 'clients', 'acme', '.hiveku', 'account.json'), JSON.stringify({ account_id: B, bound_by: 'hiveku-claude-plugin' }));
   const before = await snapshot(holdsBound);
@@ -328,7 +328,7 @@ test("a marked folder that holds another account's folder or site stays", async 
   assert.deepEqual(await snapshot(holdsBound), before);
 
   const w2 = await world(t);
-  const holdsSite = await plantAccountFolder(path.join(w2.root, 'northwind-7f6bb2cf'), { accountId: A, siteAccountId: B });
+  const holdsSite = await plantAccountFolder(path.join(w2.root, 'northwind-a0a0a0a0'), { accountId: A, siteAccountId: B });
   const before2 = await snapshot(holdsSite);
   const second = await off.runAccountRemoval(ctxFor(w2), depsFor(w2));
   assert.deepEqual(second.kept.map((k) => k.why), ['holds_other_account']);
@@ -337,7 +337,7 @@ test("a marked folder that holds another account's folder or site stays", async 
 
 test('a marked folder that cannot be read through stays: it might hold another account\'s folder', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, async (t) => {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const locked = path.join(mine, 'sites', 'locked');
   await mkdir(path.join(locked, 'inner'), { recursive: true });
   await chmod(locked, 0o000);
@@ -351,7 +351,7 @@ test('a marked folder that cannot be read through stays: it might hold another a
 
 test("a marked folder that is another account's folder of the extension stays", async (t) => {
   const w = await world(t);
-  const shared = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const shared = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const before = await snapshot(shared);
   const result = await off.runAccountRemoval(ctxFor(w, { otherAccountFolders: [shared] }), depsFor(w));
   assert.deepEqual(result.kept.map((k) => k.why), ['other_account_folder']);
@@ -360,7 +360,7 @@ test("a marked folder that is another account's folder of the extension stays", 
 
 test('a folder bound to another account at the account\'s own path stays', async (t) => {
   const w = await world(t);
-  const theirs = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: B });
+  const theirs = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: B });
   const before = await snapshot(theirs);
   const result = await off.runAccountRemoval(ctxFor(w, { otherAccountFolders: [] }), depsFor(w));
   assert.deepEqual(result.kept.map((k) => k.why), ['other_account']);
@@ -369,8 +369,8 @@ test('a folder bound to another account at the account\'s own path stays', async
 
 test('every folder under the root bound to the account by the extension goes (a renamed account), and nothing else', async (t) => {
   const w = await world(t);
-  const renamed = await plantAccountFolder(path.join(w.root, 'old-name-7f6bb2cf'), { accountId: A });
-  const current = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const renamed = await plantAccountFolder(path.join(w.root, 'old-name-a0a0a0a0'), { accountId: A });
+  const current = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const unrelated = path.join(w.root, 'my-notes');
   await mkdir(unrelated);
   await writeFile(path.join(unrelated, 'n.md'), 'mine');
@@ -384,7 +384,7 @@ test('every folder under the root bound to the account by the extension goes (a 
 
 test('each folder is checked again right before it is deleted: a mark that changed keeps it', async (t) => {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const deps = depsFor(w);
   deps.forgetAccount = async () => {
     // Between the plan and the delete, the Hiveku app takes the folder over.
@@ -400,7 +400,7 @@ test('each folder is checked again right before it is deleted: a mark that chang
 
 test('a folder already gone (another window removed it) is not an error', async (t) => {
   const w = await world(t);
-  const done = await off.deleteFolderForGood(path.join(w.root, 'northwind-7f6bb2cf'), ctxFor(w), w.storage);
+  const done = await off.deleteFolderForGood(path.join(w.root, 'northwind-a0a0a0a0'), ctxFor(w), w.storage);
   assert.deepEqual(done, { outcome: 'gone' });
 });
 
@@ -418,7 +418,7 @@ test('what a crash left in the storage folder is deleted at the next start', asy
 
 test('a removal left halfway is finished at the next start, checked again', async (t) => {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const deps = depsFor(w);
   deps.journal.entries.push({ accountId: A, label: 'Northwind', reason: 'account_closed', folders: [mine], at: new Date().toISOString() });
   const results = await off.finishPendingRemovals([...deps.journal.entries], { ...deps, journal: deps.journal, accountIsBack: () => false, contextFor: () => ctxFor(w) });
@@ -430,7 +430,7 @@ test('a removal left halfway is finished at the next start, checked again', asyn
 
 test('a removal left halfway for an account connected again since deletes nothing', async (t) => {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const before = await snapshot(mine);
   const deps = depsFor(w);
   deps.journal.entries.push({ accountId: A, label: 'Northwind', reason: 'removed_from_team', folders: [mine], at: new Date().toISOString() });
@@ -444,19 +444,19 @@ test('a removal left halfway for an account connected again since deletes nothin
 
 test('the notice says plainly what went and what stayed, in plain words', async (t) => {
   const w = await world(t);
-  await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
-  await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf-2'), { accountId: A, boundBy: 'hiveku-desktop' });
+  await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
+  await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0-2'), { accountId: A, boundBy: 'hiveku-desktop' });
   const result = await off.runAccountRemoval(ctxFor(w, { reason: 'account_closed' }), depsFor(w));
   const notice = off.removalNotice(result, w.home);
   assert.equal(
     notice,
     'You no longer have access to Northwind: the account was closed. Removed from this computer: its folder ' +
-      '~/Hiveku-Accounts/northwind-7f6bb2cf (with its downloaded sites, data, .env and .mcp.json) and its saved key. ' +
-      'Left in place: ~/Hiveku-Accounts/northwind-7f6bb2cf-2 (the Hiveku app made it and removes it itself).',
+      '~/Hiveku-Accounts/northwind-a0a0a0a0 (with its downloaded sites, data, .env and .mcp.json) and its saved key. ' +
+      'Left in place: ~/Hiveku-Accounts/northwind-a0a0a0a0-2 (the Hiveku app made it and removes it itself).',
   );
   assert.doesNotMatch(notice, /[\u2014\u2013]|Claude|Anthropic|OpenAI|Cloudflare|Render|Supabase/);
   const lines = off.removalLogLines(result);
-  assert.ok(lines.some((l) => l.includes(path.join(w.root, 'northwind-7f6bb2cf-2'))));
+  assert.ok(lines.some((l) => l.includes(path.join(w.root, 'northwind-a0a0a0a0-2'))));
 });
 
 /* ── end to end: the watcher, the website's answers and the removal ─────── */
@@ -514,9 +514,9 @@ function fakeClock() {
 
 async function endToEnd(t, answer, opts = {}) {
   const w = await world(t);
-  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
   const theirs = await plantAccountFolder(path.join(w.root, 'acme-1a2b3c4d'), { accountId: B });
-  const byApp = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf-2'), { accountId: A, boundBy: 'hiveku-desktop' });
+  const byApp = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0-2'), { accountId: A, boundBy: 'hiveku-desktop' });
   const before = { mine: await snapshot(mine), theirs: await snapshot(theirs), byApp: await snapshot(byApp) };
   const route = await startRoute(answer);
   t.after(() => route.close());
