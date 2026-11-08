@@ -108,8 +108,7 @@ Each sync only touches accounts that are `is_active`, `connection_status: connec
 carry the matching capability flag, so a broken connection stops accruing data silently.
 - `social-analytics-sync`, every 30 minutes, per-post metrics for published versions on a
   decay ladder by post age: every 30 minutes in the first day, every 4 hours to day 7,
-  daily to day 30, weekly to day 90, then it STOPS (the next-sync column goes null). Eight
-  consecutive failures also stop a post for good. Sources: Meta, X and LinkedIn deliver
+  daily to day 30, weekly to day 90, then it STOPS (the next-sync column goes null). Eight consecutive failures do not stop a post: it reads as `sync_failed`, is tried about once a week, and gets a last try 6 hours before day 90. A read that works clears it. Sources: Meta, X and LinkedIn deliver
   per-post metrics; TikTok inbox posts return nothing; GBP has no post-level read.
   Contract: a post older than 90 days never updates again, and its last `synced_at` is
   the number's date. `social_posts_analytics_list({ post_ids, from_date, to_date })`

@@ -36,9 +36,8 @@ preview: the customer's live site is whatever Webflow last published.
 
 ## Availability
 
-Every row is LIVE but the six marked INCOMING, which ask from this release on, ahead of
-the server release that serves them. The builder's Webflow ops registry holds 111 actions
-the index carries, one `webflow_*` tool each: the nine beta SEO actions (page query, bulk
+Every row is LIVE. The builder's Webflow ops registry holds 123 actions, one `webflow_*`
+tool each, and the index carries all of them, with `webflow_connections_list` beside them: the nine beta SEO actions (page query, bulk
 metadata, page schema, llms.txt) landed 2026-09-06 and the content-source switch
 2026-09-08. A name that does not resolve on your key is a server that has not redeployed
 yet, never a missing capability: say so and file the gap. The gates, re-derived from the
@@ -58,12 +57,19 @@ locale.
 | `webflow_token_introspect` | LIVE | - |
 | `webflow_token_authorized_by` | LIVE | OAuth |
 | `webflow_project_cms_provider_set` | LIVE | confirm |
-| `webflow_connection_token_add` | INCOMING | confirm |
-| `webflow_project_site_bind` | INCOMING | confirm |
-| `webflow_connection_disconnect` | INCOMING | confirm |
-| `webflow_webhooks_reregister` | INCOMING | OAuth, confirm |
-| `webflow_form_routing_set` | INCOMING | OAuth, confirm |
-| `webflow_form_submissions_backfill` | INCOMING | confirm |
+| `webflow_connections_list` | LIVE | - |
+| `webflow_status_get` | LIVE | - |
+| `webflow_connection_token_add` | LIVE | confirm |
+| `webflow_project_site_bind` | LIVE | confirm |
+| `webflow_connection_disconnect` | LIVE | confirm |
+| `webflow_webhooks_reregister` | LIVE | OAuth, confirm |
+| `webflow_hiveku_activity_list` | LIVE | - |
+| `webflow_pages_sync_to_review` | LIVE | - |
+| `webflow_site_refresh` | LIVE | - |
+| `webflow_form_routing_get` | LIVE | - |
+| `webflow_form_routing_set` | LIVE | OAuth, confirm |
+| `webflow_form_submissions_backfill` | LIVE | confirm |
+| `webflow_project_from_site` | LIVE | - |
 | `webflow_page_list` | LIVE | - |
 | `webflow_page_get` | LIVE | - |
 | `webflow_page_metadata_update` | LIVE | - |
