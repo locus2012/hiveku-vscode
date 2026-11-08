@@ -803,7 +803,7 @@ describe('what the extension writes and wires', () => {
       'the cookie banner and Review page writes stay after the Workspaces dashboards, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__dashboard_create',\n" +
           "  'mcp__hiveku__dashboard_update',\n" +
           "  'mcp__hiveku__dashboard_restore',\n" +
@@ -831,7 +831,15 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__workspaces_page_attention_item_update',\n" +
           "  'mcp__hiveku__workspaces_page_attention_recheck',",
       ),
-      'the newest ask rules, the account dashboard and Client health writes, go at the END',
+      'the account dashboard and Client health writes stay after the cookie banner and Review page writes, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__analytics_icp_matching_run',\n" +
+          "  'mcp__hiveku__marketing_form_capture_purge',\n" +
+          "  'mcp__hiveku__analytics_recording_get',",
+      ),
+      'the newest ask rules, the S5a analytics and form capture asks, go at the END',
     );
   });
 

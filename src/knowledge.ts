@@ -671,6 +671,8 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__analytics_pages',
   'mcp__hiveku__analytics_sessions',
   'mcp__hiveku__analytics_traffic_sources',
+  // The Visitor List's source choices (wave S5a, a GET): no glob above matches the name.
+  'mcp__hiveku__analytics_visitor_sources',
   'mcp__hiveku__analytics_visitors',
   'mcp__hiveku__analytics_events_list',
   'mcp__hiveku__analytics_visitor_intelligence_get',
@@ -700,7 +702,8 @@ const HIVEKU_ALLOW: string[] = [
   // Form capture's what-if (a GET that saves nothing), by EXACT name: agents
   // are taught to preview a path rule before excluding it. The settings _get
   // and the _list already match the globs above; the settings update and the
-  // purge (a permanent erase) match nothing here and keep prompting.
+  // purge (a permanent erase) match nothing here and keep prompting. The purge
+  // is on HIVEKU_ASK too (wave S5a), so it asks in every mode.
   'mcp__hiveku__marketing_form_capture_preview',
   // The PM assignee roster (a GET: GET /api/olympus/pm/projects/:id/team), by
   // EXACT name: no glob above matches it, and the work-tracking section tells
@@ -1394,6 +1397,13 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__dashboard_data_column_change',
   'mcp__hiveku__workspaces_page_attention_item_update',
   'mcp__hiveku__workspaces_page_attention_recheck',
+  // Analytics and Forms (2026-11-08, wave S5a): analytics_icp_matching_run spends the account's AI credit;
+  // marketing_form_capture_purge erases captured form submissions for good, and with no rule here it ran unasked in auto
+  // and Autonomous modes; analytics_recording_get is a read whose answer is one visitor's whole visit as they saw it on
+  // screen. Every call asks, as in the Claude Code plugin (0.27.219) and Codex (0.3.87). Appended last.
+  'mcp__hiveku__analytics_icp_matching_run',
+  'mcp__hiveku__marketing_form_capture_purge',
+  'mcp__hiveku__analytics_recording_get',
 ];
 
 /**
