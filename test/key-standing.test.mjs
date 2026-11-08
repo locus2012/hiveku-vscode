@@ -484,7 +484,7 @@ test('a Connect check that fails counts as a key that did not come from Connect 
   assert.equal(w.clock.pending().length, 0);
 });
 
-test('the person is told once for each key that stopped working, and never about a key a newer one replaced', async () => {
+test('the person is told once for each key that stopped working', async () => {
   const w = makeWatcher(['removed_from_team'], { fromConnect: () => false });
   w.watcher.onRefused(A, w.key);
   await w.watcher.settled();
@@ -507,5 +507,16 @@ test('the person is told once for each key that stopped working, and never about
   w.watcher.onRefused(A, newer);
   await w.watcher.settled();
   assert.deepEqual(w.told, [A, A]);
+  assert.deepEqual(w.removed, []);
+});
+
+test('the first refusal of an old key a newer one replaced tells the person nothing', async () => {
+  const w = makeWatcher(['removed_from_team'], { fromConnect: () => false });
+  // A newer key was pasted since; a client still holding the old one is refused, the first time for that key.
+  w.stored.key = madeUpKey();
+  w.watcher.onRefused(A, w.key);
+  await w.watcher.settled();
+  assert.equal(w.asked.length, 1);
+  assert.deepEqual(w.told, []);
   assert.deepEqual(w.removed, []);
 });
