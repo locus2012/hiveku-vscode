@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.91.70
+- **Matching visitors to your ideal customers, erasing captured form submissions and opening a session recording ask first.** Matching spends the account's AI credit, an erase cannot be undone, and a recording shows one visitor's whole visit as they saw it on screen. Your assistant now asks before each, in every mode. The Visitor List's source choices are read without asking.
+
+## 0.91.69
+- **Account dashboards and Client health ask first.** Your assistant now asks before it makes, changes, shares, publishes or deletes one of the account's dashboards, before it changes a Your data table or its rows, and before it adds to a tally. It also asks before it takes, gives, snoozes or closes a Client health item, and before it runs a live check of a client's site. Reading them does not ask.
+
 ## 0.91.68
 - **Sending a domain transfer asks first.** It charges a year of registration.
 

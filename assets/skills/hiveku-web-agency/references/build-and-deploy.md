@@ -752,11 +752,20 @@ follow. A partial you did not resume is the "my bulk_get returned 424 of 538 fil
 failure - it looks like a complete tree and is not. Read before you write.
 
 
-## Hosting options are deploy-time
+## Hosting options: most wait for a deploy, the cookie banner does not
 
 `project_hosting_options_get({ project_id })` is the one read for what is enabled per tier -
-annotations overlay, cookie consent, accessibility, SEO enhancements, security headers, PWA,
-form captcha, badge, minification, staging, deployment types. ★ Every one of these applies at
-DEPLOY time: after any toggle (`project_annotation_settings_set`, custom code, enhancements),
-the change is live only after the next deploy of that tier. ★ Per-tier password protection does
-not exist on this platform - never promise it to a user.
+annotations overlay, cookie consent (`cookie_consent_config`), accessibility, SEO enhancements,
+security headers, PWA, form captcha (`form_captcha_available`), badge, minification, staging,
+deployment types.
+- ★ The per-tier switches wait for a DEPLOY: `project_hosting_options_set` takes
+  `minification_level`, `accessibility`, `seo_enhancements` and `pwa` with a `tier`, and the change
+  is live only after the next deploy of that tier (its answer says so). So do custom code and
+  `project_annotation_settings_set`. Minification, SEO enhancements and the home screen install
+  change only the site's .html pages: a page a Next.js server renders is not changed.
+- ★ The cookie banner does NOT wait: `project_cookie_banner_set` (its words, layout, colours and
+  categories) and the trackers (`project_consent_trackers_list`, `_add`, `_update`, `_remove`)
+  reach visitors at their next page load, with no deploy. Each write asks the user first.
+- ★ A private environment exists (`site_firewall_private_set`, see firewall.md), but its
+  password is set only by the owner on the Hosting page: no key sets or removes it. Never offer
+  to set one.

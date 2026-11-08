@@ -785,7 +785,7 @@ describe('what the extension writes and wires', () => {
       'the cold lead adds and private mode stay after the Domains, settings and store writes, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__project_cookie_banner_set',\n" +
           "  'mcp__hiveku__project_consent_trackers_add',\n" +
           "  'mcp__hiveku__project_consent_trackers_update',\n" +
@@ -800,7 +800,46 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__project_review_session_clear',\n" +
           "  'mcp__hiveku__project_review_frame_url',",
       ),
-      'the newest ask rules, the cookie banner and Review page writes, go at the END',
+      'the cookie banner and Review page writes stay after the Workspaces dashboards, in this order',
+    );
+    assert.ok(
+      ask.includes(
+        "  'mcp__hiveku__dashboard_create',\n" +
+          "  'mcp__hiveku__dashboard_update',\n" +
+          "  'mcp__hiveku__dashboard_restore',\n" +
+          "  'mcp__hiveku__dashboard_layout_update',\n" +
+          "  'mcp__hiveku__dashboard_widget_create',\n" +
+          "  'mcp__hiveku__dashboard_widget_update',\n" +
+          "  'mcp__hiveku__dashboard_widget_delete',\n" +
+          "  'mcp__hiveku__dashboard_page_create',\n" +
+          "  'mcp__hiveku__dashboard_page_update',\n" +
+          "  'mcp__hiveku__dashboard_page_delete',\n" +
+          "  'mcp__hiveku__dashboard_control_create',\n" +
+          "  'mcp__hiveku__dashboard_control_update',\n" +
+          "  'mcp__hiveku__dashboard_control_delete',\n" +
+          "  'mcp__hiveku__dashboard_data_source_create',\n" +
+          "  'mcp__hiveku__dashboard_data_source_update',\n" +
+          "  'mcp__hiveku__dashboard_data_rows_send',\n" +
+          "  'mcp__hiveku__dashboard_data_rows_delete',\n" +
+          "  'mcp__hiveku__dashboard_tally_add',\n" +
+          "  'mcp__hiveku__dashboard_delete',\n" +
+          "  'mcp__hiveku__dashboard_publish',\n" +
+          "  'mcp__hiveku__dashboard_share',\n" +
+          "  'mcp__hiveku__dashboard_version_restore',\n" +
+          "  'mcp__hiveku__dashboard_data_source_delete',\n" +
+          "  'mcp__hiveku__dashboard_data_column_change',\n" +
+          "  'mcp__hiveku__workspaces_page_attention_item_update',\n" +
+          "  'mcp__hiveku__workspaces_page_attention_recheck',",
+      ),
+      'the account dashboard and Client health writes stay after the cookie banner and Review page writes, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__analytics_icp_matching_run',\n" +
+          "  'mcp__hiveku__marketing_form_capture_purge',\n" +
+          "  'mcp__hiveku__analytics_recording_get',",
+      ),
+      'the newest ask rules, the S5a analytics and form capture asks, go at the END',
     );
   });
 

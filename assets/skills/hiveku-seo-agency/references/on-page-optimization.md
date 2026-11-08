@@ -30,7 +30,7 @@ clean or empty.
 | Tool | Status | Cost | Note |
 |---|---|---|---|
 | `pages_list`, `pages_get` | LIVE | A | pages-model rows; `pages_get` returns `meta_title`, `meta_description`, `meta_keywords`, `focus_keywords`, `slug`, `is_published`, `show_in_sitemap`, `sitemap_frequency`, `sitemap_priority`, `file_path`, `content_structure`; no canonical, robots or schema |
-| `pages_update` | LIVE | write | fields `meta_title`, `meta_description`, `meta_keywords`, `focus_keywords`, `slug`, `show_in_sitemap`, `sitemap_frequency`, `sitemap_priority` (also `name`, `is_published`, `custom_css`, `custom_js`); only the fields you pass change; no confirm |
+| `pages_update` | LIVE | write | fields `meta_title`, `meta_description`, `meta_keywords`, `focus_keywords`, `slug`, `show_in_sitemap`, `sitemap_frequency`, `sitemap_priority`, `og_title`, `og_description`, `og_image` (also `name`, `is_published`, `custom_css`, `custom_js`); only the fields you pass change; no confirm |
 | `cms_list_collections`, `cms_read_entry`, `cms_write_entry` | LIVE | write | CMS-driven pages; `draft: true` writes the draft shadow; full, marketing and marketing-seo all carry the whole `cms_*` family |
 | `project_files_list`, `project_file_get`, `project_file_save`, `project_vcs_status`, `project_vcs_commit`, `deploy_site` | LIVE | write | the code lane on full, marketing and marketing-seo: read, save one file per call, save the version with NO files, deploy. On marketing and marketing-seo `project_vcs_commit` is version-only: a call carrying `files` or `deletedFiles` is refused (section 1.2) |
 | `project_files_search`, `project_files_bulk_get`, `project_files_bulk_save` | LIVE | write | the multi-file side of the code lane; full only (not on marketing or marketing-seo) |

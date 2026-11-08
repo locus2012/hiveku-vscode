@@ -671,6 +671,8 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__analytics_pages',
   'mcp__hiveku__analytics_sessions',
   'mcp__hiveku__analytics_traffic_sources',
+  // The Visitor List's source choices (wave S5a, a GET): no glob above matches the name.
+  'mcp__hiveku__analytics_visitor_sources',
   'mcp__hiveku__analytics_visitors',
   'mcp__hiveku__analytics_events_list',
   'mcp__hiveku__analytics_visitor_intelligence_get',
@@ -700,7 +702,8 @@ const HIVEKU_ALLOW: string[] = [
   // Form capture's what-if (a GET that saves nothing), by EXACT name: agents
   // are taught to preview a path rule before excluding it. The settings _get
   // and the _list already match the globs above; the settings update and the
-  // purge (a permanent erase) match nothing here and keep prompting.
+  // purge (a permanent erase) match nothing here and keep prompting. The purge
+  // is on HIVEKU_ASK too (wave S5a), so it asks in every mode.
   'mcp__hiveku__marketing_form_capture_preview',
   // The PM assignee roster (a GET: GET /api/olympus/pm/projects/:id/team), by
   // EXACT name: no glob above matches it, and the work-tracking section tells
@@ -1364,6 +1367,43 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__project_review_session_set',
   'mcp__hiveku__project_review_session_clear',
   'mcp__hiveku__project_review_frame_url',
+  // The account's own dashboards and Your data tables (dashboard_*, 2026-11-08, decision 7 of the agency satellite view):
+  // they ran unasked, and they change dashboards others in the account may see, the shared home and the data dashboards
+  // read. Then the two Client health writes. Every call asks, as in the Claude Code plugin (0.27.217) and Codex (0.3.86).
+  // Appended last.
+  'mcp__hiveku__dashboard_create',
+  'mcp__hiveku__dashboard_update',
+  'mcp__hiveku__dashboard_restore',
+  'mcp__hiveku__dashboard_layout_update',
+  'mcp__hiveku__dashboard_widget_create',
+  'mcp__hiveku__dashboard_widget_update',
+  'mcp__hiveku__dashboard_widget_delete',
+  'mcp__hiveku__dashboard_page_create',
+  'mcp__hiveku__dashboard_page_update',
+  'mcp__hiveku__dashboard_page_delete',
+  'mcp__hiveku__dashboard_control_create',
+  'mcp__hiveku__dashboard_control_update',
+  'mcp__hiveku__dashboard_control_delete',
+  'mcp__hiveku__dashboard_data_source_create',
+  'mcp__hiveku__dashboard_data_source_update',
+  'mcp__hiveku__dashboard_data_rows_send',
+  'mcp__hiveku__dashboard_data_rows_delete',
+  'mcp__hiveku__dashboard_tally_add',
+  'mcp__hiveku__dashboard_delete',
+  'mcp__hiveku__dashboard_publish',
+  'mcp__hiveku__dashboard_share',
+  'mcp__hiveku__dashboard_version_restore',
+  'mcp__hiveku__dashboard_data_source_delete',
+  'mcp__hiveku__dashboard_data_column_change',
+  'mcp__hiveku__workspaces_page_attention_item_update',
+  'mcp__hiveku__workspaces_page_attention_recheck',
+  // Analytics and Forms (2026-11-08, wave S5a): analytics_icp_matching_run spends the account's AI credit;
+  // marketing_form_capture_purge erases captured form submissions for good, and with no rule here it ran unasked in auto
+  // and Autonomous modes; analytics_recording_get is a read whose answer is one visitor's whole visit as they saw it on
+  // screen. Every call asks, as in the Claude Code plugin (0.27.219) and Codex (0.3.87). Appended last.
+  'mcp__hiveku__analytics_icp_matching_run',
+  'mcp__hiveku__marketing_form_capture_purge',
+  'mcp__hiveku__analytics_recording_get',
 ];
 
 /**
