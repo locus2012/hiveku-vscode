@@ -87,6 +87,27 @@ test('askKeyStanding: anything but exactly one of the four answers is no answer'
   }
 });
 
+test('readStandingAnswer: only a 200 whose body is exactly one of the four answers is an answer', () => {
+  for (const standing of ks.KEY_STANDINGS) {
+    assert.deepEqual(ks.readStandingAnswer(200, JSON.stringify({ standing })), { kind: 'answer', standing });
+  }
+  const removal = JSON.stringify({ standing: 'removed_from_team' });
+  for (const status of [201, 204, 302, 400, 401, 403, 404, 429, 500, 502, 503]) {
+    assert.deepEqual(ks.readStandingAnswer(status, removal), { kind: 'no_answer', why: 'unreadable' }, String(status));
+  }
+  for (const text of ['', 'removed_from_team', '"removed_from_team"', 'null', '[]', '{}', '{"standing":"REMOVED_FROM_TEAM"}', '{"standing":"removed_from_team","why":"x"}', '{"Standing":"removed_from_team"}']) {
+    assert.deepEqual(ks.readStandingAnswer(200, text), { kind: 'no_answer', why: 'unreadable' }, text);
+  }
+});
+
+test('askKeyStanding: a refusal whose body looks like a removal answer is still no answer', async (t) => {
+  for (const [status, why] of [[403, 'refused'], [401, 'refused'], [500, 'unavailable'], [503, 'unavailable']]) {
+    const route = await startRoute(() => json(status, { standing: 'removed_from_team' }));
+    t.after(() => route.close());
+    assert.deepEqual(await ks.askKeyStanding({ appUrl: route.appUrl, key: madeUpKey(), accountId: A }), { kind: 'no_answer', why }, String(status));
+  }
+});
+
 test('askKeyStanding: a 429 carries its Retry-After; a hung answer is a timeout; a closed port is a network failure', async (t) => {
   const busy = await startRoute(() => json(429, { error: 'too_many_requests' }, { 'retry-after': '120' }));
   t.after(() => busy.close());
@@ -229,6 +250,21 @@ test('a removal answer followed by anything that removes nothing removes nothing
     w.watcher.onRefused(A, w.key);
     await w.watcher.settled();
     assert.deepEqual(w.removed, [], `${second}: a new first sighting only`);
+  }
+});
+
+test('an answer that removes nothing forgets the first sighting, even if the next question comes at once', async () => {
+  for (const second of ['key_switched_off', 'active']) {
+    const w = makeWatcher(['removed_from_team', second, 'removed_from_team']);
+    w.watcher.onRefused(A, w.key);
+    await w.watcher.settled();
+    await w.clock.advance(ks.CONFIRM_AFTER_MS, w.watcher);
+    // Look past the quiet period (white box): a removal answer now must be a first sighting again.
+    w.watcher.watches.get(A).quietUntil = 0;
+    w.watcher.onRefused(A, w.key);
+    await w.watcher.settled();
+    assert.equal(w.asked.length, 3, second);
+    assert.deepEqual(w.removed, [], second);
   }
 });
 

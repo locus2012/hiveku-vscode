@@ -244,7 +244,6 @@ export async function checkRemovable(
   const root = path.resolve(ctx.root);
   if (samePath(folder, root)) return { ok: false, why: 'is_root' };
   if (!isStrictlyInside(folder, root)) return { ok: false, why: 'outside_root' };
-  if (path.parse(folder).root === folder || isInsideOrSame(ctx.home, folder)) return { ok: false, why: 'home' };
 
   let stat;
   try {
@@ -259,12 +258,14 @@ export async function checkRemovable(
     if (!between || between.isSymbolicLink()) return { ok: false, why: 'link' };
   }
 
+  // By the real paths too: a link that appeared between the checks above and here still never leads out.
   const realRoot = await realOrNull(root);
   const real = await realOrNull(folder);
   if (!realRoot || !real) return { ok: false, why: 'not_read_through' };
   if (!isStrictlyInside(real, realRoot)) return { ok: false, why: 'outside_root' };
+  // Never the home folder or a folder holding it.
   const realHome = (await realOrNull(ctx.home)) ?? path.resolve(ctx.home);
-  if (path.parse(real).root === real || isInsideOrSame(realHome, real)) return { ok: false, why: 'home' };
+  if (isInsideOrSame(realHome, real)) return { ok: false, why: 'home' };
 
   for (const other of ctx.otherAccountFolders) {
     if (!other) continue;

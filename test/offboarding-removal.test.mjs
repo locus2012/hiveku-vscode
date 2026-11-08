@@ -10,6 +10,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { lstat, mkdtemp, mkdir, readFile, readdir, readlink, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { loadOut } from './helpers/load.mjs';
 
@@ -224,6 +225,54 @@ test('a marked folder reached through a linked folder under the root stays', asy
   const result = await off.runAccountRemoval(ctxFor(w, { recordedFolder: path.join(w.root, 'linked-parent', 'northwind-7f6bb2cf') }), depsFor(w));
   assert.deepEqual(result.removed, []);
   assert.deepEqual(result.kept.map((k) => k.why), ['link']);
+  assert.deepEqual(await snapshot(target), before);
+});
+
+test('a path outside the root that leads into it through a link is never followed in', async (t) => {
+  const w = await world(t);
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  await symlink(w.root, path.join(w.outside, 'into-root'));
+  const before = await snapshot(mine);
+  const ctx = ctxFor(w, { recordedFolder: path.join(w.outside, 'into-root', 'northwind-7f6bb2cf'), canonicalFolder: undefined });
+  assert.deepEqual(await off.checkRemovable(path.join(w.outside, 'into-root', 'northwind-7f6bb2cf'), ctx), { ok: false, why: 'outside_root' });
+  const done = await off.deleteFolderForGood(path.join(w.outside, 'into-root', 'northwind-7f6bb2cf'), ctx, w.storage);
+  assert.deepEqual(done, { outcome: 'refused', why: 'outside_root' });
+  assert.deepEqual(await snapshot(mine), before);
+});
+
+test('a folder replaced by a link after it was planned stays, and so does what the link points at', async (t) => {
+  const w = await world(t);
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-7f6bb2cf'), { accountId: A });
+  const decoy = await plantAccountFolder(path.join(w.outside, 'decoy'), { accountId: A });
+  const before = await snapshot(decoy);
+  const deps = depsFor(w);
+  deps.forgetAccount = async () => {
+    await rm(mine, { recursive: true, force: true });
+    await symlink(decoy, mine);
+  };
+  const result = await off.runAccountRemoval(ctxFor(w), deps);
+  assert.deepEqual(result.removed, []);
+  assert.deepEqual(result.kept.map((k) => k.why), ['link']);
+  assert.equal((await lstat(mine)).isSymbolicLink(), true);
+  assert.deepEqual(await snapshot(decoy), before);
+});
+
+test('a link that appears between the link checks and the delete is still caught by the real path', async (t) => {
+  const w = await world(t);
+  const realParent = path.join(w.outside, 'real-parent');
+  const target = await plantAccountFolder(path.join(realParent, 'northwind-7f6bb2cf'), { accountId: A });
+  const linkedParent = path.join(w.root, 'parent');
+  await symlink(realParent, linkedParent);
+  const before = await snapshot(target);
+  // White box: the folder-by-folder link check is told the parent is a plain folder, as it was a moment earlier.
+  const fsp = createRequire(import.meta.url)('fs/promises');
+  const realLstat = fsp.lstat;
+  fsp.lstat = async (p, ...rest) => (p === linkedParent ? realLstat(realParent, ...rest) : realLstat(p, ...rest));
+  t.after(() => { fsp.lstat = realLstat; });
+  const folder = path.join(linkedParent, 'northwind-7f6bb2cf');
+  const verdict = await off.checkRemovable(folder, ctxFor(w));
+  fsp.lstat = realLstat;
+  assert.deepEqual(verdict, { ok: false, why: 'outside_root' });
   assert.deepEqual(await snapshot(target), before);
 });
 
