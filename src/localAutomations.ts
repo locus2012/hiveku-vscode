@@ -13,6 +13,7 @@
  * the project's `.mcp.json` so it's turnkey.
  */
 
+import * as cp from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { CORE_EDGE_SCRIPT } from './coreEdgeScript';
@@ -336,6 +337,7 @@ import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, unlin
 import { join } from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { homedir, platform } from 'node:os';
+import { createHash } from 'node:crypto';
 import { ROOT } from './lib.mjs';
 
 const REG = join(ROOT, 'registry.json');
@@ -345,8 +347,36 @@ const args = process.argv.slice(2);
 const cmd = args[0];
 const flag = (n) => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : undefined; };
 const tag = 'hiveku-automations';
-const plistLabel = 'com.hiveku.automations.' + Buffer.from(ROOT).toString('hex').slice(0, 12);
+// One launchd job per automations folder: the whole path names it, so two accounts on this Mac
+// never share a job. NFC because macOS treats an accented name's two spellings as one folder,
+// and a path can arrive in either.
+const plistLabel = 'com.hiveku.automations.' + createHash('sha256').update(ROOT.normalize('NFC')).digest('hex').slice(0, 12);
 const plistPath = join(homedir(), 'Library', 'LaunchAgents', plistLabel + '.plist');
+// The name every job used to get: the first 6 bytes of the path, the same for every folder
+// under /Users. A plist under it can be any folder's, so it is only read, and moved or removed
+// only when its own paths say it is this folder's job.
+const legacyPlistLabel = 'com.hiveku.automations.' + Buffer.from(ROOT).toString('hex').slice(0, 12);
+const legacyPlistPath = join(homedir(), 'Library', 'LaunchAgents', legacyPlistLabel + '.plist');
+
+// True only when the old-name plist's paths are exactly this folder's: whole strings, never a
+// substring, so .../automations does not claim .../automations-old. They are compared as the
+// old code wrote them, with no XML escaping.
+function legacyJobIsThisFolders() {
+  let plist;
+  try { plist = readFileSync(legacyPlistPath, 'utf8'); } catch { return false; }
+  const samePath = (a, b) => a.normalize('NFC') === b.normalize('NFC');
+  const workingDir = plist.match(/<key>WorkingDirectory<\\/key>\\s*<string>([\\s\\S]*?)<\\/string>/)?.[1];
+  const program = plist.match(/<key>ProgramArguments<\\/key>\\s*<array>([\\s\\S]*?)<\\/array>/)?.[1] ?? '';
+  const programArgs = [...program.matchAll(/<string>([\\s\\S]*?)<\\/string>/g)].map((m) => m[1]);
+  return workingDir !== undefined && samePath(workingDir, ROOT) && programArgs.some((a) => samePath(a, join(ROOT, 'dispatcher.mjs')));
+}
+// Unloads and removes the old-name job when it is this folder's. Another folder's is left alone.
+function retireLegacyJob() {
+  if (!legacyJobIsThisFolders()) return false;
+  spawnSync('launchctl', ['unload', legacyPlistPath], { stdio: 'ignore' });
+  unlinkSync(legacyPlistPath);
+  return true;
+}
 
 function ensureWorker(name) {
   const dir = join(ROOT, 'workers'); if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -362,6 +392,7 @@ function installScheduler() {
   mkdirSync(join(ROOT, 'logs'), { recursive: true });
   if (platform() === 'darwin') {
     mkdirSync(join(homedir(), 'Library', 'LaunchAgents'), { recursive: true });
+    if (retireLegacyJob()) console.log('Removed the old launchd agent ' + legacyPlistLabel + ' for this folder.');
     const plist = '<?xml version="1.0" encoding="UTF-8"?>\\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\\n<plist version="1.0"><dict>\\n  <key>Label</key><string>' + plistLabel + '</string>\\n  <key>ProgramArguments</key><array><string>' + process.execPath + '</string><string>' + join(ROOT, 'dispatcher.mjs') + '</string></array>\\n  <key>WorkingDirectory</key><string>' + ROOT + '</string>\\n  <key>StartInterval</key><integer>60</integer>\\n  <key>RunAtLoad</key><true/>\\n  <key>StandardOutPath</key><string>' + join(ROOT, 'logs', 'dispatcher.log') + '</string>\\n  <key>StandardErrorPath</key><string>' + join(ROOT, 'logs', 'dispatcher.log') + '</string>\\n</dict></plist>\\n';
     writeFileSync(plistPath, plist, 'utf8');
     spawnSync('launchctl', ['unload', plistPath], { stdio: 'ignore' });
@@ -379,11 +410,11 @@ function installScheduler() {
   }
 }
 function uninstallScheduler() {
-  if (platform() === 'darwin') { spawnSync('launchctl', ['unload', plistPath], { stdio: 'ignore' }); if (existsSync(plistPath)) unlinkSync(plistPath); console.log('Removed launchd agent.'); }
+  if (platform() === 'darwin') { spawnSync('launchctl', ['unload', plistPath], { stdio: 'ignore' }); if (existsSync(plistPath)) unlinkSync(plistPath); retireLegacyJob(); console.log('Removed launchd agent.'); }
   else { const cur = spawnSync('crontab', ['-l'], { encoding: 'utf8' }).stdout || ''; const next = cur.split(/\\r?\\n/).filter((l) => !l.includes('# ' + tag)).join('\\n'); spawnSync('crontab', ['-'], { input: next.trim() + '\\n' }); console.log('Removed cron entry.'); }
 }
 function schedulerStatus() {
-  if (platform() === 'darwin') console.log(existsSync(plistPath) ? 'launchd agent INSTALLED (' + plistLabel + ')' : 'NOT installed — run: node manage.mjs install');
+  if (platform() === 'darwin') console.log(existsSync(plistPath) ? 'launchd agent INSTALLED (' + plistLabel + ')' : (legacyJobIsThisFolders() ? 'launchd agent INSTALLED (' + legacyPlistLabel + ')' : 'NOT installed. Run: node manage.mjs install'));
   else { const cur = spawnSync('crontab', ['-l'], { encoding: 'utf8' }).stdout || ''; console.log(cur.includes('# ' + tag) ? 'cron entry INSTALLED' : 'NOT installed — run: node manage.mjs install'); }
 }
 
@@ -522,6 +553,19 @@ export function automationFiles(): Record<string, string> {
     'automations/registry.json': JSON.stringify({ automations: [] }, null, 2) + '\n',
     'automations/README.md': README_MD,
   };
+}
+
+/**
+ * Stop this folder's background job, and only this folder's. A folder set up before each folder
+ * had its own job still holds a manage.mjs whose uninstall deletes the one job every folder
+ * shared, whoever it belongs to, so the current script goes in first. manage.mjs is the
+ * extension's to rewrite: only workers and the registry are the user's.
+ */
+export async function stopLocalAutomations(baseDir: string): Promise<void> {
+  const autoDir = path.join(baseDir, 'automations');
+  const manage = path.join(autoDir, 'manage.mjs');
+  await fs.writeFile(manage, MANAGE_MJS, 'utf8');
+  cp.execFileSync(process.execPath, [manage, 'uninstall'], { cwd: autoDir, stdio: 'ignore', timeout: 15000 });
 }
 
 // ── Agency cadence pack: scheduled daily brief / weekly pass / monthly report ──

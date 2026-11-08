@@ -74,7 +74,7 @@ import { allFailedWarning, clipError, everythingDataNote, type FailedDataset } f
 import { attentionBadgeCount, readFailure, unreachableFromReads, unreachableRow, unreachableWarning, type ReachFailure } from './accountReach';
 import { SETUP_PROMPTS, setupPromptById } from './setupPrompts';
 import { setupLocalSupabase } from './localSupabase';
-import { scaffoldLocalAutomations, installAgencyCadence } from './localAutomations';
+import { scaffoldLocalAutomations, installAgencyCadence, stopLocalAutomations } from './localAutomations';
 import {
   captureBaseline,
   materializeTree,
@@ -1361,7 +1361,7 @@ async function teardownAccountAutomations(folder: string | undefined): Promise<v
     return; // no automations here
   }
   try {
-    cp.execFileSync(process.execPath, [manage, 'uninstall'], { cwd: autoDir, stdio: 'ignore', timeout: 15000 });
+    await stopLocalAutomations(folder);
     log.appendLine(`[remove] stopped local automations in ${autoDir}`);
   } catch (e) {
     log.appendLine(`[remove] automation teardown failed: ${String(e)}`);
