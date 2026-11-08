@@ -834,12 +834,24 @@ describe('what the extension writes and wires', () => {
       'the account dashboard and Client health writes stay after the cookie banner and Review page writes, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__analytics_icp_matching_run',\n" +
           "  'mcp__hiveku__marketing_form_capture_purge',\n" +
           "  'mcp__hiveku__analytics_recording_get',",
       ),
-      'the newest ask rules, the S5a analytics and form capture asks, go at the END',
+      'the S5a analytics and form capture asks stay after the account dashboard and Client health writes, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__social_post_publish_now',\n" +
+          "  'mcp__hiveku__social_post_approve',\n" +
+          "  'mcp__hiveku__social_posts_bulk',\n" +
+          "  'mcp__hiveku__social_account_disconnect',\n" +
+          "  'mcp__hiveku__social_accounts_activate',\n" +
+          "  'mcp__hiveku__social_accounts_import_gbp',\n" +
+          "  'mcp__hiveku__social_posts_bulk_create',",
+      ),
+      'the newest ask rules, the Social Marketing publishing and bulk draft asks, go at the END',
     );
   });
 

@@ -1404,6 +1404,19 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__analytics_icp_matching_run',
   'mcp__hiveku__marketing_form_capture_purge',
   'mcp__hiveku__analytics_recording_get',
+  // Social Marketing in the Hiveku app (2026-11-08): a person's Publish Now, Approve and bulk actions can put posts live
+  // on every target platform, Disconnect removes an account's post results, analytics and comments from Hiveku with no
+  // undo, and Activate and Import from Google Business change which accounts can publish. Hiveku takes those six from the
+  // Hiveku app's own key alone, and they ask anyway, as the domain tools above do, so a later change on the server never
+  // meets a folder unasked. social_posts_bulk_create writes up to 25 drafts and their calendar events in one call. Every
+  // call asks, as in the Claude Code plugin and Codex. Appended last.
+  'mcp__hiveku__social_post_publish_now',
+  'mcp__hiveku__social_post_approve',
+  'mcp__hiveku__social_posts_bulk',
+  'mcp__hiveku__social_account_disconnect',
+  'mcp__hiveku__social_accounts_activate',
+  'mcp__hiveku__social_accounts_import_gbp',
+  'mcp__hiveku__social_posts_bulk_create',
 ];
 
 /**
