@@ -1364,6 +1364,36 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__project_review_session_set',
   'mcp__hiveku__project_review_session_clear',
   'mcp__hiveku__project_review_frame_url',
+  // The account's own dashboards and Your data tables (dashboard_*, 2026-11-08, decision 7 of the agency satellite view):
+  // they ran unasked, and they change dashboards others in the account may see, the shared home and the data dashboards
+  // read. Then the two Client health writes. Every call asks, as in the Claude Code plugin (0.27.217) and Codex (0.3.86).
+  // Appended last.
+  'mcp__hiveku__dashboard_create',
+  'mcp__hiveku__dashboard_update',
+  'mcp__hiveku__dashboard_restore',
+  'mcp__hiveku__dashboard_layout_update',
+  'mcp__hiveku__dashboard_widget_create',
+  'mcp__hiveku__dashboard_widget_update',
+  'mcp__hiveku__dashboard_widget_delete',
+  'mcp__hiveku__dashboard_page_create',
+  'mcp__hiveku__dashboard_page_update',
+  'mcp__hiveku__dashboard_page_delete',
+  'mcp__hiveku__dashboard_control_create',
+  'mcp__hiveku__dashboard_control_update',
+  'mcp__hiveku__dashboard_control_delete',
+  'mcp__hiveku__dashboard_data_source_create',
+  'mcp__hiveku__dashboard_data_source_update',
+  'mcp__hiveku__dashboard_data_rows_send',
+  'mcp__hiveku__dashboard_data_rows_delete',
+  'mcp__hiveku__dashboard_tally_add',
+  'mcp__hiveku__dashboard_delete',
+  'mcp__hiveku__dashboard_publish',
+  'mcp__hiveku__dashboard_share',
+  'mcp__hiveku__dashboard_version_restore',
+  'mcp__hiveku__dashboard_data_source_delete',
+  'mcp__hiveku__dashboard_data_column_change',
+  'mcp__hiveku__workspaces_page_attention_item_update',
+  'mcp__hiveku__workspaces_page_attention_recheck',
 ];
 
 /**
