@@ -519,7 +519,7 @@ describe('.hiveku/pull-data.mjs (dataRunner.ts): gzip, the same refusal, and a c
       );
       assert.doesNotMatch(r.stderr, /check the account key/);
       const status = JSON.parse(await fs.readFile(path.join(dir, 'hiveku-data', 'STATUS.json'), 'utf8'));
-      assert.equal(status.runner_version, 6);
+      assert.equal(status.runner_version, dr.RUNNER_VERSION);
       const failed = status.failed.filter((f) => f.department === DEPT.id);
       assert.ok(failed.length > 0, JSON.stringify(status.failed));
       for (const f of failed) {

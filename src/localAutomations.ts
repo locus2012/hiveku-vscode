@@ -74,7 +74,7 @@ function _retryAfterFromProse(message) {
 
 async function _rpcOnce(method, params) {
   const url = (process.env.HIVEKU_MCP_URL || 'https://core.hiveku.com/mcp');
-  const headers = { Authorization: 'Bearer ' + process.env.HIVEKU_MCP_KEY, 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', Accept: 'application/json', 'User-Agent': HIVEKU_USER_AGENT };
+  const headers = { Authorization: 'Bearer ' + (process.env.HIVEKU_MCP_KEY || process.env.HIVEKU_TOKEN || ''), 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', Accept: 'application/json', 'User-Agent': HIVEKU_USER_AGENT };
   if (_session) headers['Mcp-Session-Id'] = _session;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), MCP_TIMEOUT_MS);
@@ -629,7 +629,9 @@ export async function scaffoldLocalAutomations(baseDir: string): Promise<string[
     const h = mcp?.mcpServers?.hiveku;
     if (h?.url) hivekuUrl = h.url;
     const auth = h?.headers?.Authorization as string | undefined;
-    if (auth) hivekuKey = auth.replace(/^Bearer\s+/i, '').trim();
+    // A folder the Hiveku app manages names the key's variable instead (Bearer ${HIVEKU_TOKEN}): nothing to copy, and
+    // the workers take the key a Hiveku terminal gives them.
+    if (auth && !auth.includes('${')) hivekuKey = auth.replace(/^Bearer\s+/i, '').trim();
   } catch {
     /* no .mcp.json — leave key blank */
   }
