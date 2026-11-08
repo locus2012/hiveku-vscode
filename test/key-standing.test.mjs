@@ -351,6 +351,22 @@ test('two removal answers about two different keys are not two sightings', async
   assert.deepEqual(w.removed, []);
 });
 
+test('a removal answer about a new key is a first sighting, even when the confirming question comes late', async () => {
+  const w = makeWatcher(['removed_from_team', 'removed_from_team']);
+  w.watcher.onRefused(A, w.key);
+  await w.watcher.settled();
+  // White box: the confirming question's timer has not run yet (a busy window), and a reconnect stored a new key.
+  w.watcher.watches.get(A).confirm.cancel();
+  await w.clock.advance(ks.CONFIRM_AFTER_MS + 1000, w.watcher);
+  const newKey = madeUpKey();
+  w.stored.key = newKey;
+  w.watcher.onRefused(A, newKey);
+  await w.watcher.settled();
+  assert.equal(w.asked.length, 2);
+  assert.deepEqual(w.removed, [], 'two answers about two keys are not two sightings');
+  assert.equal(w.clock.pending().length, 1, 'the new key gets its own confirming question');
+});
+
 test('a burst of refusals asks one question', async () => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
