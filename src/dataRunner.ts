@@ -42,7 +42,10 @@ import { hivekuUserAgent } from './hivekuUserAgent';
 // v7: a key named by its variable, as the Hiveku app's folders write it (Bearer ${HIVEKU_TOKEN}, desktop
 // offboarding O4: no key in any file), is read from the environment, as Claude Code itself reads it. A chat the app
 // starts has it there; anything else is told to open from the Hiveku app.
-export const RUNNER_VERSION = 7;
+// v8: the address is read the same way, with Claude Code's ${NAME:-fallback} form too. The Hiveku app's folders name
+// it ${HIVEKU_MCP_URL:-https://core.hiveku.com/mcp}: a chat the app starts reaches Hiveku through the app's own key
+// relay on this Mac, with a pass in place of the key (desktop HK-1387), and v7 would have sent that text as the address.
+export const RUNNER_VERSION = 8;
 export const RUNNER_REL_PATH = path.join('.hiveku', 'pull-data.mjs');
 
 /**
@@ -94,8 +97,8 @@ function runnerScript(): string {
 // a READ-ONLY copy of the account memory: owners and admins edit it on the Hiveku
 // dashboard, and nothing uploads this file.
 //
-// Reads the account MCP endpoint + key from ./.mcp.json (never prints the key). A key named by its variable there
-// (Bearer ${'$'}{HIVEKU_TOKEN}) is read from the environment.
+// Reads the account MCP endpoint + key from ./.mcp.json (never prints the key). A variable named there, as
+// Bearer ${'$'}{HIVEKU_TOKEN} or ${'$'}{HIVEKU_MCP_URL:-https://core.hiveku.com/mcp}, is read from the environment.
 // Requires Node 18+.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, chmodSync, unlinkSync } from 'node:fs';
@@ -121,8 +124,12 @@ try {
   console.error('Cannot read .mcp.json (need mcpServers.hiveku with url + Authorization header):', e.message);
   process.exit(1);
 }
-const ENDPOINT = mcp.url;
-const AUTH = ((mcp.headers || {}).Authorization || '').replace(/\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, name) => process.env[name] || '');
+// A variable as Claude Code reads .mcp.json: NAME's value, or the text after :- when NAME is unset or empty.
+function expand(value) {
+  return String(value || '').replace(/\\$\\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\\}/g, (_, name, fallback) => process.env[name] || fallback || '');
+}
+const ENDPOINT = expand(mcp.url);
+const AUTH = expand((mcp.headers || {}).Authorization);
 if (!ENDPOINT || !AUTH) { console.error('.mcp.json hiveku entry is missing url or Authorization header.'); process.exit(1); }
 if (/^Bearer\\s*$/i.test(AUTH)) {
   console.error('This folder holds no Hiveku key. Run this from a chat or terminal opened in the Hiveku app, which gives it one.');
