@@ -39,7 +39,10 @@ import { hivekuUserAgent } from './hivekuUserAgent';
 // again, and the closing line no longer blames the key for it
 // (coreEdgeScript.ts). An answer that could not be read is counted apart, and
 // the closing line says so instead of naming the edge.
-export const RUNNER_VERSION = 6;
+// v7: a key named by its variable, as the Hiveku app's folders write it (Bearer ${HIVEKU_TOKEN}, desktop
+// offboarding O4: no key in any file), is read from the environment, as Claude Code itself reads it. A chat the app
+// starts has it there; anything else is told to open from the Hiveku app.
+export const RUNNER_VERSION = 7;
 export const RUNNER_REL_PATH = path.join('.hiveku', 'pull-data.mjs');
 
 /**
@@ -91,7 +94,8 @@ function runnerScript(): string {
 // a READ-ONLY copy of the account memory: owners and admins edit it on the Hiveku
 // dashboard, and nothing uploads this file.
 //
-// Reads the account MCP endpoint + key from ./.mcp.json (never prints the key).
+// Reads the account MCP endpoint + key from ./.mcp.json (never prints the key). A key named by its variable there
+// (Bearer ${'$'}{HIVEKU_TOKEN}) is read from the environment.
 // Requires Node 18+.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, chmodSync, unlinkSync } from 'node:fs';
@@ -118,8 +122,12 @@ try {
   process.exit(1);
 }
 const ENDPOINT = mcp.url;
-const AUTH = (mcp.headers || {}).Authorization || '';
+const AUTH = ((mcp.headers || {}).Authorization || '').replace(/\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, name) => process.env[name] || '');
 if (!ENDPOINT || !AUTH) { console.error('.mcp.json hiveku entry is missing url or Authorization header.'); process.exit(1); }
+if (/^Bearer\\s*$/i.test(AUTH)) {
+  console.error('This folder holds no Hiveku key. Run this from a chat or terminal opened in the Hiveku app, which gives it one.');
+  process.exit(1);
+}
 
 // ── Minimal MCP client (JSON-RPC over streamable HTTP) ──────────────────────
 // Ported from the extension's src/mcpClient.ts — keep the two in step. This
