@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.91.72
 - **On a Mac, each account's local automations run as their own background job.** Every account on one Mac used to share a single job, so setting up a second account replaced the first account's job, and Stop monitoring or Delete locally on any account stopped them all. A job set up earlier keeps running until that account's automations are next installed, when it moves to a job of its own. Starting, stopping or deleting one account's automations no longer touches any other account's job. Cancelling Delete locally now leaves that account's automations running.
 
 ## 0.91.71
