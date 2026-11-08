@@ -23,9 +23,21 @@ const madeUpKey = () => `hvk_${randomBytes(32).toString('hex')}`;
 
 /* ── the planted world ──────────────────────────────────────────────────── */
 
+/** Every folder under `dir` made readable and writable again (a test locks one), never through a link. */
+async function openUp(dir) {
+  const st = await lstat(dir).catch(() => null);
+  if (!st || st.isSymbolicLink() || !st.isDirectory()) return;
+  await chmod(dir, 0o700).catch(() => undefined);
+  for (const name of await readdir(dir).catch(() => [])) await openUp(path.join(dir, name));
+}
+
 async function world(t) {
   const base = await mkdtemp(path.join(tmpdir(), 'hiveku-o8a-removal-'));
-  t.after(() => rm(base, { recursive: true, force: true }));
+  // Cleaned up even when a broken check moved a locked folder somewhere the test did not expect.
+  t.after(async () => {
+    await openUp(base);
+    await rm(base, { recursive: true, force: true });
+  });
   const home = path.join(base, 'home');
   const root = path.join(home, 'Hiveku-Accounts');
   const outside = path.join(base, 'outside');
@@ -341,9 +353,8 @@ test('a marked folder that cannot be read through stays: it might hold another a
   const locked = path.join(mine, 'sites', 'locked');
   await mkdir(path.join(locked, 'inner'), { recursive: true });
   await chmod(locked, 0o000);
-  t.after(() => chmod(locked, 0o700).catch(() => undefined));
   const result = await off.runAccountRemoval(ctxFor(w), depsFor(w));
-  await chmod(locked, 0o700);
+  await openUp(w.base);
   assert.deepEqual(result.removed, []);
   assert.deepEqual(result.kept.map((k) => k.why), ['not_read_through']);
   assert.equal(await exists(path.join(mine, 'sites', 'main-site', 'index.html')), true);
