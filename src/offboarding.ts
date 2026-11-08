@@ -15,8 +15,9 @@
  *   - it is not the home folder, an ancestor of it, or the disk's root;
  *   - it is not, does not lie inside and does not hold another account's folder
  *     the extension knows of;
- *   - no folder inside it (8 levels, node_modules and .git aside) is bound to
- *     another account or holds another account's site, and it could be read
+ *   - no folder inside it (all the way down, node_modules and .git aside, up to
+ *     200,000 folders) is bound to another account, bound by the Hiveku app or
+ *     another Hiveku tool, or holds another account's site, and it could be read
  *     through to tell.
  * Everything inside such a folder goes with it: its downloaded sites, its data,
  * its .env and .mcp.json. A link inside it is unlinked and what it points at
@@ -62,6 +63,7 @@ export type KeptWhy =
   | 'home'
   | 'other_account_folder'
   | 'holds_other_account'
+  | 'holds_other_tool'
   | 'not_read_through'
   | 'failed';
 
@@ -154,8 +156,6 @@ async function realOrNull(p: string): Promise<string | null> {
 
 /** No account's binding or site link lives in these, and they are most of a site folder's size. */
 const NEVER_BOUND: ReadonlySet<string> = new Set(['node_modules', '.git']);
-/** How deep a binding is looked for: sites/<site>/apps/<app> is four levels. */
-const MOST_DEPTH = 8;
 /** A folder with more folders than this is not looked through whole, and so is not deleted. */
 const MOST_FOLDERS = 200_000;
 
@@ -178,18 +178,20 @@ async function siteAccountAt(dir: string): Promise<string | null | 'unreadable'>
 }
 
 /**
- * Whether a folder holds anything of another account: a binding below it naming
- * another account (or one that cannot be read, or sits behind a link), or a site
- * linked to another account. Reads only; never follows a link.
+ * Whether a folder holds anything of another account or another Hiveku tool: a
+ * binding below it naming another account (or one that cannot be read, or sits
+ * behind a link), the account's own folder the Hiveku app or another Hiveku tool
+ * bound, or a site linked to another account. Looks all the way down; reads
+ * only; never follows a link.
  */
 export async function otherAccountInside(
   folder: string,
   accountId: string,
-): Promise<'clear' | 'holds_other_account' | 'not_read_through'> {
+): Promise<'clear' | 'holds_other_account' | 'holds_other_tool' | 'not_read_through'> {
   const mine = accountId.toLowerCase();
   let visited = 0;
   let level = [folder];
-  for (let depth = 0; depth <= MOST_DEPTH && level.length > 0; depth += 1) {
+  for (let depth = 0; level.length > 0; depth += 1) {
     const below: string[] = [];
     for (const dir of level) {
       visited += 1;
@@ -207,6 +209,8 @@ export async function otherAccountInside(
             const binding: FolderBinding = await readFolderBinding(dir);
             if (binding.kind === 'link' || binding.kind === 'unreadable') return 'holds_other_account';
             if (binding.kind === 'bound' && binding.accountId !== mine) return 'holds_other_account';
+            // The account's own folder that the Hiveku app or another Hiveku tool bound: that tool removes its own.
+            if (binding.kind === 'bound' && binding.boundBy !== EXTENSION_BINDER) return 'holds_other_tool';
           }
           const site = await siteAccountAt(dir);
           if (site === 'unreadable') return 'not_read_through';
@@ -493,6 +497,7 @@ const KEPT_WORDS: Record<KeptWhy, string> = {
   home: 'it is your home folder',
   other_account_folder: 'it is part of another account\'s folder',
   holds_other_account: 'it holds a folder of another account',
+  holds_other_tool: 'it holds a folder the Hiveku app or another Hiveku tool made, which that tool removes itself',
   not_read_through: 'it could not be read through to make sure it holds nothing of another account',
   failed: 'it could not be deleted completely; the extension tries again the next time VS Code starts',
 };

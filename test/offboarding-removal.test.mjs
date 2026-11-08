@@ -347,6 +347,68 @@ test("a marked folder that holds another account's folder or site stays", async 
   assert.deepEqual(await snapshot(holdsSite), before2);
 });
 
+test("a marked folder holding the account's own folder that the Hiveku app or another Hiveku tool bound stays (O8a review)", async (t) => {
+  for (const boundBy of ['hiveku-desktop', 'hiveku-claude-plugin', 'hiveku-sync', null]) {
+    const w = await world(t);
+    const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
+    const nested = path.join(mine, 'sites', 'main-site', 'apps', 'web');
+    await mkdir(path.join(nested, '.hiveku'), { recursive: true });
+    await writeFile(path.join(nested, '.hiveku', 'account.json'), JSON.stringify({ version: 1, account_id: A, ...(boundBy ? { bound_by: boundBy } : {}) }));
+    await writeFile(path.join(nested, 'notes.md'), 'that tool\'s own work\n');
+    const before = await snapshot(mine);
+    const result = await off.runAccountRemoval(ctxFor(w), depsFor(w));
+    assert.deepEqual(result.removed, [], String(boundBy));
+    assert.deepEqual(result.kept.map((k) => k.why), ['holds_other_tool'], String(boundBy));
+    assert.deepEqual(await snapshot(mine), before, String(boundBy));
+    assert.match(off.removalNotice(result, w.home), /it holds a folder the Hiveku app or another Hiveku tool made, which that tool removes itself/);
+  }
+});
+
+test("another account's folder this extension marked, inside the account's folder, keeps it; the account's own nested mark does not", async (t) => {
+  // Only the other-account check sees this one: the binding is this extension's, and there is no site.
+  const w = await world(t);
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
+  const theirs = path.join(mine, 'clients', 'acme-1a2b3c4d');
+  await mkdir(path.join(theirs, '.hiveku'), { recursive: true });
+  await writeFile(path.join(theirs, '.hiveku', 'account.json'), JSON.stringify({ version: 1, account_id: B, bound_by: 'hiveku-vscode' }));
+  const before = await snapshot(mine);
+  const result = await off.runAccountRemoval(ctxFor(w), depsFor(w));
+  assert.deepEqual(result.kept.map((k) => k.why), ['holds_other_account']);
+  assert.deepEqual(await snapshot(mine), before);
+
+  // The account's own folder, marked by this extension, kept inside it: it goes with the folder.
+  const w2 = await world(t);
+  const mine2 = await plantAccountFolder(path.join(w2.root, 'northwind-a0a0a0a0'), { accountId: A });
+  await plantAccountFolder(path.join(mine2, 'old', 'northwind-a0a0a0a0'), { accountId: A });
+  const result2 = await off.runAccountRemoval(ctxFor(w2), depsFor(w2));
+  assert.deepEqual(result2.kept, []);
+  assert.equal(result2.removed.length, 1);
+  assert.equal(await exists(mine2), false);
+});
+
+test("another account's folder deeper than eight levels inside the account's folder keeps it; a deep tree of its own does not (O8a review)", async (t) => {
+  const deepPath = ['sites', 'main-site', 'src', 'app', '(group)', 'clients', '[slug]', 'archive', '2026', 'acme', 'export'];
+  const w = await world(t);
+  const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
+  const deep = path.join(mine, ...deepPath);
+  await mkdir(path.join(deep, '.hiveku'), { recursive: true });
+  await writeFile(path.join(deep, '.hiveku', 'account.json'), JSON.stringify({ version: 1, account_id: B, bound_by: 'hiveku-vscode' }));
+  const before = await snapshot(mine);
+  assert.equal(await off.otherAccountInside(mine, A), 'holds_other_account');
+  const result = await off.runAccountRemoval(ctxFor(w), depsFor(w));
+  assert.deepEqual(result.kept.map((k) => k.why), ['holds_other_account']);
+  assert.deepEqual(await snapshot(mine), before);
+
+  // The same depth with nothing of anyone else's in it: the folder goes.
+  const w2 = await world(t);
+  const mine2 = await plantAccountFolder(path.join(w2.root, 'northwind-a0a0a0a0'), { accountId: A });
+  await mkdir(path.join(mine2, ...deepPath), { recursive: true });
+  await writeFile(path.join(mine2, ...deepPath, 'page.tsx'), 'export default function Page() { return null }\n');
+  const result2 = await off.runAccountRemoval(ctxFor(w2), depsFor(w2));
+  assert.deepEqual(result2.kept, []);
+  assert.equal(await exists(mine2), false);
+});
+
 test('a marked folder that cannot be read through stays: it might hold another account\'s folder', { skip: process.platform === 'win32' || process.getuid?.() === 0 }, async (t) => {
   const w = await world(t);
   const mine = await plantAccountFolder(path.join(w.root, 'northwind-a0a0a0a0'), { accountId: A });
