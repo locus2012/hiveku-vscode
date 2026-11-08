@@ -136,10 +136,13 @@ export class ConnectFlow {
       // this per account was O(n^2) on the index and, for a SaaS owner
       // connecting hundreds of accounts, meant well over a thousand awaited
       // writes — the connect appeared to hang and could fail outright.
+      // via 'connect': the exchange makes each key for the person signed in to the browser, so only these keys'
+      // refusals may remove an account from this computer (offboarding O8a, AccountStore.keyCameFromConnect).
       const incoming = (data.accounts ?? []).map((a) => ({
         accountId: a.account_id,
         label: a.account_name || a.account_id,
         key: a.api_key,
+        via: 'connect' as const,
       }));
       const newIds = await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: 'Storing Hiveku account keys…' },

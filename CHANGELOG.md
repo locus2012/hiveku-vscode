@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.71
+- **When you lose access to an account, its folders leave this computer.** If you are removed from an account's team, or the account closes, the extension now removes the folders it made for that account and the key it saved, then tells you what went and what stayed. It only acts when Hiveku has said so twice, a few minutes apart, and only for a key you connected from this computer. A key you pasted in removes nothing, and neither does a key that was merely switched off.
+
 ## 0.91.70
 - **Matching visitors to your ideal customers, erasing captured form submissions and opening a session recording ask first.** Matching spends the account's AI credit, an erase cannot be undone, and a recording shows one visitor's whole visit as they saw it on screen. Your assistant now asks before each, in every mode. The Visitor List's source choices are read without asking.
 

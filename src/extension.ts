@@ -9,10 +9,23 @@
  */
 
 import * as fs from 'fs/promises';
+import * as os from 'os';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as vscode from 'vscode';
 import { AccountStore, type AccountRecord } from './accounts';
+import { makeAccountFolder } from './accountBinding';
+import { KeyRefusalWatcher, askKeyStanding, type RemovalReason } from './keyStanding';
+import {
+  finishPendingRemovals,
+  keyStoppedNotice,
+  removalLogLines,
+  removalNotice,
+  runAccountRemoval,
+  type PendingRemoval,
+  type RemovalContext,
+  type RemovalResult,
+} from './offboarding';
 import { HivekuMcpClient, onRegistryDrift, resetRegistryDrift } from './mcpClient';
 import * as api from './hivekuApi';
 import { downloadAndExtract } from './download';
@@ -393,6 +406,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(versionIndicator, versionIndicator.onDidChange(() => refreshStatusBar()));
   refreshPermStatusBar();
 
+  // Offboarding O8a: when Hiveku refuses a stored account's key, ask the website
+  // why; remove the account from this computer only on two removal answers,
+  // minutes apart, about a key Connect Hiveku made here for the person signed
+  // in (keyStanding.ts, offboarding.ts). A pasted key may be a teammate's: the
+  // website's answer is about whoever made it, so it removes nothing.
+  keyWatcher = new KeyRefusalWatcher({
+    appUrl,
+    storedKey: (accountId) => accounts.getKey(accountId),
+    fromConnect: (accountId, key) => accounts.keyCameFromConnect(accountId, key),
+    ask: (opts) => askKeyStanding({ ...opts, userAgent: hivekuUserAgent() }),
+    remove: (accountId, reason) => removeAccountForLostAccess(accountId, reason),
+    keyStopped: (accountId) => void tellKeyStopped(accountId).catch(() => undefined),
+    log: (line) => log.appendLine(line),
+  });
+  accounts.setKeyRefusedListener((accountId, key) => keyWatcher?.onRefused(accountId, key));
+  context.subscriptions.push(
+    new vscode.Disposable(() => {
+      accounts.setKeyRefusedListener(undefined);
+      keyWatcher?.dispose();
+    }),
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand('hiveku.signIn', () => signIn()),
     vscode.commands.registerCommand('hiveku.setPermissionMode', () => choosePermissionMode()),
@@ -669,6 +704,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   await updateRootContext();
   // Re-home accounts whose stored folder predates (or disagrees with) the root.
   void reconcileAccountFolders().catch((err) => log.appendLine(`[folders] reconcile failed: ${errMsg(err)}`));
+  // A removal on a lost account that a crash or a closed window left halfway.
+  void finishPendingAccountRemovals().catch((err) => log.appendLine(`[offboarding] could not finish an earlier removal: ${errMsg(err)}`));
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('hiveku.rootFolder')) {
@@ -1206,6 +1243,113 @@ async function signOut(node?: { record: AccountRecord }): Promise<void> {
   consoleTree.refresh();
 }
 
+// ── Offboarding O8a: the person lost access to an account ───────────────────
+
+const PENDING_REMOVALS_KEY = 'hiveku.offboarding.pending';
+let keyWatcher: KeyRefusalWatcher | undefined;
+
+/** The extension's own folder that deleted account folders pass through (cleared at every start). */
+function removalStorageDir(): string {
+  return path.join(extensionContext.globalStorageUri.fsPath, 'removing');
+}
+
+function pendingRemovals(): PendingRemoval[] {
+  return extensionContext.globalState.get<PendingRemoval[]>(PENDING_REMOVALS_KEY, []);
+}
+
+const removalJournal = {
+  add: async (entry: PendingRemoval): Promise<void> => {
+    await extensionContext.globalState.update(PENDING_REMOVALS_KEY, [...pendingRemovals().filter((e) => e.accountId !== entry.accountId), entry]);
+  },
+  remove: async (accountId: string): Promise<void> => {
+    await extensionContext.globalState.update(PENDING_REMOVALS_KEY, pendingRemovals().filter((e) => e.accountId !== accountId));
+  },
+};
+
+/** Every folder the extension knows for its other accounts, active and archived: recorded, and by name. */
+function otherAccountFolders(accountId: string): string[] {
+  const root = hivekuRoot();
+  const out: string[] = [];
+  for (const other of accounts.allRecords()) {
+    if (other.accountId === accountId) continue;
+    const recorded = accounts.getFolder(other.accountId);
+    if (recorded) out.push(recorded);
+    if (root) out.push(path.join(root, slugForAccount(other.label, other.accountId)));
+  }
+  return out;
+}
+
+async function tellRemoval(result: RemovalResult): Promise<void> {
+  for (const line of removalLogLines(result)) log.appendLine(line);
+  const pick = await vscode.window.showWarningMessage(removalNotice(result, os.homedir()), 'Show details');
+  if (pick === 'Show details') log.show(true);
+}
+
+/** A key that did not come from Connect Hiveku will not work again: nothing was removed, and how to go on. */
+async function tellKeyStopped(accountId: string): Promise<void> {
+  const record = accounts.allRecords().find((r) => r.accountId === accountId);
+  const pick = await vscode.window.showWarningMessage(keyStoppedNotice(record?.label ?? ''), 'Connect Hiveku');
+  if (pick === 'Connect Hiveku') await vscode.commands.executeCommand('hiveku.connect');
+}
+
+/**
+ * Hiveku said twice, minutes apart, that this account's person lost access
+ * (keyStanding.ts). Remove what the extension made for it on this computer: its
+ * key first, then its own marked folders (offboarding.ts), and say what went and
+ * what stayed. Nothing is run from the folder: local automations share one
+ * scheduler entry across every account, so uninstalling it here would stop
+ * other accounts' automations.
+ */
+async function removeAccountForLostAccess(accountId: string, reason: RemovalReason): Promise<void> {
+  const record = accounts.allRecords().find((r) => r.accountId === accountId);
+  if (!record) return;
+  const root = hivekuRoot();
+  const ctx: RemovalContext = {
+    accountId,
+    label: record.label,
+    reason,
+    root,
+    recordedFolder: accounts.getFolder(accountId),
+    canonicalFolder: root ? path.join(root, slugForAccount(record.label, accountId)) : undefined,
+    otherAccountFolders: otherAccountFolders(accountId),
+    home: os.homedir(),
+  };
+  const result = await runAccountRemoval(ctx, {
+    forgetAccount: (id) => accounts.forgetRemovedAccount(id),
+    journal: removalJournal,
+    tombstoneDir: removalStorageDir(),
+    log: (line) => log.appendLine(line),
+  });
+  accountSnapshots.delete(accountId);
+  syncConnectedAs();
+  refreshStatusBar();
+  updateSignedInContext();
+  tree.refresh();
+  consoleTree.refresh();
+  // Not waited on: the removal is done, and the watcher must not wait for the person to read the notice.
+  void tellRemoval(result);
+}
+
+/** Finish a removal a crash or a closed window left halfway, and clear what it moved aside. */
+async function finishPendingAccountRemovals(): Promise<void> {
+  const results = await finishPendingRemovals(pendingRemovals(), {
+    forgetAccount: async () => undefined,
+    journal: removalJournal,
+    tombstoneDir: removalStorageDir(),
+    log: (line) => log.appendLine(line),
+    accountIsBack: (accountId) => accounts.allRecords().some((r) => r.accountId === accountId),
+    contextFor: (entry) => ({
+      accountId: entry.accountId,
+      root: hivekuRoot(),
+      otherAccountFolders: otherAccountFolders(entry.accountId),
+      home: os.homedir(),
+    }),
+  });
+  for (const result of results) {
+    if (result.removed.length || result.kept.length) await tellRemoval(result);
+  }
+}
+
 /** Stop any local automations scaffolded in an account's folder (removes the OS scheduler entry). */
 async function teardownAccountAutomations(folder: string | undefined): Promise<void> {
   if (!folder) return;
@@ -1528,9 +1672,17 @@ async function ensureAccountFolder(account: AccountRecord): Promise<string | und
       return existing; // couldn't move safely — stay consistent at the old path
     }
   }
-  await fs.mkdir(dir, { recursive: true });
+  // Offboarding O8a: a folder the extension makes here is marked as its own (accountBinding.ts).
+  noteAccountFolderMark(account, await makeAccountFolder(dir, account));
   await accounts.setFolder(account.accountId, dir);
   return dir;
+}
+
+/** Offboarding O8a: say in the log when a new account folder could not be marked as the extension's. */
+function noteAccountFolderMark(account: AccountRecord, made: Awaited<ReturnType<typeof makeAccountFolder>>): void {
+  if (made === 'already_bound' || made === 'not_marked') {
+    log.appendLine(`[folders] ${account.label}: no binding written in its new folder (${made}).`);
+  }
 }
 
 /**
@@ -1608,7 +1760,8 @@ async function reconcileAccountFolders(): Promise<void> {
         } else {
           // Stale mapping to a deleted folder — forget it; next use recreates under the root.
           pending.push({ accountId: account.accountId, folder: canonical });
-          await fs.mkdir(canonical, { recursive: true }).catch(() => undefined);
+          const made = await makeAccountFolder(canonical, account).catch(() => undefined);
+          if (made) noteAccountFolderMark(account, made);
         }
       }
     },
