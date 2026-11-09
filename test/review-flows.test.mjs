@@ -839,7 +839,44 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__marketing_form_capture_purge',\n" +
           "  'mcp__hiveku__analytics_recording_get',",
       ),
-      'the S5a analytics and form capture asks stay after the account dashboard and Client health writes, in this order',
+      'the S5a analytics and form capture asks stay after the account dashboard writes, in this order',
+    );
+    assert.ok(
+      ask.includes(
+        "  'mcp__hiveku__pm_project_tasks_copy',\n" +
+        "  'mcp__hiveku__pm_tasks_create_bulk',\n" +
+        "  'mcp__hiveku__pm_tasks_reassign_bulk',\n" +
+        "  'mcp__hiveku__pm_sections_delete',\n" +
+        "  'mcp__hiveku__pm_milestones_delete',\n" +
+        "  'mcp__hiveku__pm_milestones_close',\n" +
+        "  'mcp__hiveku__pm_task_time_log_create',\n" +
+        "  'mcp__hiveku__crm_contact_merge',\n" +
+        "  'mcp__hiveku__crm_delete_contact',\n" +
+        "  'mcp__hiveku__crm_delete_company',\n" +
+        "  'mcp__hiveku__crm_delete_deal',\n" +
+        "  'mcp__hiveku__crm_delete_sequence',\n" +
+        "  'mcp__hiveku__crm_delete_custom_field',\n" +
+        "  'mcp__hiveku__crm_delete_tag',\n" +
+        "  'mcp__hiveku__crm_delete_email_template',\n" +
+        "  'mcp__hiveku__crm_contacts_bulk_create',\n" +
+        "  'mcp__hiveku__crm_companies_bulk_create',\n" +
+        "  'mcp__hiveku__crm_deals_bulk_create',\n" +
+        "  'mcp__hiveku__crm_activities_bulk_create',\n" +
+        "  'mcp__hiveku__crm_unenroll_sequence',\n" +
+        "  'mcp__hiveku__crm_pause_sequence_enrollment',\n" +
+        "  'mcp__hiveku__crm_resume_sequence_enrollment',\n" +
+        "  'mcp__hiveku__crm_email_batch_cancel',\n" +
+        "  'mcp__hiveku__crm_email_batch_reschedule',\n" +
+        "  'mcp__hiveku__calendar_create_event',\n" +
+        "  'mcp__hiveku__helpdesk_ticket_merge',\n" +
+        "  'mcp__hiveku__helpdesk_ticket_set_status',\n" +
+        "  'mcp__hiveku__helpdesk_ticket_create',\n" +
+        "  'mcp__hiveku__helpdesk_ticket_transfer_to_voice',\n" +
+        "  'mcp__hiveku__accounting_bill_schedule_create',\n" +
+        "  'mcp__hiveku__accounting_vendor_delete',\n" +
+        "  'mcp__hiveku__brand_guide_update',",
+      ),
+      'the department agents\' approval asks stay after the S5a analytics and form capture asks, in this order',
     );
     assert.ok(
       ask.trimEnd().endsWith(

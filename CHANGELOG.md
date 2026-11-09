@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.73
+- **Hiveku folders ask before the actions Hiveku's own department agents wait for a person's approval on.** Copying a project's tasks, bulk task creation and reassignment, a section or milestone deleted, a milestone closed, time logged; a contact merge, CRM deletes and imports, a sequence enrollment taken out, paused or resumed, a scheduled batch cancelled or rescheduled, a Google Calendar event; a ticket merged, its status changed, a new ticket, a phone transfer; a recurring bill, a vendor retired; and the brand guide. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+
 ## 0.91.72
 - **On a Mac, each account's local automations run as their own background job.** Every account on one Mac used to share a single job, so setting up a second account replaced the first account's job, and Stop monitoring or Delete locally on any account stopped them all. A job set up earlier keeps running until that account's automations are next installed, when it moves to a job of its own. Starting, stopping or deleting one account's automations no longer touches any other account's job. Cancelling Delete locally now leaves that account's automations running.
 
