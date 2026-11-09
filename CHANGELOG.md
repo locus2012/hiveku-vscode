@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.74
+- **Publishing and bulk social changes ask first.** Your assistant now asks before it publishes a post at once, approves a held post, changes many posts at once, disconnects a social account, turns connected accounts on, brings in Google Business locations, or writes many drafts in one call. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+
 ## 0.91.73
 - **Hiveku folders ask before the actions Hiveku's own department agents wait for a person's approval on.** Copying a project's tasks, bulk task creation and reassignment, a section or milestone deleted, a milestone closed, time logged; a contact merge, CRM deletes and imports, a sequence enrollment taken out, paused or resumed, a scheduled batch cancelled or rescheduled, a Google Calendar event; a ticket merged, its status changed, a new ticket, a phone transfer; a recurring bill, a vendor retired; and the brand guide. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
 
