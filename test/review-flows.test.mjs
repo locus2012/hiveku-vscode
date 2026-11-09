@@ -842,7 +842,7 @@ describe('what the extension writes and wires', () => {
       'the S5a analytics and form capture asks stay after the account dashboard writes, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__pm_project_tasks_copy',\n" +
         "  'mcp__hiveku__pm_tasks_create_bulk',\n" +
         "  'mcp__hiveku__pm_tasks_reassign_bulk',\n" +
@@ -876,7 +876,19 @@ describe('what the extension writes and wires', () => {
         "  'mcp__hiveku__accounting_vendor_delete',\n" +
         "  'mcp__hiveku__brand_guide_update',",
       ),
-      'the newest ask rules, the department agents\' approval asks, go at the END',
+      'the department agents\' approval asks stay after the S5a analytics and form capture asks, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__social_post_publish_now',\n" +
+          "  'mcp__hiveku__social_post_approve',\n" +
+          "  'mcp__hiveku__social_posts_bulk',\n" +
+          "  'mcp__hiveku__social_account_disconnect',\n" +
+          "  'mcp__hiveku__social_accounts_activate',\n" +
+          "  'mcp__hiveku__social_accounts_import_gbp',\n" +
+          "  'mcp__hiveku__social_posts_bulk_create',",
+      ),
+      'the newest ask rules, the Social Marketing publishing and bulk draft asks, go at the END',
     );
   });
 
