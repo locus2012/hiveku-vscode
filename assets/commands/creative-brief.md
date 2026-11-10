@@ -25,8 +25,9 @@ lanes that render are `/hiveku:design` and `/hiveku:media` on a full-profile or
    Persona: `customer_avatar_get({ id })` for the full row - the name, `pain_points`,
    `typical_quote`, the one objection in `buying_behavior`, and
    `online_behavior.social_platforms` (a platform the persona does not use gets no card aimed
-   at them there). Brand: `brand_guide_get({ id })` on the active guide (the id from the context
-   call's `brand`, or `brand_guide_list({ is_active: "true" })`) - `color_primary`,
+   at them there). Brand: `brand_guide_get({ id })` on the account's default guide (the one
+   `brand_guide_list` marks `is_default`; with no default guide, ask the person which guide is the
+   brand) - `color_primary`,
    `color_secondary`, `color_accent`, `font_heading_family`, `font_body_family`, `copy_dos`,
    `copy_donts`, `brand_is`, `brand_is_not`, `ai_forbidden_phrases`. Quote them into the brief
    by field; an empty palette or type slot is a finding for the designer (the templates
@@ -132,4 +133,17 @@ lanes that render are `/hiveku:design` and `/hiveku:media` on a full-profile or
    attached, never brief time or chat time. Deliverable: the header, the slug, the task id, the
    asset id with its dimensions, the post id, and what remains (the schedule is
    `/hiveku:social-plan` step 4, one post, one confirm).
-6. Finish every session of work the same way: persist notable learnings to department memory - read the department's current document with `memory_list({ domain: "<dept>" })` and note its `version` and when you read it, append your note to the `content` it returns, then check `memory_log_list({ memory_id, since: "<when you read it>" })` and merge any newer change into your text (a department agent or a person may have edited it since), and send the WHOLE merged document to `memory_update({ memory_id, content, reason, expected_version })`, which REPLACES it (sending only the new note destroys everything that department had accumulated; `reason` is one plain line on why, and `expected_version` is the version you merged into, so a 409 `version_conflict` means it changed again: merge into the `content` that answer carries and save with its `version`, never resend blind); use `memory_create({ type: "memory", name: "<dept>", content, reason })` only when no entry exists, and keep `<dept>` to a canonical department name (see hiveku-orient), and reflect the work in Hiveku PM: `pm_projects_list` to find the project (it filters only by `status`; `project_type` is named in its description but is NOT in its schema, so the proxy drops it and you filter the returned list yourself), or `pm_projects_create({ name, project_type })` where project_type is one of seo | ppc | marketing | website | app_dev, then `pm_tasks_create({ project_id, title })` (the field is `title`, not `name`), `pm_tasks_update` as it moves, `pm_tasks_complete({ id, summary })` when the loop is closed. Reopen a task closed too early with `pm_tasks_uncomplete`, never `pm_tasks_update`. A memory_update that destroyed content is recoverable: `memory_list_versions({ memory_id })` lists the snapshots taken before every PUT or DELETE, and `memory_restore_version({ version_id, reason })` restores one (it works for deleted entries too). Hiveku records the session's Doing in the memory log at its first change, and its Done, counting the changes, when the session goes quiet. When `memory_log_add` is listed, end with a Done line that says what you did, if you want the log to say more than that: `memory_log_add({ phase: "done", department: "<dept>", line, outcome })`, `outcome` ok, failed or stopped, which closes the session's run with your line; leave `thread` out, and a Doing line sent once the session's is recorded answers `already_open`, which is not an error. Each `line` is one plain sentence of at most 160 characters in your own words, never a customer's words, a secret or personal details. Hiveku, not this folder, is the source of truth.
+6. Finish with PM, and with memory only for a person's words. The brief, the task, the pickup and
+   what remains live in Hiveku PM (steps 4 and 5; reopen a task closed too early with
+   `pm_tasks_uncomplete`, never `pm_tasks_update`), never in memory: a card you briefed, picked
+   up or attached is a draft until a person approves it, and a note that it worked would be your
+   own verdict on your own work. If the person said what works or what does not about a design,
+   record their words, quoted, with the design or asset id and the date, in the `branding`
+   memory document per `hiveku-creative-agency/references/memory-protocol.md` -
+   `memory_list({ domain: "branding" })`, merge,
+   `memory_update({ memory_id, content, reason, expected_version })` with the WHOLE body
+   (`memory_create({ type: "memory", name: "branding", content, reason })` only when none exists;
+   409 = exists; if you read that document earlier in the session, check
+   `memory_log_list({ memory_id, since })` first and merge any newer change, and pass `reason`,
+   one line on why). Never write palette, fonts or your own template choices there: the brand
+   guide holds the brand. Hiveku, not this folder, is the source of truth.

@@ -62,7 +62,7 @@ already-soft-deleted guide and refuses anything still active. Both are destructi
 Stop at the first rung that fits; rung 3 where rung 1 fits is paying for imagery the account already owns.
 
 **1. Reuse, import, derive.** `media_library_list`, `media_library_get`, `media_folders_list`,
-`media_collections_list`, and `design_list` for a design to restyle. The account's real photos beat AI
+`media_collections_list`, and `design_list` for a design the person names. The account's real photos beat AI
 every time, and generation costs money. Approved testimonials (`marketing_testimonials_list`) are proof
 the account already owns. A client image at a URL comes in as BYTES with `media_import_url` (the file
 outlives its origin; `media_library_register_external_url` only stores a pointer that dies with it). An
@@ -108,7 +108,8 @@ carousels, thumbnails, banners, ad creative, newsletter headers, one-pagers. `de
 first - 58 templates across 14 sizes, already brand-substituted with the account's brand guide, plus
 artboard presets, each carrying a `canvasData` payload you pipe into `design_create`'s
 `initialCanvasData`; the wide formats are templates now (two 1200x600 email headers, OG 1200x630,
-YouTube 1280x720, LinkedIn banner 1584x396, X header 1500x500), filed under their categories. Then
+YouTube 1280x720, LinkedIn banner 1584x396, X header 1500x500), filed under their categories. Take
+one whose artboard is the destination's size, then
 `design_create({ title, designType, artboard, initialCanvasData, description, tags })` and hand back the
 `dashboardUrl`. A carousel is N sibling designs (`design_list` is the grouping read) or one multi-page
 design whose `canvasData` is `{ pages: [{ id, name, canvasData }] }`, read per page with
@@ -291,8 +292,9 @@ is `references/brand-and-assets.md` Part 4; this is the shape.
 5. One proof artifact from a substituted template, handed back as a `dashboardUrl`.
 Benchmarks: 60/30/10 dominant/secondary/accent; every pairing re-checked at 4.5:1 after a palette swap;
 one restyle pass per design (re-layout is a second, separately confirmed edit).
-Exit: guide id, logo asset ids, restyled design URLs, branding memory updated with palette, type and logo
-rules, `pm_tasks_create` for gaps (missing lockups, font licensing, photo shoot).
+Exit: guide id, logo asset ids, restyled design URLs, the guide updated with the person's yes (palette,
+type and logo rules live there, never in memory), `pm_tasks_create` for gaps (missing lockups, font
+licensing, photo shoot).
 
 ### Play 5: One-shot video ad
 
@@ -350,7 +352,10 @@ Benchmarks: priced at create, billed at approval; one board per brief; voiceover
 Exit: storyboard id in the ledger, the approval card URL, a `pm_tasks_create` reminder when the approver
 is offline. An unapproved board is a deliverable that is not shipping, and that is the client's call.
 
-## 6. Benchmarks (defaults - account memory overrides)
+## 6. Benchmarks (defaults - the brand guide and the person override)
+
+Memory never overrides the colours, fonts or logos: they come only from the account's default brand
+guide. A person's own words about a design, kept in memory with its id, may move a default below.
 
 - Hierarchy: three levels (hook, support, action); demote the competitor, do not enlarge the winner.
 - Margin: 6-8% of the artboard's short edge (64-88px on 1080); one spacing unit, every gap a multiple.
@@ -422,8 +427,10 @@ Do not generate, render, or spend in the onboarding session beyond the one proof
    `references/memory-protocol.md`). `memory_create({ type:
    'memory', name: 'branding', content })` exactly once per account; 409 means it exists, so update.
 2. What goes in, dated, five to ten lines a session: storyboard ids submitted and their state, clips used
-   of 20, voiceover seconds, generations, approved narrator `voice_id`s, palette and type decisions,
-   design ids delivered, open client decisions. No PII, ever.
+   of 20, voiceover seconds, generations, approved narrator `voice_id`s, design ids delivered (drafts
+   until a person approves them), what the person said works or does not (their words, quoted, with
+   the design id), open client decisions. Never your own palette, type or template choices (the brand
+   guide holds the brand), and never your own work as what works. No PII, ever.
 3. Local mirrors (`memory/<dept>/` from `/hiveku:knowledge`; `hiveku-data/creative/` and
    `hiveku-data/media/` from `/hiveku:pull`) are read-only snapshots: write through the tools, then
    re-pull. Mechanics, recovery, and the ledger format: `references/memory-protocol.md`.

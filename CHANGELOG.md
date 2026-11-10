@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.78
+- **Design work no longer saves the assistant's own taste to memory.** The designer's commands used to end by saving "what worked" to the account's memory, so the assistant's own drafts, palettes, fonts and template picks were stored as proven and later read as the brand. Memory now keeps only what a person said about a design, in their words, with the design and the date. The designer's daily brief, weekly pass and monthly report come to you (the reply, a report file or a task), never into memory, and anything the assistant made stays a draft until a person approves or publishes it.
+- **A new design starts from Hiveku's design rules and a template of the destination's size,** and builds on an earlier design only when you name it. A generated picture is never offered as a "before and after": only the business's real photos are.
+
 ## 0.91.77
 - **Content changes that touch your live website ask first.** Your assistant now asks before it saves a post with a scheduled publish time, archives, unpublishes or deletes a post, or takes a post's page off your site. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
 
