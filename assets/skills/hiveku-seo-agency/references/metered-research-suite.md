@@ -30,7 +30,7 @@ Every vendor tool below is LIVE, proxied from the vendor MCP service with no bui
 | `backlinks_*` (20) | LIVE | D, per request; `backlinks_bulk_*` for lists | any domain |
 | `content_analysis_*` (3), `domain_analytics_*` (4), `ai_optimization_*` (2) | LIVE | per request, unclassed in the contract; treat as B | citation index, whois filter query, modeled AI estimate |
 | `business_data_business_listings_search` | LIVE | the class I search; no cooldown on the raw tool | what `seo_citations_audit` spends |
-| `crawl` | LIVE | Firecrawl credits by page count | grouped with the vendor families for profiles (contract 2026-08-30); unverified which flag gates it |
+| `crawl` | LIVE | research credits by page count | grouped with the research families for profiles (contract 2026-08-30); unverified which flag gates it |
 | `seo_research` (about 60 actions) | LIVE | the wrapped endpoint's class | no `project_id`; persists nothing except `aeo-audit` |
 
 Profiles: the vendor families need `includeDataForSEO` (full, marketing, marketing-seo,
@@ -244,7 +244,7 @@ service): read the tool definition, never guess.
 
 | Tool | What it answers | Required args | Batch/limit | Class | Trap |
 |---|---|---|---|---|---|
-| `crawl` | a Firecrawl-backed multi-URL crawl from a start URL, with content | `url`; `limit`, `maxDepth` | credits by page count | Firecrawl, not a DataForSEO class | `web_crawl` is the richer form (`sitemap`, `crawlEntireDomain`, `webhook`, `scrapeOptions`, `wait: false`); prefer it when visible. Neither is the SEO crawl: `seo_audit_start` (class F) is what the deep-dive actions read |
+| `crawl` | a multi-URL web crawl from a start URL, with content | `url`; `limit`, `maxDepth` | credits by page count | monthly research allowance, not a DataForSEO class | `web_crawl` is the richer form (`sitemap`, `crawlEntireDomain`, `webhook`, `scrapeOptions`, `wait: false`); prefer it when visible. Neither is the SEO crawl: `seo_audit_start` (class F) is what the deep-dive actions read |
 
 ## The `seo_research` action catalogue
 

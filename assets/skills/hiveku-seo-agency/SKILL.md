@@ -23,7 +23,7 @@ metered DataForSEO vendor families `backlinks_`, `dataforseo_labs_`, `serp_`,
 - `seo_` is granted on **full**, **marketing** and **marketing-seo** only (both marketing profiles
   also carry `agent_approval_` and `agent_inbox_` to finish the implement rail). The vendor
   families need `includeDataForSEO`: full, marketing, marketing-seo and marketing-ads. Bare `crawl`
-  rides `includeCrawl4AI`, which every non-full profile has.
+  is included on every connection profile.
 - **marketing-seo** = the shared marketing prefixes (`memory_`, `content_`, `pm_`, `workflow_`, `kb_`,
   `knowledge_`, `analytics_`, `room_`, `discussion_`, `marketing_`, `media_`, `survey_`) plus `seo_`,
   `pages_`, `social_`, the whole `cms_` family, `webflow_`, the approval prefixes, and by exact

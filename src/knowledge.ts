@@ -1455,6 +1455,24 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__social_accounts_activate',
   'mcp__hiveku__social_accounts_import_gbp',
   'mcp__hiveku__social_posts_bulk_create',
+  // Discussions wave S4 (2026-11-07, MCP served): asking another workspace to take a channel, cancelling that
+  // request, and a channel's update (it can stop sharing a channel or change who sees it), as in the Claude Code and
+  // Codex plugins. An ask rule names a tool, not its arguments, so every discussion_update asks, as in the Codex
+  // plugin. Appended last.
+  'mcp__hiveku__discussion_channel_share_request',
+  'mcp__hiveku__discussion_channel_share_request_cancel',
+  'mcp__hiveku__discussion_update',
+  // Discussions waves S5 and S5b (2026-11-10, asked before the MCP serves them): making many channels at once, and
+  // every read of the person's own direct messages, group messages and private channels. An ask rule names a tool, not
+  // its arguments, so the bulk make's practice run asks too, as in the Codex plugin (the Claude Code plugin asks only
+  // for the write). The three reads ask on every call: the other people in those conversations never chose to show
+  // them to an AI, and the '*_list' read glob above would otherwise approve discussion_private_list. The private
+  // door's three switches are taken from the Hiveku app's own key alone, so they need no rule. Appended last, in this
+  // order.
+  'mcp__hiveku__discussion_channels_bulk_create',
+  'mcp__hiveku__discussion_private_list',
+  'mcp__hiveku__discussion_private_messages',
+  'mcp__hiveku__discussion_private_search',
 ];
 
 /**

@@ -31,7 +31,7 @@ only place a reply is ever published); or how the brand appears inside AI answer
 | `backlinks_domain_pages_summary`, `backlinks_domain_pages` | LIVE | D | a rival's most-linked pages: the linkable-asset read |
 | `talk_to_department({ domain: 'seo' })` | LIVE | agent turn | angle generation with evidence |
 | `talk_to_department({ domain: 'outbound' })` | LIVE | agent turn | the handoff, never the send |
-| `web_search`, `web_scrape`, `web_extract`, `web_map` | LIVE | Firecrawl credits | verify a mention is live and unlinked; find the author |
+| `web_search`, `web_scrape`, `web_extract`, `web_map` | LIVE | research credits | verify a mention is live and unlinked; find the author |
 | `account_context_get({ domain: 'seo' })` | LIVE | A | brand voice, protected terms, the assets the client actually has |
 | `pm_tasks_create`, `memory_create`, `memory_update`, `memory_list` | LIVE | A | persistence |
 | `seo_sheet_create_tab`, `seo_sheet_add_rows` | LIVE | A | the dated mention and prospect tabs |
