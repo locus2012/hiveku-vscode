@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.77
+- **Content changes that touch your live website ask first.** Your assistant now asks before it saves a post with a scheduled publish time, archives, unpublishes or deletes a post, or takes a post's page off your site. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+
 ## 0.91.76
 - **Discussions asks first where it matters.** Your assistant now asks before each read of your own direct messages, group messages and private channels, before making many channels at once, before asking another workspace to take a channel or taking that request back, and before changing a channel's settings. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
 - **The orient guide teaches Discussions:** which tool does what, what to confirm first, and that your own conversations are read only and on your yes each time.

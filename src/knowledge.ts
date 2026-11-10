@@ -1473,6 +1473,17 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__discussion_private_list',
   'mcp__hiveku__discussion_private_messages',
   'mcp__hiveku__discussion_private_search',
+  // Content Marketing in the Hiveku app (2026-11-08): saving a post (a scheduled publish time it sends queues a public
+  // publish of the page at that time; the save itself never publishes), archiving a post (with remove_from_site its
+  // page leaves the live website) and unpublishing one (its page leaves the live website). With them, two older writes
+  // that took a page off a live site with nobody asked: content_delete with remove_from_site, and
+  // content_unpublish_from_site, whose draft goes out with the site's next deploy. Every call asks, as in the Claude
+  // Code plugin and Codex. Appended last.
+  'mcp__hiveku__content_editor_save',
+  'mcp__hiveku__content_archive',
+  'mcp__hiveku__content_unpublish',
+  'mcp__hiveku__content_delete',
+  'mcp__hiveku__content_unpublish_from_site',
 ];
 
 /**
