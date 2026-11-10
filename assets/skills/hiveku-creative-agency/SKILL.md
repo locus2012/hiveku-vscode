@@ -352,7 +352,10 @@ Benchmarks: priced at create, billed at approval; one board per brief; voiceover
 Exit: storyboard id in the ledger, the approval card URL, a `pm_tasks_create` reminder when the approver
 is offline. An unapproved board is a deliverable that is not shipping, and that is the client's call.
 
-## 6. Benchmarks (defaults - account memory overrides)
+## 6. Benchmarks (defaults - the brand guide and the person override)
+
+Memory never overrides the colours, fonts or logos: they come only from the account's default brand
+guide. A person's own words about a design, kept in memory with its id, may move a default below.
 
 - Hierarchy: three levels (hook, support, action); demote the competitor, do not enlarge the winner.
 - Margin: 6-8% of the artboard's short edge (64-88px on 1080); one spacing unit, every gap a multiple.

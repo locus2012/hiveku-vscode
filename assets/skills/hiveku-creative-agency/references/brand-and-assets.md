@@ -161,8 +161,8 @@ Order of preference:
 
 1. **The library.** `media_library_list`, `media_collections_list`, `media_folders_list` first, every time. Keyword search, then browse the folder you would have filed it in. The most common cause of a duplicate generation is not looking.
 2. **The client.** Real-world subject, no shot on file: ask. A photo from the client's phone outperforms a generated one and costs nothing.
-3. **Stock**, via `stock_photos_search` plus registration, for generic context - backgrounds, textures, anything with no brand specificity.
-4. **Generation**, for concepts, illustrations, and composites that cannot be photographed. That is where `generate_image` earns its cost.
+3. **Stock**, via `stock_photos_search` plus registration, only for a real subject the business has no photo of yet (a product type, a tool, a place it serves), never in place of its own work, people or customers. Decoration is never the design: no stock background, texture or mood photo under a big headline. A plain brand colour behind real words is fine.
+4. **Generation**, last, where `generate_image` earns its cost: to restage or extend one of the business's real photos (`mode: 'modify'`, below), or to show something real that cannot be photographed. A generated picture never invents a customer, a result, a team, a place or a "before".
 
 Three more levers before a from-scratch generation: a real photo at the wrong size or format is a free `media_transform` (a new row, the source untouched), a still can be animated rather than re-shot (`marketing_generate_video` takes an existing asset as `reference_media_asset_id`, and the design canvas animates a still per layer at no generation cost at all), and a real photo can be modified rather than replaced (`generate_image` with `mode: 'modify'` and `reference_media_asset_ids` restages or relights the client's actual product instead of inventing a lookalike). `media_upscale` sits after all of these: it is the only derivation that spends.
 
