@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.78
+- **Folders set up before 0.91.76 can read your direct messages.** Such a folder kept naming the release that set it up in its Claude Code connection, so Hiveku refused your assistant's reads of your own direct messages there, even after the update added their ask rules. Now, on the folder's next start, once it holds every ask rule, the extension updates that one value in the connection and leaves the rest of the file as it was.
+- **A folder tells Hiveku your assistant asks first only when its ask rules are really there.** Hiveku: Set Claude Code Account now adds the ask rules to the folder before it connects Claude Code, also in a folder Hiveku never set up. When the rules cannot be written there, or setting up a folder could not write its settings, the connection no longer says so: Hiveku then refuses reads of your direct messages from that folder, and revealing a secret waits for an approval on the dashboard.
+
 ## 0.91.77
 - **Content changes that touch your live website ask first.** Your assistant now asks before it saves a post with a scheduled publish time, archives, unpublishes or deletes a post, or takes a post's page off your site. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
 
