@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.91.77
+- **Content changes that touch your live website ask first.** Your assistant now asks before it saves a post with a scheduled publish time, archives, unpublishes or deletes a post, or takes a post's page off your site. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+
+## 0.91.76
+- **Discussions asks first where it matters.** Your assistant now asks before each read of your own direct messages, group messages and private channels, before making many channels at once, before asking another workspace to take a channel or taking that request back, and before changing a channel's settings. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+- **The orient guide teaches Discussions:** which tool does what, what to confirm first, and that your own conversations are read only and on your yes each time.
+
+## 0.91.75
+- **Downloading department data works in folders the Hiveku app looks after.** The app now names its local connection in each account folder's settings instead of a fixed address, and the data downloader read that setting as plain text, so it could not connect. It now reads the address the way the app writes it, and the local automations setup no longer copies it into its own settings. A downloader already in a folder is replaced the next time you download data there.
+
 ## 0.91.74
 - **Publishing and bulk social changes ask first.** Your assistant now asks before it publishes a post at once, approves a held post, changes many posts at once, disconnects a social account, turns connected accounts on, brings in Google Business locations, or writes many drafts in one call. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
 

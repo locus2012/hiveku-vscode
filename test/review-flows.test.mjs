@@ -879,7 +879,7 @@ describe('what the extension writes and wires', () => {
       'the department agents\' approval asks stay after the S5a analytics and form capture asks, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__social_post_publish_now',\n" +
           "  'mcp__hiveku__social_post_approve',\n" +
           "  'mcp__hiveku__social_posts_bulk',\n" +
@@ -888,7 +888,38 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__social_accounts_import_gbp',\n" +
           "  'mcp__hiveku__social_posts_bulk_create',",
       ),
-      'the newest ask rules, the Social Marketing publishing and bulk draft asks, go at the END',
+      'the Social Marketing publishing and bulk draft asks stay after the department agents\' approval asks, in this order',
+    );
+    assert.ok(
+      ask.includes(
+        "  'mcp__hiveku__discussion_channel_share_request',\n" +
+          "  'mcp__hiveku__discussion_channel_share_request_cancel',\n" +
+          "  'mcp__hiveku__discussion_update',\n",
+      ),
+      'Discussions wave S4\'s asks are listed together, in this order',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__social_posts_bulk_create'") < ask.indexOf("'mcp__hiveku__discussion_channel_share_request'"),
+      'Discussions wave S4\'s asks come after the Social Marketing asks',
+    );
+    assert.ok(
+      ask.includes(
+        "  'mcp__hiveku__discussion_channels_bulk_create',\n" +
+          "  'mcp__hiveku__discussion_private_list',\n" +
+          "  'mcp__hiveku__discussion_private_messages',\n" +
+          "  'mcp__hiveku__discussion_private_search',",
+      ),
+      'making many channels and the person\'s own direct messages (waves S5 and S5b) stay before the Content Marketing asks, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__content_editor_save',\n" +
+          "  'mcp__hiveku__content_archive',\n" +
+          "  'mcp__hiveku__content_unpublish',\n" +
+          "  'mcp__hiveku__content_delete',\n" +
+          "  'mcp__hiveku__content_unpublish_from_site',",
+      ),
+      'the newest ask rules, the Content Marketing asks, go at the END',
     );
   });
 

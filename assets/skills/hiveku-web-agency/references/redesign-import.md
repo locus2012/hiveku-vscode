@@ -8,7 +8,7 @@ in code. It is strictly ordered and step 1 is a precondition, not a finish line.
 1. `redesign_homepage_approve({ project_id })` - call exactly ONCE, after the user confirms
    the homepage looks right. Until this is set, `redesign_start` refuses with 409 "Homepage
    not approved". It unlocks the rest of the workflow; it does not publish anything.
-2. `redesign_start({ project_id, sourceUrl })` - runs Firecrawl `/map` on the source site
+2. `redesign_start({ project_id, sourceUrl })` - maps the source site to discover its pages
    and returns `{ session: { id, status, total_pages }, pages: [{ id, source_url, path,
    slug, title, screenshot_url }] }`. Keep the session id and the page ids.
 3. `redesign_select_pages({ project_id, sessionId, pageIds })` - REPLACES the selection with

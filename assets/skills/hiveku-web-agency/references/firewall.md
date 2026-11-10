@@ -45,7 +45,7 @@ Which Hiveku tools reach the edge, and how:
 - `preview_http_get` hits localhost inside the preview container (a branch preview is fetched
   from Hiveku's servers by its preview address); it never reaches the edge.
 - `web_scrape`, `web_crawl`, `web_extract`, `web_actions` and the screenshot pipeline go through
-  Firecrawl's hosted browsers at third-party addresses, so the edge treats them like any other
+  hosted browsers at third-party addresses, so the edge treats them like any other
   automated client. A format that drives a real browser (a screenshot, `web_actions`, or
   `waitFor` on `web_scrape`) runs the JavaScript and passes the challenge; a plain-fetch format
   (`markdown`, `html`, `rawHtml` or `links` with no `waitFor`) on a Hiveku-hosted site can come
@@ -208,7 +208,7 @@ directly. If the tools are not on your key yet, say so and hand the user the pat
 identify themselves with a user agent containing `Hiveku` and come from Hiveku's exempt
 addresses. If one of those direct fetchers says it was challenged or blocked as an automated
 client, that is a defect in the fetcher (its user agent or its egress address), not something to
-fix with an allowance; report it. The Firecrawl-backed tools are the exception: a
+fix with an allowance; report it. The hosted-browser web tools (`web_scrape`, `web_crawl`, `web_extract`, `web_actions`) are the exception: a
 `bot_challenge` from `web_scrape` on a Hiveku-hosted site is the edge doing its job to a
 third-party browser fleet, and the fix is a rendering format or `fetch_url` (above), not a report
 and not an allowance. Never ask for a customer's monitor to be added to Hiveku's own exempt
