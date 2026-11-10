@@ -34,12 +34,12 @@ before(async () => {
 });
 after(() => server.close());
 
-async function keylessFolder() {
+async function keylessFolder(url = endpoint) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hvk-keyless-'));
   await dr.writeDataRunner(dir);
   await fs.writeFile(
     path.join(dir, '.mcp.json'),
-    JSON.stringify({ mcpServers: { hiveku: { url: endpoint, headers: { Authorization: PLACEHOLDER } } } }),
+    JSON.stringify({ mcpServers: { hiveku: { url, headers: { Authorization: PLACEHOLDER } } } }),
   );
   return dir;
 }
@@ -56,8 +56,12 @@ function run(dir, env) {
 const withoutKey = () => {
   const env = { ...process.env };
   delete env.HIVEKU_TOKEN;
+  delete env.HIVEKU_MCP_URL;
   return env;
 };
+
+/** The address as the Hiveku app's folders name it since its key relay (desktop HK-1387). */
+const APP_ADDRESS = '${HIVEKU_MCP_URL:-https://core.hiveku.com/mcp}';
 
 describe('a folder that names its key instead of holding it', () => {
   test('the runner sends the key the environment holds', async () => {
@@ -65,6 +69,21 @@ describe('a folder that names its key instead of holding it', () => {
     auths = [];
     await run(dir, { ...withoutKey(), HIVEKU_TOKEN: 'hvk_from_the_app' });
     assert.ok(auths.length > 0, 'the runner sent nothing');
+    assert.deepEqual([...new Set(auths)], ['Bearer hvk_from_the_app']);
+  });
+
+  test('the runner reaches the address the environment names, as the Hiveku app’s relay', async () => {
+    const dir = await keylessFolder(APP_ADDRESS);
+    auths = [];
+    await run(dir, { ...withoutKey(), HIVEKU_MCP_URL: endpoint, HIVEKU_TOKEN: 'hkr_pass_from_the_app' });
+    assert.ok(auths.length > 0, 'the runner sent nothing');
+    assert.deepEqual([...new Set(auths)], ['Bearer hkr_pass_from_the_app']);
+  });
+
+  test('the runner takes the address after :- when the variable is not set', async () => {
+    const dir = await keylessFolder(`\${HIVEKU_TEST_NO_SUCH_ADDRESS:-${endpoint}}`);
+    auths = [];
+    await run(dir, { ...withoutKey(), HIVEKU_TOKEN: 'hvk_from_the_app' });
     assert.deepEqual([...new Set(auths)], ['Bearer hvk_from_the_app']);
   });
 
@@ -88,6 +107,18 @@ describe('a folder that names its key instead of holding it', () => {
     const keylessEnv = await fs.readFile(path.join(keyless, 'automations', '.env'), 'utf8');
     assert.match(keylessEnv, /^HIVEKU_MCP_KEY=$/m);
     assert.doesNotMatch(keylessEnv, /HIVEKU_TOKEN/);
+
+    // An address named by its variable is not copied either: the .env keeps Hiveku's own.
+    const relayed = await fs.mkdtemp(path.join(os.tmpdir(), 'hvk-relayed-auto-'));
+    await fs.writeFile(
+      path.join(relayed, '.mcp.json'),
+      JSON.stringify({ mcpServers: { hiveku: { url: APP_ADDRESS, headers: { Authorization: PLACEHOLDER } } } }),
+    );
+    await la.scaffoldLocalAutomations(relayed);
+    assert.match(
+      await fs.readFile(path.join(relayed, 'automations', '.env'), 'utf8'),
+      /^HIVEKU_MCP_URL=https:\/\/core\.hiveku\.com\/mcp$/m,
+    );
 
     const keyed = await fs.mkdtemp(path.join(os.tmpdir(), 'hvk-keyed-auto-'));
     await fs.writeFile(

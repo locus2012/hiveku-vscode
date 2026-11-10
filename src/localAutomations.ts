@@ -695,7 +695,9 @@ export async function scaffoldLocalAutomations(baseDir: string): Promise<string[
   try {
     const mcp = JSON.parse(await fs.readFile(path.join(baseDir, '.mcp.json'), 'utf8'));
     const h = mcp?.mcpServers?.hiveku;
-    if (h?.url) hivekuUrl = h.url;
+    // A folder the Hiveku app manages names its address by variable too (${HIVEKU_MCP_URL:-...}): the workers take the
+    // address a Hiveku terminal gives them, and the .env keeps Hiveku's own for anywhere else.
+    if (h?.url && !h.url.includes('${')) hivekuUrl = h.url;
     const auth = h?.headers?.Authorization as string | undefined;
     // A folder the Hiveku app manages names the key's variable instead (Bearer ${HIVEKU_TOKEN}): nothing to copy, and
     // the workers take the key a Hiveku terminal gives them.
