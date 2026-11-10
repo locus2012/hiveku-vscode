@@ -157,12 +157,12 @@ That is your problem the moment a collection has a `routePattern`, because a col
 
 ### What is blocked, and why
 
-- **Never DELETE or UPDATE without a WHERE clause.** Blocked.
-- **Never DROP anything.** Blocked: `DROP DATABASE`, `DROP SCHEMA`, `DROP TABLE`, `DROP INDEX`, `DROP TRIGGER`, `DROP FUNCTION`, `DROP VIEW`.
-- Also blocked: `ALTER TABLE DROP`, `ALTER TABLE RENAME`, `CREATE/DROP/ALTER ROLE`, `GRANT ALL`, `REVOKE`.
-- `database_query` is **read-only SELECT, capped at 100 rows**. `database_execute` **DELETE is capped at 50 rows**.
+- **Never DELETE or UPDATE without a WHERE clause.** It is NOT refused: such a statement runs and changes every row of the table. Name the rows with a `WHERE`, and count them first with `database_query`.
+- **Never DROP anything.** Refused before anything runs (`database_execute` answers `blocked_statement`, and nothing in the SQL runs): `DROP DATABASE`, `DROP SCHEMA`, `DROP TABLE`, `DROP INDEX`, `DROP TRIGGER`, `DROP FUNCTION`, `DROP VIEW`. `DROP POLICY` and dropping a constraint are not refused.
+- Also refused: `TRUNCATE`, an `ALTER TABLE` that drops a column or renames the table or a column, turning row level security off, `CREATE/DROP/ALTER ROLE`, `GRANT ALL`, `REVOKE`.
+- **There is no row cap.** `database_execute` changes every row a statement matches, however many. `database_query` only reads (each query runs in a read-only transaction that is rolled back), and nothing caps it at 100 rows.
 
-Enforced, not advisory: production data cannot be destroyed by an agent that misread a schema. Past 100 rows, paginate with an `ORDER BY` and a stated reason. The blocked `ALTER TABLE RENAME` is the same two-writer problem as renaming a collection id: the table moves, the code reading it does not, nothing reports the break. Add the new column, migrate, drop nothing.
+The refusals guard against accidents; they do not stop every loss, because a statement they do not name runs as written. The safety of a write is your `WHERE` clause, your count and the person's yes. For a large read, paginate with an `ORDER BY` and a `LIMIT`. The blocked `ALTER TABLE RENAME` is the same two-writer problem as renaming a collection id: the table moves, the code reading it does not, nothing reports the break. Add the new column, migrate, drop nothing.
 
 ### RLS is mandatory, and a policy-less RLS table returns zero rows
 
