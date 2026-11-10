@@ -125,9 +125,11 @@ await checkAsync('.hiveku/pull-data.mjs bakes HivekuDataRunner/<version> in and 
   assert.ok(agent, m[1]);
   assert.equal(agent[1], 'HivekuDataRunner');
   assert.equal(agent[2], pkg.version);
-  assert.equal(dr.RUNNER_VERSION, 7);
+  assert.equal(dr.RUNNER_VERSION, 8);
   // v7: a key a folder names by its variable (Bearer ${HIVEKU_TOKEN}, the desktop app's keyless folders) is read from the environment.
+  // v8: so is the address (${HIVEKU_MCP_URL:-https://core.hiveku.com/mcp}, the desktop app's key relay, HK-1387).
   assert.match(runner, /process\.env\[name\]/);
+  assert.match(runner, /const ENDPOINT = expand\(mcp\.url\);/);
   assert.match(runner, /'Content-Encoding': 'gzip'/);
   assert.match(runner, /body: hivekuGzipBody\(/);
   assert.match(runner, /const refused = hivekuEdgeRefusal\(res, text\);/);
