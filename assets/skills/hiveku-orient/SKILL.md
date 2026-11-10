@@ -202,7 +202,7 @@ the memory_* tools.
   site and not a failed deploy. Say "the edge firewall refused this client", then identify and
   retry before reporting. `fetch_url` runs from Hiveku's own servers as `Hiveku-Agent/1.0` and
   is exempt; a WebFetch or a bare GET from this machine is not. `web_scrape` and the other
-  Firecrawl-backed web tools run from third-party browsers: a rendering format (a screenshot,
+  hosted-browser web tools (`web_crawl`, `web_extract`, `web_actions`) run from third-party browsers: a rendering format (a screenshot,
   `web_actions`, `waitFor`) passes the challenge, and a plain-fetch format on a Hiveku-hosted
   site can answer `scrape_failed` with `reason: 'bot_challenge'` and a 202 or 403 - switch
   format or use `fetch_url`, do not report a fetcher defect. A customer's own monitor or audit
@@ -667,6 +667,56 @@ every key has, on every profile: `web_search` (search with optional inline scrap
 and `fetch_url` (fetch one public URL - SSRF-safe, body capped at 200KB, sets `truncated`; it runs
 from Hiveku's servers, so it passes the edge firewall that refuses a bare GET from your
 terminal) for live-web research, and `audit_query` for what-happened-on-this-account questions.
+
+## Discussions - the team's chat
+
+Discussions is the workspace's team chat: its channels, the threads in them, and each person's own
+direct messages, group messages and private channels. Everything you do there is done as the person
+who connected you, under their name and with their role. On a full key, read the `team-discussions`
+playbook before the first step: `hiveku_playbook_get({ playbook: "team-discussions" })`. On a scoped
+key, which cannot see playbooks, this section carries its rules.
+
+- **Which tool for what.** Find a channel with `discussion_list` (or `discussion_channels_browse`,
+  joined or not), read it with `discussion_messages_list` (a thread: `parent` set to the message that
+  started it), and search what was said with `discussion_search`. A teammate's id and name come from
+  `discussion_team_members`. Post in a channel, or reply in a thread with `parent_message_id`:
+  `discussion_reply`. Make one channel: `discussion_create`. Make many at once:
+  `discussion_channels_bulk_create`. Add someone: `discussion_participant_add`. Ask another
+  workspace to take a channel: `discussion_channel_share_request`, after
+  `discussion_channel_sharing_get` says which workspaces the person may ask.
+- **Confirm before anything others will see, or that makes something.** Say what you will post and
+  where, the channel's name, who you will add, or which workspace you will ask, and act only on the
+  person's yes. Words you post are theirs: write as they would. Reading and searching channels needs
+  no yes.
+- **Many channels: the practice run first.** `discussion_channels_bulk_create` makes nothing unless
+  `dry_run` is `false`. Send the list without it first, and show the person what it would make (each
+  channel's visibility, so they see what will be public), what it skips and why, and how many more
+  the workspace may make today. Send the same list with `dry_run: false` only on their yes; Hiveku
+  asks before that write too. At most 100 a call and 1,000 a day for a workspace. Only ordinary
+  channels, public or account only: a channel meant to be private, or a direct or group message, is
+  left out (its people start it in the Hiveku app) and never sent again as an ordinary one. No
+  automation starts and nobody added is told. If no answer comes back, read the channels with
+  `discussion_list` before you send it again.
+- **The person's own direct messages, group messages and private channels: read only, and only on
+  their yes.** The channel tools never see them. `discussion_private_list`,
+  `discussion_private_messages` and `discussion_private_search` read only the conversations the
+  person is in, and only on a connection they turned that on for, in a workspace that allows it.
+  Ask before each read, every time: say what you will read, and read only that. Hiveku asks too,
+  whatever the settings allow. What you read stays with the person: never post it, save it to
+  Memory, or put it in a task, an email or a document unless they ask for exactly that. No tool can
+  send, reply, react or start one there. On 403 `private_reads_off`, say this connection cannot
+  read their direct messages and that they can turn that on for it under Settings > API &
+  Connectors; on 403 `workspace_private_reads_off`, say their workspace's owner has turned off AI
+  access to private conversations.
+- **Only the person does these, in the Hiveku app:** sharing a channel straight into a workspace
+  they run, accepting or declining a request to take a channel, and anything in their direct
+  messages, group messages and private channels but reading their own. You have no tool for them:
+  say so, and point them to the app.
+- **A tool named here that is not among your tools** has not reached your connection yet: say so
+  plainly. If making many channels at once has not, never make them one at a time instead without
+  telling the person first what that changes: each channel `discussion_create` makes starts the
+  workspace's "discussion created" automations, and each person `discussion_participant_add` adds
+  gets a line in the channel saying so.
 
 ## When Hiveku itself gets in your way
 
