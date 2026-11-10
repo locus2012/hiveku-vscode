@@ -912,14 +912,47 @@ describe('what the extension writes and wires', () => {
       'making many channels and the person\'s own direct messages (waves S5 and S5b) stay before the Content Marketing asks, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__content_editor_save',\n" +
           "  'mcp__hiveku__content_archive',\n" +
           "  'mcp__hiveku__content_unpublish',\n" +
           "  'mcp__hiveku__content_delete',\n" +
           "  'mcp__hiveku__content_unpublish_from_site',",
       ),
-      'the newest ask rules, the Content Marketing asks, go at the END',
+      'the Content Marketing asks stay before the database and storage asks, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__database_execute',\n" +
+          "  'mcp__hiveku__supabase_migration_apply',\n" +
+          "  'mcp__hiveku__supabase_table_row_insert',\n" +
+          "  'mcp__hiveku__supabase_table_row_update',\n" +
+          "  'mcp__hiveku__supabase_table_row_delete',\n" +
+          "  'mcp__hiveku__supabase_policy_create',\n" +
+          "  'mcp__hiveku__supabase_policy_update',\n" +
+          "  'mcp__hiveku__supabase_policy_delete',\n" +
+          "  'mcp__hiveku__supabase_auth_user_create',\n" +
+          "  'mcp__hiveku__supabase_auth_user_update',\n" +
+          "  'mcp__hiveku__supabase_auth_user_delete',\n" +
+          "  'mcp__hiveku__supabase_auth_user_generate_link',\n" +
+          "  'mcp__hiveku__supabase_auth_config_update',\n" +
+          "  'mcp__hiveku__supabase_sync_redirect_urls',\n" +
+          "  'mcp__hiveku__supabase_configure_oauth',\n" +
+          "  'mcp__hiveku__supabase_configure_smtp',\n" +
+          "  'mcp__hiveku__supabase_configure_hiveku_smtp',\n" +
+          "  'mcp__hiveku__supabase_storage_create',\n" +
+          "  'mcp__hiveku__supabase_storage_delete',\n" +
+          "  'mcp__hiveku__supabase_storage_empty',\n" +
+          "  'mcp__hiveku__supabase_storage_object_upload',\n" +
+          "  'mcp__hiveku__supabase_storage_object_move',\n" +
+          "  'mcp__hiveku__supabase_storage_object_copy',\n" +
+          "  'mcp__hiveku__supabase_storage_object_delete',\n" +
+          "  'mcp__hiveku__supabase_edge_functions_deploy',\n" +
+          "  'mcp__hiveku__supabase_edge_functions_delete',\n" +
+          "  'mcp__hiveku__supabase_edge_functions_invoke',\n" +
+          "  'mcp__hiveku__supabase_edge_functions_set_secrets',",
+      ),
+      'the newest ask rules, the database and storage asks, go at the END',
     );
   });
 

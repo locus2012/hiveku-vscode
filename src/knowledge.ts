@@ -1484,6 +1484,39 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__content_unpublish',
   'mcp__hiveku__content_delete',
   'mcp__hiveku__content_unpublish_from_site',
+  // The site's database, and its app's sign-in, file storage, row security and server functions (2026-11-10): SQL
+  // and migrations that change any number of rows, row and policy writes and deletes, user accounts and sign-in
+  // links, sign-in settings, buckets and files, and server functions deployed, deleted, run or given secrets. None
+  // was on this list, so in a folder whose settings allow them they ran with nobody asked. Every call asks, as in
+  // the Claude Code plugin and Codex. Their reads are not here. Appended last.
+  'mcp__hiveku__database_execute',
+  'mcp__hiveku__supabase_migration_apply',
+  'mcp__hiveku__supabase_table_row_insert',
+  'mcp__hiveku__supabase_table_row_update',
+  'mcp__hiveku__supabase_table_row_delete',
+  'mcp__hiveku__supabase_policy_create',
+  'mcp__hiveku__supabase_policy_update',
+  'mcp__hiveku__supabase_policy_delete',
+  'mcp__hiveku__supabase_auth_user_create',
+  'mcp__hiveku__supabase_auth_user_update',
+  'mcp__hiveku__supabase_auth_user_delete',
+  'mcp__hiveku__supabase_auth_user_generate_link',
+  'mcp__hiveku__supabase_auth_config_update',
+  'mcp__hiveku__supabase_sync_redirect_urls',
+  'mcp__hiveku__supabase_configure_oauth',
+  'mcp__hiveku__supabase_configure_smtp',
+  'mcp__hiveku__supabase_configure_hiveku_smtp',
+  'mcp__hiveku__supabase_storage_create',
+  'mcp__hiveku__supabase_storage_delete',
+  'mcp__hiveku__supabase_storage_empty',
+  'mcp__hiveku__supabase_storage_object_upload',
+  'mcp__hiveku__supabase_storage_object_move',
+  'mcp__hiveku__supabase_storage_object_copy',
+  'mcp__hiveku__supabase_storage_object_delete',
+  'mcp__hiveku__supabase_edge_functions_deploy',
+  'mcp__hiveku__supabase_edge_functions_delete',
+  'mcp__hiveku__supabase_edge_functions_invoke',
+  'mcp__hiveku__supabase_edge_functions_set_secrets',
 ];
 
 /**
