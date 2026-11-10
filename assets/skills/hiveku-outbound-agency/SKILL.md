@@ -331,7 +331,7 @@ underneath it.
      spend with the user first. (`seo_` + DataForSEO: marketing/full keys only.)
  - Third-party vendors/enrichment: same preflight -> bulk-create pipeline. A lead without a
      personalization hook is a spray-and-pray lead; hold it back.
-3. **Hooks are researched, not remembered.** `web_search` (Firecrawl-backed, optional inline
+3. **Hooks are researched, not remembered.** `web_search` (with optional inline
    scraping) + `fetch_url` (SSRF-safe, 200KB cap) - both always available. A hook must quote
    something you actually fetched this session; a "recent funding" line from model memory is a
    fabrication risk in the first line of a cold email.

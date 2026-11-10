@@ -62,7 +62,7 @@ same artifact. `queries` is at most 5 strings of 200 characters (default: the ta
 the title); `location_code` 2840 | 2826 | 2124 | 2036 | 2372 | 2554, anything else falls back to
 the account market with a warning; `location_name` wins when given.
 
-**What it spends, say so before calling:** Firecrawl search credits (one search per query, pages
+**What it spends, say so before calling:** web search and page-read credits (one search per query, pages
 fetched inline), one DataForSEO SERP call unless the brief is fresh or `include_serp` is false,
 OpenAI embeddings per indexed page and for the brief, one model completion for the extraction.
 The run is synchronous inside the request (up to 300 s): call with a 240 s or longer client
