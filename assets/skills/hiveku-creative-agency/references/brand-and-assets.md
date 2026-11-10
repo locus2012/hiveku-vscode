@@ -89,7 +89,7 @@ The first hour on a new account. Nothing downstream is worth doing until this is
 
 **7 - Build one artifact as proof.** Pipe one substituted template's `canvasData` into `design_create` and hand back the `dashboardUrl`. It is immediately editable there, which is the point: the client sees the system applied and can push on it while it is cheap to change.
 
-**8 - Capture the avatars and the proof grids** (Part 5), then **record the decisions**: palette, type, logo rules, and reasoning into the `branding` memory document via the read-merge-write in `references/memory-protocol.md` (a bare `memory_create` on an account with history 409s, or worse, forks the document); follow-up work (missing lockups, photo shoot, font licensing) as `pm_tasks_create` items, not a line in a chat message.
+**8 - Capture the avatars and the proof grids** (Part 5), then **record what the person said**: their reasons for the palette, type and logo choices, in their words, into the `branding` memory document via the read-merge-write in `references/memory-protocol.md` (a bare `memory_create` on an account with history 409s, or worse, forks the document). The values themselves live only in the guide (step 5): a note that repeats them can later disagree with it. Follow-up work (missing lockups, photo shoot, font licensing) goes in as `pm_tasks_create` items, not a line in a chat message.
 
 ---
 

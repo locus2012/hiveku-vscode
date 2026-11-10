@@ -41,6 +41,31 @@ const PERSIST_STEP =
   'and merge. Then reflect the work in Hiveku PM — `pm_tasks_create`/`pm_tasks_update`/`pm_tasks_complete`. ' +
   'Hiveku, not this folder, is the source of truth.';
 
+/**
+ * The designer commands' closer (Hiveku's design rules, 2026-11-10). On design
+ * work the generic "persist notable learnings" became an agent saving its own
+ * drafts, palette and template picks to the branding memory as what works, and
+ * later sessions read those notes as proven and as brand values. Design memory
+ * holds a person's words about a design; colours, fonts and logos live in the
+ * brand guide. The Claude Code plugin's /hiveku:design ends the same way.
+ */
+const DESIGN_PERSIST_STEP =
+  'Finish with memory and PM. If the person said what works or what does not, record their words, quoted, ' +
+  "with the design's id and the date, in the `branding` memory document: read it " +
+  '(`memory_list({ domain: "branding" })`), merge into the full text, and send the whole document with ' +
+  '`memory_update({ memory_id, content, reason, expected_version })`. ' +
+  MEMORY_EDIT_RULES_PROSE +
+  ' Only when there is none, `memory_create({ type: "memory", name: "branding", content, reason })`; a 409 ' +
+  'there means one exists, so read and merge. Never write your own palette, font or template choices there ' +
+  '(the brand guide holds the brand), and never your own design as what works: it is a draft until the ' +
+  'person says so. Then reflect the work in Hiveku PM: `pm_tasks_create`/`pm_tasks_update`/`pm_tasks_complete`. ' +
+  'Hiveku, not this folder, is the source of truth.';
+
+/** Where Hiveku's design rules come from; the same line as the plugin's /hiveku:design. */
+const DESIGN_RULES_POINTER =
+  "Hiveku's design rules come first: `account_context_get` returns them in `platform_rules`. They apply to " +
+  'every account and outrank its memory, so follow them in every step below.';
+
 function dailyCommand(role: Role): string {
   const signals = role.briefTools;
   const domain = role.knowledgeDomains[0] ?? 'marketing';
@@ -839,7 +864,7 @@ domain; there is no "creative" chat domain).
    playbook is \`hiveku-data/creative/SETUP.md\`).
 6. Rank the queue: failed video runs and unresolved client revisions first, then approvals blocking a
    video run, then new briefs, then brand foundation. One next action per item.
-7. ${PERSIST_STEP}
+7. ${DESIGN_PERSIST_STEP}
 `,
         'hiveku-design-produce': `---
 description: Produce a design deliverable from a brief - brand first, reuse and transform first, the meter before any batch, editable layered designs with dashboard links, self-judged, then handed to the post.
@@ -847,6 +872,7 @@ argument-hint: "[campaign brief]"
 ---
 Produce: $ARGUMENTS. Brand FIRST: \`account_context_get({ domain: "branding" })\` + \`brand_guide_get\` -
 colors, fonts, logo URLs and voice come from there, never from a previous account.
+${DESIGN_RULES_POINTER}
 1. Reuse first: \`media_library_list\` (the client's real photos beat generated ones) and
    \`stock_photos_search\` before generating anything. An owned asset at the wrong size or crop is a
    \`media_transform({ asset_id, resize | crop | format })\` (free, a NEW row); a client's or stock URL that
@@ -858,7 +884,9 @@ colors, fonts, logo URLs and voice come from there, never from a previous accoun
    report \`brand_applied\` / \`brand_skipped_reason\`, and a 503 \`brand_unavailable\` spent nothing.
 3. One shared direction for the whole set via \`talk_to_department({ domain: "branding", message })\`, then
    \`design_templates_list\` (brand-substituted starting points, including the 1200x600 email headers,
-   the 1200x630 OG card, 1280x720 YouTube, 1584x396 LinkedIn and 1500x500 X formats) →
+   the 1200x630 OG card, 1280x720 YouTube, 1584x396 LinkedIn and 1500x500 X formats): take one whose
+   artboard is the destination's size, then replace its words and pictures with this business's true
+   story. Start from an earlier design (\`design_list\`) only when the person names it. Then
    \`design_create({ title, designType, artboard, initialCanvasData })\` per artboard / variant. Text and
    logos are canvas LAYERS; never generate them into an image.
 4. Self-judge before hand-off: \`design_export_image({ id, canvas_json, width, height })\` → read
@@ -874,7 +902,7 @@ colors, fonts, logo URLs and voice come from there, never from a previous accoun
    media_types })\` (index-aligned, one MIME per entry, replaces the post's whole media list; a
    published post is edit-locked) or on \`social_create_post\` at create time, under the social lane's own
    confirm rules; site slots go through \`assets_upload\` (a separate store: download + re-upload).
-7. ${PERSIST_STEP}
+7. ${DESIGN_PERSIST_STEP}
 `,
       };
     default:
