@@ -1,7 +1,10 @@
 # Changelog
 
-## 0.91.81
+## 0.91.82
 - **Bringing your team's chat history over asks first.** Your assistant now asks before it starts uploading a chat history export (it holds your whole company's messages and your people's names and emails), before it brings up to 500,000 messages into new channels your whole team can read, before it stops an import (before the import runs, that deletes the uploaded file), and before it takes out everything an import brought, which cannot be undone. Reading an import, finishing its upload and matching its people do not ask. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+
+## 0.91.81
+- **Setting the help desk away message asks first.** Your assistant now asks before it turns the help desk away message on or off, or changes its window or words. While it is on, every customer who emails in gets it automatically. Reading the away message does not ask. A folder set up earlier gains the new ask rule on its next start, after the ones it has.
 
 ## 0.91.80
 - **Changes to a site's own database and Supabase project ask first.** Your assistant now asks before it runs SQL that can write, sets up or repairs a site's database, applies a migration, or writes or deletes any Supabase row, policy, sign-in user, sign-in setting, storage file or edge function. It also asks before it emails a sign-in link, calls an edge function, or makes a link to a private file. Reading a site's tables, users and settings does not ask. A folder set up earlier gains the new ask rules on its next start, after the ones it has.

@@ -953,13 +953,13 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__supabase_edge_functions_deploy',\n" +
           "  'mcp__hiveku__supabase_edge_functions_delete',\n" +
           "  'mcp__hiveku__supabase_edge_functions_invoke',\n" +
-          "  'mcp__hiveku__supabase_edge_functions_set_secrets',",
+          "  'mcp__hiveku__supabase_edge_functions_set_secrets',\n",
       ),
-      'the database and storage asks stay together, in this order',
+      'the database and storage asks are listed together, in this order',
     );
     assert.ok(
-      ask.indexOf("'mcp__hiveku__supabase_edge_functions_set_secrets'") < ask.indexOf("'mcp__hiveku__discussion_import_start'"),
-      'the chat history import asks come after the database and storage asks',
+      ask.indexOf("'mcp__hiveku__helpdesk_away_reply_set'") < ask.indexOf("'mcp__hiveku__discussion_import_start'"),
+      'the chat history import asks come after the help desk away message',
     );
     assert.ok(
       ask.trimEnd().endsWith(

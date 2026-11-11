@@ -1547,7 +1547,12 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__supabase_edge_functions_delete',
   'mcp__hiveku__supabase_edge_functions_invoke',
   'mcp__hiveku__supabase_edge_functions_set_secrets',
-  // Discussions wave S5c (2026-11-11, asked before the MCP serves them): bringing a team's chat history over from a
+  // The help desk away message (2026-11-11, HK-1504; asked before the MCP serves it): while its window is on, every
+  // customer who emails in gets it automatically instead of the usual confirmation, and a customer who replies gets it
+  // once per conversation. Its description says ASK THE PERSON FIRST; no read glob above matches it, and this makes it
+  // ask in every mode, as in the Claude Code and Codex plugins. Appended last.
+  'mcp__hiveku__helpdesk_away_reply_set',
+  // Discussions wave S5c (2026-11-11, 0.91.82): bringing a team's chat history over from a
   // chat history export, which holds the whole company's messages and its people's names and emails. The start begins
   // the upload, the run brings up to 500,000 messages into new channels the whole team can read, a cancel before the
   // run deletes the uploaded file, and the undo deletes every channel and message the import brought, for good. Every
