@@ -1,9 +1,13 @@
 # Changelog
 
-## 0.91.78
+## 0.91.79
 - **Folders set up before 0.91.76 can read your direct messages.** Such a folder kept naming the release that set it up in its Claude Code connection, so Hiveku refused your assistant's reads of your own direct messages there, even after the update added their ask rules. Now, on the folder's next start, once it holds every ask rule, the extension updates that one value in the connection and leaves the rest of the file as it was. That includes the connection Hiveku: Set Claude Code Account made, and a connection a newer copy of the extension made is left as it is. The file is swapped in whole, so a Claude Code session starting at that moment never finds it empty.
 - **A folder tells Hiveku your assistant asks first only when its ask rules are really there.** Hiveku: Set Claude Code Account now adds the ask rules to the folder before it connects Claude Code, also in a folder Hiveku never set up. When the rules cannot be written there, or setting up a folder could not write its settings, the connection no longer says so: Hiveku then refuses reads of your direct messages from that folder, and revealing a secret waits for an approval on the dashboard. A connection an earlier Set Claude Code Account made in a folder without the ask rules stops saying so on the folder's next start.
 - **Your own settings stay as you wrote them.** Adding the ask rules to a folder's .claude/settings.json now changes nothing else in it: your spacing, line endings and everything else are kept. Set Claude Code Account leaves alone the settings in your home folder, which apply to every folder, and a settings file that is a link other folders may share.
+
+## 0.91.78
+- **Design work no longer saves the assistant's own taste to memory.** The designer's commands used to end by saving "what worked" to the account's memory, so the assistant's own drafts, palettes, fonts and template picks were stored as proven and later read as the brand. Memory now keeps only what a person said about a design, in their words, with the design and the date. The designer's daily brief, weekly pass and monthly report come to you (the reply, a report file or a task), never into memory, and anything the assistant made stays a draft until a person approves or publishes it.
+- **A new design starts from Hiveku's design rules and a template of the destination's size,** and builds on an earlier design only when you name it. A generated picture is never offered as a "before and after": only the business's real photos are.
 
 ## 0.91.77
 - **Content changes that touch your live website ask first.** Your assistant now asks before it saves a post with a scheduled publish time, archives, unpublishes or deletes a post, or takes a post's page off your site. A folder set up earlier gains the new ask rules on its next start, after the ones it has.

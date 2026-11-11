@@ -471,9 +471,11 @@ replacing `media_urls` without `media_types` leaves the old types in place. A pu
 post is edit-locked (400). The URL is the asset's `mp4_url` / `file_url` from the library, or a design
 export URL. The social lane's rules still apply - setting `scheduled_at` is publishing on a timer, and
 no tool can approve a post; cross-channel via `content_create`.
-Decisions worth keeping (aspect ratio, the animation style signed off, the storyboard template that worked)
-go to the branding memory document (read-merge-write per `references/memory-protocol.md`), production
-work items to `pm_tasks_create`. `media_usage_get` says where an asset is
+Keep only what a person decided, in their words: the aspect ratio they chose or the animation style they
+signed off goes to the branding memory document quoted, with the design or storyboard id and the date
+(read-merge-write per `references/memory-protocol.md`). Never your own pick of a template, a style or a
+storyboard as what worked: a video you made is a draft until a person approves it. Production work items
+go to `pm_tasks_create`. `media_usage_get` says where an asset is
 used; `media_delete` refuses 409 `in_use` while it knows of a use - never force past it (see the
 brand-and-assets reference).
 

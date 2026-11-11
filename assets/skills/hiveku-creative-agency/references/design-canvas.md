@@ -18,9 +18,10 @@ Why it needs a manual: this is the one place where Claude and the human write to
   full canvas blind over the top of a user's edits.**
 - **D3. Snapshot before destructive edits** with `design_version_create`, so the user can roll back from
   the dashboard's Version History panel. Restyles, re-layouts, deletions, and artboard changes count.
-- **D4. Start from `design_templates_list`, not a blank artboard.** Its 58 templates come back
-  brand-substituted with the account's active brand guide. A blank artboard means you pick the colors and
-  fonts, which means off-brand.
+- **D4. Start from a `design_templates_list` template of the frame's size, not a blank artboard.** Its 58
+  templates come back brand-substituted with the account's active brand guide. A blank artboard means you
+  pick the colors and fonts, which means off-brand. An earlier design is the start only when the person
+  names it.
 - **D5. Generated images and video clips auto-register. Design exports and stock-photo URLs do NOT -
   register those explicitly before attaching them anywhere.**
 - **D6. Confirm before anything billable or blocking.** `design_export_mp4` blocks up to 280s and
@@ -244,8 +245,8 @@ reference for how the platform structures a group, a path, or a text layer. The 
 headers (photo-led with a scrim, and typographic; category Email Header), an Open Graph 1200x630 card
 (Blog Hero / Open Graph), a YouTube 1280x720 split thumbnail (YouTube Thumbnail), a LinkedIn 1584x396
 banner with its content clear of the avatar overlap (LinkedIn Banner) and an X 1500x500 header that
-clears the bottom-left avatar (X / Twitter Header). `design_list` reads existing designs; check there
-for something to reuse first.
+clears the bottom-left avatar (X / Twitter Header). `design_list` reads existing designs; restyle one
+only when the person names it.
 
 **Prefer the presets that tool returns over the table below,** which is guidance for when none matches:
 
