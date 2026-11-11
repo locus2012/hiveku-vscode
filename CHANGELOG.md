@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.81
+- **Setting the help desk away message asks first.** Your assistant now asks before it turns the help desk away message on or off, or changes its window or words. While it is on, every customer who emails in gets it automatically. Reading the away message does not ask. A folder set up earlier gains the new ask rule on its next start, after the ones it has.
+
 ## 0.91.80
 - **Changes to a site's own database and Supabase project ask first.** Your assistant now asks before it runs SQL that can write, sets up or repairs a site's database, applies a migration, or writes or deletes any Supabase row, policy, sign-in user, sign-in setting, storage file or edge function. It also asks before it emails a sign-in link, calls an edge function, or makes a link to a private file. Reading a site's tables, users and settings does not ask. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
 - **The database guide says what Hiveku now refuses.** A connection that no account owner or admin made, and every assistant, can't touch a site's sign-in tables or the settings that can hold a secret, can't give a user a role but the normal one, and can't set a user's app_metadata. The guide says so, and that an owner or admin can run such SQL from the database page's SQL editor.

@@ -922,7 +922,7 @@ describe('what the extension writes and wires', () => {
       'the Content Marketing asks stay before the database and storage asks, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__database_execute',\n" +
           "  'mcp__hiveku__database_provision',\n" +
           "  'mcp__hiveku__database_repair',\n" +
@@ -953,9 +953,13 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__supabase_edge_functions_deploy',\n" +
           "  'mcp__hiveku__supabase_edge_functions_delete',\n" +
           "  'mcp__hiveku__supabase_edge_functions_invoke',\n" +
-          "  'mcp__hiveku__supabase_edge_functions_set_secrets',",
+          "  'mcp__hiveku__supabase_edge_functions_set_secrets',\n",
       ),
-      'the newest ask rules, the database and storage asks, go at the END',
+      'the database and storage asks are listed together, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith("  'mcp__hiveku__helpdesk_away_reply_set',"),
+      'the newest ask rule, the help desk away message, goes at the END',
     );
   });
 
