@@ -9,6 +9,7 @@
 
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
+import * as os from 'os';
 import * as path from 'path';
 import { HivekuMcpClient } from './mcpClient';
 import * as api from './hivekuApi';
@@ -29,6 +30,8 @@ import {
 } from './memoryLog';
 import { ownerOf, type OwnerInput } from './memoryOwner';
 import { extensionVersion } from './hivekuUserAgent';
+import { appendJsonStrings, replaceJsonString } from './jsonText';
+import { setLocalHivekuServer, updateLocalHivekuClient } from './claudeMcp';
 
 /** memory `type` → local folder (matches hiveku-sync TYPE_TO_FOLDER). */
 export const TYPE_TO_FOLDER: Record<string, string> = {
@@ -269,6 +272,27 @@ async function writeSecretFile(file: string, contents: string): Promise<void> {
     await fs.chmod(file, 0o600);
   } catch {
     // Best effort: a filesystem without POSIX modes must not fail the scaffold.
+  }
+}
+
+/**
+ * Replace a file that holds a credential, for a change made on its own (not
+ * one the person asked for): the new text goes into an owner-only file beside
+ * it, which is then renamed over it. writeSecretFile truncates the file and
+ * then writes it, so a Claude Code session starting at that moment can read
+ * it empty and get none of the folder's MCP servers, and a crash in between
+ * leaves it empty, the person's own servers lost with it. Here a reader sees
+ * the old file or the new one, and a crash leaves the old one whole. The new
+ * file is created 0600, so an older 0644 key file comes out owner-only.
+ */
+async function replaceSecretFile(file: string, contents: string): Promise<void> {
+  const tmp = `${file}.hiveku-${process.pid}-${crypto.randomBytes(4).toString('hex')}.tmp`;
+  try {
+    await fs.writeFile(tmp, contents, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    await fs.rename(tmp, file);
+  } catch (err) {
+    await fs.rm(tmp, { force: true }).catch(() => undefined);
+    throw err;
   }
 }
 
@@ -1531,19 +1555,32 @@ function mergeSpendAskRules(perms: Record<string, unknown>, deny: readonly unkno
  * on activation for the open Hiveku folders, so an owner does not have to know
  * to run Refresh Setup before an enable prompts instead of being blocked.
  *
- * Writes only when a rule was added. A missing file (never scaffolded; the next
+ * Writes only when a rule was added, and then only the rules: they go into the
+ * file's own text after the ask entries already there (appendJsonStrings), so
+ * the owner's spacing, line endings, escapes and numbers stay as written. A
+ * file whose text they cannot be placed in that way (`"permissions": null`) is
+ * written out whole instead. A missing file (never scaffolded; the next
  * scaffold writes the rules) or one that does not parse (the owner's edit in
- * progress) is left alone. Returns the rules added.
+ * progress) is left alone. With `createMissing`, a missing file is written,
+ * holding only the ask rules: the account command connects Claude Code in a
+ * folder the extension may never have scaffolded, and the rules must be there
+ * before the connection may declare (pointClaudeCodeAt). Returns the rules
+ * added.
  */
-export async function ensureSpendAskRules(baseDir: string): Promise<string[]> {
+export async function ensureSpendAskRules(baseDir: string, opts: { createMissing?: boolean } = {}): Promise<string[]> {
   const file = path.join(baseDir, '.claude', 'settings.json');
+  let text = '';
   let settings: Record<string, unknown>;
+  let creating = false;
   try {
-    const parsed: unknown = JSON.parse(await fs.readFile(file, 'utf8'));
+    text = await fs.readFile(file, 'utf8');
+    const parsed: unknown = JSON.parse(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
     settings = parsed as Record<string, unknown>;
-  } catch {
-    return [];
+  } catch (err) {
+    if (!opts.createMissing || (err as NodeJS.ErrnoException)?.code !== 'ENOENT') return [];
+    settings = {};
+    creating = true;
   }
   // A permissions or ask value of the wrong shape is the owner's to fix; a
   // silent update does not overwrite it (a scaffold run would).
@@ -1554,8 +1591,35 @@ export async function ensureSpendAskRules(baseDir: string): Promise<string[]> {
   const added = mergeSpendAskRules(perms, Array.isArray(perms.deny) ? (perms.deny as unknown[]) : []);
   if (added.length === 0) return [];
   settings.permissions = perms;
-  await fs.writeFile(file, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  const inText = creating ? null : appendJsonStrings(text, ['permissions', 'ask'], added);
+  if (creating) await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, inText ?? JSON.stringify(settings, null, 2) + '\n', 'utf8');
   return added;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * Whether Claude Code in this folder asks before every HIVEKU_ASK tool: each
+ * rule is in `permissions.ask` of the folder's `.claude/settings.json`, or a
+ * deny there already covers the tool (deny beats ask, so that tool never runs
+ * at all; the scaffold and ensureSpendAskRules skip it the same way). A missing
+ * file, one that does not parse, or a permissions block of the wrong shape
+ * holds none. This is the one test of whether a folder may declare
+ * (claudeCodeClientFor).
+ */
+export async function askRulesInPlace(baseDir: string): Promise<boolean> {
+  let settings: unknown;
+  try {
+    settings = JSON.parse(await fs.readFile(path.join(baseDir, '.claude', 'settings.json'), 'utf8'));
+  } catch {
+    return false;
+  }
+  if (!isRecord(settings) || !isRecord(settings.permissions)) return false;
+  const ask = Array.isArray(settings.permissions.ask) ? (settings.permissions.ask as unknown[]) : [];
+  const deny = Array.isArray(settings.permissions.deny) ? (settings.permissions.deny as unknown[]) : [];
+  return HIVEKU_ASK.every((rule) => ask.includes(rule) || deny.some((d) => typeof d === 'string' && denyCovers(d, rule)));
 }
 
 /**
@@ -2396,18 +2460,45 @@ Drive the redesign pipeline for THIS project$ARGUMENTS. ${idLine} Follow the ord
 /**
  * X-Hiveku-Client for the `.mcp.json` this extension writes for Claude Code:
  * `vscode-extension/<version>`, the declaration that Claude Code in this folder
- * asks a person before project_secrets_reveal (plan "Server-side approval").
- * The folder's .claude/settings.json carries HIVEKU_ASK, which asks on every
- * project_secrets_reveal and every hiveku_batch in every permission mode, and
- * the same scaffold writes both. The MCP server forwards the declaration to
- * the builder, which lets a release at or above its listed minimum skip the
- * dashboard approval, and still reads the caller as Claude Code for its
- * memory-log label and rate-limit bucket. Set here, never by the model. The
- * extension's own calls (mcpClient.ts, Pull Env included) and the Codex config
- * (codex.ts, which writes no prompts) do not declare.
+ * asks a person before the tools the builder gates on it: project_secrets_reveal
+ * (plan "Server-side approval") and each read of the person's own direct
+ * messages (discussions S5b). The folder's .claude/settings.json carries
+ * HIVEKU_ASK, which asks on every one of them and on every hiveku_batch in every
+ * permission mode. The MCP server forwards the declaration to the builder,
+ * which lets a release at or above its listed minimum skip the dashboard
+ * approval (or, for the direct messages, read at all), and still reads the
+ * caller as Claude Code for its memory-log label and rate-limit bucket. Set
+ * here, never by the model. The extension's own calls (mcpClient.ts, Pull Env
+ * included) and the Codex config (codex.ts, which writes no prompts) do not
+ * declare.
+ *
+ * A folder declares only while those ask rules are all in place
+ * (claudeCodeClientFor): the scaffold writes them before its .mcp.json, the
+ * account command writes them before its server (pointClaudeCodeAt), and
+ * activation brings an older folder's declaration up to this release once they
+ * are all there, in its .mcp.json (refreshDeclaration) and in the local-scope
+ * server the account command wrote, which it also takes back while they are
+ * not (updateLocalDeclaration).
  */
 export function declaredClaudeCodeClient(): string {
   return `vscode-extension/${extensionVersion()}`;
+}
+
+/**
+ * What Claude Code sends as X-Hiveku-Client from a folder whose ask rules are
+ * not all in place: `claude-code`, the name this extension's `.mcp.json` sent
+ * before it declared. It carries no release, so the MCP server forwards no
+ * declaration and the builder refuses the tools that need the ask (fail
+ * closed). The MCP server's memory-log label, rate-limit bucket and feedback
+ * surface read it exactly as they read the declaration, which they map back to
+ * `claude-code`. The bare `vscode-extension` is the extension's own calls
+ * (mcpClient.ts), never Claude Code, so it is not used here.
+ */
+const UNDECLARED_CLAUDE_CODE_CLIENT = 'claude-code';
+
+/** The X-Hiveku-Client for Claude Code in this folder: the declaration only when its ask rules are all in place. */
+export async function claudeCodeClientFor(baseDir: string): Promise<string> {
+  return (await askRulesInPlace(baseDir)) ? declaredClaudeCodeClient() : UNDECLARED_CLAUDE_CODE_CLIENT;
 }
 
 /**
@@ -2415,16 +2506,206 @@ export function declaredClaudeCodeClient(): string {
  * `${OLYMPUS_API_KEY}`): Claude Code only expands `${VAR}` from the shell
  * environment — it does NOT auto-load a `.env` — so a placeholder would never
  * resolve when the user just opens the folder. We gitignore `.mcp.json` instead.
+ *
+ * `client` is the folder's X-Hiveku-Client, from claudeCodeClientFor: the
+ * caller decides it after the folder's ask rules are written, never before.
  */
-export function hivekuMcpServer(apiKey: string, baseUrl: string): { type: string; url: string; headers: Record<string, string> } {
+export function hivekuMcpServer(apiKey: string, baseUrl: string, client: string): { type: string; url: string; headers: Record<string, string> } {
   return {
     type: 'http',
     url: `${baseUrl.replace(/\/+$/, '')}/mcp`,
-    // X-Hiveku-Client is the declaration above, which the MCP server reads as Claude
-    // Code for the memory log and Claude Code's own rate-limit bucket; Codex sends
-    // "codex" (codex.ts). A label and a declaration, never auth.
-    headers: { Authorization: `Bearer ${apiKey}`, 'X-Hiveku-Client': declaredClaudeCodeClient() },
+    // X-Hiveku-Client is the declaration above (or the undeclared name), which the MCP
+    // server reads as Claude Code for the memory log and Claude Code's own rate-limit
+    // bucket; Codex sends "codex" (codex.ts). A label and a declaration, never auth.
+    headers: { Authorization: `Bearer ${apiKey}`, 'X-Hiveku-Client': client },
   };
+}
+
+/**
+ * A declaration this extension wrote for Claude Code's `hiveku` server:
+ * `vscode-extension/<version>`. With `claude-code` (what it sent before it
+ * declared, and sends whenever a folder's ask rules are not all in place) and
+ * the bare `vscode-extension`, these are the values it may change. Another
+ * client's value (hiveku-sync, the Hiveku app) and a server with no value are
+ * not the extension's to change.
+ */
+const OWN_DECLARATION = /^vscode-extension\/(\d+)\.(\d+)\.(\d+)/;
+const CLIENT_HEADER_PATH = ['mcpServers', 'hiveku', 'headers', 'X-Hiveku-Client'] as const;
+
+/** `version` as [major, minor, patch]; null unless it is exactly that and above 0.0.0, what an unreadable package.json reads as. */
+function releaseParts(version: string): number[] | null {
+  const found = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!found) return null;
+  const parts = [Number(found[1]), Number(found[2]), Number(found[3])];
+  return parts.some((part) => part > 0) ? parts : null;
+}
+
+/** Whether release `have` comes before release `than`. */
+function isEarlier(have: readonly number[], than: readonly number[]): boolean {
+  for (let i = 0; i < 3; i += 1) if (have[i] !== than[i]) return have[i] < than[i];
+  return false;
+}
+
+/**
+ * This release's declaration, to write in place of `current` once a folder's
+ * ask rules are all in place, or null to leave `current` as it is. Replaced:
+ * `claude-code`, the bare `vscode-extension`, and the declaration of an
+ * earlier release. Kept: this release; a later one, which another install of
+ * the extension (VS Code Insiders, Cursor, a remote host) may have written for
+ * the same folder, since replacing it would flip the value at every start and
+ * get the folder refused once the builder's minimum passes this release;
+ * another client's value; and every value when this release cannot be read
+ * (an unreadable package.json reads as 0.0.0, which the builder refuses).
+ */
+export function upgradedClaudeCodeClient(current: string, version: string = extensionVersion()): string | null {
+  const release = releaseParts(version);
+  if (!release) return null;
+  const declared = `vscode-extension/${version}`;
+  if (current === UNDECLARED_CLAUDE_CODE_CLIENT || current === 'vscode-extension') return declared;
+  const found = current.match(OWN_DECLARATION);
+  return found && isEarlier([Number(found[1]), Number(found[2]), Number(found[3])], release) ? declared : null;
+}
+
+/**
+ * What a server should send in place of `current` while the folder's ask
+ * rules are not all in place: `claude-code` in place of a declaration of this
+ * extension's, of any release, or null to leave `current`. The undeclared
+ * names declare nothing already, and another client's value is not the
+ * extension's to change.
+ */
+function undeclaredClaudeCodeClient(current: string): string | null {
+  return OWN_DECLARATION.test(current) ? UNDECLARED_CLAUDE_CODE_CLIENT : null;
+}
+
+/**
+ * Bring the declaration in this folder's `.mcp.json` up to this release once
+ * the folder asks before every HIVEKU_ASK tool. A folder keeps declaring the
+ * release that scaffolded it until its scaffold is written again, and the
+ * builder refuses a release below its minimum for the tools whose ask rules
+ * came later (vscode-extension/0.91.75 for each read of the person's own
+ * direct messages, whose rules arrived in 0.91.76). Activation adds the
+ * missing rules (ensureSpendAskRules), then calls this (updateFolderAsks).
+ *
+ * Changes only the `hiveku` server's X-Hiveku-Client, and only to replace a
+ * value upgradedClaudeCodeClient replaces; every other byte of the file stays
+ * as it was. Never declares while a rule is missing. Leaves alone a missing
+ * or unparseable `.mcp.json`, and one that is a link, symbolic or hard (it may
+ * be shared with a folder whose rules are not in place). The new text goes
+ * into a new owner-only file renamed over the old one (replaceSecretFile),
+ * since this runs on the first start after every update, when a Claude Code
+ * session may be reading the file. Returns whether it wrote.
+ */
+export async function refreshDeclaration(baseDir: string): Promise<boolean> {
+  if (!(await askRulesInPlace(baseDir))) return false;
+  const file = path.join(baseDir, '.mcp.json');
+  let text: string;
+  let current: unknown;
+  try {
+    const stat = await fs.lstat(file);
+    if (!stat.isFile() || stat.nlink > 1) return false;
+    text = await fs.readFile(file, 'utf8');
+    current = JSON.parse(text);
+  } catch {
+    return false;
+  }
+  for (const step of CLIENT_HEADER_PATH) {
+    current = isRecord(current) && Object.prototype.hasOwnProperty.call(current, step) ? current[step] : undefined;
+  }
+  const declared = typeof current === 'string' ? upgradedClaudeCodeClient(current) : null;
+  if (declared === null) return false;
+  const next = replaceJsonString(text, CLIENT_HEADER_PATH, declared);
+  if (next === null) return false;
+  await replaceSecretFile(file, next);
+  return true;
+}
+
+/**
+ * Bring the X-Hiveku-Client of this folder's local-scope `hiveku` server in
+ * ~/.claude.json (what Set Claude Code Account writes, and what beats the
+ * folder's `.mcp.json`) in line with the folder's ask rules: this release once
+ * they are all in place (upgradedClaudeCodeClient), `claude-code` while they
+ * are not. Activation runs it for every open folder, since the command can
+ * wire any folder. The command declared there from 0.91.8 to 0.91.77 whether
+ * or not the folder had a single ask rule, and nothing else revisits that
+ * server, so such a folder kept passing the builder's checks with nothing in
+ * it that asks; and a folder with every rule kept the release that wired it,
+ * which the builder refuses for the tools whose rules came later. Changes
+ * only that one value, and only a value this extension wrote, under Claude
+ * Code's own lock on the file (updateLocalHivekuClient). Returns the value
+ * written, or null.
+ */
+export async function updateLocalDeclaration(folderPath: string): Promise<string | null> {
+  const inPlace = await askRulesInPlace(folderPath);
+  return updateLocalHivekuClient(folderPath, (current) =>
+    inPlace ? upgradedClaudeCodeClient(current) : undeclaredClaudeCodeClient(current),
+  );
+}
+
+/**
+ * What activation does for each open Hiveku folder: add the ask rules it lacks,
+ * then bring its `.mcp.json` declaration up to this release once they are all
+ * in place. Returns the rules added and whether the declaration changed.
+ */
+export async function updateFolderAsks(baseDir: string): Promise<{ added: string[]; declared: boolean }> {
+  const added = await ensureSpendAskRules(baseDir);
+  return { added, declared: await refreshDeclaration(baseDir) };
+}
+
+/** Whether two paths name the same folder, links followed where they can be. */
+async function samePath(a: string, b: string): Promise<boolean> {
+  if (path.resolve(a) === path.resolve(b)) return true;
+  const real = (p: string): Promise<string> => fs.realpath(p).catch(() => path.resolve(p));
+  return (await real(a)) === (await real(b));
+}
+
+/**
+ * Why the account command leaves a folder's `.claude/settings.json` as it is,
+ * or null when it may add the ask rules there. `home`: the folder is the home
+ * folder, where that file is Claude Code's own settings for every folder.
+ * `link`: `.claude` or the file is a link, symbolic or hard, so a write would
+ * change a file other folders may share. (Activation keeps the rules of the
+ * Hiveku folders it set up current wherever their file is; this command runs
+ * in any folder the person picks.)
+ */
+async function settingsLeftAlone(folderPath: string): Promise<'home' | 'link' | null> {
+  if (await samePath(folderPath, os.homedir())) return 'home';
+  const dir = path.join(folderPath, '.claude');
+  for (const entry of [dir, path.join(dir, 'settings.json')]) {
+    let stat;
+    try {
+      stat = await fs.lstat(entry);
+    } catch {
+      continue;
+    }
+    if (stat.isSymbolicLink() || (stat.isFile() && stat.nlink > 1)) return 'link';
+  }
+  return null;
+}
+
+/**
+ * Point Claude Code in `folderPath` at an account: a `hiveku` server at local
+ * scope in ~/.claude.json, which beats the folder's `.mcp.json` (claudeMcp.ts).
+ * The folder may be one this extension never scaffolded, so the ask rules go
+ * into its `.claude/settings.json` first (a new file holding only them when it
+ * has none), and the server declares this release only when they are all in
+ * place. Otherwise it sends the undeclared name, and the builder refuses the
+ * tools that need the ask. A settings file that does not parse, or whose
+ * permissions are of the wrong shape, is left as it is, and so is one this
+ * command does not change (settingsLeftAlone: the home folder's, or a link);
+ * the server then declares only if that file already holds every rule, as
+ * that is what Claude Code there reads. Returns whether it declared, and why
+ * the rules were left out when that was a choice.
+ */
+export async function pointClaudeCodeAt(
+  folderPath: string,
+  apiKey: string,
+  baseUrl: string,
+): Promise<{ declared: boolean; leftAlone: 'home' | 'link' | null }> {
+  const leftAlone = await settingsLeftAlone(folderPath);
+  if (!leftAlone) await ensureSpendAskRules(folderPath, { createMissing: true }).catch(() => undefined);
+  const client = await claudeCodeClientFor(folderPath);
+  await setLocalHivekuServer(folderPath, hivekuMcpServer(apiKey, baseUrl, client));
+  return { declared: client === declaredClaudeCodeClient(), leftAlone };
 }
 
 /**
@@ -3030,7 +3311,12 @@ export async function writeProjectScaffold(opts: ScaffoldOptions): Promise<void>
   if (!opts.connectedAs && opts.accountId) opts.connectedAs = connectedAsByAccount[opts.accountId];
   const mcpUrl = `${opts.baseUrl.replace(/\/+$/, '')}/mcp`;
 
-  // 1) .mcp.json — merge the `hiveku` server in, preserving any servers already there.
+  // 1) .claude/settings.json first: the read-tool/safe-bash allowlist (fewer
+  //    prompts + acceptEdits) and the ask rules. The .mcp.json below declares
+  //    only when the ask rules landed.
+  await writeClaudeSettings(opts.baseDir, opts.permissionMode).catch(() => undefined);
+
+  // 2) .mcp.json: merge the `hiveku` server in, preserving any servers already there.
   const mcpPath = path.join(opts.baseDir, '.mcp.json');
   let config: { mcpServers?: Record<string, unknown> } = {};
   try {
@@ -3039,21 +3325,19 @@ export async function writeProjectScaffold(opts: ScaffoldOptions): Promise<void>
     /* no .mcp.json yet */
   }
   if (!config.mcpServers || typeof config.mcpServers !== 'object') config.mcpServers = {};
-  config.mcpServers.hiveku = hivekuMcpServer(opts.apiKey, opts.baseUrl);
+  config.mcpServers.hiveku = hivekuMcpServer(opts.apiKey, opts.baseUrl, await claudeCodeClientFor(opts.baseDir));
   // Playwright MCP so Claude Code can drive a real browser against the local dev
   // server. Don't clobber a user-customized entry (e.g. one with --headed).
   if (!config.mcpServers.playwright) config.mcpServers.playwright = playwrightMcpServer();
   await writeAtomic(mcpPath, JSON.stringify(config, null, 2) + '\n');
 
-  // 2) .gitignore — the inlined key + any pulled env must never be committed.
+  // 3) .gitignore: the inlined key + any pulled env must never be committed.
   await appendGitignore(opts.baseDir, ['.mcp.json', '.env.local', '.env.hiveku', '.hiveku/', 'hiveku-data/', '.claude/settings.local.json']);
 
-  // 3) CLAUDE.md — tell Claude it has the full account toolset (+ the user's role loop).
+  // 4) CLAUDE.md: tell Claude it has the full account toolset (+ the user's role loop).
   await appendHivekuSection(opts.baseDir, opts.accountLabel, mcpUrl, opts.role, opts.connectedAs);
 
-  // 4) Claude Code accelerators: a read-tool/safe-bash allowlist (fewer prompts +
-  //    acceptEdits) and /hiveku-* slash commands for the common loop.
-  await writeClaudeSettings(opts.baseDir, opts.permissionMode).catch(() => undefined);
+  // 5) Claude Code accelerators: /hiveku-* slash commands for the common loop.
   await writeClaudeLocalSettings(opts.baseDir).catch(() => undefined);
   await writeScratchDir(opts.baseDir).catch(() => undefined);
   await writeSlashCommands(opts.baseDir, opts.projectId).catch(() => undefined);
@@ -3098,7 +3382,6 @@ async function maybeWriteCodex(opts: ScaffoldOptions, kind: 'account' | 'project
 export async function writeScaffold(opts: ScaffoldOptions): Promise<void> {
   if (!opts.connectedAs && opts.accountId) opts.connectedAs = connectedAsByAccount[opts.accountId];
   const mcpUrl = `${opts.baseUrl.replace(/\/+$/, '')}/mcp`;
-  const mcpJson = JSON.stringify({ mcpServers: { hiveku: hivekuMcpServer(opts.apiKey, opts.baseUrl) } }, null, 2) + '\n';
 
   const env = [
     '# Hiveku account credentials (gitignored). Used by .mcp.json.',
@@ -3416,6 +3699,13 @@ ${MULTI_SESSION_BLOCK}${roleClaudeMdBlock(opts.role)}`;
   // costs nothing and removing one is unrecoverable.
   const gitignoreLines = ['.mcp.json', '.env', '.env.local', '.codex/config.toml', '.hiveku/', 'hiveku-data/', '.claude/settings.local.json'];
 
+  // .claude/settings.json first: the read-tool/safe-bash allowlist (fewer
+  // prompts) and the ask rules. The .mcp.json below declares only when the ask
+  // rules landed.
+  await writeClaudeSettings(opts.baseDir, opts.permissionMode).catch(() => undefined);
+  const mcpJson =
+    JSON.stringify({ mcpServers: { hiveku: hivekuMcpServer(opts.apiKey, opts.baseUrl, await claudeCodeClientFor(opts.baseDir)) } }, null, 2) + '\n';
+
   // Both of these carry the live account key: owner-only, never 0644.
   await writeSecretFile(path.join(opts.baseDir, '.mcp.json'), mcpJson);
   await writeSecretFile(path.join(opts.baseDir, '.env'), env);
@@ -3424,10 +3714,8 @@ ${MULTI_SESSION_BLOCK}${roleClaudeMdBlock(opts.role)}`;
   // the user had added themselves.
   await appendGitignore(opts.baseDir, gitignoreLines);
 
-  // Claude Code accelerators for the account workspace: the read-tool/safe-bash
-  // allowlist (fewer prompts) + account-level /hiveku-* slash commands + the
-  // user's role commands (/hiveku-daily and the role loops).
-  await writeClaudeSettings(opts.baseDir, opts.permissionMode).catch(() => undefined);
+  // Claude Code accelerators for the account workspace: account-level /hiveku-*
+  // slash commands + the user's role commands (/hiveku-daily and the role loops).
   await writeClaudeLocalSettings(opts.baseDir).catch(() => undefined);
   await writeScratchDir(opts.baseDir).catch(() => undefined);
   await writeAccountSlashCommands(opts.baseDir).catch(() => undefined);

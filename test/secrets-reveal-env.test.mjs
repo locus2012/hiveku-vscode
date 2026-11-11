@@ -293,11 +293,14 @@ describe('the declaration', () => {
   // The builder's DECLARED_RE (hiveku_builder src/lib/secrets/reveal-client.ts), character for character.
   const BUILDER_DECLARED_RE = /^([a-z][a-z0-9-]{0,39})\/(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,4})\.(0|[1-9]\d{0,5})$/;
 
-  test('the .mcp.json for Claude Code declares vscode-extension/<package.json version>', () => {
+  // Only once the folder's ask rules landed; a folder without them sends claude-code (declare-after-asks.test.mjs).
+  test('the .mcp.json for Claude Code declares vscode-extension/<package.json version> once its ask rules land', async () => {
     const version = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
-    const entry = knowledge.hivekuMcpServer('olp_test_key_123', 'https://core.hiveku.com');
-    assert.equal(entry.headers['X-Hiveku-Client'], `vscode-extension/${version}`);
-    assert.match(entry.headers['X-Hiveku-Client'], BUILDER_DECLARED_RE);
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'hv-declare-'));
+    await knowledge.writeScaffold({ baseDir: dir, accountLabel: 'Acme', apiKey: 'olp_test_key_123', baseUrl: 'https://core.hiveku.com', accountId: ACCOUNT });
+    const client = JSON.parse(await fs.readFile(path.join(dir, '.mcp.json'), 'utf8')).mcpServers.hiveku.headers['X-Hiveku-Client'];
+    assert.equal(client, `vscode-extension/${version}`);
+    assert.match(client, BUILDER_DECLARED_RE);
   });
 
   test('the ask rules it rests on reach every folder: reveal and hiveku_batch ask', async () => {

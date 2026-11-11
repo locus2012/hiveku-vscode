@@ -238,10 +238,11 @@ async function agentFacingFiles(dir) {
 
 describe('Scaffolds: the client label and the two rules', () => {
   // Since 0.91.7 the header is the declaration vscode-extension/<version> (the folder's settings ask
-  // before every reveal); the MCP server still reads it as claude-code for the memory log.
+  // before every reveal); the MCP server still reads it as claude-code for the memory log. Since
+  // 0.91.78 a folder whose ask rules did not land sends claude-code itself (declare-after-asks.test.mjs).
   test('the Claude .mcp.json sends the client declaration beside the key', async () => {
     const declared = `vscode-extension/${JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')).version}`;
-    const server = knowledge.hivekuMcpServer(KEY, `${BASE}/`);
+    const server = knowledge.hivekuMcpServer(KEY, `${BASE}/`, declared);
     assert.deepEqual(server, {
       type: 'http',
       url: `${BASE}/mcp`,
