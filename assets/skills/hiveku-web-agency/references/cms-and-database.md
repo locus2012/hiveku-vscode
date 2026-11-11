@@ -157,7 +157,7 @@ That is your problem the moment a collection has a `routePattern`, because a col
 
 ### What is blocked, and why
 
-- **Never DELETE or UPDATE without a WHERE clause.** It is NOT refused: such a statement runs and changes every row of the table. Name the rows with a `WHERE`, and count them first with `database_query`.
+- **Never DELETE or UPDATE without a WHERE clause.** Do not count on a refusal: name the rows with a `WHERE` and count them first with `database_query`. `database_execute` refuses a DELETE or UPDATE with no WHERE (`blocked_statement`) once the builder release that adds this refusal is live; until then such a statement runs and changes every row of the table.
 - **Never DROP anything.** Refused before anything runs (`database_execute` answers `blocked_statement`, and nothing in the SQL runs): `DROP DATABASE`, `DROP SCHEMA`, `DROP TABLE`, `DROP INDEX`, `DROP TRIGGER`, `DROP FUNCTION`, `DROP VIEW`. `DROP POLICY` and dropping a constraint are not refused.
 - Also refused: `TRUNCATE`, an `ALTER TABLE` that drops a column or renames the table or a column, turning row level security off, `CREATE/DROP/ALTER ROLE`, `GRANT ALL`, `REVOKE`.
 - **There is no row cap.** `database_execute` changes every row a statement matches, however many. `database_query` only reads (each query runs in a read-only transaction that is rolled back), and nothing caps it at 100 rows.
