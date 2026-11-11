@@ -962,13 +962,19 @@ describe('what the extension writes and wires', () => {
       'the chat history import asks come after the help desk away message',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__discussion_import_start',\n" +
           "  'mcp__hiveku__discussion_import_run',\n" +
           "  'mcp__hiveku__discussion_import_cancel',\n" +
-          "  'mcp__hiveku__discussion_import_undo',",
+          "  'mcp__hiveku__discussion_import_undo',\n",
       ),
-      'the newest ask rules, the chat history import asks (Discussions wave S5c), go at the END',
+      'the chat history import asks (Discussions wave S5c) are listed together, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__helpdesk_ticket_field_delete',\n" + "  'mcp__hiveku__project_vcs_ai_review_set',",
+      ),
+      'the newest ask rules, removing a help desk ticket field and the AI review switch, go at the END',
     );
   });
 

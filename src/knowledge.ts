@@ -1564,6 +1564,12 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__discussion_import_run',
   'mcp__hiveku__discussion_import_cancel',
   'mcp__hiveku__discussion_import_undo',
+  // Help desk ticket fields (2026-11-11, HK-1503, 0.91.83): removing a field takes its answer off every ticket for good,
+  // as crm_delete_custom_field does for a CRM field, so it asks; making, changing and filling fields do not. The AI
+  // review switch asks too, as it has in the Claude Code plugin since 0.27.248. Neither name ends in _get or _list or
+  // holds _list_, so no read glob above approves one. Appended last, in this order.
+  'mcp__hiveku__helpdesk_ticket_field_delete',
+  'mcp__hiveku__project_vcs_ai_review_set',
 ];
 
 /**

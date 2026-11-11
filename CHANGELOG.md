@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.83
+- **Removing a help desk ticket field asks first.** Your assistant now asks before it removes one of your help desk's ticket fields, which takes that field's answer off every ticket for good. Making, changing and filling in fields does not ask. Switching a site's AI review on or off asks too, as it does in Claude Code. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+
 ## 0.91.82
 - **Bringing your team's chat history over asks first.** Your assistant now asks before it starts uploading a chat history export (it holds your whole company's messages and your people's names and emails), before it brings up to 500,000 messages into new channels your whole team can read, before it stops an import (before the import runs, that deletes the uploaded file), and before it takes out everything an import brought, which cannot be undone. Reading an import, finishing its upload and matching its people do not ask. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
 
