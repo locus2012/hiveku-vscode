@@ -1547,6 +1547,11 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__supabase_edge_functions_delete',
   'mcp__hiveku__supabase_edge_functions_invoke',
   'mcp__hiveku__supabase_edge_functions_set_secrets',
+  // The help desk away message (2026-11-11, HK-1504; asked before the MCP serves it): while its window is on, every
+  // customer who emails in gets it automatically instead of the usual confirmation, and a customer who replies gets it
+  // once per conversation. Its description says ASK THE PERSON FIRST; no read glob above matches it, and this makes it
+  // ask in every mode, as in the Claude Code and Codex plugins. Appended last.
+  'mcp__hiveku__helpdesk_away_reply_set',
 ];
 
 /**
