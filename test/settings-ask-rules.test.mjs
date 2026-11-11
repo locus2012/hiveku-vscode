@@ -745,9 +745,13 @@ const CONTENT_MARKETING = [
 
 /** The site's database, and its app's sign-in, file storage, row security and server functions (2026-11-10): SQL and
  * migrations, row and policy writes and deletes, user accounts and sign-in links, sign-in settings, buckets and files,
- * and server functions deployed, deleted, run or given secrets. Each call asks. Appended last. */
+ * and server functions deployed, deleted, run or given secrets. Each call asks. Appended last. The review of 2026-11-10
+ * added database_provision and database_repair (they write the connections the live site runs on) and
+ * supabase_storage_object_signed_url (its answer opens a private file for anyone for up to 7 days). */
 const DATABASE_WRITES = [
   'mcp__hiveku__database_execute',
+  'mcp__hiveku__database_provision',
+  'mcp__hiveku__database_repair',
   'mcp__hiveku__supabase_migration_apply',
   'mcp__hiveku__supabase_table_row_insert',
   'mcp__hiveku__supabase_table_row_update',
@@ -771,6 +775,7 @@ const DATABASE_WRITES = [
   'mcp__hiveku__supabase_storage_object_move',
   'mcp__hiveku__supabase_storage_object_copy',
   'mcp__hiveku__supabase_storage_object_delete',
+  'mcp__hiveku__supabase_storage_object_signed_url',
   'mcp__hiveku__supabase_edge_functions_deploy',
   'mcp__hiveku__supabase_edge_functions_delete',
   'mcp__hiveku__supabase_edge_functions_invoke',

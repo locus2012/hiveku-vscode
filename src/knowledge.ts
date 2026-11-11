@@ -1488,8 +1488,13 @@ const HIVEKU_ASK: string[] = [
   // and migrations that change any number of rows, row and policy writes and deletes, user accounts and sign-in
   // links, sign-in settings, buckets and files, and server functions deployed, deleted, run or given secrets. None
   // was on this list, so in a folder whose settings allow them they ran with nobody asked. Every call asks, as in
-  // the Claude Code plugin and Codex. Their reads are not here. Appended last.
+  // the Claude Code plugin and Codex. Their reads are not here. Appended last. The review of 2026-11-10 added three:
+  // database_provision and database_repair write the connections the live site runs on (repair gives the database a
+  // new password at once), and supabase_storage_object_signed_url answers with a link that opens a private file for
+  // anyone for up to 7 days, which the builder treats as minting a credential.
   'mcp__hiveku__database_execute',
+  'mcp__hiveku__database_provision',
+  'mcp__hiveku__database_repair',
   'mcp__hiveku__supabase_migration_apply',
   'mcp__hiveku__supabase_table_row_insert',
   'mcp__hiveku__supabase_table_row_update',
@@ -1513,6 +1518,7 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__supabase_storage_object_move',
   'mcp__hiveku__supabase_storage_object_copy',
   'mcp__hiveku__supabase_storage_object_delete',
+  'mcp__hiveku__supabase_storage_object_signed_url',
   'mcp__hiveku__supabase_edge_functions_deploy',
   'mcp__hiveku__supabase_edge_functions_delete',
   'mcp__hiveku__supabase_edge_functions_invoke',

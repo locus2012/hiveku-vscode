@@ -924,6 +924,8 @@ describe('what the extension writes and wires', () => {
     assert.ok(
       ask.trimEnd().endsWith(
         "  'mcp__hiveku__database_execute',\n" +
+          "  'mcp__hiveku__database_provision',\n" +
+          "  'mcp__hiveku__database_repair',\n" +
           "  'mcp__hiveku__supabase_migration_apply',\n" +
           "  'mcp__hiveku__supabase_table_row_insert',\n" +
           "  'mcp__hiveku__supabase_table_row_update',\n" +
@@ -947,6 +949,7 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__supabase_storage_object_move',\n" +
           "  'mcp__hiveku__supabase_storage_object_copy',\n" +
           "  'mcp__hiveku__supabase_storage_object_delete',\n" +
+          "  'mcp__hiveku__supabase_storage_object_signed_url',\n" +
           "  'mcp__hiveku__supabase_edge_functions_deploy',\n" +
           "  'mcp__hiveku__supabase_edge_functions_delete',\n" +
           "  'mcp__hiveku__supabase_edge_functions_invoke',\n" +
