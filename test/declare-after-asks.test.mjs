@@ -9,12 +9,21 @@
  *   - Activation (updateFolderAsks): a folder an older release made keeps
  *     declaring that release. Once its rules are all there, the hiveku
  *     server's X-Hiveku-Client in its .mcp.json changes to this release, and
- *     nothing else does; never before, never another client's value.
+ *     nothing else does; never before, never another client's value, never a
+ *     later release's, never through a link (symbolic or hard). The new file
+ *     is renamed over the old one, owner-only.
+ *   - Activation (updateLocalDeclaration), in every open folder: the
+ *     local-scope server the account command wrote into ~/.claude.json comes
+ *     up to this release once the folder's rules are all there, and stops
+ *     declaring while they are not; only that value changes, under Claude
+ *     Code's own lock on the file.
  *   - The scaffold writes the ask rules before .mcp.json and declares only
  *     when they landed: a failed settings write leaves the undeclared name.
  *   - The account command (pointClaudeCodeAt) writes the ask rules into the
  *     folder first, one the extension never scaffolded included, and declares
- *     only when they landed.
+ *     only when they are all there. The rules go into the settings file's own
+ *     text, every other byte kept; the home folder's settings and a linked
+ *     settings file are left alone.
  *
  * The undeclared name is `claude-code`, what this .mcp.json sent before it
  * declared: it names no release, so nothing reaches the builder as a
@@ -29,6 +38,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -285,6 +295,88 @@ describe('Activation: an older folder\'s declaration comes up to this release', 
     await assert.rejects(fs.access(mcpPath(none)), 'a .mcp.json was made');
   });
 
+  test('a hard-linked .mcp.json is left alone, so a folder sharing it does not start declaring', async () => {
+    // Folder A asks before every rule; folder B, an older one, does not, and shares A's .mcp.json by a hard link.
+    const a = await oldFolder(ALL);
+    const b = await oldFolder(OLD_RULES);
+    await fs.rm(mcpPath(b));
+    await fs.link(mcpPath(a), mcpPath(b));
+    assert.equal(await knowledge.refreshDeclaration(a), false);
+    assert.deepEqual(await knowledge.updateFolderAsks(a), { added: [], declared: false });
+    assert.equal(await fs.readFile(mcpPath(b), 'utf8'), oldMcpJson(OLD), 'B started declaring this release without its rules');
+    assert.equal((await fs.stat(mcpPath(a))).nlink, 2, 'the link between the two folders was broken');
+  });
+
+  test('the new .mcp.json replaces the old one whole, and an older 0644 one comes out owner-only', async () => {
+    const dir = await oldFolder(OLD_RULES);
+    await fs.chmod(mcpPath(dir), 0o644);
+    const before = await fs.stat(mcpPath(dir));
+    const entries = (await fs.readdir(dir)).sort();
+    assert.deepEqual(await knowledge.updateFolderAsks(dir), { added: PRIVATE_READS, declared: true });
+    const after = await fs.stat(mcpPath(dir));
+    assert.equal(await fs.readFile(mcpPath(dir), 'utf8'), oldMcpJson(DECLARED));
+    // A new file renamed over the old: a reader at that moment sees one or the other, never an empty file.
+    assert.notEqual(after.ino, before.ino, '.mcp.json was rewritten in place, so a reader could see it empty');
+    assert.equal(after.mode & 0o777, 0o600, 'the key file is not owner-only');
+    assert.deepEqual((await fs.readdir(dir)).sort(), entries, 'a temporary file was left beside .mcp.json');
+  });
+
+  test('a write that cannot finish leaves the old .mcp.json whole', { skip: process.getuid?.() === 0 && 'root writes into a read-only folder' }, async () => {
+    const dir = await oldFolder(ALL);
+    await fs.chmod(dir, 0o500);
+    try {
+      await assert.rejects(knowledge.refreshDeclaration(dir));
+      assert.equal(await fs.readFile(mcpPath(dir), 'utf8'), oldMcpJson(OLD));
+    } finally {
+      await fs.chmod(dir, 0o700);
+    }
+    assert.deepEqual((await fs.readdir(dir)).sort(), ['.claude', '.mcp.json']);
+  });
+
+  test('a later release\'s declaration stays: another install of the extension may share the folder', async () => {
+    const [major, minor, patch] = VERSION.split('.').map(Number);
+    for (const later of [`vscode-extension/${major}.${minor}.${patch + 1}`, `vscode-extension/${major}.${minor + 1}.0`, `vscode-extension/${major + 1}.0.0`]) {
+      const dir = await oldFolder(ALL, later);
+      assert.equal(await knowledge.refreshDeclaration(dir), false, later);
+      assert.equal(await fs.readFile(mcpPath(dir), 'utf8'), oldMcpJson(later), later);
+    }
+  });
+
+  test('which values a release replaces with its own declaration', () => {
+    const replaces = (current, version) => knowledge.upgradedClaudeCodeClient(current, version);
+    // Its own undeclared names and an earlier release of it: replaced.
+    for (const current of ['claude-code', 'vscode-extension', 'vscode-extension/0.91.75', 'vscode-extension/0.91.9', 'vscode-extension/0.0.0', 'vscode-extension/0.90.99']) {
+      assert.equal(replaces(current, '0.91.77'), 'vscode-extension/0.91.77', current);
+    }
+    // Numbers compare as numbers, not text: 0.91.9 is earlier than 0.91.10.
+    assert.equal(replaces('vscode-extension/0.91.9', '0.91.10'), 'vscode-extension/0.91.10');
+    // This release, a later one, another client's value, or a value that names no release: kept.
+    for (const current of ['vscode-extension/0.91.77', 'vscode-extension/0.91.78', 'vscode-extension/0.92.0', 'vscode-extension/1.0.0', 'vscode-extension/dev', 'hiveku-sync/0.5.59', 'codex', '']) {
+      assert.equal(replaces(current, '0.91.77'), null, current);
+    }
+    // A release that cannot read its own version (it reads as 0.0.0) changes nothing.
+    for (const current of ['claude-code', 'vscode-extension', 'vscode-extension/0.91.75']) {
+      assert.equal(replaces(current, '0.0.0'), null, current);
+      assert.equal(replaces(current, 'not-a-version'), null, current);
+    }
+    // Without a version given, it is this release.
+    assert.equal(replaces('claude-code'), DECLARED);
+  });
+
+  test('an install that cannot read its own version leaves a working declaration alone', async () => {
+    // The compiled extension beside a package.json with no version, as an unreadable one reads: 0.0.0.
+    const copy = await tmp('hk-declare-noversion-');
+    await fs.cp(path.join(ROOT, 'out'), path.join(copy, 'out'), { recursive: true });
+    await fs.writeFile(path.join(copy, 'package.json'), JSON.stringify({ name: 'hiveku-vscode' }));
+    const unversioned = createRequire(path.join(copy, 'out', 'knowledge.js'))('./knowledge.js');
+    assert.equal(unversioned.declaredClaudeCodeClient(), 'vscode-extension/0.0.0');
+    for (const client of [DECLARED, UNDECLARED, OLD]) {
+      const dir = await oldFolder(ALL, client);
+      assert.equal(await unversioned.refreshDeclaration(dir), false, client);
+      assert.equal(await fs.readFile(mcpPath(dir), 'utf8'), oldMcpJson(client), client);
+    }
+  });
+
   test('every start runs it for each open Hiveku folder, after the ask rules, one folder at a time (source)', () => {
     const fn = body('applySpendAskRules');
     assert.match(fn, /const \{ added, declared \} = await updateFolderAsks\(root\);/);
@@ -366,7 +458,7 @@ describe('The account command writes the ask rules first and declares only if th
 
   test('a folder the extension never scaffolded: the ask rules land, then the server declares', async () => {
     const dir = await tmp('hk-declare-cmd-');
-    assert.equal(await knowledge.pointClaudeCodeAt(dir, KEY, BASE), true);
+    assert.deepEqual(await knowledge.pointClaudeCodeAt(dir, KEY, BASE), { declared: true, leftAlone: null });
     // Only the ask rules: nothing else of the scaffold's settings comes with them.
     assert.deepEqual(await readJson(settingsPath(dir)), { permissions: { ask: ALL } });
     assert.deepEqual(await fs.readdir(dir), ['.claude']);
@@ -382,7 +474,7 @@ describe('The account command writes the ask rules first and declares only if th
     const dir = await tmp('hk-declare-cmd-own-');
     const have = ['WebFetch', ...ALL.slice(0, 5)];
     await seedSettings(dir, { model: 'opus', permissions: { allow: ['Bash(make:*)'], ask: have } });
-    assert.equal(await knowledge.pointClaudeCodeAt(dir, KEY, BASE), true);
+    assert.deepEqual(await knowledge.pointClaudeCodeAt(dir, KEY, BASE), { declared: true, leftAlone: null });
     const kept = await readJson(settingsPath(dir));
     assert.deepEqual(kept, { model: 'opus', permissions: { allow: ['Bash(make:*)'], ask: [...have, ...ALL.slice(5)] } });
     assert.equal((await localServer(dir)).headers['X-Hiveku-Client'], DECLARED);
@@ -408,19 +500,22 @@ describe('The account command writes the ask rules first and declares only if th
       ['an ask that is not a list', (dir) => seedSettings(dir, JSON.stringify({ permissions: { ask: 'WebFetch' } }))],
       ['a settings file that is a folder', (dir) => fs.mkdir(settingsPath(dir), { recursive: true })],
       ['a .claude that is a file', (dir) => fs.writeFile(path.join(dir, '.claude'), 'not a folder')],
-      [
+    ];
+    // A settings file the owner cannot write (root writes it anyway, so not then).
+    if (process.getuid?.() !== 0) {
+      cases.push([
         'a settings file whose write fails',
         async (dir) => {
-          await fs.mkdir(path.join(dir, '.claude'));
-          await fs.symlink(path.join(dir, 'no-such-folder', 'settings.json'), settingsPath(dir));
+          await seedSettings(dir, { permissions: { allow: ['Bash(make:*)'] } });
+          await fs.chmod(settingsPath(dir), 0o444);
         },
-      ],
-    ];
+      ]);
+    }
     for (const [what, seed] of cases) {
       const dir = await tmp('hk-declare-cmd-fail-');
       await seed(dir);
       const seeded = await snapshot(dir);
-      assert.equal(await knowledge.pointClaudeCodeAt(dir, KEY, BASE), false, what);
+      assert.deepEqual(await knowledge.pointClaudeCodeAt(dir, KEY, BASE), { declared: false, leftAlone: null }, what);
       const client = (await localServer(dir)).headers['X-Hiveku-Client'];
       assert.equal(client, UNDECLARED, what);
       assert.doesNotMatch(client, BUILDER_DECLARED_RE, what);
@@ -428,15 +523,217 @@ describe('The account command writes the ask rules first and declares only if th
     }
   });
 
-  test('the account command and the repoint after a download both go through it (source)', () => {
+  test('the account command and the repoint after a download both go through it, and say why it did not declare (source)', () => {
     const command = body('setClaudeCodeAccount');
-    assert.match(command, /declared = await pointClaudeCodeAt\(folderPath, key, baseUrl\(\)\);/);
-    assert.match(command, /\$\{declared \? '' : NO_ASK_RULES_NOTE\}/);
+    assert.match(command, /pointed = await pointClaudeCodeAt\(folderPath, key, baseUrl\(\)\);/);
+    assert.match(command, /\$\{askRulesNote\(pointed\)\}/);
     const repoint = body('warnIfClaudeShadowsProject');
-    assert.match(repoint, /const declared = await pointClaudeCodeAt\(folderPath, key, baseUrl\(\)\);/);
-    assert.match(repoint, /\$\{declared \? '' : NO_ASK_RULES_NOTE\}/);
+    assert.match(repoint, /const pointed = await pointClaudeCodeAt\(folderPath, key, baseUrl\(\)\);/);
+    assert.match(repoint, /\$\{askRulesNote\(pointed\)\}/);
+    // No note when it declared; the home folder and a link each get their own.
+    const note = body('askRulesNote');
+    assert.match(note, /if \(declared\) return '';/);
+    assert.match(note, /leftAlone === 'home'\) return HOME_SETTINGS_NOTE;/);
+    assert.match(note, /leftAlone === 'link'\) return LINKED_SETTINGS_NOTE;/);
+    assert.match(note, /return NO_ASK_RULES_NOTE;/);
     // Nothing else in the extension builds a hiveku server or writes one into ~/.claude.json.
     assert.doesNotMatch(SRC, /hivekuMcpServer\(|setLocalHivekuServer\(/);
+  });
+});
+
+describe('The account command adds only the rules, and leaves the home folder\'s settings and links alone', () => {
+  const claudeJsonPath = () => path.join(os.homedir(), '.claude.json');
+  const localClient = async (dir) => (await readJson(claudeJsonPath())).projects[dir].mcpServers.hiveku.headers['X-Hiveku-Client'];
+
+  test('a hand-formatted settings file keeps every byte; the rules go in after what it asks', async () => {
+    // CRLF, a four-space indent, an escape, a number JSON.stringify would rewrite, a one-line list, no final newline.
+    const own = '{\r\n    "model": "opus",\r\n    "env": { "GREETING": "caf\\u00e9", "RETRIES": 3e0 },\r\n    "permissions": {\r\n        "allow": ["Bash(make:*)"],\r\n        "ask": [\r\n            "WebFetch"\r\n        ]\r\n    }\r\n}';
+    const dir = await tmp('hk-declare-cmd-bytes-');
+    await seedSettings(dir, own);
+    assert.deepEqual(await knowledge.pointClaudeCodeAt(dir, KEY, BASE), { declared: true, leftAlone: null });
+    const rules = ALL.map((rule) => `,\r\n            "${rule}"`).join('');
+    assert.equal(await fs.readFile(settingsPath(dir), 'utf8'), own.replace('            "WebFetch"', `            "WebFetch"${rules}`));
+    assert.equal(await localClient(dir), DECLARED);
+  });
+
+  test('a start adds the missing rules into the text the same way', async () => {
+    const dir = await tmp('hk-declare-start-bytes-');
+    const own = `{\n\t"model": "opus",\n\t"permissions": {\n\t\t"ask": [\n${OLD_RULES.map((rule) => `\t\t\t"${rule}"`).join(',\n')}\n\t\t],\n\t\t"deny": ["Read(**/.env.local)"]\n\t}\n}\n`;
+    await seedSettings(dir, own);
+    await seedMcp(dir, oldMcpJson(OLD));
+    assert.deepEqual(await knowledge.updateFolderAsks(dir), { added: PRIVATE_READS, declared: true });
+    const last = `\t\t\t"${OLD_RULES.at(-1)}"`;
+    assert.equal(await fs.readFile(settingsPath(dir), 'utf8'), own.replace(`${last}\n`, `${last}${PRIVATE_READS.map((rule) => `,\n\t\t\t"${rule}"`).join('')}\n`));
+  });
+
+  test('a linked settings file, or a linked .claude, is left alone, and the server does not declare', async () => {
+    const own = '{\n\t"model": "opus",\n\t"permissions": { "allow": ["Bash(make:*)"] }\n}\n';
+    // Each case links into a shared folder of its own, holding one settings file with no other link to it.
+    const cases = [
+      ['a symbolic link', async (dir, target) => { await fs.mkdir(path.join(dir, '.claude')); await fs.symlink(target, settingsPath(dir)); }],
+      ['a hard link', async (dir, target) => { await fs.mkdir(path.join(dir, '.claude')); await fs.link(target, settingsPath(dir)); }],
+      ['a linked .claude', async (dir, target) => { await fs.rename(target, path.join(path.dirname(target), 'settings.json')); await fs.symlink(path.dirname(target), path.join(dir, '.claude')); }],
+      ['a link to no file', async (dir, target) => { await fs.mkdir(path.join(dir, '.claude')); await fs.symlink(path.join(path.dirname(target), 'none', 'settings.json'), settingsPath(dir)); }],
+    ];
+    for (const [what, seed] of cases) {
+      const shared = await tmp('hk-declare-dotfiles-');
+      const target = path.join(shared, 'claude-settings.json');
+      await fs.writeFile(target, own);
+      const dir = await tmp('hk-declare-cmd-link-');
+      await seed(dir, target);
+      const before = await snapshot(shared);
+      assert.deepEqual(await knowledge.pointClaudeCodeAt(dir, KEY, BASE), { declared: false, leftAlone: 'link' }, what);
+      assert.deepEqual(await snapshot(shared), before, `${what}: the shared settings changed`);
+      assert.equal(await localClient(dir), UNDECLARED, what);
+    }
+  });
+
+  test('a linked settings file that already asks before every rule: the server declares, and the file is not written', async () => {
+    const shared = await tmp('hk-declare-dotfiles-full-');
+    const target = path.join(shared, 'claude-settings.json');
+    await fs.writeFile(target, JSON.stringify({ permissions: { ask: ALL } }));
+    const { mtimeMs } = await fs.stat(target);
+    const dir = await tmp('hk-declare-cmd-link-full-');
+    await fs.mkdir(path.join(dir, '.claude'));
+    await fs.symlink(target, settingsPath(dir));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(await knowledge.pointClaudeCodeAt(dir, KEY, BASE), { declared: true, leftAlone: 'link' });
+    assert.equal((await fs.stat(target)).mtimeMs, mtimeMs);
+    assert.equal(await localClient(dir), DECLARED);
+  });
+
+  test('in the home folder, .claude/settings.json is Claude Code\'s settings for every folder: left alone', async () => {
+    const userSettings = '{\n    "model": "opus",\n    "statusLine": { "type": "command", "command": "echo hi" }\n}\n';
+    await fs.mkdir(path.join(HOME, '.claude'), { recursive: true });
+    await fs.writeFile(path.join(HOME, '.claude', 'settings.json'), userSettings);
+    try {
+      assert.deepEqual(await knowledge.pointClaudeCodeAt(HOME, KEY, BASE), { declared: false, leftAlone: 'home' });
+      assert.equal(await fs.readFile(path.join(HOME, '.claude', 'settings.json'), 'utf8'), userSettings);
+      assert.equal(await localClient(HOME), UNDECLARED);
+      // Also when the folder is named another way.
+      assert.deepEqual(await knowledge.pointClaudeCodeAt(`${HOME}${path.sep}`, KEY, BASE), { declared: false, leftAlone: 'home' });
+      assert.equal(await fs.readFile(path.join(HOME, '.claude', 'settings.json'), 'utf8'), userSettings);
+    } finally {
+      await fs.rm(path.join(HOME, '.claude'), { recursive: true, force: true });
+    }
+  });
+});
+
+describe('A start brings the local-scope server the account command wrote in line with the folder\'s rules', () => {
+  const claudeJsonPath = () => path.join(os.homedir(), '.claude.json');
+  const server = (client) => ({
+    type: 'http',
+    url: `${BASE}/mcp`,
+    headers: client === undefined ? { Authorization: `Bearer ${KEY}` } : { Authorization: `Bearer ${KEY}`, 'X-Hiveku-Client': client },
+  });
+
+  /** ~/.claude.json as Claude Code keeps it (owner-only), with `folder`'s local hiveku server sending `client`. */
+  async function seedClaudeJson(folder, client) {
+    const cfg = {
+      numStartups: 41,
+      mcpServers: { hiveku: server('claude-code') },
+      projects: {
+        '/somewhere/else': { allowedTools: [], mcpServers: { hiveku: server('vscode-extension/0.91.70') }, lastCost: 1.5 },
+        [folder]: { allowedTools: ['Bash(make:*)'], hasTrustDialogAccepted: true, mcpServers: { mine: { command: 'npx' }, hiveku: server(client) } },
+      },
+    };
+    await fs.rm(claudeJsonPath(), { recursive: true, force: true });
+    await fs.writeFile(claudeJsonPath(), JSON.stringify(cfg, null, 2), { mode: 0o600 });
+    return cfg;
+  }
+
+  async function folderAsking(ask) {
+    const dir = await tmp('hk-declare-local-');
+    if (ask) await seedSettings(dir, { permissions: { ask } });
+    return dir;
+  }
+
+  test('a folder with no ask rules stops declaring: only that one value changes', async () => {
+    for (const declared of ['vscode-extension/0.91.77', 'vscode-extension/0.91.8', DECLARED]) {
+      const dir = await folderAsking(null);
+      const cfg = await seedClaudeJson(dir, declared);
+      assert.equal(await knowledge.updateLocalDeclaration(dir), UNDECLARED, declared);
+      cfg.projects[dir].mcpServers.hiveku.headers['X-Hiveku-Client'] = UNDECLARED;
+      assert.deepEqual(await readJson(claudeJsonPath()), cfg, declared);
+      assert.equal((await fs.stat(claudeJsonPath())).mode & 0o777, 0o600, 'the file holds keys: it stays owner-only');
+    }
+    // With some of the rules, it is the same.
+    const partial = await folderAsking(OLD_RULES);
+    await seedClaudeJson(partial, 'vscode-extension/0.91.77');
+    assert.equal(await knowledge.updateLocalDeclaration(partial), UNDECLARED);
+    // Nothing is left beside the file: no lock, no temporary file.
+    assert.deepEqual((await fs.readdir(HOME)).filter((name) => name.startsWith('.claude.json')), ['.claude.json']);
+  });
+
+  test('a folder with every ask rule comes up to this release; a later release, another client\'s value and none stay', async () => {
+    for (const earlier of ['vscode-extension/0.91.75', 'claude-code', 'vscode-extension']) {
+      const dir = await folderAsking(ALL);
+      await seedClaudeJson(dir, earlier);
+      assert.equal(await knowledge.updateLocalDeclaration(dir), DECLARED, earlier);
+      assert.equal((await readJson(claudeJsonPath())).projects[dir].mcpServers.hiveku.headers['X-Hiveku-Client'], DECLARED, earlier);
+    }
+    const [major, minor, patch] = VERSION.split('.').map(Number);
+    const kept = [[ALL, `vscode-extension/${major}.${minor}.${patch + 1}`], [ALL, DECLARED], [ALL, 'hiveku-sync/0.5.59'], [ALL, undefined], [null, 'claude-code'], [OLD_RULES, 'vscode-extension']];
+    for (const [ask, client] of kept) {
+      const dir = await folderAsking(ask);
+      await seedClaudeJson(dir, client);
+      const before = await fs.readFile(claudeJsonPath(), 'utf8');
+      const { mtimeMs } = await fs.stat(claudeJsonPath());
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      assert.equal(await knowledge.updateLocalDeclaration(dir), null, String(client));
+      assert.equal(await fs.readFile(claudeJsonPath(), 'utf8'), before, String(client));
+      assert.equal((await fs.stat(claudeJsonPath())).mtimeMs, mtimeMs, `${client}: a start with nothing to change wrote ~/.claude.json`);
+    }
+    // No local server for the folder, or no ~/.claude.json at all: nothing to do.
+    const other = await folderAsking(null);
+    await seedClaudeJson('/not/this/folder', 'vscode-extension/0.91.77');
+    assert.equal(await knowledge.updateLocalDeclaration(other), null);
+    await fs.rm(claudeJsonPath());
+    assert.equal(await knowledge.updateLocalDeclaration(other), null);
+    await assert.rejects(fs.access(claudeJsonPath()), 'a ~/.claude.json was made');
+  });
+
+  test('while Claude Code holds its lock on ~/.claude.json nothing is written; once it lets go, the change lands', async () => {
+    const dir = await folderAsking(null);
+    await seedClaudeJson(dir, 'vscode-extension/0.91.77');
+    const before = await fs.readFile(claudeJsonPath(), 'utf8');
+    const lock = `${await fs.realpath(claudeJsonPath())}.lock`;
+    await fs.mkdir(lock);
+    try {
+      assert.equal(await knowledge.updateLocalDeclaration(dir), null);
+      assert.equal(await fs.readFile(claudeJsonPath(), 'utf8'), before);
+    } finally {
+      await fs.rmdir(lock);
+    }
+    assert.equal(await knowledge.updateLocalDeclaration(dir), UNDECLARED);
+    await assert.rejects(fs.access(lock), 'the lock was not let go');
+  });
+
+  test('a linked ~/.claude.json stays a link; the file it points at is changed', async () => {
+    const dir = await folderAsking(null);
+    await seedClaudeJson(dir, 'vscode-extension/0.91.77');
+    const dotfiles = await tmp('hk-declare-dotfiles-claude-');
+    const target = path.join(dotfiles, 'claude.json');
+    await fs.rename(claudeJsonPath(), target);
+    await fs.symlink(target, claudeJsonPath());
+    try {
+      assert.equal(await knowledge.updateLocalDeclaration(dir), UNDECLARED);
+      assert.ok((await fs.lstat(claudeJsonPath())).isSymbolicLink());
+      assert.equal(JSON.parse(await fs.readFile(target, 'utf8')).projects[dir].mcpServers.hiveku.headers['X-Hiveku-Client'], UNDECLARED);
+    } finally {
+      await fs.rm(claudeJsonPath(), { force: true });
+    }
+  });
+
+  test('a start runs it for every open folder, Hiveku or not, after the ask rules and on its own (source)', () => {
+    const fn = body('applySpendAskRules');
+    const local = fn.indexOf('await updateLocalDeclaration(root)');
+    assert.ok(local > fn.indexOf('await updateFolderAsks(root)'), 'the local server is updated after the folder\'s rules');
+    // Not only in Hiveku folders: the account command wires any folder.
+    assert.match(fn, /if \(isProject \|\| isAccount\) \{\s*const \{ added, declared \} = await updateFolderAsks\(root\);/);
+    assert.doesNotMatch(fn, /continue;/);
+    // Its own try, so a failed rules step does not skip it.
+    assert.match(fn, /ask rules failed: \$\{errMsg\(err\)\}`\);\s*\}\s*try \{\s*const sent = await updateLocalDeclaration\(root\);/);
   });
 });
 

@@ -16,16 +16,27 @@
  * (the same file `claude mcp add -s local` writes), which already holds their creds.
  */
 
+import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 
-/** Atomic write — temp file + rename — so a crash or a concurrent Claude Code
- *  read never sees a half-written ~/.claude.json. */
+/**
+ * Atomic write (temp file + rename), so a crash or a concurrent Claude Code
+ * read never sees a half-written ~/.claude.json. The file holds keys (the
+ * local-scope `hiveku` server's among them) and Claude Code keeps it
+ * owner-only, so the new file is created 0600: a temp file made with the
+ * default mode would have left it readable by every user once renamed over.
+ */
 async function writeAtomic(file: string, contents: string): Promise<void> {
-  const tmp = `${file}.hiveku-${process.pid}.tmp`;
-  await fs.writeFile(tmp, contents, 'utf8');
-  await fs.rename(tmp, file);
+  const tmp = `${file}.hiveku-${process.pid}-${crypto.randomBytes(4).toString('hex')}.tmp`;
+  try {
+    await fs.writeFile(tmp, contents, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    await fs.rename(tmp, file);
+  } catch (err) {
+    await fs.rm(tmp, { force: true }).catch(() => undefined);
+    throw err;
+  }
 }
 
 export interface McpServerConfig {
@@ -147,6 +158,96 @@ export async function setLocalHivekuServer(folderPath: string, server: McpServer
   if (!entry.mcpServers || typeof entry.mcpServers !== 'object') entry.mcpServers = {};
   entry.mcpServers.hiveku = server;
   await writeAtomic(claudeConfigPath(), JSON.stringify(cfg, null, 2) + '\n');
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+const own = (record: Record<string, unknown>, key: string): unknown =>
+  Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
+
+/** The headers of the local-scope `hiveku` server for `folderPath`, or undefined when there is none. */
+function localHivekuHeaders(cfg: ClaudeConfig, folderPath: string): Record<string, unknown> | undefined {
+  const projects: unknown = cfg.projects;
+  const project = isRecord(projects) ? own(projects, folderPath) : undefined;
+  const servers = isRecord(project) ? own(project, 'mcpServers') : undefined;
+  const server = isRecord(servers) ? own(servers, 'hiveku') : undefined;
+  const headers = isRecord(server) ? own(server, 'headers') : undefined;
+  return isRecord(headers) ? headers : undefined;
+}
+
+const CLIENT_HEADER = 'X-Hiveku-Client';
+
+/** The X-Hiveku-Client the local-scope `hiveku` server for `folderPath` sends, or null when it sends no string one. */
+function localHivekuClient(cfg: ClaudeConfig, folderPath: string): string | null {
+  const headers = localHivekuHeaders(cfg, folderPath);
+  const value = headers ? own(headers, CLIENT_HEADER) : undefined;
+  return typeof value === 'string' ? value : null;
+}
+
+/**
+ * Take Claude Code's own lock on its config, the one it holds while it saves
+ * the file (the proper-lockfile convention: a folder named after the file's
+ * real path plus `.lock`, made with one mkdir, so only one process gets it).
+ * Holding it, a read-modify-write here cannot lose a save of Claude Code's,
+ * nor Claude Code one of ours. Tries for about a second; resolves to null
+ * when the lock stays taken (the next start tries again) and when there is no
+ * config to lock. Resolves to the file to write and a function that lets go.
+ */
+async function lockClaudeConfig(): Promise<{ file: string; release: () => Promise<void> } | null> {
+  let file: string;
+  try {
+    file = await fs.realpath(claudeConfigPath());
+  } catch {
+    return null;
+  }
+  const lock = `${file}.lock`;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await fs.mkdir(lock);
+      return { file, release: () => fs.rmdir(lock).catch(() => undefined) };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException)?.code !== 'EEXIST') throw err;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  return null;
+}
+
+/**
+ * Change only the X-Hiveku-Client that the local-scope `hiveku` server for
+ * `folderPath` sends, to what `decide` answers for the current value (null
+ * keeps it). For an update that runs on its own, at every start: a look
+ * without the lock first, so a start with nothing to change takes no lock and
+ * writes nothing; then, under Claude Code's lock (lockClaudeConfig), a strict
+ * read, `decide` again on what is there now, and an atomic owner-only write
+ * of the file's real path, so a linked ~/.claude.json stays a link. A server
+ * that sends no string value, a file that cannot be read, and a lock that
+ * stays taken are left alone. Returns the value written, or null.
+ */
+export async function updateLocalHivekuClient(
+  folderPath: string,
+  decide: (current: string) => string | null,
+): Promise<string | null> {
+  const { cfg, unreadable } = await readConfigTolerant();
+  const seen = unreadable ? null : localHivekuClient(cfg, folderPath);
+  if (seen === null) return null;
+  const wanted = decide(seen);
+  if (wanted === null || wanted === seen) return null;
+  const lock = await lockClaudeConfig();
+  if (!lock) return null;
+  try {
+    const fresh = await readConfigForWrite();
+    const current = localHivekuClient(fresh, folderPath);
+    const next = current === null ? null : decide(current);
+    const headers = localHivekuHeaders(fresh, folderPath);
+    if (!headers || next === null || next === current) return null;
+    headers[CLIENT_HEADER] = next;
+    await writeAtomic(lock.file, JSON.stringify(fresh, null, 2) + '\n');
+    return next;
+  } finally {
+    await lock.release();
+  }
 }
 
 /** Remove the local-scoped `hiveku` server for a folder (so a project .mcp.json wins). */

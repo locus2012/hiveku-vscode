@@ -60,6 +60,7 @@ import {
   setConnectedAsMap,
   setCodexSupport,
   updateFolderAsks,
+  updateLocalDeclaration,
   declaredClaudeCodeClient,
   pointClaudeCodeAt,
   type PermissionMode,
@@ -1092,12 +1093,24 @@ async function switchAccount(): Promise<void> {
 }
 
 /**
- * Added to the message when pointClaudeCodeAt could not put the ask rules in
- * place, so the folder's Claude Code connection does not declare that it asks
- * first, and the builder refuses the tools that need it.
+ * Added to the message when pointClaudeCodeAt did not declare, because the ask
+ * rules are not all in the folder's settings: the builder then refuses the
+ * tools that need them. Says why: the file could not take them, or the
+ * command leaves it alone (the home folder's settings, or a link).
  */
 const NO_ASK_RULES_NOTE =
   " Hiveku could not add its ask rules to the folder's .claude/settings.json, so Claude Code there cannot read your direct messages, and revealing a secret needs an approval on the dashboard each time. Fix that file, then run Hiveku: Set Claude Code Account again.";
+const HOME_SETTINGS_NOTE =
+  " In your home folder, .claude/settings.json holds your Claude Code settings for every folder, so Hiveku did not add its ask rules to it. Claude Code there cannot read your direct messages, and revealing a secret needs an approval on the dashboard each time. Run Hiveku: Set Claude Code Account in a project folder instead.";
+const LINKED_SETTINGS_NOTE =
+  " The folder's .claude/settings.json is a link to a file other folders may share, so Hiveku did not add its ask rules to it. Claude Code there cannot read your direct messages, and revealing a secret needs an approval on the dashboard each time. Give the folder a settings file of its own, then run Hiveku: Set Claude Code Account again.";
+
+function askRulesNote({ declared, leftAlone }: { declared: boolean; leftAlone: 'home' | 'link' | null }): string {
+  if (declared) return '';
+  if (leftAlone === 'home') return HOME_SETTINGS_NOTE;
+  if (leftAlone === 'link') return LINKED_SETTINGS_NOTE;
+  return NO_ASK_RULES_NOTE;
+}
 
 /**
  * After scaffolding a downloaded project, a local-scoped `hiveku` server in
@@ -1120,10 +1133,10 @@ async function warnIfClaudeShadowsProject(folderPath: string, account: AccountRe
   );
   if (choice !== 'Use this account') return;
   try {
-    // The ask rules go into the folder first; the server declares only if they landed.
-    const declared = await pointClaudeCodeAt(folderPath, key, baseUrl());
+    // The ask rules go into the folder first; the server declares only if they are all there.
+    const pointed = await pointClaudeCodeAt(folderPath, key, baseUrl());
     vscode.window.showInformationMessage(
-      `Claude Code in this folder now uses ${account.label}. Reload the window to apply.${declared ? '' : NO_ASK_RULES_NOTE}`,
+      `Claude Code in this folder now uses ${account.label}. Reload the window to apply.${askRulesNote(pointed)}`,
     );
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
@@ -1171,16 +1184,16 @@ async function setClaudeCodeAccount(): Promise<void> {
     folderPath = pick.description;
   }
 
-  let declared: boolean;
+  let pointed: Awaited<ReturnType<typeof pointClaudeCodeAt>>;
   try {
-    declared = await pointClaudeCodeAt(folderPath, key, baseUrl());
+    pointed = await pointClaudeCodeAt(folderPath, key, baseUrl());
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: could not update Claude Code config — ${errMsg(err)}`);
     return;
   }
 
   const reload = await vscode.window.showInformationMessage(
-    `Claude Code in "${path.basename(folderPath)}" is now wired to ${account.label}. Reload the window to apply (Claude Code reads MCP config at startup).${declared ? '' : NO_ASK_RULES_NOTE}`,
+    `Claude Code in "${path.basename(folderPath)}" is now wired to ${account.label}. Reload the window to apply (Claude Code reads MCP config at startup).${askRulesNote(pointed)}`,
     'Reload Window',
   );
   if (reload === 'Reload Window') await vscode.commands.executeCommand('workbench.action.reloadWindow');
@@ -2928,8 +2941,13 @@ async function openDepartmentWindow(
  * release that scaffolded it, which the builder refuses for the tools whose ask
  * rules came later. This adds only the missing rules, then, once every rule is
  * there, changes only the hiveku server's X-Hiveku-Client (updateFolderAsks);
- * it writes nothing when there is nothing to change. One folder that fails does
- * not stop the others.
+ * it writes nothing when there is nothing to change.
+ *
+ * Then, in every open folder, Hiveku or not: the local-scope hiveku server
+ * that Set Claude Code Account writes into ~/.claude.json, which beats the
+ * .mcp.json, declares this release once the folder's rules are all there, and
+ * stops declaring while they are not (updateLocalDeclaration). One folder, or
+ * one of the two steps, that fails does not stop the rest.
  */
 async function applySpendAskRules(): Promise<void> {
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
@@ -2939,12 +2957,19 @@ async function applySpendAskRules(): Promise<void> {
       const link = scms.get(root)?.link ?? (await readProjectLink(root).catch(() => undefined));
       const isProject = !!(link?.project_id && link.account_id);
       const isAccount = accounts.list().some((a) => accounts.getFolder(a.accountId) === root);
-      if (!isProject && !isAccount) continue;
-      const { added, declared } = await updateFolderAsks(root);
-      if (added.length) log.appendLine(`[settings] ${root}: now asks before ${added.join(', ')}`);
-      if (declared) log.appendLine(`[settings] ${root}: .mcp.json now declares ${declaredClaudeCodeClient()}`);
+      if (isProject || isAccount) {
+        const { added, declared } = await updateFolderAsks(root);
+        if (added.length) log.appendLine(`[settings] ${root}: now asks before ${added.join(', ')}`);
+        if (declared) log.appendLine(`[settings] ${root}: .mcp.json now declares ${declaredClaudeCodeClient()}`);
+      }
     } catch (err) {
       log.appendLine(`[settings] ${root}: ask rules failed: ${errMsg(err)}`);
+    }
+    try {
+      const sent = await updateLocalDeclaration(root);
+      if (sent) log.appendLine(`[settings] ${root}: the local hiveku server in ~/.claude.json now sends ${sent}`);
+    } catch (err) {
+      log.appendLine(`[settings] ${root}: local hiveku server not updated: ${errMsg(err)}`);
     }
   }
 }
