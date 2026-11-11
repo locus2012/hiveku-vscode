@@ -10,7 +10,10 @@
  * into assets/commands/ - see vendoredCommand). All
  * commands share one skeleton: account_context_get
  * FIRST → do the work → persist learnings (memory) → reflect work in Hiveku PM
- * (source of truth). Writes are confirmed per-step, never auto-approved.
+ * (source of truth). The designer's commands are the exception: memory keeps
+ * only a person's words about a design, never the agent's own work
+ * (DESIGN_PERSIST_STEP, DESIGN_SUMMARY_STEP). Writes are confirmed per-step,
+ * never auto-approved.
  */
 
 import { readFileSync } from 'fs';
@@ -41,6 +44,53 @@ const PERSIST_STEP =
   'and merge. Then reflect the work in Hiveku PM — `pm_tasks_create`/`pm_tasks_update`/`pm_tasks_complete`. ' +
   'Hiveku, not this folder, is the source of truth.';
 
+/** The one memory write design work makes: a person's own words about a design. */
+const PERSON_WORDS_TO_MEMORY =
+  'If the person said what works or what does not, record their words, quoted, ' +
+  "with the design's id and the date, in the `branding` memory document: read it " +
+  '(`memory_list({ domain: "branding" })`), merge into the full text, and send the whole document with ' +
+  '`memory_update({ memory_id, content, reason, expected_version })`. ' +
+  MEMORY_EDIT_RULES_PROSE +
+  ' Only when there is none, `memory_create({ type: "memory", name: "branding", content, reason })`; a 409 ' +
+  'there means one exists, so read and merge. Never write your own palette, font or template choices there ' +
+  '(the brand guide holds the brand), and never your own design as what works: it is a draft until the ' +
+  'person says so.';
+
+/**
+ * The designer commands' closer (Hiveku's design rules, 2026-11-10). On design
+ * work the generic "persist notable learnings" became an agent saving its own
+ * drafts, palette and template picks to the branding memory as what works, and
+ * later sessions read those notes as proven and as brand values. Design memory
+ * holds a person's words about a design; colours, fonts and logos live in the
+ * brand guide. The Claude Code plugin's /hiveku:design ends the same way.
+ */
+const DESIGN_PERSIST_STEP =
+  'Finish with memory and PM. ' +
+  PERSON_WORDS_TO_MEMORY +
+  ' Then reflect the work in Hiveku PM: `pm_tasks_create`/`pm_tasks_update`/`pm_tasks_complete`. ' +
+  'Hiveku, not this folder, is the source of truth.';
+
+/**
+ * How the designer's daily brief, weekly pass and monthly report end (Hiveku's
+ * design rules, 2026-11-10). Agency Cadence runs all three on a timer with no
+ * person present (localAutomations.ts CADENCE_JOBS), and they used to end by
+ * saving "notable learnings", a "what changed / what's next" note and the
+ * report summary to the branding memory: the agent grading its own drafts,
+ * which later sessions read as what works. The summary goes to the person;
+ * memory keeps only what a person said about a design.
+ */
+const DESIGN_SUMMARY_STEP =
+  'This summary is your own account of your own work: it goes to the person (your reply, a report file or a ' +
+  'PM task), never into memory, and anything you made is a draft until a person approves it. Memory keeps only ' +
+  'what a person said. ' +
+  PERSON_WORDS_TO_MEMORY +
+  ' Hiveku, not this folder, is the source of truth.';
+
+/** Where Hiveku's design rules come from; the same line as the plugin's /hiveku:design. */
+const DESIGN_RULES_POINTER =
+  "Hiveku's design rules come first: `account_context_get` returns them in `platform_rules`. They apply to " +
+  'every account and outrank its memory, so follow them in every step below.';
+
 function dailyCommand(role: Role): string {
   const signals = role.briefTools;
   const domain = role.knowledgeDomains[0] ?? 'marketing';
@@ -69,7 +119,7 @@ ${signals.map((t) => `   - \`${t}\``).join('\n')}
    its number (\`account_usage_get\`).
 3. End with the task queue: \`mc_tasks_next\` then \`pm_tasks_list\` (open, due soon).
 4. Report: a 5-line summary, then the top 3 actions ranked by impact. Keep it tight.
-5. ${PERSIST_STEP} Offer (do not force) to create a PM task per recommended action.
+5. ${role.id === 'designer' ? DESIGN_SUMMARY_STEP : PERSIST_STEP} Offer (do not force) to create a PM task per recommended action.
 `;
 }
 
@@ -286,11 +336,13 @@ IMAGES: cheap, iterate freely:
   \`brand_skipped_reason: "no_active_brand_guide"\` when the account has no active guide: the image is
   unbranded and the slot was spent, say so). Exact frame via \`target_width\` / \`target_height\`;
   \`mode: "modify"\` with \`reference_media_asset_ids\` edits an existing library image.
-- A SET that must look consistent (ad variations, hero + before/after, carousel):
+- A SET that must look consistent (ad variations, a carousel's slides):
   \`generate_image_set\` (up to 10 prompts, one shared brand context; top-level \`use_brand\` and
   \`target_width\` / \`target_height\` set the batch default, a per-prompt frame replaces them). Load
   \`account_context_get({ domain: "branding" })\` first and write all prompts from the same visual
-  language. Read \`errors[]\` and \`summary\`, not the HTTP status.
+  language. Read \`errors[]\` and \`summary\`, not the HTTP status. Never a before and after: the
+  business's real photos are the only before and after that may appear, and a generated picture never
+  invents a "before", a result or a customer.
 - Import: \`media_import_url({ url, folder_id?, title?, tags? })\` copies an external image's BYTES into
   the library as a NEW row (no quota slot; SSRF-guarded, 25MB, image-only): use it for a client's file or
   a chosen stock URL so the asset outlives its origin (\`stock_photos_download\` is the website-project
@@ -839,7 +891,7 @@ domain; there is no "creative" chat domain).
    playbook is \`hiveku-data/creative/SETUP.md\`).
 6. Rank the queue: failed video runs and unresolved client revisions first, then approvals blocking a
    video run, then new briefs, then brand foundation. One next action per item.
-7. ${PERSIST_STEP}
+7. ${DESIGN_PERSIST_STEP}
 `,
         'hiveku-design-produce': `---
 description: Produce a design deliverable from a brief - brand first, reuse and transform first, the meter before any batch, editable layered designs with dashboard links, self-judged, then handed to the post.
@@ -847,6 +899,7 @@ argument-hint: "[campaign brief]"
 ---
 Produce: $ARGUMENTS. Brand FIRST: \`account_context_get({ domain: "branding" })\` + \`brand_guide_get\` -
 colors, fonts, logo URLs and voice come from there, never from a previous account.
+${DESIGN_RULES_POINTER}
 1. Reuse first: \`media_library_list\` (the client's real photos beat generated ones) and
    \`stock_photos_search\` before generating anything. An owned asset at the wrong size or crop is a
    \`media_transform({ asset_id, resize | crop | format })\` (free, a NEW row); a client's or stock URL that
@@ -858,7 +911,9 @@ colors, fonts, logo URLs and voice come from there, never from a previous accoun
    report \`brand_applied\` / \`brand_skipped_reason\`, and a 503 \`brand_unavailable\` spent nothing.
 3. One shared direction for the whole set via \`talk_to_department({ domain: "branding", message })\`, then
    \`design_templates_list\` (brand-substituted starting points, including the 1200x600 email headers,
-   the 1200x630 OG card, 1280x720 YouTube, 1584x396 LinkedIn and 1500x500 X formats) →
+   the 1200x630 OG card, 1280x720 YouTube, 1584x396 LinkedIn and 1500x500 X formats): take one whose
+   artboard is the destination's size, then replace its words and pictures with this business's true
+   story. Start from an earlier design (\`design_list\`) only when the person names it. Then
    \`design_create({ title, designType, artboard, initialCanvasData })\` per artboard / variant. Text and
    logos are canvas LAYERS; never generate them into an image.
 4. Self-judge before hand-off: \`design_export_image({ id, canvas_json, width, height })\` → read
@@ -874,7 +929,7 @@ colors, fonts, logo URLs and voice come from there, never from a previous accoun
    media_types })\` (index-aligned, one MIME per entry, replaces the post's whole media list; a
    published post is edit-locked) or on \`social_create_post\` at create time, under the social lane's own
    confirm rules; site slots go through \`assets_upload\` (a separate store: download + re-upload).
-7. ${PERSIST_STEP}
+7. ${DESIGN_PERSIST_STEP}
 `,
       };
     default:
@@ -912,7 +967,7 @@ function cadenceCommands(role: Role): Record<string, string> {
     designer: {
       skill: 'hiveku-creative-agency',
       weekly: 'inbox ears (`agent_inbox_list` for design.comment / design.video_completed / design.video_failed, `agent_inbox_resolve` only what is fixed), revision sweep (`design_list` → `design_comments_list` per active design, unresolved threads first), storyboard approvals outstanding (`marketing_video_pipeline_list` reconciled against branding memory; you never approve), lost renders (`design_render_jobs_list`), the image meter (`media_image_quota`: a null remaining is unknown or unlimited, never zero), brand audit (`brand_guide_list` gaps: logo, fonts, voice), export/register hygiene',
-      report: 'deliverables shipped (designs created/revised with dashboard links), inbox items handled, video clips consumed vs the monthly cap (`design_video_capabilities_get`), image generations used of limit (`media_image_quota`) plus upscale dollars, generation spend ledger, media library growth + top reused assets → `reports/<YYYY-MM>-creative.md`',
+      report: 'designs created or revised, with dashboard links and each one\'s status (a draft until a person approves or publishes it), inbox items handled, video clips consumed vs the monthly cap (`design_video_capabilities_get`), image generations used of limit (`media_image_quota`) plus upscale dollars, generation spend ledger, media library growth + top reused assets → `reports/<YYYY-MM>-creative.md`',
     },
     sales: {
       skill: 'hiveku-sales-agency',
@@ -927,6 +982,18 @@ function cadenceCommands(role: Role): Record<string, string> {
   };
   const s = spec[role.id] ?? (role.id === 'owner' ? { skill: 'the relevant hiveku-*-agency skills', weekly: 'each active discipline\'s weekly checklist', report: 'one consolidated report across disciplines → `reports/<YYYY-MM>-account.md`' } : undefined);
   if (!s) return {};
+  // The designer's pass and report are the agent's account of its own drafts:
+  // they go to the person, never into memory (DESIGN_SUMMARY_STEP).
+  const design = role.id === 'designer';
+  const domain = role.knowledgeDomains[0];
+  const weeklyClose = design
+    ? `Close with a 5-line "what changed / what's next" note. ${DESIGN_SUMMARY_STEP}`
+    : `Close with a 5-line "what changed / what's next" note merged into the "${domain}" memory: read it
+   (\`memory_list({ domain: "${domain}" })\`), add the note to the full text, and send the whole
+   document with \`memory_update({ memory_id, content, reason, expected_version })\`. ${MEMORY_EDIT_RULES_PROSE}`;
+  const reportClose = design
+    ? `Create next month's plan as PM tasks (on approval). ${DESIGN_SUMMARY_STEP}`
+    : "Persist the summary to memory and create next month's plan as PM tasks (on approval).";
   return {
     'hiveku-weekly': `---
 description: Weekly optimization pass (role: ${role.label}) — the agency cadence, not just a status check.
@@ -935,9 +1002,7 @@ Run this account's weekly pass. Follow the **${s.skill}** skill's weekly cadence
 1. Context first: \`account_context_get({ domain: "${role.knowledgeDomains[0]}" })\`.
 2. Work the checklist: ${s.weekly}.
 3. Every change is confirmed before applying; every work item lands as a PM task.
-4. Close with a 5-line "what changed / what's next" note merged into the "${role.knowledgeDomains[0]}" memory: read it
-   (\`memory_list({ domain: "${role.knowledgeDomains[0]}" })\`), add the note to the full text, and send the whole
-   document with \`memory_update({ memory_id, content, reason, expected_version })\`. ${MEMORY_EDIT_RULES_PROSE}
+4. ${weeklyClose}
 `,
     'hiveku-report': `---
 description: Monthly client-grade report (role: ${role.label}) — what an agency sends its clients.
@@ -948,7 +1013,7 @@ Produce this account's monthly report for $ARGUMENTS (default: last full month).
 1. Context: \`account_context_get({ domain: "${role.knowledgeDomains[0]}" })\` — write in the brand's voice, for the CLIENT (plain language, numbers that matter, no tool names).
 2. ${s.report}.
 3. Sections every agency report needs: executive summary (3 bullets), results vs last period, work completed, insights, next month's plan.
-4. Persist the summary to memory and create next month's plan as PM tasks (on approval).
+4. ${reportClose}
 5. OFFER to email it to the client: render the report as clean simple HTML, then
    \`email_send_test({ to, subject, html_body, dry_run: true })\` to validate (from-domain must be
    verified; suppressions respected), show the would-send preview, and send for real ONLY after the
