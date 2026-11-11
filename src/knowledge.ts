@@ -1508,6 +1508,18 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__content_unpublish',
   'mcp__hiveku__content_delete',
   'mcp__hiveku__content_unpublish_from_site',
+  // Discussions wave S5c (2026-11-11, asked before the MCP serves them): bringing a team's chat history over from a
+  // chat history export, which holds the whole company's messages and its people's names and emails. The start begins
+  // the upload, the run brings up to 500,000 messages into new channels the whole team can read, a cancel before the
+  // run deletes the uploaded file, and the undo deletes every channel and message the import brought, for good. Every
+  // call asks, as in the Claude Code and Codex plugins. No name ends in _get or _list or holds _list_, so no read glob
+  // above approves one. The import's reads (discussion_import_people_list among them, which the '*_list' glob
+  // approves, as reads are), the upload's finish (it starts a practice run that writes nothing) and the people
+  // matching stay unasked. Appended last, in this order.
+  'mcp__hiveku__discussion_import_start',
+  'mcp__hiveku__discussion_import_run',
+  'mcp__hiveku__discussion_import_cancel',
+  'mcp__hiveku__discussion_import_undo',
 ];
 
 /**

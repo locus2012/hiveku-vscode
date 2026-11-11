@@ -912,14 +912,27 @@ describe('what the extension writes and wires', () => {
       'making many channels and the person\'s own direct messages (waves S5 and S5b) stay before the Content Marketing asks, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__content_editor_save',\n" +
           "  'mcp__hiveku__content_archive',\n" +
           "  'mcp__hiveku__content_unpublish',\n" +
           "  'mcp__hiveku__content_delete',\n" +
           "  'mcp__hiveku__content_unpublish_from_site',",
       ),
-      'the newest ask rules, the Content Marketing asks, go at the END',
+      'the Content Marketing asks stay before the chat history import asks, in this order',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__content_unpublish_from_site'") < ask.indexOf("'mcp__hiveku__discussion_import_start'"),
+      'the chat history import asks come after the Content Marketing asks',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__discussion_import_start',\n" +
+          "  'mcp__hiveku__discussion_import_run',\n" +
+          "  'mcp__hiveku__discussion_import_cancel',\n" +
+          "  'mcp__hiveku__discussion_import_undo',",
+      ),
+      'the newest ask rules, the chat history import asks (Discussions wave S5c), go at the END',
     );
   });
 
