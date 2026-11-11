@@ -919,11 +919,47 @@ describe('what the extension writes and wires', () => {
           "  'mcp__hiveku__content_delete',\n" +
           "  'mcp__hiveku__content_unpublish_from_site',",
       ),
-      'the Content Marketing asks stay before the chat history import asks, in this order',
+      'the Content Marketing asks stay before the database and storage asks, in this order',
     );
     assert.ok(
-      ask.indexOf("'mcp__hiveku__content_unpublish_from_site'") < ask.indexOf("'mcp__hiveku__discussion_import_start'"),
-      'the chat history import asks come after the Content Marketing asks',
+      ask.includes(
+        "  'mcp__hiveku__database_execute',\n" +
+          "  'mcp__hiveku__database_provision',\n" +
+          "  'mcp__hiveku__database_repair',\n" +
+          "  'mcp__hiveku__supabase_migration_apply',\n" +
+          "  'mcp__hiveku__supabase_table_row_insert',\n" +
+          "  'mcp__hiveku__supabase_table_row_update',\n" +
+          "  'mcp__hiveku__supabase_table_row_delete',\n" +
+          "  'mcp__hiveku__supabase_policy_create',\n" +
+          "  'mcp__hiveku__supabase_policy_update',\n" +
+          "  'mcp__hiveku__supabase_policy_delete',\n" +
+          "  'mcp__hiveku__supabase_auth_user_create',\n" +
+          "  'mcp__hiveku__supabase_auth_user_update',\n" +
+          "  'mcp__hiveku__supabase_auth_user_delete',\n" +
+          "  'mcp__hiveku__supabase_auth_user_generate_link',\n" +
+          "  'mcp__hiveku__supabase_auth_config_update',\n" +
+          "  'mcp__hiveku__supabase_sync_redirect_urls',\n" +
+          "  'mcp__hiveku__supabase_configure_oauth',\n" +
+          "  'mcp__hiveku__supabase_configure_smtp',\n" +
+          "  'mcp__hiveku__supabase_configure_hiveku_smtp',\n" +
+          "  'mcp__hiveku__supabase_storage_create',\n" +
+          "  'mcp__hiveku__supabase_storage_delete',\n" +
+          "  'mcp__hiveku__supabase_storage_empty',\n" +
+          "  'mcp__hiveku__supabase_storage_object_upload',\n" +
+          "  'mcp__hiveku__supabase_storage_object_move',\n" +
+          "  'mcp__hiveku__supabase_storage_object_copy',\n" +
+          "  'mcp__hiveku__supabase_storage_object_delete',\n" +
+          "  'mcp__hiveku__supabase_storage_object_signed_url',\n" +
+          "  'mcp__hiveku__supabase_edge_functions_deploy',\n" +
+          "  'mcp__hiveku__supabase_edge_functions_delete',\n" +
+          "  'mcp__hiveku__supabase_edge_functions_invoke',\n" +
+          "  'mcp__hiveku__supabase_edge_functions_set_secrets',",
+      ),
+      'the database and storage asks stay together, in this order',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__supabase_edge_functions_set_secrets'") < ask.indexOf("'mcp__hiveku__discussion_import_start'"),
+      'the chat history import asks come after the database and storage asks',
     );
     assert.ok(
       ask.trimEnd().endsWith(

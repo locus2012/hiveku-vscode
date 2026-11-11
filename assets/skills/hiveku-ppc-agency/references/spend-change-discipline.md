@@ -559,7 +559,8 @@ The enable is the write that starts spend. Four things to know at the call itsel
   what the card is asking. In a session with nobody to answer (a scheduled or `-p` run, or the
   `dontAsk` mode) the call is refused instead, which is the intended result.
 - **A Claude Code auto-mode denial never turns into a prompt.** On a plugin older than 0.26.36, or
-  on the VS Code extension's tools (the plugin's hook never sees them), the auto-mode classifier can
+  on the VS Code extension's tools (the plugin's hook sees those only where a plugin new enough to read
+  their names is installed too), the auto-mode classifier can
   still deny an enable, naming a category such as "[Production Deploy]". Nothing is then waiting for
   approval. Never promise the owner a prompt (one comes only from the plugin's ask or the steps
   below), and do not retry around the denial (another tool, a bulk edit, the same call reworded).
@@ -571,7 +572,7 @@ The enable is the write that starts spend. Four things to know at the call itsel
      indicator under the prompt box; CLI: Shift+Tab), then switch back afterwards. Or:
   3. On the VS Code extension only, check the folder has a permissions ASK rule for each enable tool:
      `mcp__hiveku__ppc_platform_enable_resource` and `mcp__hiveku__ppc_enable_resource`. The
-     extension does not run the plugin's hook, so these rules are its only ask. Extension releases
+     extension does not run the plugin's hook, so without the plugin these rules are its only ask. Extension releases
      from 0.85.12 write ask rules for the same calls the plugin asks before (the enables,
      `ppc_bulk_edit`, `ppc_linkedin_creatives`, `ppc_tiktok_split_tests`, the four restart calls,
      `workflow_enable` and `workflow_resume`) into each Hiveku folder they open; on an older release,

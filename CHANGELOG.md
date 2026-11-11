@@ -1,7 +1,11 @@
 # Changelog
 
-## 0.91.80
+## 0.91.81
 - **Bringing your team's chat history over asks first.** Your assistant now asks before it starts uploading a chat history export (it holds your whole company's messages and your people's names and emails), before it brings up to 500,000 messages into new channels your whole team can read, before it stops an import (before the import runs, that deletes the uploaded file), and before it takes out everything an import brought, which cannot be undone. Reading an import, finishing its upload and matching its people do not ask. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+
+## 0.91.80
+- **Changes to a site's own database and Supabase project ask first.** Your assistant now asks before it runs SQL that can write, sets up or repairs a site's database, applies a migration, or writes or deletes any Supabase row, policy, sign-in user, sign-in setting, storage file or edge function. It also asks before it emails a sign-in link, calls an edge function, or makes a link to a private file. Reading a site's tables, users and settings does not ask. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+- **The database guide says what Hiveku now refuses.** A connection that no account owner or admin made, and every assistant, can't touch a site's sign-in tables or the settings that can hold a secret, can't give a user a role but the normal one, and can't set a user's app_metadata. The guide says so, and that an owner or admin can run such SQL from the database page's SQL editor.
 
 ## 0.91.79
 - **Folders set up before 0.91.76 can read your direct messages.** Such a folder kept naming the release that set it up in its Claude Code connection, so Hiveku refused your assistant's reads of your own direct messages there, even after the update added their ask rules. Now, on the folder's next start, once it holds every ask rule, the extension updates that one value in the connection and leaves the rest of the file as it was. That includes the connection Hiveku: Set Claude Code Account made, and a connection a newer copy of the extension made is left as it is. The file is swapped in whole, so a Claude Code session starting at that moment never finds it empty.

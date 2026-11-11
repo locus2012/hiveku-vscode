@@ -1508,6 +1508,45 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__content_unpublish',
   'mcp__hiveku__content_delete',
   'mcp__hiveku__content_unpublish_from_site',
+  // The site's database, and its app's sign-in, file storage, row security and server functions (2026-11-10): SQL
+  // and migrations that change any number of rows, row and policy writes and deletes, user accounts and sign-in
+  // links, sign-in settings, buckets and files, and server functions deployed, deleted, run or given secrets. None
+  // was on this list, so in a folder whose settings allow them they ran with nobody asked. Every call asks, as in
+  // the Claude Code plugin and Codex. Their reads are not here. Appended last. The review of 2026-11-10 added three:
+  // database_provision and database_repair write the connections the live site runs on (repair gives the database a
+  // new password at once), and supabase_storage_object_signed_url answers with a link that opens a private file for
+  // anyone for up to 7 days, which the builder treats as minting a credential.
+  'mcp__hiveku__database_execute',
+  'mcp__hiveku__database_provision',
+  'mcp__hiveku__database_repair',
+  'mcp__hiveku__supabase_migration_apply',
+  'mcp__hiveku__supabase_table_row_insert',
+  'mcp__hiveku__supabase_table_row_update',
+  'mcp__hiveku__supabase_table_row_delete',
+  'mcp__hiveku__supabase_policy_create',
+  'mcp__hiveku__supabase_policy_update',
+  'mcp__hiveku__supabase_policy_delete',
+  'mcp__hiveku__supabase_auth_user_create',
+  'mcp__hiveku__supabase_auth_user_update',
+  'mcp__hiveku__supabase_auth_user_delete',
+  'mcp__hiveku__supabase_auth_user_generate_link',
+  'mcp__hiveku__supabase_auth_config_update',
+  'mcp__hiveku__supabase_sync_redirect_urls',
+  'mcp__hiveku__supabase_configure_oauth',
+  'mcp__hiveku__supabase_configure_smtp',
+  'mcp__hiveku__supabase_configure_hiveku_smtp',
+  'mcp__hiveku__supabase_storage_create',
+  'mcp__hiveku__supabase_storage_delete',
+  'mcp__hiveku__supabase_storage_empty',
+  'mcp__hiveku__supabase_storage_object_upload',
+  'mcp__hiveku__supabase_storage_object_move',
+  'mcp__hiveku__supabase_storage_object_copy',
+  'mcp__hiveku__supabase_storage_object_delete',
+  'mcp__hiveku__supabase_storage_object_signed_url',
+  'mcp__hiveku__supabase_edge_functions_deploy',
+  'mcp__hiveku__supabase_edge_functions_delete',
+  'mcp__hiveku__supabase_edge_functions_invoke',
+  'mcp__hiveku__supabase_edge_functions_set_secrets',
   // Discussions wave S5c (2026-11-11, asked before the MCP serves them): bringing a team's chat history over from a
   // chat history export, which holds the whole company's messages and its people's names and emails. The start begins
   // the upload, the run brings up to 500,000 messages into new channels the whole team can read, a cancel before the
@@ -2288,7 +2327,7 @@ changes, and after edits check the page in the browser or the live preview.
     'hiveku-supabase': `---
 description: Manage this project's Supabase backend — auth users, storage, edge functions, migrations, RLS, table rows.
 argument-hint: "[what to do — e.g. 'list storage buckets' or 'add an auth user']"
-allowed-tools: mcp__hiveku__supabase_auth_users_list, mcp__hiveku__supabase_auth_user_get, mcp__hiveku__supabase_auth_user_create, mcp__hiveku__supabase_auth_user_update, mcp__hiveku__supabase_auth_user_delete, mcp__hiveku__supabase_auth_config_get, mcp__hiveku__supabase_storage_list, mcp__hiveku__supabase_storage_objects_list, mcp__hiveku__supabase_storage_object_upload, mcp__hiveku__supabase_storage_object_signed_url, mcp__hiveku__supabase_edge_functions_list, mcp__hiveku__supabase_edge_functions_get_source, mcp__hiveku__supabase_edge_functions_deploy, mcp__hiveku__supabase_edge_functions_invoke, mcp__hiveku__supabase_migrations_list, mcp__hiveku__supabase_migration_apply, mcp__hiveku__supabase_policies_list, mcp__hiveku__supabase_policy_create, mcp__hiveku__supabase_table_rows_list, mcp__hiveku__supabase_table_row_insert, mcp__hiveku__supabase_table_row_update, mcp__hiveku__supabase_gen_types
+allowed-tools: mcp__hiveku__supabase_auth_users_list, mcp__hiveku__supabase_auth_user_get, mcp__hiveku__supabase_auth_config_get, mcp__hiveku__supabase_storage_list, mcp__hiveku__supabase_storage_objects_list, mcp__hiveku__supabase_edge_functions_list, mcp__hiveku__supabase_edge_functions_get_source, mcp__hiveku__supabase_migrations_list, mcp__hiveku__supabase_policies_list, mcp__hiveku__supabase_table_rows_list, mcp__hiveku__supabase_gen_types
 ---
 Manage THIS project's Supabase backend$ARGUMENTS. ${idLine} Every call takes \`project_id: "${pid}"\`.
 (Only for projects with a provisioned Supabase DB — \`database_status({ project_id })\` confirms.)

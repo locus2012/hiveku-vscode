@@ -301,7 +301,7 @@ edits on `ppc_meta_campaign_update`, `ppc_linkedin_campaign_update` and
 `ppc_linkedin_campaign_group_update`) whatever the settings allow, and auto mode still shows that
 prompt, so show the diff first and let the card be the owner's yes. **A Claude Code auto-mode
 denial never turns into a prompt.** On an older plugin or the VS Code extension's tools (the
-hook never sees them) a
+plugin's hook sees those only where a plugin new enough to read their names is installed too) a
 classifier can still deny the enable (e.g. "[Production Deploy]"): nothing is then waiting for
 approval, so never promise the owner a prompt (one comes only from the plugin's ask or the steps
 below) and never retry around the denial. Give the owner the exact steps: to run the denied call, in
