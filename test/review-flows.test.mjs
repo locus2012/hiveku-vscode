@@ -958,8 +958,17 @@ describe('what the extension writes and wires', () => {
       'the database and storage asks are listed together, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith("  'mcp__hiveku__helpdesk_away_reply_set',"),
-      'the newest ask rule, the help desk away message, goes at the END',
+      ask.indexOf("'mcp__hiveku__helpdesk_away_reply_set'") < ask.indexOf("'mcp__hiveku__discussion_import_start'"),
+      'the chat history import asks come after the help desk away message',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__discussion_import_start',\n" +
+          "  'mcp__hiveku__discussion_import_run',\n" +
+          "  'mcp__hiveku__discussion_import_cancel',\n" +
+          "  'mcp__hiveku__discussion_import_undo',",
+      ),
+      'the newest ask rules, the chat history import asks (Discussions wave S5c), go at the END',
     );
   });
 
