@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.86
+- **The website build guide no longer says to restart the preview after a build check.** Hiveku's preview build check now pauses the live preview while it builds, restarts it afterwards and builds the way the deploy does, so the guide your assistant reads says so.
+
 ## 0.91.85
 - **Approving or cancelling an Accounting money card asks first.** Your assistant now asks before it decides one of the money cards the Accounting assistant staged: approving one pays, sends or runs payroll at once. Hiveku takes this only from you in the Hiveku app, and the extension asks anyway, as Claude Code and Codex do. Listing the cards does not ask. A folder set up earlier gains the new ask rule on its next start, after the ones it has.
 
