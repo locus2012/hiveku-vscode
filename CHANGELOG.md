@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.85
+- **Approving or cancelling an Accounting money card asks first.** Your assistant now asks before it decides one of the money cards the Accounting assistant staged: approving one pays, sends or runs payroll at once. Hiveku takes this only from you in the Hiveku app, and the extension asks anyway, as Claude Code and Codex do. Listing the cards does not ask. A folder set up earlier gains the new ask rule on its next start, after the ones it has.
+
 ## 0.91.84
 - **Changing a customer subscription asks first.** Your assistant now asks before it changes a subscription's price, quantity, tax rate or next billing date, which changes what the client is charged from their next renewal. A folder set up earlier gains the new ask rule on its next start, after the ones it has.
 
