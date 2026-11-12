@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.84
+- **Changing a customer subscription asks first.** Your assistant now asks before it changes a subscription's price, quantity, tax rate or next billing date, which changes what the client is charged from their next renewal. A folder set up earlier gains the new ask rule on its next start, after the ones it has.
+
 ## 0.91.83
 - **Removing a help desk ticket field asks first.** Your assistant now asks before it removes one of your help desk's ticket fields, which takes that field's answer off every ticket for good. Making, changing and filling in fields does not ask. Switching a site's AI review on or off asks too, as it does in Claude Code. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
 

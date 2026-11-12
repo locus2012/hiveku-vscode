@@ -971,10 +971,12 @@ describe('what the extension writes and wires', () => {
       'the chat history import asks (Discussions wave S5c) are listed together, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
-        "  'mcp__hiveku__helpdesk_ticket_field_delete',\n" + "  'mcp__hiveku__project_vcs_ai_review_set',",
-      ),
-      'the newest ask rules, removing a help desk ticket field and the AI review switch, go at the END',
+      ask.includes("  'mcp__hiveku__helpdesk_ticket_field_delete',\n" + "  'mcp__hiveku__project_vcs_ai_review_set',\n"),
+      'removing a help desk ticket field and the AI review switch are listed together, in this order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith("  'mcp__hiveku__accounting_subscription_update',"),
+      'the newest ask rule, changing a customer subscription, goes at the END',
     );
   });
 
