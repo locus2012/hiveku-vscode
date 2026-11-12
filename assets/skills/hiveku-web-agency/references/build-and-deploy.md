@@ -604,8 +604,9 @@ structurally broken. Highest-yield check when you have been moving markup.
 structure, imports, or types gets a check.
 
 **Rule 62. `preview_build_check` runs a REAL `next build` in the container** and catches CSS/PostCSS,
-native-module, and config failures `verify_build` cannot see. **But it OVERWRITES the dev server's
-`.next` - restart the preview afterward.**
+native-module, and config failures `verify_build` cannot see. It builds the way the deploy does, pauses
+the live preview while it builds and restarts it afterward, so no `preview_restart` is needed unless its
+answer says so.
 
 **Rule 63. An empty `preview_client_errors` result is NOT proof the page is clean - check
 `capture_installed`.** Zero errors and zero instrumentation look identical from outside. Generalize
