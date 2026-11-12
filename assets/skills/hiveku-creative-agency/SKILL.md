@@ -105,7 +105,7 @@ heading. `media_ai_enhance_prompt` COSTS MONEY, writes nothing - batch use only.
 
 **3. Editable design project.** The default for anything the client will ever tweak: social graphics,
 carousels, thumbnails, banners, ad creative, newsletter headers, one-pagers. `design_templates_list`
-first - 58 templates across 14 sizes, already brand-substituted with the account's brand guide, plus
+first, with the frame's `width` and `height` - 92 templates across 14 sizes, already brand-substituted with the account's brand guide, plus
 artboard presets, each carrying a `canvasData` payload you pipe into `design_create`'s
 `initialCanvasData`; the wide formats are templates now (two 1200x600 email headers, OG 1200x630,
 YouTube 1280x720, LinkedIn banner 1584x396, X header 1500x500), filed under their categories. Take

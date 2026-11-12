@@ -236,7 +236,7 @@ see it), so on a scoped key the per-design read stays the sweep.
 
 ## Part 5: Templates and artboard sizing
 
-`design_templates_list` takes no arguments and returns the 58-template library (14 canvas sizes)
+`design_templates_list` returns the 92-template library (14 canvas sizes; pass the frame's `width` and `height` for that size alone)
 brand-substituted with the account's active brand guide, plus artboard size presets grouped by category
 (Social Media, Presentation, Print, Ads, Email). Each template carries a ready-to-use `canvasData`
 payload: pipe it into `design_create`'s `initialCanvasData`, then swap text and imagery. It is also the

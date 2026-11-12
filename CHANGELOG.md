@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.87
+- **The design guide asks for templates in the frame size you are making.** Hiveku's design templates can now be read one frame size at a time, so the guide your assistant reads says to pass the design's width and height and start from a template of that size. It also names the library's real size, 92 templates in 14 frame sizes, and no longer says the template list takes no arguments.
+
 ## 0.91.86
 - **The website build guide no longer says to restart the preview after a build check.** Hiveku's preview build check now pauses the live preview while it builds, restarts it afterwards and builds the way the deploy does, so the guide your assistant reads says so.
 

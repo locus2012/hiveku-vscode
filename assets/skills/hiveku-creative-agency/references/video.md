@@ -66,10 +66,10 @@ The output is not just an MP4; it is a design project the client can open, retim
 
 ### 2.1 Build the canvas
 
-Start from the library. `design_templates_list` returns the 52-template library already brand-substituted
+Start from the library. `design_templates_list` returns the 92-template library already brand-substituted
 with the account's active brand guide, plus artboard presets by category (Social Media / Presentation /
 Print / Ads / Email). Each template carries a ready-to-use canvasData payload - pipe it into
-`design_create`'s `initialCanvasData`. It takes no arguments, so there is no reason to skip it.
+`design_create`'s `initialCanvasData`. Pass the frame's `width` and `height` to get that size alone; it is one read, so there is no reason to skip it.
 
 `design_create({ title, designType, artboard, initialCanvasData, description, tags })` returns `id` and
 `dashboardUrl`. Hand the `dashboardUrl` back every single time; that URL is the deliverable as much as the
