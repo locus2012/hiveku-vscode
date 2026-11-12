@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.88
+- **Sending a feature's alerts to a Discussions channel asks first.** Your assistant now asks before it turns on or off the Discussions copy of help desk alerts, website form leads, site review comments or customer reviews, or moves it to another channel: from then on each alert is posted in that channel in your name, for everyone who reads it, a workspace it is shared with included. Reading where each alert goes does not ask. A folder set up earlier gains the new ask rule on its next start, after the ones it has.
+
 ## 0.91.87
 - **The design guide asks for templates in the frame size you are making.** Hiveku's design templates can now be read one frame size at a time, so the guide your assistant reads says to pass the design's width and height and start from a template of that size. It also names the library's real size, 92 templates in 14 frame sizes, and no longer says the template list takes no arguments.
 
