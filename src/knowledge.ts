@@ -1579,6 +1579,12 @@ const HIVEKU_ASK: string[] = [
   // app's own key; it asks here anyway, as in the Claude Code and Codex plugins. Its name ends in neither _get nor _list
   // and holds no _list_, so no read glob approves it. Appended last.
   'mcp__hiveku__accounting_approval_decide',
+  // Turning a feature's alerts on or off in a Discussions channel (2026-11-12, 0.91.88): discussion_notice_route_set
+  // posts what a feature sends to a team chat outside Hiveku (help desk alerts, website form leads, site review comments,
+  // customer reviews) in a channel too, in the person's name, for everyone who reads it, as the Claude Code and Codex
+  // plugins ask. Its name ends in neither _get nor _list and holds no _list_, so no read glob approves it; its read,
+  // discussion_notice_routes_list, is a GET the *_list glob approves. Appended last.
+  'mcp__hiveku__discussion_notice_route_set',
 ];
 
 /**
