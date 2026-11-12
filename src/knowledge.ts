@@ -1574,6 +1574,11 @@ const HIVEKU_ASK: string[] = [
   // billing date, so what the client is charged from the next renewal, as accounting_subscription_create asks above.
   // Its name ends in neither _get nor _list and holds no _list_, so no read glob approves it. Appended last.
   'mcp__hiveku__accounting_subscription_update',
+  // Deciding an Accounting money card (2026-11-12, 0.91.85): accounting_approval_decide approves a card the Accounting
+  // assistant staged, which pays, sends or runs payroll at once, or cancels it. Hiveku takes it only from the Hiveku
+  // app's own key; it asks here anyway, as in the Claude Code and Codex plugins. Its name ends in neither _get nor _list
+  // and holds no _list_, so no read glob approves it. Appended last.
+  'mcp__hiveku__accounting_approval_decide',
 ];
 
 /**

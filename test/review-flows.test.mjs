@@ -975,8 +975,12 @@ describe('what the extension writes and wires', () => {
       'removing a help desk ticket field and the AI review switch are listed together, in this order',
     );
     assert.ok(
-      ask.trimEnd().endsWith("  'mcp__hiveku__accounting_subscription_update',"),
-      'the newest ask rule, changing a customer subscription, goes at the END',
+      ask.indexOf("'mcp__hiveku__project_vcs_ai_review_set'") < ask.indexOf("'mcp__hiveku__accounting_subscription_update'"),
+      'changing a customer subscription comes after the AI review switch',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith("  'mcp__hiveku__accounting_approval_decide',"),
+      'the newest ask rule, deciding an Accounting money card, goes at the END',
     );
   });
 
