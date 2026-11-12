@@ -1570,6 +1570,10 @@ const HIVEKU_ASK: string[] = [
   // holds _list_, so no read glob above approves one. Appended last, in this order.
   'mcp__hiveku__helpdesk_ticket_field_delete',
   'mcp__hiveku__project_vcs_ai_review_set',
+  // Changing a customer subscription in place (2026-11-12, HK-1566, 0.91.84): its price, quantity, tax rate or next
+  // billing date, so what the client is charged from the next renewal, as accounting_subscription_create asks above.
+  // Its name ends in neither _get nor _list and holds no _list_, so no read glob approves it. Appended last.
+  'mcp__hiveku__accounting_subscription_update',
 ];
 
 /**
