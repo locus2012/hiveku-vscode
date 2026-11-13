@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.89
+- **The Social guide says an assistant's edit can send an approved post back for approval.** When your assistant changes what an approved post will send (its text, pictures, link, accounts, LinkedIn audience or time), Hiveku now puts the post back in the approval queue until a person approves it again, and the guide your assistant reads says so. Your own edits in Hiveku keep the approval.
+
 ## 0.91.88
 - **Sending a feature's alerts to a Discussions channel asks first.** Your assistant now asks before it turns on or off the Discussions copy of help desk alerts, website form leads, site review comments or customer reviews, or moves it to another channel: from then on each alert is posted in that channel in your name, for everyone who reads it, a workspace it is shared with included. Reading where each alert goes does not ask. A folder set up earlier gains the new ask rule on its next start, after the ones it has.
 
