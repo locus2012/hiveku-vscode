@@ -827,7 +827,9 @@ export const DEPARTMENTS: Department[] = [
       'the every-minute cron ships the post on the first tick after that instant with no further confirmation; a true ' +
       'draft omits it. `social_update_post` edits title, content, targets, media (send `media_urls` WITH `media_types`, ' +
       'the FULL list - it replaces wholesale), link card, first comment, `platform_overrides`, tags, pillar, the ' +
-      'foundation refs and the schedule (`scheduled_at: null` unschedules); it CANNOT change status or approval_status. ' +
+      'foundation refs and the schedule (`scheduled_at: null` unschedules); it cannot set status or approval_status, ' +
+      'and an assistant\'s change to what an approved post sends puts it back in the approval queue until a person ' +
+      'approves it again (`sent_back_for_approval` in the answer). ' +
       '`social_delete_post` removes a row. `social_publish_post` does not publish an unapproved post: it moves the post ' +
       'into the dashboard approval queue (`pending_approval`) where a human approves it; there is deliberately no ' +
       'approve tool. `social_post_reject({ post_id, reason })` returns a held post to draft. Before ANY schedule, ' +
