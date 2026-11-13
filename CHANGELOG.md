@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.89
+- **Turning on an email series, confirm-by-email, topics and template copies ask first.** Your assistant now asks before it turns on an email series connected to a form, tag or store (from then on each new person it adds gets the series' emails), turns a form's confirm-by-email step on or off (Hiveku emails every new sign-up a Confirm button), disconnects a series (it stops the live automation that adds people), adds or changes an email topic (it changes the page people's unsubscribe link opens, and who emails with that topic leave out), or copies a template into another client's account. Reading topics and the clients a template can be copied to does not ask. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+
 ## 0.91.88
 - **Sending a feature's alerts to a Discussions channel asks first.** Your assistant now asks before it turns on or off the Discussions copy of help desk alerts, website form leads, site review comments or customer reviews, or moves it to another channel: from then on each alert is posted in that channel in your name, for everyone who reads it, a workspace it is shared with included. Reading where each alert goes does not ask. A folder set up earlier gains the new ask rule on its next start, after the ones it has.
 
