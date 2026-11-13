@@ -806,7 +806,7 @@ const ACCOUNTING_APPROVAL = ['mcp__hiveku__accounting_approval_decide'];
 /** Turning a feature's alerts on or off in a Discussions channel (2026-11-12, 0.91.88): each later alert is posted there
  * in the person's name, for everyone who reads it. Appended last. */
 const DISCUSSIONS_NOTICES = ['mcp__hiveku__discussion_notice_route_set'];
-/** Email series, topics and template copies (2026-11-12, 0.91.89): two sends (a connected series' turn on, a form's
+/** Email series, topics and template copies (2026-11-12, 0.91.90): two sends (a connected series' turn on, a form's
  * confirm-by-email step) and four live changes (a series' disconnect, a topic's create and update, a template copied
  * into another client's account). Appended last. */
 const EMAIL_W23 = [

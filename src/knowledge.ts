@@ -1585,7 +1585,7 @@ const HIVEKU_ASK: string[] = [
   // plugins ask. Its name ends in neither _get nor _list and holds no _list_, so no read glob approves it; its read,
   // discussion_notice_routes_list, is a GET the *_list glob approves. Appended last.
   'mcp__hiveku__discussion_notice_route_set',
-  // Email series, topics and template copies (2026-11-12, 0.91.89), as the Claude Code and Codex plugins ask. Two
+  // Email series, topics and template copies (2026-11-12, 0.91.90), as the Claude Code and Codex plugins ask. Two
   // sends: email_sequence_connection_turn_on emails each new person a connected series adds from then on, and
   // marketing_form_confirm_signups_set emails every new sign-up on a form a Confirm button. Four live changes:
   // email_sequence_disconnect stops a live automation, email_topic_create and email_topic_update change the public
