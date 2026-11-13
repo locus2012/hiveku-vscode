@@ -983,8 +983,16 @@ describe('what the extension writes and wires', () => {
       'deciding an Accounting money card comes after changing a customer subscription',
     );
     assert.ok(
-      ask.trimEnd().endsWith("  'mcp__hiveku__discussion_notice_route_set',"),
-      'the newest ask rule, turning a feature\'s alerts on or off in a Discussions channel, goes at the END',
+      ask.indexOf("'mcp__hiveku__accounting_approval_decide'") < ask.indexOf("'mcp__hiveku__discussion_notice_route_set'"),
+      'turning a feature\'s alerts on or off in a Discussions channel comes after deciding an Accounting money card',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__discussion_notice_route_set'") < ask.indexOf("'mcp__hiveku__email_connection_read_label'"),
+      'limiting what Hiveku reads of a Gmail inbox comes after turning a feature\'s alerts on or off in a Discussions channel',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith("  'mcp__hiveku__email_connection_read_label',"),
+      'the newest ask rule, limiting what Hiveku reads of a Gmail inbox to one label, goes at the END',
     );
   });
 

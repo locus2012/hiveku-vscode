@@ -1585,6 +1585,13 @@ const HIVEKU_ASK: string[] = [
   // plugins ask. Its name ends in neither _get nor _list and holds no _list_, so no read glob approves it; its read,
   // discussion_notice_routes_list, is a GET the *_list glob approves. Appended last.
   'mcp__hiveku__discussion_notice_route_set',
+  // Limiting what Hiveku reads of a connected Gmail inbox to one label (2026-11-12, HK-1636): email_connection_read_label
+  // sets, changes or removes the label. While one is set, Hiveku reads only that label's mail and the owner's own sent
+  // mail in those conversations, so a reply without the label stops no sequence and opens no ticket; removing it lets
+  // Hiveku read the whole mailbox again. Every call asks, as in the Claude Code and Codex plugins. Its name ends in
+  // neither _get nor _list and holds no _list_, so no read glob approves it; its read, email_connections_list, is a GET
+  // the *_list glob approves. Appended last.
+  'mcp__hiveku__email_connection_read_label',
 ];
 
 /**
