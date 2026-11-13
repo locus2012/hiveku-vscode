@@ -983,8 +983,12 @@ describe('what the extension writes and wires', () => {
       'deciding an Accounting money card comes after changing a customer subscription',
     );
     assert.ok(
-      ask.trimEnd().endsWith("  'mcp__hiveku__discussion_notice_route_set',"),
-      'the newest ask rule, turning a feature\'s alerts on or off in a Discussions channel, goes at the END',
+      ask.indexOf("'mcp__hiveku__discussion_notice_route_set'") < ask.indexOf("'mcp__hiveku__email_sequence_connection_turn_on'"),
+      'the email series asks come after turning a feature\'s alerts on or off in a Discussions channel',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith("  'mcp__hiveku__marketing_template_copy_to_account',"),
+      'the newest ask rule, copying a template into another client\'s account, goes at the END',
     );
   });
 

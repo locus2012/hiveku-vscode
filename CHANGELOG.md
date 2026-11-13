@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.90
+- **Turning on an email series, confirm-by-email, topics and template copies ask first.** Your assistant now asks before it turns on an email series connected to a form, tag or store (from then on each new person it adds gets the series' emails), turns a form's confirm-by-email step on or off (Hiveku emails every new sign-up a Confirm button), disconnects a series (it stops the live automation that adds people), adds or changes an email topic (it changes the page people's unsubscribe link opens, and who emails with that topic leave out), or copies a template into another client's account. Reading topics and the clients a template can be copied to does not ask. A folder set up earlier gains the new ask rules on its next start, after the ones it has.
+
 ## 0.91.89
 - **The Social guide says an assistant's edit can send an approved post back for approval.** When your assistant changes what an approved post will send (its text, pictures, link, accounts, LinkedIn audience or time), Hiveku now puts the post back in the approval queue until a person approves it again, and the guide your assistant reads says so. Your own edits in Hiveku keep the approval.
 
