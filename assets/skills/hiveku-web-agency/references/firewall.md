@@ -116,14 +116,28 @@ evidence, allow, remove.
   the row had them (asn 0 when null, an empty user_agent for a client that sent none). It raises
   one urgent inbox item and a Hiveku operator considers a network block. Nothing at the edge
   changes, so it does not ask. Once per client: a later call answers `alreadyReported: true`.
-- `site_firewall_private_set({ project_id, environment, mode, allowed_cidrs?, exempt_paths?, note?, dry_run? })` -
+- `site_firewall_private_set({ project_id, environment, mode, allowed_cidrs?, exempt_paths?, note?, accept_monthly_cents?, dry_run? })` -
   makes one environment private, changes what it lets in, or makes it public again (`mode: 'public'`).
   Send `dry_run: true` first: it changes nothing and answers every switch-on check that does not pass.
+  For a turn-on it also answers the price it adds to the bill (`charge`).
   Each entry in `exempt_paths` opens exactly that path, and must be a route of the site that takes
   data, never a page. An agent never sets the password; the owner does, in Site > Hosting > Firewall.
   After a turn-on the server lock reads `locking` for about 15 minutes, then `on`. Confirm with the
-  user first: making an environment private can lock their own people out, and making it public
-  opens it to anyone.
+  user first: making an environment private adds a monthly charge to the account's bill and can
+  lock their own people out, and making it public opens it to anyone.
+  - Name the price before you ask. Tell the user the dry run's `charge.words`, in those words,
+    never a number of your own. Send the turn-on only after their yes, with
+    `accept_monthly_cents` set to `charge.monthly_cents`. Never send `accept_monthly_cents` without
+    that yes, and never with `mode: 'public'`. Without it nothing changes (409
+    `charge_not_accepted`, which carries `charge` again). A change to an environment that is
+    already private needs no price. With no card on file the turn-on and its dry run are refused
+    (402 `private_mode_needs_card`): a card is added in Settings > Billing.
+  - Making an environment public stops its charge (the day it is made public is the last day
+    billed) and needs no price. It works even while the account's billing is past due, and a
+    billing problem never turns private mode off. So when a private environment is no longer
+    used, offer to make it public to stop its charge: `site_firewall_get` answers
+    `private_environments`, and `private_access.charge` says whether that tier is billed and since
+    when.
 
 The same four operations are `GET`, `GET .../firewall/clients/detail`, `POST` and `DELETE` on
 `/api/olympus/builder/projects/{projectId}/firewall[...]` for a script that talks to Olympus

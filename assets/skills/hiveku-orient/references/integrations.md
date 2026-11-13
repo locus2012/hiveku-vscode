@@ -395,6 +395,20 @@ one click on Hiveku's own Google app (connector `google_calendar`), not on the G
 hours and resolves the client when the person presses Continue. Verify with
 `email_connections_list` (`connection_status`, `consumers`).
 
+**Reading one label only.** An owner who does not want the whole mailbox read (an alias like
+hello@ on their own Gmail) limits the inbox to one Gmail label, with no new sign-in: they make a
+Gmail filter in that mailbox (To: the address, Apply the label; Hiveku cannot make filters), then
+`email_connection_read_label({ connection_id, label_name: 'Hiveku', create: true })`, or `label_id`
+from `gmail_list_labels`; `clear: true` removes the limit. Only the inbox's own person may set,
+change or remove it, whatever their role (an inbox no one owns: an owner or admin; a label someone
+else chose stays theirs while they are on the account). Anyone else is refused (403
+`read_label_not_yours`, `read_label_owner_or_admin_required` or
+`read_label_chosen_by_someone_else`), and the plugin asks before it runs. With a label set, Hiveku
+reads only mail with that label and the owner's own sent mail in those conversations, so a reply
+without it does not stop a sequence or open a ticket. Google's permission still covers the whole
+mailbox (the limit is Hiveku's own), and Outlook cannot be limited yet. `email_connections_list`
+shows each inbox's `read_label`.
+
 ### Bing Webmaster and other BYOK SEO sources: `seo_connection_create`
 
 The route's `platform` enum is exactly `bing_webmaster | google_search_console |

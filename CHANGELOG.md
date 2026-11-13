@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.92
+- **The firewall guide names the price before an environment turns private.** Making one of a site's environments private adds a monthly charge to the account's bill. The guide your assistant reads now says to tell you the price Hiveku quotes before it asks, to turn private mode on only after your yes, and to offer to make an environment nobody uses any more public again, which stops its charge.
+- **The integrations guide says how to read one Gmail label only.** It now says how an inbox's own person limits what Hiveku reads of a Gmail inbox to one label, that only they may change or remove that limit, and that an Outlook inbox cannot be limited yet.
+
 ## 0.91.91
 - **Limiting what Hiveku reads of a Gmail inbox asks first.** Your assistant now asks before it limits what Hiveku reads of a connected Gmail inbox to one label, changes that label, or removes the limit so the whole mailbox is read again. Only the inbox's own person may do this. Listing your inboxes and their limits does not ask. A folder set up earlier gains the new ask rule on its next start, after the ones it has.
 
