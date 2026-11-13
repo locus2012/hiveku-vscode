@@ -118,8 +118,8 @@ evidence, allow, remove.
   changes, so it does not ask. Once per client: a later call answers `alreadyReported: true`.
 - `site_firewall_private_set({ project_id, environment, mode, allowed_cidrs?, exempt_paths?, note?, accept_monthly_cents?, dry_run? })` -
   makes one environment private, changes what it lets in, or makes it public again (`mode: 'public'`).
-  Send `dry_run: true` first: it changes nothing and answers every switch-on check that does not pass.
-  For a turn-on it also answers the price it adds to the bill (`charge`).
+  Send `dry_run: true` first: it changes nothing and answers the first switch-on check that fails.
+  Once every check passes, a turn-on's dry run also answers the price it adds to the bill (`charge`).
   Each entry in `exempt_paths` opens exactly that path, and must be a route of the site that takes
   data, never a page. An agent never sets the password; the owner does, in Site > Hosting > Firewall.
   After a turn-on the server lock reads `locking` for about 15 minutes, then `on`. Confirm with the
@@ -137,7 +137,9 @@ evidence, allow, remove.
     billing problem never turns private mode off. So when a private environment is no longer
     used, offer to make it public to stop its charge: `site_firewall_get` answers
     `private_environments`, and `private_access.charge` says whether that tier is billed and since
-    when.
+    when. While the account's billing is blocked, `site_firewall_get` is refused too (402), but
+    `mode: 'public'` and its dry run still go through: ask the person which environment, then make
+    it public.
 
 The same four operations are `GET`, `GET .../firewall/clients/detail`, `POST` and `DELETE` on
 `/api/olympus/builder/projects/{projectId}/firewall[...]` for a script that talks to Olympus
