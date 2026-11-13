@@ -1585,6 +1585,20 @@ const HIVEKU_ASK: string[] = [
   // plugins ask. Its name ends in neither _get nor _list and holds no _list_, so no read glob approves it; its read,
   // discussion_notice_routes_list, is a GET the *_list glob approves. Appended last.
   'mcp__hiveku__discussion_notice_route_set',
+  // Email series, topics and template copies (2026-11-12, 0.91.90), as the Claude Code and Codex plugins ask. Two
+  // sends: email_sequence_connection_turn_on emails each new person a connected series adds from then on, and
+  // marketing_form_confirm_signups_set emails every new sign-up on a form a Confirm button. Four live changes:
+  // email_sequence_disconnect stops a live automation, email_topic_create and email_topic_update change the public
+  // preference page and who sends leave out (an update can archive a topic off it), and
+  // marketing_template_copy_to_account writes into another client's account. No name ends in _get or _list or holds
+  // _list_, so no read glob approves one. Their reads are GETs and get no rule: the *_list glob approves
+  // email_subscription_list, and marketing_template_copy_targets follows the folder's settings. Appended last.
+  'mcp__hiveku__email_sequence_connection_turn_on',
+  'mcp__hiveku__marketing_form_confirm_signups_set',
+  'mcp__hiveku__email_sequence_disconnect',
+  'mcp__hiveku__email_topic_create',
+  'mcp__hiveku__email_topic_update',
+  'mcp__hiveku__marketing_template_copy_to_account',
   // Limiting what Hiveku reads of a connected Gmail inbox to one label (2026-11-12, HK-1636): email_connection_read_label
   // sets, changes or removes the label. While one is set, Hiveku reads only that label's mail and the owner's own sent
   // mail in those conversations, so a reply without the label stops no sequence and opens no ticket; removing it lets
