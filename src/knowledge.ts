@@ -1606,6 +1606,19 @@ const HIVEKU_ASK: string[] = [
   // neither _get nor _list and holds no _list_, so no read glob approves it; its read, email_connections_list, is a GET
   // the *_list glob approves. Appended last.
   'mcp__hiveku__email_connection_read_label',
+  // The bucket-C outbound sends and deletes (2026-11-13, MCP #541): outbound_lead_resume resumes a paused lead, so in a
+  // campaign that is sending it starts getting its emails again; outbound_inbox_forward forwards an outbound inbox email
+  // thread to an address you give, sending real mail to that person; outbound_lead_subsequence_push pushes a lead into a
+  // campaign subsequence, so it starts getting that subsequence's emails; outbound_blocklist_remove takes an address or
+  // domain off the campaign blocklist, so cold email can reach them again; outbound_campaign_email_accounts_detach
+  // detaches a sending email account from a campaign, changing which mailboxes its emails send from. Every call asks, as
+  // in the Claude Code and Codex plugins. None ends in _get or _list or holds _list_, so no read glob approves one.
+  // Appended last, in this order.
+  'mcp__hiveku__outbound_lead_resume',
+  'mcp__hiveku__outbound_inbox_forward',
+  'mcp__hiveku__outbound_lead_subsequence_push',
+  'mcp__hiveku__outbound_blocklist_remove',
+  'mcp__hiveku__outbound_campaign_email_accounts_detach',
 ];
 
 /**
