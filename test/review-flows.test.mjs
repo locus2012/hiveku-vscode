@@ -991,8 +991,41 @@ describe('what the extension writes and wires', () => {
       'limiting what Hiveku reads of a Gmail inbox comes after copying a template into another client\'s account',
     );
     assert.ok(
-      ask.trimEnd().endsWith("  'mcp__hiveku__email_connection_read_label',"),
-      'the newest ask rule, limiting what Hiveku reads of a Gmail inbox to one label, goes at the END',
+      ask.indexOf("'mcp__hiveku__email_connection_read_label'") < ask.indexOf("'mcp__hiveku__outbound_lead_resume'"),
+      'the bucket-C outbound sends and deletes come after limiting what Hiveku reads of a Gmail inbox',
+    );
+    assert.ok(
+      ask.includes(
+        "  'mcp__hiveku__outbound_lead_resume',\n" +
+          "  'mcp__hiveku__outbound_inbox_forward',\n" +
+          "  'mcp__hiveku__outbound_lead_subsequence_push',\n" +
+          "  'mcp__hiveku__outbound_blocklist_remove',\n" +
+          "  'mcp__hiveku__outbound_campaign_email_accounts_detach',\n",
+      ),
+      'the bucket-C outbound sends and deletes are listed together, in this order',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__outbound_campaign_email_accounts_detach'") < ask.indexOf("'mcp__hiveku__project_vcs_temp_env_create'"),
+      'the temporary environment writes come after the bucket-C outbound sends and deletes',
+    );
+    assert.ok(
+      ask.includes(
+        "  'mcp__hiveku__project_vcs_temp_env_create',\n" +
+          "  'mcp__hiveku__project_vcs_temp_env_update',\n" +
+          "  'mcp__hiveku__project_vcs_temp_env_extend',\n" +
+          "  'mcp__hiveku__project_vcs_temp_env_revive',\n" +
+          "  'mcp__hiveku__project_vcs_temp_env_try_again',\n" +
+          "  'mcp__hiveku__project_vcs_temp_env_password_set',\n" +
+          "  'mcp__hiveku__project_vcs_temp_env_settings_set',\n" +
+          "  'mcp__hiveku__project_vcs_temp_env_delete',\n" +
+          "  'mcp__hiveku__project_vcs_temp_env_request_dismiss',\n" +
+          "  'mcp__hiveku__project_vcs_temp_env_open',",
+      ),
+      'the temporary environment writes are listed together, in the Claude Code plugin\'s ask list order',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith("  'mcp__hiveku__project_vcs_temp_env_open',"),
+      'the newest ask rules, the temporary environment writes, go at the END',
     );
   });
 

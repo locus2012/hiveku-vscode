@@ -658,6 +658,12 @@ const HIVEKU_ALLOW: string[] = [
   // The merge line (2026-10-09, builder #977 / MCP #182): a GET with readOnlyHint. Its writes keep
   // prompting: adding asks in every mode (HIVEKU_ASK); taking out and reordering only hold a merge back.
   'mcp__hiveku__project_vcs_queue',
+  // Temporary environments (2026-11-13, MCP feature/temporary-environments): finding one from a pasted address or
+  // link, or listing the account's, is a GET, named by NAME because it ends in neither _get nor _list. The family's
+  // other reads already match the globs above (project_vcs_temp_env_get and project_vcs_temp_envs_usage_get the *_get
+  // glob, project_vcs_temp_envs_list and project_vcs_temp_envs_requests_list the *_list glob). Its ten writes match no
+  // glob here and are on HIVEKU_ASK.
+  'mcp__hiveku__project_vcs_temp_envs_find',
   // Version history + checkpoints — READ + DRY-RUN only (the actual restores
   // stay behind a confirm; creating a checkpoint is safe/additive).
   'mcp__hiveku__project_version_log',
@@ -1619,6 +1625,24 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__outbound_lead_subsequence_push',
   'mcp__hiveku__outbound_blocklist_remove',
   'mcp__hiveku__outbound_campaign_email_accounts_detach',
+  // Temporary environments (2026-11-13, MCP feature/temporary-environments, after builder #2247): one branch of a site
+  // on its own address and Hiveku link for 1, 3 or 7 days, at 50 cents a day. create, extend, revive and try_again add
+  // that charge to the account's bill; password_set, settings_set and delete change who can get in, or turn one off for
+  // good. update, request_dismiss and open ask only in ask mode in the Hiveku app, and an ask rule cannot tell the modes
+  // apart, so here they ask every time, as on the Claude Code plugin's ask list and in the Codex plugin. Written before
+  // the tool server serves them, so a folder asks from the first day. No name ends in _get or _list or holds _list_, so
+  // no read glob above approves one; the reads get no rule (project_vcs_temp_envs_find is on HIVEKU_ALLOW by name).
+  // Appended last, in this order.
+  'mcp__hiveku__project_vcs_temp_env_create',
+  'mcp__hiveku__project_vcs_temp_env_update',
+  'mcp__hiveku__project_vcs_temp_env_extend',
+  'mcp__hiveku__project_vcs_temp_env_revive',
+  'mcp__hiveku__project_vcs_temp_env_try_again',
+  'mcp__hiveku__project_vcs_temp_env_password_set',
+  'mcp__hiveku__project_vcs_temp_env_settings_set',
+  'mcp__hiveku__project_vcs_temp_env_delete',
+  'mcp__hiveku__project_vcs_temp_env_request_dismiss',
+  'mcp__hiveku__project_vcs_temp_env_open',
 ];
 
 /**
