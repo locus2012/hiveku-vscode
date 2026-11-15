@@ -80,11 +80,9 @@ fire by luck.
   compiled server-side) OR `source_pdf_s3_key` + `fields[]` (legacy PDF + coordinate fields); there
   is no `source_pdf` argument. signers[] is 1-10; signing_order = parallel | sequential (default
   parallel). Link it with contact_id / company_id / deal_id.
-- Signer tokens: `crm_envelope_send` mints fresh per-signer plaintext tokens itself on first send,
-  so the normal flow needs nothing from you. Capture the create-time tokens (and the one
-  `crm_envelope_add_signer` returns) only when you are hand-delivering a signing link outside the
-  invite email - they are not derivable from the stored hash afterwards. The `signer_tokens`
-  argument on send is legacy; omit it.
+- Signing links: `crm_envelope_send` makes each signer's own link on the server and emails it to
+  them. No answer carries one and none can be handed out by hand: whoever holds a client's link
+  could sign as them. Your own place on a contract is signed with Sign now in the Hiveku app.
 - **Pre-flight: the from_email on the account's payment-integrations settings page is a BRANDING
   choice, not a blocker.** (The server's own `crm_envelope_send` description names that setting
   `crm_payment_integrations` - it is a settings surface, NOT a callable tool; do not attempt the
