@@ -96,20 +96,26 @@ writes no `scheduled_at` anywhere.
    gap OPEN and named in the report - the client reads drafts in the dashboard, so a failing draft
    is not written. Words on the canvas (a quote card, a data-point card, carousel copy) are a
    designed asset briefed through `/hiveku:creative-brief`; the post is held text-only until the
-   asset is attached. Then `social_post_validate({ content, target_platforms, target_accounts,
+   asset is attached. Then `social_post_strategy_check` per draft with what it is for (`avatar_id`,
+   `journey_id`, `journey_stage`, `before_after_grid_id`, `before_after_item_id`, `pillar_id`); it
+   only reads (it never blocks a post, costs nothing and calls no AI): fix each `fix` item in the
+   draft, and carry each `ask` item into the STOP below as a question for the person, never answered
+   by you. Then `social_post_validate({ content, target_platforms, target_accounts,
    media_asset_ids, platform_overrides })` per draft with the healthy ids and NO schedule fields; it
    writes nothing and returns `{ ok, validation: { errors, warnings }, media: { resolved, missing },
    x_quota }`, and its errors are the work list. STOP - show the two-week grid with the draft that
-   fills each gap (header, Rubric line, copy, first comment), the stock bindings, the orphan
-   bindings, any series change and the exact write calls, and get a yes. Then persist, drafts only.
+   fills each gap (header, Rubric line, copy, first comment, its `ask` items as questions), the
+   stock bindings, the orphan bindings, any series change and the exact write calls, and get a yes,
+   and the person's answers (a pick changes only to what they say). Then persist, drafts only.
    ONE `social_posts_bulk_create({ posts: [...], batch_id })` for the new copy: up to 25 rows,
    all-or-nothing with every row's validation echoed (one foreign id or one `scheduled_at` and
    nothing is written). Each row: `title` `"<date> / <platform> / <format>"`, `content`,
    `target_platforms` with ONE slug, `target_accounts` with the one healthy id, `pillar_id`, `tags:
    ["persona:<slug>", "stage:<slug>", "hook:<pattern>", "format:<slug>"]` (`stage:` is one of
-   `unaware`, `problem-aware`, `solution-aware`, `product-aware`, `most-aware`), `avatar_id`,
-   `journey_id` + `journey_stage` (the journey's own stage NAME), `before_after_grid_id` when a grid
-   item is the proof, the link where the platform allows it (`first_comment` on LinkedIn and on
+   `unaware`, `problem-aware`, `solution-aware`, `product-aware`, `most-aware` or `customer`),
+   `avatar_id`, `journey_id` + `journey_stage` (the journey's own stage NAME), `before_after_grid_id`
+   and `settings: { before_after_item_id }` (the grid's row) when a grid item is the proof, the
+   link where the platform allows it (`first_comment` on LinkedIn and on
    Facebook with media, `link_url` on GBP and on text-only Facebook, in the body on X, nothing from
    this rail on TikTok), `media_asset_ids` + `media_alt_texts` in the same order, and the two fields
    that put it on its day: `proposed_date: "YYYY-MM-DD"` (the gap's date) and `calendar_event: true`
@@ -151,7 +157,8 @@ writes no `scheduled_at` anywhere.
    (R12): the grid and the counts from `social_calendar_gaps`, the queue from `social_list_posts`,
    the roster from `social_list_accounts`. Then the handoff, stated plainly: nothing written here
    carries a time. The schedule is `/hiveku:social-plan` step 4 - `social_schedule_slot_next_open`,
-   then `social_analytics_best_times`, `social_post_validate` with the intended
+   then `social_analytics_best_times`, `social_post_strategy_check` with the `post_id` (its `ask`
+   items answered by the person), `social_post_validate` with the intended
    `scheduled_at_local` + `timezone`, then `social_update_post({ post_id, scheduled_at })`, one
    post, one confirm, because setting `scheduled_at` is publishing on a timer. Never
    `social_publish_post` on any of these: on an unapproved post it returns 200 with

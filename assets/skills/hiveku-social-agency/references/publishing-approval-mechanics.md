@@ -1,6 +1,7 @@
 # Publishing, scheduling, and approval mechanics
 
-Load this before any create/update/validate/schedule/publish/reject call, before a bulk
+Load this before any create/update/validate/schedule/publish/reject call, before the
+strategy check or the strategy write, before a bulk
 draft, a duplicate or a retry, before touching the calendar or the recurring slots, and
 before answering "why didn't my post go out". Every state transition and failure mode
 in this rail is documented here, and the contract table below is the ONE place the
@@ -122,16 +123,18 @@ and named in `_dropped_params` on the response. Every row is SHIPPED. Rule, then
 | `scheduled_at` | create, update | SHIPPED | the publish instant as ISO 8601 WITH a zone designator (`2026-09-10T15:00:00Z` or `...+02:00`); on update `null` unschedules | no designator is a 400 (the server refuses to guess a zone); a past instant is a 400 on create and, on update, only when the time is MOVED; setting it is publishing on a timer (Path A) |
 | `scheduled_at_local` + `timezone` | create, update | SHIPPED | the wall clock (`YYYY-MM-DDTHH:mm`) in an IANA zone; `timezone` omitted falls back to the account scheduling timezone | together with `scheduled_at` in one call is a 400; no `timezone` and no account zone is a 400 (ask the client for the zone, references/connection-health-and-syncs.md); the response's `schedule.timezone_used` says which zone was applied |
 | `linkedin_visibility` | create, update | SHIPPED | PUBLIC (default), CONNECTIONS or LOGGED_IN on the LinkedIn version | LinkedIn only; every other platform ignores it |
-| `avatar_id`, `journey_id`, `journey_stage`, `before_after_grid_id`, `linked_content_id` | create, update | SHIPPED | the foundation links: which persona, journey and stage, transformation grid and repurposed content item the post serves; they are the `social_list_posts` filters and the `social_analytics_by_dimension` groups | each id is checked against the account and a foreign or unknown id is a 400 naming the field; `journey_stage` with `journey_id` must be a stage NAME on that journey (the 400 lists the real names); the header rule is references/audience-grounding.md section 6 |
+| `avatar_id`, `journey_id`, `journey_stage`, `before_after_grid_id`, `linked_content_id` | create, update | SHIPPED | the foundation links: which persona, journey and stage, transformation grid and repurposed content item the post serves; they are the `social_list_posts` filters and the `social_analytics_by_dimension` groups | each id is checked against the account and a foreign or unknown id is a 400 naming the field; `journey_stage` with `journey_id` must be a stage NAME on that journey (the 400 lists the real names), and the server keeps that stage's id in `settings.journey_stage_id`, which no caller sets, so a renamed stage keeps its posts; the grid's row is `settings.before_after_item_id` (the `settings` row); a publishing or published post takes these only through `social_post_strategy_update`, on the person's word (below); the header rule is references/audience-grounding.md section 6 |
 | `linkedin_commentary` | create, update | SHIPPED | a stored LinkedIn note on the row | the publish path does not read it; LinkedIn copy goes in `platform_overrides.linkedin.content` |
-| `ai_generated`, `ai_prompt` | create | SHIPPED | provenance; an Olympus create defaults to `ai_generated: true` | pass `ai_generated: false` only for copy a human wrote; the update tool does not carry either |
-| `settings` | create | SHIPPED | a free JSON bag on the row; the server writes `media_asset_ids` and `batch_id` into it | nothing the publisher reads belongs here; never put copy, links or times in it |
+| `ai_generated`, `ai_prompt` | create (`ai_prompt` on update too) | SHIPPED | provenance; an Olympus create defaults to `ai_generated: true` | pass `ai_generated: false` only for copy a human wrote; the update tool carries `ai_prompt` only |
+| `settings` | create, update | SHIPPED | a free JSON bag on the row (update merges it); `before_after_item_id` in it names the one row of `before_after_grid_id` the post shows (a row's `item_id` from `before_after_grid_get`); the server writes `media_asset_ids`, `batch_id` and `journey_stage_id` into it | `before_after_item_id` is checked: a row the grid lacks, or a row with no grid, is a 400; `null` takes it off, and so does a changed grid that lacks it; keys only the server writes (`media_asset_ids`, `journey_stage_id`, `strategy_review`) are ignored when sent; nothing the publisher reads belongs here; never put copy, links or times in it |
 
 ### What the write returns (draft warnings vs the scheduled 400)
 
 - A create returns 201 `{ data, validation: { errors, warnings }, schedule: {
   scheduled_at, timezone_used } }`. The validation object is the same one
-  `social_post_validate` returns, so a validated plan and its create agree.
+  `social_post_validate` returns, so a validated plan and its create agree. Nothing on the
+  create says who the post is for and why: run `social_post_strategy_check` yourself before
+  the write (Creating a post, step 2).
 - A DRAFT (no schedule) is written even when a platform reports errors; the errors and
   warnings are echoed so the draft can be fixed before it is scheduled. Read them: a
   201 is not a clean post, and the same errors are a 400 the moment the post is
@@ -166,7 +169,21 @@ same way and also says whether the instant is already past.
 1. Ground it (references/audience-grounding.md), draft it
    (references/hooks-and-formats.md), score it (references/anti-fluff.md). Confirm
    client-facing copy with the user before the write.
-2. `social_post_validate` with the same body a create would carry: `content`,
+2. `social_post_strategy_check` with the draft and what it is for: the draft as
+   `social_post_validate` takes it (without the schedule or the media types), `avatar_id`
+   (the ICP), `journey_id` + `journey_stage`, `before_after_grid_id` +
+   `before_after_item_id` (the grid's row), `pillar_id`, and `post_id` once the post is
+   saved. It only reads: it never blocks a post, costs nothing and calls no AI, and it
+   never scores copy (step 1's rubric is yours). It answers `summary` (how many items are
+   `ok`, `fix`, `ask` and `not_set`), `stage` (`name`, `stage_id`, `awareness`,
+   `awareness_source` and `job`, or null), `items` (`id`, `group`, `platform`, `status`,
+   `reason`, `data`) and `platforms`. Work the items: fix each `fix` item in the post (the
+   `reason` says how) and run the check again; ask the person each `ask` item in plain
+   words, since only they can answer it (is a guessed step right, should the post go to a
+   network the ICP does not list); a `not_set` item is a pick still to make, with the
+   person. Never answer an `ask` item yourself, and never change what the person chose to
+   make an item `ok`.
+3. `social_post_validate` with the same body a create would carry: `content`,
    `target_platforms`, the real `target_accounts`, `media_urls` + `media_types`,
    `media_asset_ids`, `platform_overrides`, and the intended schedule in either form.
    It writes nothing and returns `{ ok, validation: { errors, warnings }, schedule,
@@ -174,16 +191,18 @@ same way and also says whether the instant is already past.
    where the write would 400 on it; `x_quota` appears whenever `twitter` is among the
    platforms, and a plan with more X drafts than `x_quota.remaining` fails on the last
    ones at cron time. Errors are the work list, not a footnote.
-3. `social_create_post` as a DRAFT: no `scheduled_at`, no `scheduled_at_local`. A
+4. `social_create_post` as a DRAFT: no `scheduled_at`, no `scheduled_at_local`. A
    create with a schedule is not a proposal, it is a scheduled publish (Path A). Pass
    `target_accounts` every time. Persist the header on the row: `avatar_id`,
-   `journey_id` + `journey_stage`, `before_after_grid_id`, `pillar_id`, the
+   `journey_id` + `journey_stage`, `before_after_grid_id` with its row in
+   `settings.before_after_item_id`, `pillar_id`, the
    `hook:`/`format:`/`persona:`/`stage:` tags, and `platform_overrides` when one post
-   serves several platforms.
-4. Read the echoed `validation` and fix anything under `errors` with
+   serves several platforms. Never send `settings.journey_stage_id`: the server sets it
+   from the stage.
+5. Read the echoed `validation` and fix anything under `errors` with
    `social_update_post` while it is a draft.
-5. The schedule is its own confirmed step (Path A). Never batch it across drafts.
-6. Attach the calendar: `social_calendar_create` (or `social_calendar_update`) with
+6. The schedule is its own confirmed step (Path A). Never batch it across drafts.
+7. Attach the calendar: `social_calendar_create` (or `social_calendar_update`) with
    `linked_post_id`.
 
 Longer-form pieces that live in the content library first: `content_create`, then the
@@ -217,8 +236,8 @@ creates the event with `linked_post_id` already set. Rules:
 
 Review and revise with `social_get_post` and `social_update_post` while the post is a
 draft, held, or scheduled. `social_update_post({ post_id, ... })` carries every row of
-the contract table except `ai_generated`, `ai_prompt` and `settings`, and only the
-fields you send change. The rules that bite:
+the contract table except `ai_generated` (`settings` is merged onto the post's), and only
+the fields you send change. The rules that bite:
 - Media is replaced, not appended. Sending `media_urls` (with `media_types`) or
   `media_asset_ids` replaces the whole media list with what you sent; to add a slide,
   send the full list. Send `media_alt_texts` in the same call, same order.
@@ -237,7 +256,9 @@ fields you send change. The rules that bite:
 - A post at status 'publishing' or 'published' is EDIT-LOCKED: any update is a 400
   "Cannot modify a published post" / "Cannot modify a publishing post". It has already
   been handed to the platform. To revise, `social_post_duplicate({ post_id })`
-  (below), edit the copy, and schedule the copy as its own confirmed step.
+  (below), edit the copy, and schedule the copy as its own confirmed step. Who it is for
+  is not locked: `social_post_strategy_update` (below) sets or fixes that on any post, on
+  the person's word.
 - `social_get_post` reads everything back: top-level `first_comment`,
   `platform_overrides`, `media_alt_texts`, `media_asset_ids` and the foundation ids;
   per version `status`, `error_message`, `first_comment_status`, `first_comment_error`,
@@ -259,6 +280,36 @@ and named in `dropped_target_accounts`; a `target_accounts` override must be own
 the account or the call is a 400. It is the "revise a published post" path and the
 series path (`hooks-and-formats` rotate the specific, not the frame). It writes a
 draft, so it needs no confirm; the schedule that follows does.
+
+### Who it is for, on any post: social_post_strategy_update
+
+`social_post_strategy_update({ post_id, avatar_id, journey_id, journey_stage,
+before_after_grid_id, before_after_item_id, pillar_id, tags })` sets or fixes who a post is
+for and why, on any post in any status, published included: the ICP, the journey and its
+stage, the grid and its row, the pillar and the tags. These stay in Hiveku and never reach a
+network, so it never changes the text, media, time, accounts or status, and never sends a
+post back for approval. It is how an old post comes to count in the by-ICP and by-stage
+numbers, and how a published post's wrong ICP or stage is put right. Rules:
+- Ask the person first, and send what they chose. Run `social_post_strategy_check({ ...,
+  post_id })` to see what needs fixing, then change only what the person says; their picks
+  are never yours to change on your own reading.
+- Send only what changes. `null` clears a field (a blank string is left out, so it clears
+  nothing); `tags` replaces the whole tag list, so read it first with `social_get_post` and
+  send every tag back with your change (`[]` clears them all).
+- `journey_stage` is a stage of the post's journey, by its name or `stage_id`, stored as the
+  stage's own name; send `journey_id` with it when the post has none. The server keeps the
+  stage's id (`settings.journey_stage_id`), so a renamed stage keeps its posts. A journey
+  changed without a stage clears the old journey's stage; a grid changed without a row takes
+  off a row the new grid lacks; `before_after_item_id` must be a row of the post's grid.
+- Any other argument (the text, media, time, accounts, status or `settings`) is refused
+  before anything changes (`dropped_args_refused`, as Hiveku refuses it with 400
+  `not_strategy`); those are `social_update_post`'s while the post is editable.
+- Answers: 200 `{ data, changed }`, with `changed` empty and nothing written when the post
+  already says all of it. Refused with nothing written: 400 `nothing_to_update`, `bad_id` or
+  `invalid` (an id not in this account, a stage the journey lacks, a row the grid lacks);
+  404 `not_found`; 409 `post_changed` when the post changed while the call ran (read it again
+  with `social_get_post`, then resend); 409 `post_publishing` while it is going out (try
+  again once it has gone out). Every change is in the activity log, with who made it.
 
 ### Re-driving a failure: social_post_retry (ask-gated)
 
@@ -295,6 +346,9 @@ This path needs no approval anywhere:
   schedule, so an already-overdue post can be edited and left overdue. Schedule in the
   account's own timezone; a timezone slip is a rejected create at best and a same-minute
   publish at worst.
+- Before setting the time, run `social_post_strategy_check({ ..., post_id })` on the post
+  as it stands (Creating a post, step 2): fix each `fix` item while it is a draft, and ask
+  the person each `ask` item before the post gets its time.
 - Before picking a time, check `social_schedule_slot_next_open` so two posts do not
   collide in one slot, and prefer a slot over a hand-picked timestamp.
 - Scheduling is reversible until it fires - you can still edit the post or move the
@@ -322,7 +376,9 @@ This path needs no approval anywhere:
   route always publishes to ALL of the post's `target_accounts`, and a post with none is
   a 400 "Post has no target accounts configured". Fix that BEFORE staging:
   `social_update_post({ post_id, target_accounts })` while the post is a draft, then
-  `social_post_validate`. Get `target_accounts` right at create time anyway.
+  `social_post_validate` and `social_post_strategy_check({ ..., post_id })` (fix each `fix`
+  item, and ask the person each `ask` item before staging). Get `target_accounts` right at
+  create time anyway.
 - Confirm the exact post and account(s) before every publish, and never loop
   `social_publish_post` over a batch of drafts.
 - Retry discipline: retry ONE transient failure (timeout, 5xx). Never retry a 400/409 -
@@ -436,8 +492,8 @@ makes the queue tone-deaf), there is no single pause switch. The procedure:
   the copy is never scheduled until you schedule it.
 - A post created with `target_platforms` but no `target_accounts` cannot publish - 400
   "Post has no target accounts configured", discovered only at publish time, after the
-  client approved it. Always pass both, and run `social_post_validate` with the real
-  accounts first.
+  client approved it. Always pass both, and run `social_post_validate` and
+  `social_post_strategy_check` with the real accounts first.
 - `scheduled_at` without a zone designator, or together with `scheduled_at_local`, is a
   400. The fix is the timezone rule above, not a retry.
 - A draft 201 can carry `validation.errors`. Read them: the same errors are a 400 the

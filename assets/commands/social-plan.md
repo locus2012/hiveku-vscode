@@ -32,7 +32,8 @@ is set and every schedule must carry `timezone` explicitly).
    `online_behavior.social_platforms`; a persona whose platforms do not list a slug gets no post
    there), `before_after_grid_list({ target_avatar_id })` for its grids (real before/after photos are
    the proof; never generate a "before"), `customer_journey_get({ id })` for the stage vocabulary when
-   a journey exists. Variance: `social_list_posts({ platform, status: "published", limit: 20 })` per
+   a journey exists and each stage's step (`awareness`; a `guess` in `awareness_source` is a question
+   for the person at step 4). Variance: `social_list_posts({ platform, status: "published", limit: 20 })` per
    platform - at most 2 of the last 10 with the same hook pattern, never the same opening six words,
    never the same format three in a row, and the same three checks across this week's drafts in slot
    order. Draft via `talk_to_department({ domain: "social", message })`: put the persona (name and id),
@@ -52,7 +53,14 @@ is set and every schedule must carry `timezone` explicitly).
    `platform_overrides` (`{ [platform]: { content, firstComment } }`, the only two keys the publisher
    reads) when its targets share one instant and one media set; this plan does not use it, because
    each platform gets its own row (step 3) and its own time (step 4).
-3. Persist as TRUE DRAFTS, one row per platform slot. Dry run first: `social_post_validate` with the
+3. Persist as TRUE DRAFTS, one row per platform slot. Check first: `social_post_strategy_check` with
+   each draft and what it is for (`avatar_id`, `journey_id`, `journey_stage`, `before_after_grid_id`,
+   `before_after_item_id`, `pillar_id`); it only reads (it never blocks a post, costs nothing and
+   calls no AI): fix each `fix` item before the draft is written, and treat each `ask` item as a
+   question for the person, listed beside its slot at step 4's STOP and asked in plain words, never
+   answered by you. Until the person answers, the pick is your proposal and the plan says so; it
+   changes only to what they say (`social_update_post` while it is a draft). Then the dry run:
+   `social_post_validate` with the
    exact body the create will carry (`content`, `target_platforms`, the real `target_accounts`,
    `media_asset_ids` or `media_urls` + `media_types`, `first_comment`, `link_url`, no schedule). It
    writes nothing and returns `{ ok, validation: { errors, warnings }, schedule, media: { resolved,
@@ -60,12 +68,13 @@ is set and every schedule must carry `timezone` explicitly).
    row over 280 with every URL counted as 23, an asset id the account does not own). Then one
    `social_create_post({ title, content, target_platforms: ["<one slug>"], target_accounts: ["<one
    healthy account id>"], pillar_id, tags: ["persona:<slug>", "stage:<slug>", "hook:<pattern>",
-   "format:<format>"], avatar_id, journey_id, journey_stage, before_after_grid_id, first_comment,
-   link_url, media_asset_ids, media_alt_texts })` per slot, and **omit `scheduled_at` and
+   "format:<format>"], avatar_id, journey_id, journey_stage, before_after_grid_id, settings: {
+   before_after_item_id }, first_comment, link_url, media_asset_ids, media_alt_texts })` per slot
+   (the `settings` row is the grid's row, when a grid item is the proof), and **omit `scheduled_at` and
    `scheduled_at_local`**. Setting a schedule is not a proposal - it writes status 'scheduled' and the
    every-minute cron publishes it, since the default `approval_status: 'not_required'` passes the
    cron's filter. Tags: `stage:` is one of `unaware`, `problem-aware`, `solution-aware`,
-   `product-aware`, `most-aware`; `hook:` and `format:` are the slugs from
+   `product-aware`, `most-aware` or `customer`; `hook:` and `format:` are the slugs from
    `references/hooks-and-formats.md` (the confession hook is `mistake`, not `mistake-confession`);
    `persona:` is a stable slug you keep in memory; the pillar is `pillar_id`, never a tag. Foundation
    ids are checked against the account (a foreign id is a 400 naming the field) and `journey_stage`
@@ -84,7 +93,8 @@ is set and every schedule must carry `timezone` explicitly).
    target_platforms, linked_post_id })` - `title`, `event_type` and `start_date` are required,
    `start_date` is stored as a DATE (a time on it is dropped; the slot time is `start_time` read in
    `timezone`), and `linked_post_id` is checked against the account.
-4. Present the week - header, rubric line and copy per post, the slot, the X count, the excluded
+4. Present the week - header, rubric line and copy per post, each post's `ask` items as questions for
+   the person, the slot, the X count, the excluded
    accounts with reasons - and STOP for a yes: scheduling is publishing on a timer, and nothing below
    runs without an explicit yes on the exact posts and times. Pick the times with two tools, in this
    order: `social_schedule_slot_next_open` (the next open occurrences of the account's defined slots
@@ -92,7 +102,9 @@ is set and every schedule must carry `timezone` explicitly).
    list means no slots are defined, not an error - schedule by hand) and `social_analytics_best_times`
    (zero params; concrete FUTURE ISO timestamps computed from this account's own engagement history,
    usable directly as `scheduled_at`; an empty list means too few samples, not an error - schedule by
-   the calendar instead). Before EACH scheduling update: `social_post_validate` with the draft's body
+   the calendar instead). Before EACH scheduling update: `social_post_strategy_check` with the draft's
+   body, its picks and its `post_id` (every `fix` item fixed, every `ask` item answered by the
+   person), then `social_post_validate` with the draft's body
    plus the intended `scheduled_at_local` + `timezone` (or `scheduled_at` with a zone designator) - it
    resolves the instant the same way the update will, says whether it is already past, and returns
    `x_quota` when `twitter` is among the platforms; an update that leaves the post scheduled and

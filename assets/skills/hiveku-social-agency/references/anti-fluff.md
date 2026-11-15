@@ -15,10 +15,15 @@ and it runs on every draft, including copy that came back from
 
 Rule: nothing on the server scores copy. `social_post_validate` checks caps, media fit, the
 schedule and the X quota; the draft 201 from `social_create_post` echoes
-`validation.warnings` about the same things; neither reads a sentence. The gate is this
-file, applied by you, before the write. A draft that fails is not written to the account,
-not even as a draft: the dashboard shows drafts to the client, and a client who reads
-"unlock your potential" in the approval queue has already seen the agency's floor.
+`validation.warnings` about the same things; neither reads a sentence.
+`social_post_strategy_check` reads who the post is for and why: the ICP, the journey stage <!-- plugin-only -->
+and its step, the before and after row, the ask, proof sources, the banned phrases and the <!-- plugin-only -->
+brand's phrases to avoid, and each network's first line before the cut. It still never <!-- plugin-only -->
+scores copy: no rubric, no total, no verdict on whether a sentence is good, and it never <!-- plugin-only -->
+blocks a post. Its `fix` items go into the draft; its `ask` items go to the person. <!-- plugin-only -->
+The gate is this file, applied by you, before the write. A draft that fails is not written
+to the account, not even as a draft: the dashboard shows drafts to the client, and a client
+who reads "unlock your potential" in the approval queue has already seen the agency's floor.
 
 The order: ground (audience-grounding.md), write (hooks-and-formats.md), score here, then
 `social_create_post` with no `scheduled_at`. The department agent runs the same gate (its
@@ -122,6 +127,10 @@ media fit per platform, the X rule that every URL counts 23) and
 `social_post_preview({ post_id })` after it, the effective copy above each platform's fold
 once `platform_overrides` apply. A LinkedIn hook whose specific lands at character 230 is
 native 1 however well it reads in the deliverable.
+`social_post_strategy_check` reads the same fold before the write, per network: whether the <!-- plugin-only -->
+first line lands before the cut, where the link goes, the hashtag count against its norm, <!-- plugin-only -->
+and an opening that repeats one of the account's last 20 posts there. Its items feed this <!-- plugin-only -->
+axis and the variance rule; the score stays yours. <!-- plugin-only -->
 
 ## 5. The competitor-swap test
 

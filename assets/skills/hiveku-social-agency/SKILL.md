@@ -38,6 +38,20 @@ invalid, and name the persona each post serves. Check, criteria and ladder:
   client signs off. `social_publish_post` on an unapproved post stages it into the dashboard
   approval queue instead of publishing. Never bulk-schedule or bulk-publish - one post, one
   confirm (`social_posts_bulk_create` writes up to 25 DRAFTS and rejects `scheduled_at`).
+- Who and why before every save, schedule and send for approval. Before you save a draft
+  (`social_create_post`, `social_update_post`, `social_posts_bulk_create`), schedule one, or
+  send it for approval (`social_publish_post`), run `social_post_strategy_check` with the draft
+  and what it is for: `avatar_id` (the ICP), `journey_id` and `journey_stage`,
+  `before_after_grid_id` and `before_after_item_id` (the grid's row), `pillar_id`, and `post_id`
+  once the post is saved. It only reads: it never blocks a post, costs nothing and calls no AI,
+  and it never scores copy (the rubric stays yours, references/anti-fluff.md). It answers
+  `summary`, the `stage` with its step and its job, and `items`, each `ok`, `fix`, `ask` or
+  `not_set`: fix each `fix` item in the post; ask the person each `ask` item in plain words,
+  because only they can answer it; a `not_set` item is a pick to make with the person. Never
+  answer an `ask` item yourself, and never change what the person chose to turn an item `ok`.
+  A published post's who-and-why (its ICP, journey and stage, grid and row, pillar and tags)
+  changes only through `social_post_strategy_update`, on the person's word, and nothing else
+  about the post moves. Load references/publishing-approval-mechanics.md for both.
 - `hiveku-data/social/*.json` (accounts, posts, pillars, calendar, comments, hashtags, slots,
   analytics-summary) is the local snapshot - read it for orientation, brand voice recall, and
   cheap counts; use live tools for anything current or decision-grade (a post's live status,
@@ -88,6 +102,8 @@ invalid, and name the persona each post serves. Check, criteria and ladder:
    Standard 30, Premium 60); over the cap only the X version fails, silently. Check version rows.
 9. A post at 'publishing' or 'published' is edit-locked (400). Revise through
    `social_post_duplicate` (a new unscheduled draft), then schedule the copy as its own confirm.
+   Its who-and-why is the one exception: `social_post_strategy_update` sets or fixes the ICP,
+   journey, stage, grid, row, pillar and tags of any post, on the person's word.
 10. Every number in a deliverable traces to a named tool call. Unknown or unsynced never
     becomes zero; a failed platform is partial, not absent.
 
@@ -96,10 +112,12 @@ Twelve rules every post obeys; the department agent runs the same list, account 
 it, and references/audience-grounding.md, hooks-and-formats.md and anti-fluff.md hold the depth.
 - R1. Persona and stage header. Every post opens with
   `For: <avatar> | Stage: | Pillar: | Hook: | Format: | CTA:`, read from the foundation objects
-  (`customer_avatar_get` full row, `before_after_grid_list`, `customer_journey_get`), persisted
-  as `avatar_id`, `journey_stage`, `before_after_grid_id` and tags `persona:<slug>`,
-  `stage:<slug>`. "General audience" is a missing header; no post goes to a platform outside
-  the persona's `online_behavior.social_platforms`.
+  (`customer_avatar_get` full row, `before_after_grid_list`, `customer_journey_get`, whose
+  stages each carry their step as `awareness` and where it came from as `awareness_source`;
+  a `guess` is a question for the person), persisted as `avatar_id`, `journey_id` +
+  `journey_stage`, `before_after_grid_id` with its row in `settings.before_after_item_id`, and
+  tags `persona:<slug>`, `stage:<slug>`. "General audience" is a missing header; no post goes to
+  a platform outside the persona's `online_behavior.social_platforms`.
 - R2. Hook first. The first line is one of the 16 named patterns with the specific (a number,
   name, place or date) inside it, tagged `hook:<pattern>`. No warm-up line.
 - R3. One idea, one CTA, the verb from the pillar's rung on the CTA ladder; only Promotion asks
@@ -118,7 +136,9 @@ it, and references/audience-grounding.md, hooks-and-formats.md and anti-fluff.md
   last 10 with the same hook, never the same opening six words, never the same format three in
   a row; check the batch against itself. Under 20 published means no variance history - say so.
 - R8. Platform-native limits and link strategy: hook above the fold, caps and media fit checked
-  with `social_post_validate` before the write, the link where the platform allows it (LinkedIn
+  with `social_post_validate` before the write (and who and why with
+  `social_post_strategy_check`, whose per-network items read the first line before the cut,
+  the link, the hashtag count and repeats), the link where the platform allows it (LinkedIn
   and Meta `first_comment`, X inside the 280 with every URL counting 23, GBP `link_url`, TikTok
   nowhere from this rail), the effective copy read back with `social_post_preview({ post_id })`.
 - R9. Draft only - scheduling is publishing on a timer (invariant 1): no `scheduled_at` at
@@ -230,15 +250,20 @@ Command: /hiveku:social-calendar (integrity 14 days out; schedules nothing).
 (references/hooks-and-formats.md, R2, R3, R8), score (references/anti-fluff.md, R5-R7), then
 draft. Pull the account's own winners first (`social_analytics_by_dimension`), read the slot's
 pillar with `social_pillar_get`, generate with `talk_to_department` and re-score its
-`social_drafts.v1` block yourself. Dry-run with `social_post_validate` (per-platform errors and
+`social_drafts.v1` block yourself. Check who and why with `social_post_strategy_check` (fix each
+`fix` item, ask the person each `ask` item; it only reads, never blocks a post, costs nothing
+and calls no AI). Dry-run with `social_post_validate` (per-platform errors and
 warnings, resolved schedule, media fit, `x_quota`; writes nothing), then persist with
 `social_create_post` - `content` and `target_platforms` required, ALWAYS pass
-`target_accounts`, OMIT `scheduled_at` at draft stage, plus `pillar_id`, the foundation ids,
-tags `persona:` / `stage:` / `hook:` / `format:`, `first_comment` or `link_url`,
-`platform_overrides` for tuned copy - and read it back as each platform will show it with
-`social_post_preview({ post_id })`. Revise with `social_get_post` / `social_update_post`: update
-carries every create field (the contract table: references/publishing-approval-mechanics.md),
-`scheduled_at: null` unschedules, a publishing or published post is edit-locked. Commands:
+`target_accounts`, OMIT `scheduled_at` at draft stage, plus `pillar_id`, the foundation ids and
+the grid's row (`settings.before_after_item_id`), tags `persona:` / `stage:` / `hook:` /
+`format:`, `first_comment` or `link_url`, `platform_overrides` for tuned copy - and read it back
+as each platform will show it with `social_post_preview({ post_id })`. Revise with
+`social_get_post` / `social_update_post`: update carries every create field (the contract
+table: references/publishing-approval-mechanics.md), `scheduled_at: null` unschedules, a
+publishing or published post is edit-locked. Its who-and-why is not: `social_post_strategy_update`
+sets or fixes the ICP, journey, stage, grid, row, pillar and tags on any post, published
+included, and changes nothing else, on the person's word. Commands:
 /hiveku:social-post (one post from a brief), /hiveku:social-proof (proof posts; Proof axis 2),
 /hiveku:social-audit (read-only rubric and histogram, last 30 posts).
 
@@ -273,7 +298,10 @@ closures: load references/engagement-inbox.md BEFORE replying to anything. Comma
 **Play 7 - Publishing and scheduling.** Two paths to live: Path A, the schedule
 (`social_update_post` with `scheduled_at` - ships unattended via the cron, needs no approval);
 Path B, `social_publish_post` (a governance gate - publishes only an already-approved post,
-stages everything else). Prefer slot discipline: define cadence as slots,
+stages everything else). Before every schedule or send for approval,
+`social_post_strategy_check({ ..., post_id })` on the post as it stands: fix each `fix` item
+while it is a draft, and ask the person each `ask` item before it goes on its way. Prefer slot
+discipline: define cadence as slots,
 `social_schedule_slot_next_open` before every schedule, seed times from
 `social_analytics_best_times` (the account's own history; empty on thin data means schedule by
 the calendar). A post that reads published with one `failed` version: read the version rows on
@@ -392,8 +420,9 @@ Command: /hiveku:social-report.
 
 ## Reference files (load on demand - an unnamed reference is invisible)
 - references/publishing-approval-mechanics.md - load before any create, update, schedule,
-  publish, reject, calendar, or slot call, and for the crisis-hold brake: the cron semantics,
-  the approval state machine, every field trap and edit lock.
+  publish, reject, calendar, or slot call, before the strategy check or the strategy write,
+  and for the crisis-hold brake: the cron semantics, the approval state machine, every field
+  trap and edit lock, and how who a post is for is fixed on any post, published included.
 - references/analytics-and-reporting.md - load before quoting any metric or building the
   baseline, weekly check, or monthly report: the metric-source map, sync discipline, LinkedIn
   live analytics, honesty states, the full report recipe.
@@ -414,9 +443,10 @@ Command: /hiveku:social-report.
   library and its per-platform fit, hook-line rules, the CTA ladder by pillar, the
   first-comment link strategy, alt text rules.
 - references/audience-grounding.md - Load this before ideating, drafting or auditing any post:
-  mining avatar fields into angles, the Schwartz stage -> post-type map for the TRAFFIC leg,
-  grid_items -> transformation posts with the Have / Feel / Average Day / Status ladder, KB and
-  testimonial proof, and the name-the-persona-and-stage rule.
+  mining avatar fields into angles, the Schwartz stage -> post-type map for the TRAFFIC leg
+  and each journey stage's step (`awareness`, and whether a template, a person or a guess set
+  it), grid_items -> transformation posts with the Have / Feel / Average Day / Status ladder,
+  KB and testimonial proof, and the name-the-persona-and-stage rule.
 - references/anti-fluff.md - Load this before persisting ANY draft (a caption, a first comment,
   a platform override, a carousel slide, alt text), before scoring a post in an audit, and
   whenever a client says "our posts sound like AI": the 45 banned phrases plus the account's

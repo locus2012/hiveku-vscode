@@ -169,11 +169,15 @@ formats wanted with their hook patterns, the platforms the persona allows, the p
 `utm_links`, and the account's last 20 posts on each platform for the variance rule. Ask for
 the `social_drafts.v1` block. Score every draft against the 7-axis rubric in
 references/anti-fluff.md (>= 11/14, zero hard fails, `Rubric:` written in the deliverable),
-rewrite once, then report what still fails rather than shipping it. Run
-`social_post_validate` on each draft with its real `target_accounts` and `media_asset_ids`
-before the batch: it returns the per-platform errors and warnings, the resolved media and
-`x_quota`, and writes nothing. A set with more X drafts than `quota.x.remaining` is a set
-whose last posts fail silently at cron time (references/connection-health-and-syncs.md).
+rewrite once, then report what still fails rather than shipping it.
+Run `social_post_strategy_check` on each draft too, with the persona, journey, stage, grid <!-- plugin-only -->
+row and pillar it is for: fix each `fix` item, and ask the person each `ask` item before <!-- plugin-only -->
+the batch, never answering one yourself. <!-- plugin-only -->
+Run `social_post_validate` on each draft with its real `target_accounts` and
+`media_asset_ids` before the batch: it returns the per-platform errors and warnings, the
+resolved media and `x_quota`, and writes nothing. A set with more X drafts than
+`quota.x.remaining` is a set whose last posts fail silently at cron time
+(references/connection-health-and-syncs.md).
 
 ## 6. Persisting the batch
 
@@ -190,7 +194,8 @@ Each row carries:
 - `linked_content_id` (the `content_items` id from the source package or door 2; a CMS-only
   entry with no library row has none, say so), `avatar_id`, `journey_id` and
   `journey_stage` (the journey's own stage name, references/audience-grounding.md),
-  `before_after_grid_id` when a grid item is the proof.
+  `before_after_grid_id` and the item's `settings.before_after_item_id` when a grid item is
+  the proof.
 - The link, per platform: `first_comment` on LinkedIn and on Facebook posts with media (one
   line of reason plus the UTM link), `link_url` on GBP (the Learn more button) and on a
   text-only Facebook post, the link inside the 280 on X, nothing from this rail on TikTok.
@@ -293,6 +298,8 @@ measured one" (LinkedIn), `case-study-3-lines` from the Parkside grid row (Faceb
 the dues objection (Facebook), `behind-the-scenes` on the walk-through that prompted the
 article (Facebook, hero crop 1200x630 on a confirmed two-image spend). Each scores 11 or
 better; two rewrites for banned openers. `social_post_validate` passes all eight.
+`social_post_strategy_check` reads each draft's picks back first; its `ask` items go to <!-- plugin-only -->
+the person before the batch. <!-- plugin-only -->
 `social_posts_bulk_create` writes eight drafts with `linked_content_id`, the `repurpose:` tag,
 a Facebook `first_comment` carrying the facebook UTM link, eight all-day calendar events
 across five weeks, and one `batch_id`. Two crops go onto the item with `content_media_attach`.

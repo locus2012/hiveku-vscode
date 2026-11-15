@@ -27,7 +27,9 @@ the schedule is `/hiveku:social-plan` step 4, its own confirm, one post at a tim
    `buying_behavior` (the objection, the trigger) and `online_behavior.social_platforms` are
    not in the context summary, and a platform the persona's list does not include gets no
    post aimed at them there. The journey, when the account has one: `customer_journey_list`
-   then `customer_journey_get({ id })` for the stage NAME that `journey_stage` must carry.
+   then `customer_journey_get({ id })` for the stage NAME that `journey_stage` must carry and
+   the stage's step: `awareness`, with `awareness_source` (a `guess` is Hiveku's reading, so
+   ask the person which step it is at step 5's STOP before you write to it as that step).
    Proof: `before_after_grid_list({ target_avatar_id })` (take ids, then
    `before_after_grid_get({ id })` for the item: its `measurable_results` and its real
    photos are the strongest proof the account owns, and a "before" is never generated),
@@ -69,6 +71,15 @@ the schedule is `/hiveku:social-plan` step 4, its own confirm, one post at a tim
    hook 2, cta 1)` with one reason per 1 or 0. Rewrite ONCE, re-hooking when that is the fix
    (the persona and the stage do not change); if it still fails, say what fails, keep the
    draft as an alternative, and persist nothing - the client reads drafts. Then
+   `social_post_strategy_check({ content, target_platforms, target_accounts,
+   platform_overrides, first_comment, media_asset_ids, avatar_id, journey_id, journey_stage,
+   before_after_grid_id, before_after_item_id, pillar_id })` with the picks from step 1. It
+   only reads: it never blocks a post, costs nothing and calls no AI, and it never scores
+   copy (the Rubric line is yours). It answers `summary`, the `stage` with its step and its
+   job, and `items`, each `ok`, `fix`, `ask` or `not_set`: fix each `fix` item in the variant
+   (the `reason` says how) and check again; each `ask` item is a question only the person
+   can answer, put to them at step 5's STOP in plain words and never answered by you; a
+   `not_set` item is a pick to make with the person. Then
    `social_post_validate({ content, target_platforms, target_accounts, media_asset_ids,
    platform_overrides })` with the healthy ids from step 1. It writes nothing and returns
    `{ ok, validation: { errors, warnings }, media: { resolved, missing }, x_quota }`: the
@@ -104,8 +115,10 @@ the schedule is `/hiveku:social-plan` step 4, its own confirm, one post at a tim
    text as pixels, never a bare export URL in `media_urls`
    (`media_library_register_external_url` first, then attach by id).
 5. STOP - show the header, the Rubric line, every variant with its first comment, the alt
-   text, the validation result and the exact create call, and get a yes: the dashboard
-   shows drafts to the client. Then persist as a DRAFT. One `social_create_post` per
+   text, the strategy check's `summary` with each `ask` item as a question, the validation
+   result and the exact create call, and get a yes, and the person's answers (a pick changes
+   only to what they say): the dashboard shows drafts to the client. Then persist as a
+   DRAFT. One `social_create_post` per
    platform when the platforms will run at different times; ONE post with
    `platform_overrides: { "<platform>": { content, firstComment } }` when they share a
    schedule (only those two keys are read; an unknown key or slug is a 400 naming it).
@@ -115,9 +128,10 @@ the schedule is `/hiveku:social-plan` step 4, its own confirm, one post at a tim
    mandatory in practice: a post without them is a 400 at publish time, after the client
    approved it), `pillar_id`, `tags` `["persona:<slug>", "stage:<slug>", "hook:<pattern>",
    "format:<slug>"]` where `stage:` is one of `unaware`, `problem-aware`, `solution-aware`,
-   `product-aware`, `most-aware`, `avatar_id`, `journey_id` + `journey_stage` (the
-   journey's own stage NAME; a name not on the journey is a 400 listing the real ones),
-   `before_after_grid_id` when a grid item is the proof, `media_asset_ids` +
+   `product-aware`, `most-aware` or `customer`, `avatar_id`, `journey_id` + `journey_stage`
+   (the journey's own stage NAME; a name not on the journey is a 400 listing the real ones),
+   `before_after_grid_id` and `settings: { before_after_item_id }` (the grid's row) when a
+   grid item is the proof, `media_asset_ids` +
    `media_alt_texts` in the same order (stored for the dashboard; no publisher sends alt
    text to any platform today), and the link where each platform lets it go:
    `first_comment` on LinkedIn and Facebook (Facebook drops `link_url` when the post has

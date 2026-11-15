@@ -54,7 +54,8 @@ the piece it came from, the set is persisted as DRAFTS, and no publish time is p
    of the six slugs get a post at all (a platform the persona does not list gets none, however
    connected) and `buying_behavior.objections` is the `faq` post. `customer_journey_get({ id })` for
    the journey's own `stages[].name` - that string goes in `journey_stage` (a name not on the journey
-   is a 400), the Schwartz stage goes in the header and the `stage:` tag. The proof each post rests
+   is a 400), the stage's step (`awareness`; a `guess` in `awareness_source` is a question for the
+   person at step 5's STOP) goes in the header and the `stage:` tag. The proof each post rests
    on, by id: the piece itself (its content id is Proof 2 for every post in the set),
    `before_after_grid_list({ target_avatar_id })` for the grid item behind the `case-study-3-lines`,
    `kb_search({ query })` for the fact behind the `faq`, `marketing_testimonials_list({ status:
@@ -90,6 +91,10 @@ the piece it came from, the set is persisted as DRAFTS, and no publish time is p
    breach). One rewrite pass, then say what still fails and leave it out - the client reads drafts.
    Each platform gets its own version, not a trim: X is one line plus one payoff and the URL counts
    23; LinkedIn's fold is about 210 characters, Instagram and Facebook about 125, GBP about 100.
+   Then `social_post_strategy_check` on every draft with what it is for (`avatar_id`, `journey_id`,
+   `journey_stage`, `before_after_grid_id`, `before_after_item_id`, `pillar_id`); it only reads (it
+   never blocks a post, costs nothing and calls no AI): fix each `fix` item, and carry each `ask`
+   item to step 5's STOP as a question for the person, never answered by you.
    Then `social_post_validate` on every draft with its real `target_accounts` and `media_asset_ids`:
    it returns `{ ok, validation: { errors, warnings }, schedule, media: { resolved, missing, warnings
    }, x_quota }` and writes nothing; its errors are the work list before the batch.
@@ -121,15 +126,17 @@ the piece it came from, the set is persisted as DRAFTS, and no publish time is p
    and the deliverable says so. Never generate a "before": a grid item's photos are the only before
    there is.
 5. **STOP, then persist as ONE batch.** Present the set - every header and `Rubric:` line, the
-   per-platform copy, each first comment and link, the crops and the briefs, the day each post lands
-   across the 4-6 weeks - and get a yes. Then one `social_posts_bulk_create({ posts: [...], batch_id
+   per-platform copy, each first comment and link, the crops and the briefs, each draft's `ask`
+   items as questions, the day each post lands across the 4-6 weeks - and get a yes, and the
+   person's answers (a pick changes only to what they say). Then one `social_posts_bulk_create({ posts: [...], batch_id
    })`: up to 25 DRAFTS in one transaction, all-or-nothing with every row's validation echoed (one
    foreign id, one bad override key, one `scheduled_at`, and nothing is written), the `batch_id`
    written to `settings.batch_id` and the tag `batch:<id>` so the set can be reviewed or unwound as a
    unit. Each row: `title` `"<slug> / <format> / <platform>"` (255 max; the header lives in the
    deliverable), `content` as that platform's version, `target_platforms` with ONE slug and the
    matching `target_accounts`, `pillar_id`, `linked_content_id`, `avatar_id`, `journey_id` +
-   `journey_stage`, `before_after_grid_id` when a grid item is the proof, the link where the platform
+   `journey_stage`, `before_after_grid_id` and `settings: { before_after_item_id }` (the grid's row)
+   when a grid item is the proof, the link where the platform
    allows it (`first_comment` - one line of reason plus the UTM link - on LinkedIn and on Facebook
    posts with media; `link_url` on GBP, where it becomes the Learn more button, and on a text-only
    Facebook post; in the body on X; nothing from this rail on TikTok; on LinkedIn a `link_url` with
