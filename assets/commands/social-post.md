@@ -140,7 +140,8 @@ the schedule is `/hiveku:social-plan` step 4, its own confirm, one post at a tim
    Learn more button), nothing from this rail on TikTok. NO `scheduled_at` and NO
    `scheduled_at_local`: a create with a schedule is not a proposal, it is a publish on a
    timer. Read the 201's `validation.warnings`, and fix anything under `errors` with
-   `social_update_post({ post_id, ... })` while it is a draft. Then `social_post_preview({
+   `social_update_post({ post_id, ... })` while it is a draft; after any change to the copy or
+   to what the post is for, run `social_post_strategy_check` again with its `post_id`. Then `social_post_preview({
    post_id })` and show the fold per platform: the effective copy after overrides, the
    character count against the cap, the hashtag count against the platform norm, where the
    link landed, the media composition. A hook whose specific sits below the fold is native
