@@ -157,8 +157,8 @@ writes no `scheduled_at` anywhere.
    (R12): the grid and the counts from `social_calendar_gaps`, the queue from `social_list_posts`,
    the roster from `social_list_accounts`. Then the handoff, stated plainly: nothing written here
    carries a time. The schedule is `/hiveku:social-plan` step 4 - `social_schedule_slot_next_open`,
-   then `social_analytics_best_times`, `social_post_strategy_check` with the `post_id` (its `ask`
-   items answered by the person), `social_post_validate` with the intended
+   then `social_analytics_best_times`, `social_post_strategy_check` with the post's text, its picks
+   and its `post_id` (its `ask` items answered by the person), `social_post_validate` with the intended
    `scheduled_at_local` + `timezone`, then `social_update_post({ post_id, scheduled_at })`, one
    post, one confirm, because setting `scheduled_at` is publishing on a timer. Never
    `social_publish_post` on any of these: on an unapproved post it returns 200 with

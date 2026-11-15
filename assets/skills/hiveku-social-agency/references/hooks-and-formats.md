@@ -68,8 +68,9 @@ values. Every example is invented; the business names are not real customers.
 
 ### The awareness-stage map (which hooks open which door)
 
-The stage comes from the persona read and the journey, whose stages each carry their step
-as `awareness` (references/audience-grounding.md section 3; the Schwartz ladder in
+The stage comes from the persona read and the journey, whose stages carry their step as
+`awareness` (references/audience-grounding.md section 3 says what a guessed or missing step
+means; the Schwartz ladder in
 hiveku-content-agency/references/customer-journey.md; the social lane owns the TRAFFIC
 leg). Social does not move a Most Aware reader with an Unaware hook, or the reverse.
 

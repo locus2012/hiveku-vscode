@@ -46,9 +46,15 @@ invalid, and name the persona each post serves. Check, criteria and ladder:
   once the post is saved. It only reads: it never blocks a post, costs nothing and calls no AI,
   and it never scores copy (the rubric stays yours, references/anti-fluff.md). It answers
   `summary`, the `stage` with its step and its job, and `items`, each `ok`, `fix`, `ask` or
-  `not_set`: fix each `fix` item in the post; ask the person each `ask` item in plain words,
-  because only they can answer it; a `not_set` item is a pick to make with the person. Never
-  answer an `ask` item yourself, and never change what the person chose to turn an item `ok`.
+  `not_set`: fix each `fix` item about the post's own words (its ask, proof, voice and each
+  network's items) in the post; ask the person each `ask` item in plain words, because only
+  they can answer it; a `not_set` item is a pick to make with the person. A `fix` item in the
+  `who`, `where` or `what` group (the ICP, the journey and its stage, the grid and its row) is
+  about a pick or a foundation, not the post's words: tell the person what it says, change a
+  pick only to what they choose, and change a foundation only as
+  `hiveku-orient/references/foundation-first.md` says, never making up their pains or a quote
+  in their own words. Never answer an `ask` item yourself, and never change what the person
+  chose to turn an item `ok`.
   A published post's who-and-why (its ICP, journey and stage, grid and row, pillar and tags)
   changes only through `social_post_strategy_update`, on the person's word, and nothing else
   about the post moves. Load references/publishing-approval-mechanics.md for both.
@@ -265,7 +271,8 @@ publishing or published post is edit-locked. Its who-and-why is not: `social_pos
 sets or fixes the ICP, journey, stage, grid, row, pillar and tags on any post, published
 included, and changes nothing else, on the person's word. Commands:
 /hiveku:social-post (one post from a brief), /hiveku:social-proof (proof posts; Proof axis 2),
-/hiveku:social-audit (read-only rubric and histogram, last 30 posts).
+/hiveku:social-audit (the rubric and histogram of the last 30 posts; its only writes, each on a
+yes, are the memory line and the who-and-why fixes).
 
 **Play 4 - Creative and media.** Library first (`media_library_list` and kin), stock second,
 `generate_image` / `generate_image_set` third; anything with text on it is a designed card

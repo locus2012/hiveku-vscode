@@ -194,8 +194,8 @@ Each row carries:
 - `linked_content_id` (the `content_items` id from the source package or door 2; a CMS-only
   entry with no library row has none, say so), `avatar_id`, `journey_id` and
   `journey_stage` (the journey's own stage name, references/audience-grounding.md),
-  `before_after_grid_id` and the item's `settings.before_after_item_id` when a grid item is
-  the proof.
+  `before_after_grid_id` when a grid item is the proof.
+  The grid item's row goes in `settings.before_after_item_id`. <!-- plugin-only -->
 - The link, per platform: `first_comment` on LinkedIn and on Facebook posts with media (one
   line of reason plus the UTM link), `link_url` on GBP (the Learn more button) and on a
   text-only Facebook post, the link inside the 280 on X, nothing from this rail on TikTok.

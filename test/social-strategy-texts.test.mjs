@@ -7,8 +7,10 @@
  *
  * Holds:
  *   1. The Social department's crud text (src/deptData.ts) runs the check before a draft is saved, scheduled or sent
- *      for approval, and before the dry run; a published post's who-and-why goes through the strategy write, on the
- *      person's word. The emitted src/dept-manifest.json carries the same texts (npm run gen:registry ran).
+ *      for approval, and before the dry run; fixes in the post only the fix items about its own words, and leaves a
+ *      fix item about the ICP, journey or grid, every ask item and every not_set pick to the person; a published
+ *      post's who-and-why goes through the strategy write, on the person's word. The emitted src/dept-manifest.json
+ *      carries the same texts (npm run gen:registry ran).
  *   2. The Social first run (src/setupPlaybooks.ts) checks its first draft before it validates and creates it, and
  *      leaves the picks to the person.
  *   3. The permission rules of a fresh folder: no allow rule or read glob approves the strategy write, and no read
@@ -53,6 +55,14 @@ test("the Social crud text runs the strategy check before the dry run, and sends
   assert.match(crud, /Before saving a draft, scheduling or sending a post for approval, run `social_post_strategy_check`/);
   assert.match(crud, /It only reads: it never blocks a post, costs nothing and calls no AI\./);
   assert.match(crud, /ask the person each ask item, never answering one for them/);
+  // A fix item about the ICP, the journey or the grid is a pick or a foundation (the route's reasons there say "pick
+  // one of yours", "fill in their pains and a quote in their own words"): never fixed in the post on the agent's own.
+  assert.ok(crud.includes("Fix each fix item about the post's own words (its ask, proof, voice and each network's items)"), 'the crud text fixes in the post only the items about its own words');
+  assert.ok(
+    crud.includes("a fix item about the ICP, the journey or the grid (the who, where and what groups) is a pick or a foundation, so tell the person, change a pick only to what they choose, and never make up an ICP's pains or a quote in their own words"),
+    'the crud text leaves a who, where or what fix item to the person',
+  );
+  assert.match(crud, /a not_set item is a pick to make with the person; never change what the person chose\./, 'the crud text keeps the person\'s picks, as the first run does');
   assert.match(crud, /`social_post_strategy_update`, which changes nothing else, on the person's word/);
   assert.doesNotMatch(crud, /Before ANY schedule, dry-run with `social_post_validate`/, 'the old sentence named only the dry run');
 });

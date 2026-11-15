@@ -177,12 +177,17 @@ same way and also says whether the instant is already past.
    never scores copy (step 1's rubric is yours). It answers `summary` (how many items are
    `ok`, `fix`, `ask` and `not_set`), `stage` (`name`, `stage_id`, `awareness`,
    `awareness_source` and `job`, or null), `items` (`id`, `group`, `platform`, `status`,
-   `reason`, `data`) and `platforms`. Work the items: fix each `fix` item in the post (the
-   `reason` says how) and run the check again; ask the person each `ask` item in plain
-   words, since only they can answer it (is a guessed step right, should the post go to a
-   network the ICP does not list); a `not_set` item is a pick still to make, with the
-   person. Never answer an `ask` item yourself, and never change what the person chose to
-   make an item `ok`.
+   `reason`, `data`) and `platforms`. Work the items: fix each `fix` item about the post's
+   own words (the `ask`, `proof`, `voice` and `network` groups; the `reason` says how) and run
+   the check again; ask the person each `ask` item in plain words, since only they can
+   answer it (is a guessed step right, should the post go to a network the ICP does not
+   list); a `not_set` item is a pick still to make, with the person. A `fix` item in the
+   `who`, `where` or `what` group (the ICP, the journey and its stage, the grid and its row)
+   is about a pick or a foundation, not the post's words: tell the person what it says,
+   change a pick only to what they choose, and change a foundation only as
+   `hiveku-orient/references/foundation-first.md` says, never making up their pains or a
+   quote in their own words. Never answer an `ask` item yourself, and never change what the
+   person chose to make an item `ok`.
 3. `social_post_validate` with the same body a create would carry: `content`,
    `target_platforms`, the real `target_accounts`, `media_urls` + `media_types`,
    `media_asset_ids`, `platform_overrides`, and the intended schedule in either form.
@@ -285,11 +290,12 @@ draft, so it needs no confirm; the schedule that follows does.
 
 `social_post_strategy_update({ post_id, avatar_id, journey_id, journey_stage,
 before_after_grid_id, before_after_item_id, pillar_id, tags })` sets or fixes who a post is
-for and why, on any post in any status, published included: the ICP, the journey and its
-stage, the grid and its row, the pillar and the tags. These stay in Hiveku and never reach a
-network, so it never changes the text, media, time, accounts or status, and never sends a
-post back for approval. It is how an old post comes to count in the by-ICP and by-stage
-numbers, and how a published post's wrong ICP or stage is put right. Rules:
+for and why, on the person's word, on any post in any status, published included: the ICP,
+the journey and its stage, the grid and its row, the pillar and the tags. These stay in
+Hiveku and never reach a network, so it never changes the text, media, time, accounts or
+status, and never sends a post back for approval. It is how an old post comes to count in
+the by-ICP and by-stage numbers, and how a published post's wrong ICP or stage is put right.
+Rules:
 - Ask the person first, and send what they chose. Run `social_post_strategy_check({ ...,
   post_id })` to see what needs fixing, then change only what the person says; their picks
   are never yours to change on your own reading.
