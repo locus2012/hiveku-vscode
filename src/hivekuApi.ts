@@ -1168,6 +1168,420 @@ export async function vcsBranchDelete(
   return unwrap<{ deleted: string }>(res);
 }
 
+// Temporary environments (project_vcs_temp_env*; MCP feature/temporary-environments, builder #2247): one branch of a
+// site on its own address and Hiveku link for 1, 3 or 7 days, at 50 cents a day. Development, Staging and Production do
+// not change. The routes answer bare bodies in snake case, as the tools pass them on. Every write on one environment
+// names its branch (409 branch_mismatch otherwise). create, extend, revive and try_again add the charge: without
+// acceptCents the server only quotes (dryRun) or refuses with 409 charge_not_accepted, which carries the charge. Pass
+// acceptCents only as a dry run's charge.total_cents, after the person said yes to charge.words.
+
+export type TempEnvStatus =
+  | 'creating' | 'live' | 'updating' | 'expiring' | 'expired' | 'reviving' | 'failed' | 'deleting' | 'deleted' | 'ended';
+
+export type TempEnvDays = 1 | 3 | 7;
+
+/** How far the branch has moved past the version a live environment shows. */
+export interface TempEnvBehind {
+  versions: number;
+  unsaved: boolean;
+}
+
+/** One temporary environment, as the reads and writes answer it. Never the passcode, never a link past it. */
+export interface TempEnvRow {
+  id: string;
+  project_id: string;
+  label: string;
+  branch: string;
+  status: TempEnvStatus;
+  /** The Hiveku link: the one to give people. */
+  share_url: string | null;
+  /** https://<label>.hiveku.dev, where it is served. */
+  address: string;
+  commit_id: string;
+  pending_commit_id: string | null;
+  behind: TempEnvBehind | null;
+  expires_at: string;
+  latest_possible_end: string | null;
+  duration_days: number;
+  days_granted: number;
+  days_left_in_lifetime: number;
+  has_passcode: boolean;
+  allow_feedback: boolean;
+  open_requests: number;
+  last_error: string | null;
+  ended_reason: string | null;
+  created_by: string | null;
+  created_via: string;
+  created_at: string;
+  status_changed_at: string;
+  live_at: string | null;
+  started_at: string | null;
+  expired_at: string | null;
+  ended_at: string | null;
+}
+
+/** The price a charging write quotes and takes. */
+export interface TempEnvCharge {
+  cents_per_day: number;
+  days: number;
+  total_cents: number;
+  /** The price in a sentence: what the person says yes to. */
+  words: string;
+  confirm_label: string;
+}
+
+/** Something to tell the person before a share, an update or a bring-back, in its own words. */
+export interface TempEnvNotice {
+  code: string;
+  words: string;
+}
+
+/** address_updated false: the address has not picked the change up yet (address_note says so). */
+export interface TempEnvAddressAnswer {
+  address_updated?: boolean;
+  address_note?: string;
+}
+
+/** A charging write's dry run: the price and what it would do. Nothing changed and nothing was charged. */
+export interface TempEnvQuote {
+  dry_run: true;
+  days: number;
+  charge: TempEnvCharge;
+  notices?: TempEnvNotice[];
+  expires_at_after?: string;
+  days_granted_after?: number;
+  days_left_in_lifetime_after?: number;
+}
+
+/** The charge arguments of create, extend, revive and try_again. */
+export interface TempEnvChargeArgs {
+  /** true: change nothing and answer the price. */
+  dryRun?: boolean;
+  /** A dry run's charge.total_cents, after the person said yes. Never a number of your own. */
+  acceptCents?: number;
+}
+
+function tempEnvChargeArgs(args: TempEnvChargeArgs): { dry_run?: boolean; accept_cents?: number } {
+  return {
+    ...(args.dryRun !== undefined ? { dry_run: args.dryRun } : {}),
+    ...(args.acceptCents !== undefined ? { accept_cents: args.acceptCents } : {}),
+  };
+}
+
+/** The site's temporary environments, newest first, or one branch's. ready false: not set up yet. */
+export async function vcsTempEnvs(
+  client: HivekuMcpClient,
+  projectId: string,
+  branch?: string,
+): Promise<{ environments: TempEnvRow[]; ready: boolean }> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_envs_list', {
+    project_id: projectId,
+    ...(branch ? { branch } : {}),
+  });
+  const d = unwrap<{ environments?: TempEnvRow[]; ready?: boolean }>(res) ?? {};
+  return { environments: Array.isArray(d.environments) ? d.environments : [], ready: d.ready === true };
+}
+
+export interface TempEnvDetail {
+  environment: TempEnvRow;
+  build: { session_id: string | null; build_number: number; phase: 'queued' | 'building' | 'idle'; last_progress_at: string | null };
+  logs: { log_group: string | null; region: string | null };
+  /** The last 20 changes, newest first. */
+  events: Array<{ action: string; via: string; by: string | null; before: unknown; after: unknown; cents_accepted: number | null; at: string }>;
+  ready: boolean;
+}
+
+/** One environment in full: its build phase, its log group and its last 20 changes. */
+export async function vcsTempEnvGet(client: HivekuMcpClient, projectId: string, tempEnvId: string): Promise<TempEnvDetail> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_get', { project_id: projectId, temp_env_id: tempEnvId });
+  return unwrap<TempEnvDetail>(res);
+}
+
+/** The one a pasted address or Hiveku link names ({ environment }), or with neither the account's ({ environments }). */
+export async function vcsTempEnvsFind(
+  client: HivekuMcpClient,
+  query: { address?: string; link?: string; status?: TempEnvStatus; limit?: number } = {},
+): Promise<{ environment?: TempEnvRow; environments?: TempEnvRow[] }> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_envs_find', {
+    ...(query.address ? { address: query.address } : {}),
+    ...(query.link ? { link: query.link } : {}),
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.limit !== undefined ? { limit: query.limit } : {}),
+  });
+  return unwrap<{ environment?: TempEnvRow; environments?: TempEnvRow[] }>(res);
+}
+
+/** An ask to bring an environment back or share its branch again. Who asked and their note stay in the Hiveku app. */
+export interface TempEnvRequest {
+  id: string;
+  kind: 'bring_back' | 'share_branch';
+  environment_id: string | null;
+  branch: string;
+  status: string;
+  via: string;
+  requested_at: string;
+  answered_at: string | null;
+  has_note: boolean;
+  wants_reply: boolean;
+}
+
+export async function vcsTempEnvRequests(
+  client: HivekuMcpClient,
+  projectId: string,
+  status?: 'open' | 'all',
+): Promise<TempEnvRequest[]> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_envs_requests_list', {
+    project_id: projectId,
+    ...(status ? { status } : {}),
+  });
+  const d = unwrap<{ requests?: TempEnvRequest[] }>(res) ?? {};
+  return Array.isArray(d.requests) ? d.requests : [];
+}
+
+/** This month's days and charges so far, as the monthly invoice reads them. */
+export interface TempEnvUsage {
+  period_start: string;
+  period_end: string;
+  as_of: string;
+  cents_per_day: number;
+  environments: Array<{ id: string; label: string; branch: string; days: number; cents: number; periods: string[] }>;
+  days: number;
+  total_cents: number;
+}
+
+export async function vcsTempEnvUsage(client: HivekuMcpClient, projectId: string): Promise<TempEnvUsage> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_envs_usage_get', { project_id: projectId });
+  return unwrap<TempEnvUsage>(res);
+}
+
+export interface TempEnvCreated {
+  id: string;
+  label: string;
+  branch: string;
+  share_url: string | null;
+  status: TempEnvStatus;
+  commit_id: string;
+  expires_at: string;
+  has_passcode: boolean;
+  allow_feedback: boolean;
+  charge: TempEnvCharge;
+  notices: TempEnvNotice[];
+  build: { build_number: number };
+}
+
+/** Share a branch (never main) on a temporary environment. Charged: quote with dryRun first. */
+export async function vcsTempEnvCreate(
+  client: HivekuMcpClient,
+  projectId: string,
+  branch: string,
+  opts: { days?: TempEnvDays; password?: string; allowFeedback?: boolean; label?: string; requestId?: string } & TempEnvChargeArgs = {},
+): Promise<TempEnvCreated | TempEnvQuote> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_create', {
+    project_id: projectId,
+    branch,
+    ...(opts.days !== undefined ? { days: opts.days } : {}),
+    ...(opts.password !== undefined ? { password: opts.password } : {}),
+    ...(opts.allowFeedback !== undefined ? { allow_feedback: opts.allowFeedback } : {}),
+    ...(opts.label !== undefined ? { label: opts.label } : {}),
+    ...(opts.requestId !== undefined ? { request_id: opts.requestId } : {}),
+    ...tempEnvChargeArgs(opts),
+  });
+  return unwrap<TempEnvCreated | TempEnvQuote>(res);
+}
+
+export interface TempEnvUpdated {
+  environment: TempEnvRow | null;
+  rebuild: boolean;
+  building_commit_id: string;
+  notices: TempEnvNotice[];
+  build: { build_number: number };
+}
+
+/** Rebuild a live environment on its branch's newest version, or the same version with rebuild. Never charged. */
+export async function vcsTempEnvUpdate(
+  client: HivekuMcpClient,
+  projectId: string,
+  tempEnvId: string,
+  branch: string,
+  rebuild = false,
+): Promise<TempEnvUpdated> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_update', {
+    project_id: projectId,
+    temp_env_id: tempEnvId,
+    branch,
+    ...(rebuild ? { rebuild: true } : {}),
+  });
+  return unwrap<TempEnvUpdated>(res);
+}
+
+export interface TempEnvExtended extends TempEnvAddressAnswer {
+  environment: TempEnvRow | null;
+  days: number;
+  charge: TempEnvCharge;
+  expires_at_after: string;
+  days_granted_after: number;
+  days_left_in_lifetime_after: number;
+}
+
+/** More days for a running environment (30 in its whole life). Charged: quote with dryRun first. */
+export async function vcsTempEnvExtend(
+  client: HivekuMcpClient,
+  projectId: string,
+  tempEnvId: string,
+  branch: string,
+  opts: { days?: TempEnvDays } & TempEnvChargeArgs = {},
+): Promise<TempEnvExtended | TempEnvQuote> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_extend', {
+    project_id: projectId,
+    temp_env_id: tempEnvId,
+    branch,
+    ...(opts.days !== undefined ? { days: opts.days } : {}),
+    ...tempEnvChargeArgs(opts),
+  });
+  return unwrap<TempEnvExtended | TempEnvQuote>(res);
+}
+
+/** What revive and try_again answer: the environment, the charge taken and the build queued (revive adds the lifetime). */
+export interface TempEnvRebuilt {
+  environment: TempEnvRow | null;
+  days: number;
+  charge: TempEnvCharge;
+  notices: TempEnvNotice[];
+  build: { build_number: number };
+  days_granted_after?: number;
+  days_left_in_lifetime_after?: number;
+}
+
+/** Bring an ended environment back at the same address and link. Charged: quote with dryRun first. */
+export async function vcsTempEnvRevive(
+  client: HivekuMcpClient,
+  projectId: string,
+  tempEnvId: string,
+  branch: string,
+  days: TempEnvDays,
+  opts: { requestId?: string } & TempEnvChargeArgs = {},
+): Promise<TempEnvRebuilt | TempEnvQuote> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_revive', {
+    project_id: projectId,
+    temp_env_id: tempEnvId,
+    branch,
+    days,
+    ...(opts.requestId !== undefined ? { request_id: opts.requestId } : {}),
+    ...tempEnvChargeArgs(opts),
+  });
+  return unwrap<TempEnvRebuilt | TempEnvQuote>(res);
+}
+
+/** Make one whose first build failed again, at the same address and link. Charged: quote with dryRun first. */
+export async function vcsTempEnvTryAgain(
+  client: HivekuMcpClient,
+  projectId: string,
+  tempEnvId: string,
+  branch: string,
+  opts: { days?: TempEnvDays } & TempEnvChargeArgs = {},
+): Promise<TempEnvRebuilt | TempEnvQuote> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_try_again', {
+    project_id: projectId,
+    temp_env_id: tempEnvId,
+    branch,
+    ...(opts.days !== undefined ? { days: opts.days } : {}),
+    ...tempEnvChargeArgs(opts),
+  });
+  return unwrap<TempEnvRebuilt | TempEnvQuote>(res);
+}
+
+/** Set (8 to 64 characters) or clear (null) the passcode: only one the person gave, never read back. */
+export async function vcsTempEnvPasswordSet(
+  client: HivekuMcpClient,
+  projectId: string,
+  tempEnvId: string,
+  branch: string,
+  password: string | null,
+): Promise<TempEnvAddressAnswer & { has_passcode: boolean; signed_out: boolean }> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_password_set', {
+    project_id: projectId,
+    temp_env_id: tempEnvId,
+    branch,
+    password,
+  });
+  return unwrap<TempEnvAddressAnswer & { has_passcode: boolean; signed_out: boolean }>(res);
+}
+
+export interface TempEnvSettingsChanged extends TempEnvAddressAnswer {
+  environment: TempEnvRow | null;
+  /** With a new link: give people this one; the old link stops at once. */
+  share_url?: string;
+  signed_out?: boolean;
+  old_link_works?: boolean;
+}
+
+/** Change the label, turn comments on or off, or make a new Hiveku link (newLink 'share'). */
+export async function vcsTempEnvSettingsSet(
+  client: HivekuMcpClient,
+  projectId: string,
+  tempEnvId: string,
+  branch: string,
+  change: { label?: string; allowFeedback?: boolean; newLink?: 'share' },
+): Promise<TempEnvSettingsChanged> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_settings_set', {
+    project_id: projectId,
+    temp_env_id: tempEnvId,
+    branch,
+    ...(change.label !== undefined ? { label: change.label } : {}),
+    ...(change.allowFeedback !== undefined ? { allow_feedback: change.allowFeedback } : {}),
+    ...(change.newLink ? { new_link: change.newLink } : {}),
+  });
+  return unwrap<TempEnvSettingsChanged>(res);
+}
+
+/** Turn one off now. Irreversible: it cannot be brought back; only the days that started are billed. */
+export async function vcsTempEnvDelete(
+  client: HivekuMcpClient,
+  projectId: string,
+  tempEnvId: string,
+  branch: string,
+): Promise<TempEnvAddressAnswer & { id: string; status: 'deleting'; link_works: false; address_works: boolean }> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_delete', {
+    project_id: projectId,
+    temp_env_id: tempEnvId,
+    branch,
+    confirm: true,
+  });
+  return unwrap<TempEnvAddressAnswer & { id: string; status: 'deleting'; link_works: false; address_works: boolean }>(res);
+}
+
+/** Say not now to an open ask; branch is the branch the ask is about. */
+export async function vcsTempEnvRequestDismiss(
+  client: HivekuMcpClient,
+  projectId: string,
+  requestId: string,
+  branch: string,
+): Promise<{ id: string; status: 'dismissed' }> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_request_dismiss', {
+    project_id: projectId,
+    request_id: requestId,
+    branch,
+  });
+  return unwrap<{ id: string; status: 'dismissed' }>(res);
+}
+
+/** A 60-second link straight past the passcode, to look at it now. Open it at once and never pass it on. */
+export async function vcsTempEnvOpen(
+  client: HivekuMcpClient,
+  projectId: string,
+  tempEnvId: string,
+  branch: string,
+  next?: string,
+): Promise<{ enter_url: string; expires_at: string }> {
+  const res = await client.callToolJson<unknown>('project_vcs_temp_env_open', {
+    project_id: projectId,
+    temp_env_id: tempEnvId,
+    branch,
+    ...(next ? { next } : {}),
+  });
+  return unwrap<{ enter_url: string; expires_at: string }>(res);
+}
+
 export interface DeployStart {
   /** Normalized: the olympus deploy route returns `deploy_id`; older
    *  envelopes used `deployment_id`. Whichever arrived is copied here. */
