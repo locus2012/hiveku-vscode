@@ -13,9 +13,9 @@ outside the Availability table is a handoff, named as such.
 
 ## Availability
 
-Cost classes: A = free DB read; write = free, confirm-gated; C = live SERP per keyword; G = LLM
-Mentions, one live check per keyword per engine against the account's daily re-check limit (not
-billed per check); H = LLM-scored against a shared per-UTC-day budget.
+Cost classes: A = free DB read; write = free, confirm-gated; C = live SERP per keyword; G = an
+AI-lane check, one per keyword per engine, queued for Hiveku's checker, against the account's daily
+re-check limit (not billed per check); H = LLM-scored against a shared per-UTC-day budget.
 A 402 on a metered call is 402 `seo_research_limit`: this month's research lookups are used up;
 they start again next month, and the next plan has more (`account_usage_get`).
 
@@ -25,7 +25,7 @@ they start again next month, and the next plan has more (`account_usage_get`).
 | `seo_entity_check` | LIVE | free | Knowledge Graph lookup, `query` required |
 | `seo_aeo_audit_get` | LIVE | A | stored SERP-side results; `since` for incremental re-reads |
 | `seo_aeo_audit_run` | LIVE | C | one SERP call per keyword, cap 25; `location_code` is a NUMBER |
-| `seo_aeo_rankings_sync` | LIVE | G | one LLM Mentions call per keyword x engine; `location_code` is a STRING; `skip_sync: true` creates rows without spending |
+| `seo_aeo_rankings_sync` | LIVE | G | one check per keyword x engine, queued for Hiveku's checker; the call answers within about 45 seconds and a lane not done by then answers `pending: true`; `location_code` is a STRING; `skip_sync: true` creates rows without spending |
 | `seo_rankings_list` (= `seo_list_rankings`) | LIVE | A | reads the synced AI lanes back: `search_engine` `ai_overview`, `chatgpt`, `perplexity`, `claude`, `gemini`; `group_by_keyword: true` |
 | `seo_aeo_brand_profile_get`, `seo_aeo_brand_profile_upsert` | LIVE | A / write | upsert is a FULL REPLACE (5.1) |
 | `seo_aeo_brand_audit` | LIVE | H | 15-20 OpenRouter calls; refuses when the day's budget is spent |
@@ -46,9 +46,9 @@ they start again next month, and the next plan has more (`account_usage_get`).
 - Read local first (`hiveku-data/aeo/*.json`, `hiveku-data/seo/*.json`), then the free reads
   (`seo_aeo_audit_get`, `seo_aeo_readiness`, `seo_aeo_brand_audit_history`, `seo_entity_check`,
   `seo_schema_markup`, `seo_featured_snippets`), then pay. Only three spend money:
-  `seo_aeo_audit_run` (one DataForSEO SERP call per keyword), `seo_aeo_rankings_sync` (one LLM
-  Mentions call per keyword x engine), `seo_aeo_brand_audit` (15-20 OpenRouter calls against a
-  shared per-UTC-day budget).
+  `seo_aeo_audit_run` (one DataForSEO SERP call per keyword), `seo_aeo_rankings_sync` (one check
+  per keyword x engine, against the daily re-check limit), `seo_aeo_brand_audit` (15-20 OpenRouter
+  calls against a shared per-UTC-day budget).
 - Confirm every write and paid run: state keyword count, engines, estimated calls and what gets
   persisted, then wait for a yes. `seo_aeo_brand_profile_upsert` is destructive (5.1), so never
   bundle a profile change and an audit run into one confirmation.
@@ -290,7 +290,12 @@ checks per sync. Confirm the keyword count, the engine list and the resulting ch
 before every sync, and refuse "sync every keyword on every engine": a 200-keyword list on five
 engines is 1,000 checks.
 
-**Read out:** per row, citation position, `ai_mentioned`, `mentions_count`, `ai_search_volume`.
+**Read out:** per lane in `synced.results`, `current_rank` (the site's place among the sites the
+answer cites; null when the answer names the site without citing it), `mentioned` and `checked_at`;
+or `pending: true` when the checker has not finished the lane in that time or not confirmed the checks: read it back with
+`seo_rankings_list` a few minutes later, never by running the sync again (each run uses more of the
+day's checks). A lane whose check ended without the assistant's answer has `success: false` and an
+`error`, and keeps its last reading: never report it as not mentioned.
 **Read-back:** the synced rows are ordinary tracker lanes.
 `seo_rankings_list({ search_engine: 'ai_overview' | 'chatgpt' | 'perplexity' | 'claude' | 'gemini',
 group_by_keyword: true })` reads them; `pagination.total_groups` is the honest keyword count
@@ -372,9 +377,15 @@ send all of it; `[]` clears it, and `seo_aeo_brand_profile_delete` deletes it wi
 `category` without telling the client the trend baseline resets. A silently rewritten category is the usual cause of an unexplained
 share-of-voice collapse: check it against the baseline memory record before diagnosing.
 
-**5.2 Do not present `perplexity` rankings-sync data as Perplexity.** That engine key currently
-routes through Google, not a native Perplexity platform, so "Perplexity visibility" in a paid
-deliverable is a false claim. Omit the engine or footnote the method.
+**5.2 `perplexity` lanes read Perplexity's answer since the change; a reading from before it shows as
+not checked.** Before the change the lane was read from Google's AI Overview answers, and a scheduled
+`chatgpt` check could not record a mention. So a ChatGPT or Perplexity reading from before the lanes
+began reading each assistant's own answer is not that assistant's data, and it shows as not checked
+until its next check. The rule goes by the change, never by a date: each lane changes at its own first
+check from the assistant's answer. `seo_ai_visibility` counts the lanes checked before the change and
+not since in `notCheckedSinceChange`, and starts their trend at the change. In a paid deliverable,
+never compare a reading from before the change with one after it, and never present an older reading
+as Perplexity's or ChatGPT's.
 
 **5.3 Do not rotate the audit keyword list.** Comparability needs the same keywords, `location_code`
 and `language_code`; changing the list changes the denominator and every summary percentage. If it

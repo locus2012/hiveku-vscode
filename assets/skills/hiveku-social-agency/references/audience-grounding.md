@@ -41,7 +41,9 @@ visual the persona needs is briefed through `references/creative-handoff.md`.
 4. `customer_journey_list` then `customer_journey_get({ id })` for the journey the persona
    moves through - both are on the social key. The full row's `stages[]` carry `name,
    description, emotions[], pain_points[], touchpoints[], content_types[],
-   opportunities[]` per stage; that per-stage vocabulary is what a stage-aimed post is
+   opportunities[]` per stage, its `stage_id`, and its step (`awareness` with
+   `awareness_source`; section 3 says what a guessed or missing step means); that per-stage
+   vocabulary is what a stage-aimed post is
    written in. Which personas a journey serves is `customer_journey_avatar_list`, which
    is not a pure read (it backfills a legacy link) - the foundation-first check covers it.
 
@@ -95,7 +97,8 @@ catch the drift after the fact - reading the quote first prevents it.
 Social owns the TRAFFIC leg of every journey transition - how the persona arrives at the
 transition at all (`hiveku-content-agency/references/customer-journey.md`, sections 1
 and 3). The awareness ladder is Schwartz's: what the person BELIEVES, not where the
-business sees them. One post moves one stage by one step.
+business sees them. One post moves one stage by one step. Hiveku's journeys add a sixth
+step after Schwartz's five, for the stages after the sale: Already a customer.
 
 | Stage (what they know) | The post's job | Post types that do it |
 |---|---|---|
@@ -104,6 +107,7 @@ business sees them. One post moves one stage by one step.
 | Solution Aware | show why this approach beats the others | comparison, data-point, listicle, specific-number hook |
 | Product Aware | remove the specific risk holding them | case-study-in-3-lines, before/after (a grid item), quote-card, objection-handler |
 | Most Aware | make acting easy, give a reason for now | offer with honest scarcity, behind-the-scenes, FAQ - the only stage that takes the Promotion CTA |
+| Already a customer | keep them; earn the review and the referral | customer story (with their permission), how-to tip, milestone; the ask is a review, a referral or a share, never a sale straight away |
 
 Read the stage's own row before writing to it: `emotions[]` sets the register,
 `pain_points[]` at THAT stage is narrower than the avatar's list, `content_types[]` and
@@ -115,12 +119,30 @@ published post can be attached back to the stage with
 its analytics count in journey ROI; on a social key that is a note for the content
 session, not something to fake.
 
-Two vocabularies can coexist. The header (section 6) always carries the Schwartz stage.
-The post's `journey_stage` column is validated against the journey's own `stages[].name`
-when `journey_id` is set - a name not on the journey is a 400 listing the real names -
-so when the account's journey says "Vendor Selection", write that in `journey_stage`,
-"Solution Aware" in the header and `stage:solution-aware` in the tags, and say which is
-which in the deliverable.
+A journey stage names its step in `awareness`: `unaware` (Doesn't see the problem yet),
+`problem_aware` (Feels the problem), `solution_aware` (Weighing kinds of fix),
+`product_aware` (Weighing you), `most_aware` (Ready to act) or `customer` (Already a
+customer), the table's six rows in the app's own words. Beside it, `awareness_source` says
+where the step came from: `template` (the journey's template set it), `person` (a person
+chose it) or `guess` (Hiveku's reading of the stage's name and place). A `template` or
+`person` step is the header's Stage. A `guess`, or a stage with no `awareness` at all (no
+step set yet), is a question for the person: ask which step the stage is before you write
+to it as that step, and say in the deliverable that you asked.
+Every stage that `customer_journey_get`, `customer_journey_list` and <!-- plugin-only -->
+`customer_journey_stage_list` return carries a step: where no template or person set one, <!-- plugin-only -->
+it is Hiveku's `guess`. <!-- plugin-only -->
+`customer_journey_stage_update({ journey_id, stage_id, awareness })` stores the answer as <!-- plugin-only -->
+the person's (`awareness_source: person`), only once the person has said which step it <!-- plugin-only -->
+is; never set it from your own reading. <!-- plugin-only -->
+
+Two vocabularies can coexist. The header (section 6) always carries the step. The post's
+`journey_stage` column is validated against the journey's own `stages[].name` when
+`journey_id` is set (a name not on the journey is a 400 listing the real names). So when
+the account's journey says "Vendor Selection" with `awareness: solution_aware`, write that
+in `journey_stage`, "Solution Aware" in the header and `stage:solution-aware` in the tags,
+and say which is which in the deliverable.
+The server keeps the stage's id beside the name in `settings.journey_stage_id` (no caller <!-- plugin-only -->
+sets it), so a renamed stage keeps its posts. <!-- plugin-only -->
 
 ## 4. Grids -> four transformation posts
 
@@ -208,7 +230,8 @@ header line, before the copy:
 `For: <avatar name> | Stage: <Schwartz stage> | Pillar: <pillar> | Hook: <pattern> | Format: <format> | CTA: <verb>`
 
 "General audience" is the absence of an answer, and a header you cannot fill is a post
-you have not grounded yet. The header is also the audit trail `/hiveku:social-audit`
+you have not grounded yet. The Stage is the step (section 3): one of Schwartz's five, or
+Already a customer. The header is also the audit trail `/hiveku:social-audit`
 reads back, so it is written exactly, not paraphrased.
 
 Persist what the header says, on the post, in first-class fields:
@@ -219,9 +242,15 @@ Persist what the header says, on the post, in first-class fields:
   naming the field. Set them on create; add or correct them with `social_update_post`
   while the post is still editable (a publishing or published post is edit-locked,
   `references/publishing-approval-mechanics.md`).
+  The grid's row goes in `settings.before_after_item_id`: the one row of the grid the post <!-- plugin-only -->
+  shows (a row the grid lacks, or a row with no grid, is a 400). Never send <!-- plugin-only -->
+  `settings.journey_stage_id`: the server sets it from the stage. <!-- plugin-only -->
+- A published post's who-and-why is not locked: `social_post_strategy_update` sets or fixes <!-- plugin-only -->
+  its ICP, journey, stage, grid, row, pillar and tags and nothing else, on any post in any <!-- plugin-only -->
+  status, after `social_post_strategy_check` and on the person's word. <!-- plugin-only -->
 - `tags` carry the slugs the analytics loop groups by: `['persona:<slug>',
   'stage:<slug>', 'hook:<pattern>']` - `stage:` is one of `unaware`, `problem-aware`,
-  `solution-aware`, `product-aware`, `most-aware`; `hook:` is the pattern name from
+  `solution-aware`, `product-aware`, `most-aware` or `customer`; `hook:` is the pattern name from
   `references/hooks-and-formats.md`, lower-case, hyphenated; `persona:` is the avatar's
   first name or a stable slug you keep in memory. The pillar goes in `pillar_id`, never
   in a tag. `title` is clamped to 255 characters - keep it a label, the header lives in
@@ -274,6 +303,9 @@ them. Each post persists with `avatar_id`, `before_after_grid_id` where a grid i
 used, `journey_stage` as the journey names it, and tags
 `['persona:priya', 'stage:product-aware', 'hook:specific-number']` (per post). Each is
 scored against `references/anti-fluff.md` before `social_create_post`, as a draft.
+A post that uses a grid item names its row in `settings.before_after_item_id`. <!-- plugin-only -->
+`social_post_strategy_check` reads each one's picks back before the write; an `ask` item <!-- plugin-only -->
+it raises goes to the person as a question. <!-- plugin-only -->
 
 ## 8. Traps that survive the read
 
@@ -290,5 +322,10 @@ scored against `references/anti-fluff.md` before `social_create_post`, as a draf
   `kb_search` did not return.
 - A `journey_stage` that is not on the journey. The write is a 400 listing the names;
   read the journey first instead of guessing the vocabulary.
+- Treating a guessed step, or a missing one, as settled. A stage whose `awareness_source`
+  is `guess` is Hiveku's reading of its name and place, and a stage with no `awareness` has
+  no step set yet; ask the person which step it is before you write to it as that step.
+- Setting a stage's step yourself. `customer_journey_stage_update` with `awareness` <!-- plugin-only -->
+  records the person's choice; it runs on the person's answer, never on your reading. <!-- plugin-only -->
 - Grounding once and reusing it for a month. Personas change (`updated_at`), grids gain
   items, journeys are republished. Re-read before each drafting session; it is four calls.

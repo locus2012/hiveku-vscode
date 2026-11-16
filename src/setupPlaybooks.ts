@@ -244,17 +244,23 @@ social_account_id? })\` - weekday 0-6 (0 = Sunday), minute_of_day 0-1439 local t
 \`social_schedule_slot_next_open\` later offers these times to a plan.
 
 ## Verify with a DRAFT post (never publish or schedule during setup)
-1. \`social_post_validate({ content, target_platforms: [<one slug>], target_accounts: [<publishable id>] })\` -
+1. \`social_post_strategy_check({ content, target_platforms: [<one slug>], target_accounts: [<publishable id>] })\`:
+   who the post is for and why, item by item \`ok\`, \`fix\`, \`ask\` or \`not_set\`, with the journey stage's step
+   and job once a stage is chosen. It only reads: it never blocks a post, costs nothing and calls no AI. On a first
+   run the who-and-why items are \`not_set\` (no ICP, journey or before and after chosen yet): report each as a
+   pick to make with the person, never one to make for them, and ask the person each \`ask\` item. Run it before
+   ANY draft is saved, scheduled or sent for approval, not only here.
+2. \`social_post_validate({ content, target_platforms: [<one slug>], target_accounts: [<publishable id>] })\` -
    a dry run: writes nothing and reports every platform problem in one round trip. Run it before ANY post is
    ever scheduled, not only here.
-2. \`social_create_post({ title, content, target_platforms: [<one slug>], target_accounts: [<publishable id>],
+3. \`social_create_post({ title, content, target_platforms: [<one slug>], target_accounts: [<publishable id>],
    pillar_id? })\` - pass \`target_accounts\`, OMIT \`scheduled_at\`. Setting \`scheduled_at\` IS the publish: the
    every-minute cron ships the post on the first tick after that instant with no further confirmation. Do NOT
    call \`social_publish_post\` either - it does not publish an unapproved post, it stages it into the dashboard
    approval queue (\`pending_approval\`), and there is deliberately no approve tool.
-3. Confirm it exists (\`social_get_post\` / \`social_list_posts({ status: 'draft' })\`), then clean up:
+4. Confirm it exists (\`social_get_post\` / \`social_list_posts({ status: 'draft' })\`), then clean up:
    \`social_delete_post\`.
-4. \`social_analytics_summary\` - the tool advertises \`from_date\` / \`to_date\`, but the route reads only a
+5. \`social_analytics_summary\` - the tool advertises \`from_date\` / \`to_date\`, but the route reads only a
    \`period\` the proxy never sends, so the answer is ALWAYS the last 7 days of published posts (with the previous
    7 days for comparison) plus the active accounts. Zeros are fine on a fresh account; an error means the
    account connection is broken. For a real window use \`social_posts_analytics_list\` (per post) or

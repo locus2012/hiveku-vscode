@@ -1,5 +1,5 @@
 ---
-description: "\"Our posts sound like AI\" / \"why is engagement flat?\" - content-quality audit of the last 30 published posts against the anti-fluff rubric: hook-pattern histogram, banned phrases, persona coverage, winners and losers by format, and a rewrite list. Read-only."
+description: "\"Our posts sound like AI\" / \"why is engagement flat?\" - content-quality audit of the last 30 published posts against the anti-fluff rubric: hook-pattern histogram, banned phrases, persona coverage, winners and losers by format, and a rewrite list. Read-only, but for the memory line and the who-and-why fixes the person approves post by post."
 argument-hint: "[optional platform or window]"
 ---
 Social content audit ($ARGUMENTS). Follow the **hiveku-social-agency** skill (Play 3) and load
@@ -13,8 +13,9 @@ says how many of how many, and what was not looked at). Context: `account_contex
 Default scope: the 30 most recently published posts across every connected platform; the argument
 may narrow it to one platform slug (`linkedin`, `twitter`, `facebook`, `instagram`, `tiktok`,
 `google_business_profile`) or a window. This command is READ-ONLY: it grades, ranks and proposes. It
-edits no post, deletes nothing, reschedules nothing and runs no `social_post_duplicate`; the one
-write it can end with is the memory line in step 6, after a yes in step 5.
+edits no post's copy, deletes nothing, reschedules nothing and runs no `social_post_duplicate`; the
+writes it can end with, each after its own yes in step 5, are the memory line in step 6 and the
+who-and-why fixes of step 5 (h), which change only who a post was for.
 1. **Sync, then the set, then its numbers.** `social_analytics_sync` (no args) refreshes only the
    versions that are DUE, 50 per run, and returns the run report; repeat until a run reports zero
    synced and record the result as "N versions synced across M runs" - the zero is the completion
@@ -51,7 +52,8 @@ write it can end with is the memory line in step 6, after a yes in step 5.
    `stage:<slug>` tag or `journey_stage`, pillar from `pillar_id` against `social_pillar_list`, hook
    and format from the `hook:` and `format:` tags, the CTA verb from the copy. A row with none of
    these reads "persona not recorded", "stage not recorded" or "pillar not recorded" - never a
-   guess. Rows from before the tagging convention carry no `hook:` or `format:` tag: classify both
+   guess; those rows, and a row whose persona or stage the audit doubts, are the candidates for
+   step 5 (h). Rows from before the tagging convention carry no `hook:` or `format:` tag: classify both
    from the first line and the shape yourself, and say in the deliverable that you did. Score each
    post on the seven axes and write the line exactly: `Rubric: N/14 (specificity n, one-idea n,
    proof n, voice n, native n, hook n, cta n)`, with the reason for every 1 or 0 on the next line.
@@ -144,10 +146,24 @@ write it can end with is the memory line in step 6, after a yes in step 5.
    Do-Not-Post": the hooks and formats that earned, with N and window; the ones to retire; the
    banned phrases found; the openings not to reuse; the audit date and window. Show the exact text
    and STOP for a yes; on a yes it goes in through step 6's read-merge-write into the social
-   department document, and on a no nothing is written. A phrase the client bans in this
+   department document, and on a no nothing is written. (h) The who-and-why fixes, asked at the
+   same STOP: each post from step 2 with no ICP or stage recorded, or with one the audit doubts (a
+   persona whose `social_platforms` do not list the post's platform, a stage whose step does not
+   fit the post's job), with the ICP, journey, stage, grid row and pillar you propose and why, put
+   to the person as questions. `social_post_strategy_check({ content, target_platforms, avatar_id,
+   journey_id, journey_stage, before_after_grid_id, before_after_item_id, pillar_id, post_id })`
+   reads a post the way the server does and is the evidence for each line; it only reads (it never
+   blocks a post, costs nothing and calls no AI). On the person's word for that post, one post per
+   yes, `social_post_strategy_update({ post_id, ... })` sends what they chose and only the fields
+   that change. It works on published posts too and changes nothing else (not the copy, the time
+   or the status); `null` clears a field; `tags` replaces the whole list, so read the post's tags
+   with `social_get_post` first and send every tag back; a 409 `post_changed` means read the post
+   again and resend. That is how an old post comes to count in the by-ICP and by-stage numbers.
+   A phrase the client bans in this
    conversation belongs on the brand guide, not in memory - `brand_guide_update({ guide_id,
    brand_guide_data: { ai_forbidden_phrases: [...] } })` with the WHOLE array, since the column is
    replaced - and that is a separate confirm the client asks for, not this command's. Nothing is
    edited, deleted or rescheduled from here: no `social_update_post`, no `social_delete_post`, no
-   `social_hashtags_delete`, no `scheduled_at` on anything.
+   `social_hashtags_delete`, no `scheduled_at` on anything; the one change to a post is (h)'s, on
+   the person's word.
 6. Finish every session of work the same way: persist notable learnings to department memory - read the department's current document with `memory_list({ domain: "<dept>" })` and note its `version` and when you read it, append your note to the `content` it returns, then check `memory_log_list({ memory_id, since: "<when you read it>" })` and merge any newer change into your text (a department agent or a person may have edited it since), and send the WHOLE merged document to `memory_update({ memory_id, content, reason, expected_version })`, which REPLACES it (sending only the new note destroys everything that department had accumulated; `reason` is one plain line on why, and `expected_version` is the version you merged into, so a 409 `version_conflict` means it changed again: merge into the `content` that answer carries and save with its `version`, never resend blind); use `memory_create({ type: "memory", name: "<dept>", content, reason })` only when no entry exists, and keep `<dept>` to a canonical department name (see hiveku-orient), and reflect the work in Hiveku PM: `pm_projects_list` to find the project (it filters only by `status`; `project_type` is named in its description but is NOT in its schema, so the proxy drops it and you filter the returned list yourself), or `pm_projects_create({ name, project_type })` where project_type is one of seo | ppc | marketing | website | app_dev, then `pm_tasks_create({ project_id, title })` (the field is `title`, not `name`), `pm_tasks_update` as it moves, `pm_tasks_complete({ id, summary })` when the loop is closed. Reopen a task closed too early with `pm_tasks_uncomplete`, never `pm_tasks_update`. A memory_update that destroyed content is recoverable: `memory_list_versions({ memory_id })` lists the snapshots taken before every PUT or DELETE, and `memory_restore_version({ version_id, reason })` restores one (it works for deleted entries too). Hiveku records the session's Doing in the memory log at its first change, and its Done, counting the changes, when the session goes quiet. When `memory_log_add` is listed, end with a Done line that says what you did, if you want the log to say more than that: `memory_log_add({ phase: "done", department: "<dept>", line, outcome })`, `outcome` ok, failed or stopped, which closes the session's run with your line; leave `thread` out, and a Doing line sent once the session's is recorded answers `already_open`, which is not an error. Each `line` is one plain sentence of at most 160 characters in your own words, never a customer's words, a secret or personal details. Hiveku, not this folder, is the source of truth.

@@ -689,12 +689,11 @@ key, which cannot see playbooks, this section carries its rules.
   person's yes. Words you post are theirs: write as they would. Reading and searching channels needs
   no yes.
 - **Many channels: the practice run first.** `discussion_channels_bulk_create` makes nothing unless
-  `dry_run` is `false`. Send the list without it first, and show the person what it would make (each
-  channel's visibility, so they see what will be public), what it skips and why, and how many more
-  the workspace may make today. Send the same list with `dry_run: false` only on their yes; Hiveku
-  asks before that write too. At most 100 a call and 1,000 a day for a workspace. Only ordinary
-  channels, public or account only: a channel meant to be private, or a direct or group message, is
-  left out (its people start it in the Hiveku app) and never sent again as an ordinary one. No
+  `dry_run` is `false`. Send the list without it first, and show the person what it would make (every
+  channel it makes is public), what it skips and why, and how many more the workspace may make
+  today. Send the same list with `dry_run: false` only on their yes; Hiveku asks before that write
+  too. At most 100 a call and 1,000 a day for a workspace. Only ordinary channels, which are
+  public: a channel meant to be private, or a direct or group message, is left out (its people start it in the Hiveku app) and never sent again as an ordinary one. No
   automation starts and nobody added is told. If no answer comes back, read the channels with
   `discussion_list` before you send it again.
 - **The person's own direct messages, group messages and private channels: read only, and only on

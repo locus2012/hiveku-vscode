@@ -35,7 +35,8 @@ references/repurpose.md and references/creative-handoff.md.
   `data/customer_avatars.json`, `data/before_after_grids.json`,
   `data/customer_journey_maps.json`, `data/social_accounts.json`,
   `data/content_pillars.json`, `data/social_posts.json`), not from `customer_avatar_get`.
-  It has NO `social_post_validate`, `social_repurpose_source`, `social_posts_bulk_create`,
+  It has NO `social_post_validate`, `social_post_strategy_check`,
+  `social_post_strategy_update`, `social_repurpose_source`, `social_posts_bulk_create`,
   `social_calendar_*` or `talk_to_department`; a recipe that names one of those sends the
   agent to a tool it cannot call. `social_post_publish` exists there and is GATED: on a
   dashboard chat it stages an approval card, on an MCP turn it is never called.
@@ -107,6 +108,7 @@ Never: scheduled_at (scheduling is the operator's confirm), social_post_publish 
 - A recipe never contradicts the rules: draft only (R9), no `scheduled_at`, no publish from
   an MCP turn, the header and the Rubric line on every post (R1, R5), proof by id (R4).
 - The MCP-side twins of these plays stay in the plugin commands: the operator session runs
-  `/hiveku:social-post` and `/hiveku:repurpose` with `social_post_validate`,
+  `/hiveku:social-post` and `/hiveku:repurpose` with `social_post_strategy_check` (who each
+  draft is for and why, its `ask` items put to the person), `social_post_validate`,
   `social_repurpose_source` and `social_posts_bulk_create`; the agent runs the recipe with
   the tools it has. Both persist drafts to the same `social_posts` rows.

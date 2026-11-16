@@ -832,8 +832,19 @@ export const DEPARTMENTS: Department[] = [
       'approves it again (`sent_back_for_approval` in the answer). ' +
       '`social_delete_post` removes a row. `social_publish_post` does not publish an unapproved post: it moves the post ' +
       'into the dashboard approval queue (`pending_approval`) where a human approves it; there is deliberately no ' +
-      'approve tool. `social_post_reject({ post_id, reason })` returns a held post to draft. Before ANY schedule, ' +
-      'dry-run with `social_post_validate` (same body as create, writes nothing, reports every platform problem at once). ' +
+      'approve tool. `social_post_reject({ post_id, reason })` returns a held post to draft. ' +
+      'Before saving a draft, scheduling or sending a post for approval, run `social_post_strategy_check` with the draft ' +
+      'and what it is for (`avatar_id`, `journey_id` + `journey_stage`, `before_after_grid_id` + `before_after_item_id`, ' +
+      '`pillar_id`; `post_id` once saved): who it is for and why, item by item ok, fix, ask or not_set. It only reads: ' +
+      'it never blocks a post, costs nothing and calls no AI. Fix each fix item about the post\'s own words (its ask, ' +
+      'proof, voice and each network\'s items); a fix item about the ICP, the journey or the grid (the who, where and ' +
+      'what groups) is a pick or a foundation, so tell the person, change a pick only to what they choose, and never ' +
+      'make up an ICP\'s pains or a quote in their own words; ask the person each ask item, never answering one for ' +
+      'them; a not_set item is a pick to make with the person; never change what the person chose. ' +
+      'Before ANY schedule, also dry-run with `social_post_validate` (same body as create, ' +
+      'writes nothing, reports every platform problem at once). A published post is edit-locked, but who it is for and ' +
+      'why (ICP, journey, stage, grid and row, pillar, tags) changes through `social_post_strategy_update`, which ' +
+      'changes nothing else, on the person\'s word. ' +
       'Pillars: `social_pillar_create` / `social_pillar_update` / `social_pillar_delete`. ' +
       'Calendar events are plans, not posts (nothing on the calendar publishes): `social_calendar_create` / ' +
       '`social_calendar_update` / `social_calendar_delete`, bound to a post with `linked_post_id`. ' +

@@ -100,7 +100,13 @@ DRAFTS. Nothing is scheduled and nothing is published here.
    rewrite pass: re-hook when that is the fix (the persona, the stage and the source do not
    change), then re-score. A post that still fails, or whose source cannot be named, is not
    re-hooked as an opinion post here: it goes to the alternatives with the reason, and nothing
-   under the gate is persisted - the client reads drafts. Then `social_post_validate({ content,
+   under the gate is persisted - the client reads drafts. Then `social_post_strategy_check` per post
+   with what it is for (`avatar_id`, `journey_id`, `journey_stage`, `before_after_grid_id`,
+   `before_after_item_id` for the grid item it shows, `pillar_id`); it only reads (it never blocks
+   a post, costs nothing and calls no AI): fix each `fix` item in the post (its proof item matches
+   each number and quote to the grid, the brand's proof points or a public testimonial), and carry
+   each `ask` item to step 5's STOP as a question for the person, never answered by you. Then
+   `social_post_validate({ content,
    target_platforms, target_accounts, media_asset_ids, platform_overrides })` per post with the
    healthy ids from step 1; it writes nothing and returns `{ ok, validation: { errors, warnings },
    media: { resolved, missing, fit }, x_quota }`: the cap per platform, Instagram's media
@@ -135,8 +141,9 @@ DRAFTS. Nothing is scheduled and nothing is published here.
    alt_text, tags })` (`tags` REPLACES the array: send the existing tags plus `social:<slug>`).
    It reaches the dashboard, not the platforms, and the deliverable says so.
 5. STOP - show every header, Source and Rubric line, the copy per platform with its first
-   comment, the photos by asset id and their alt text, the briefs filed, the validation result and
-   the exact create call, and get a yes: the dashboard shows drafts to the client. Then persist as
+   comment, the photos by asset id and their alt text, the briefs filed, each post's `ask` items as
+   questions, the validation result and the exact create call, and get a yes, and the person's
+   answers (a pick changes only to what they say): the dashboard shows drafts to the client. Then persist as
    DRAFTS. One `social_create_post` per platform when the set is small, or ONE
    `social_posts_bulk_create({ posts: [...], batch_id })` for the set (up to 25 rows in one
    transaction, all-or-nothing with every row's validation echoed - one foreign id or one bad
@@ -146,7 +153,8 @@ DRAFTS. Nothing is scheduled and nothing is published here.
    version, `target_platforms` with ONE slug (exactly `linkedin`, `facebook`, `instagram`,
    `google_business_profile`) and the matching `target_accounts` (optional to the tool, mandatory
    in practice: a post without them is a 400 at publish time, after the client approved it),
-   `pillar_id`, `before_after_grid_id`, `avatar_id`, `journey_id` + `journey_stage` (the journey's
+   `pillar_id`, `before_after_grid_id` with `settings: { before_after_item_id }` (the grid item's
+   `item_id`, the row the post shows), `avatar_id`, `journey_id` + `journey_stage` (the journey's
    own stage NAME; a name not on the journey is a 400 listing the real ones), `tags:
    ["proof:<grid_id>", "persona:<slug>", "stage:<slug>", "hook:<pattern>", "format:<format>"]`
    (`stage:` is `product-aware` or `most-aware` here; `proof:` is the provenance a human reads

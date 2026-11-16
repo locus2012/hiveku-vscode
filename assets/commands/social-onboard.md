@@ -155,7 +155,8 @@ first week of posts is `/hiveku:social-plan`, later.
      plugin command's steps in the DEPARTMENT AGENT's vocabulary, not the MCP names
      (`social_post_create`, `social_post_update`, `social_post_list`, `media_library_list`,
      `design_to_post`, `pm_task_create`, `memory_update(domain, content)` - the agent has no
-     `social_post_validate`, `social_repurpose_source` or `social_posts_bulk_create`): the
+     `social_post_validate`, `social_post_strategy_check`, `social_post_strategy_update`,
+     `social_repurpose_source` or `social_posts_bulk_create`): the
      phrases that trigger it, the reads in order, the header and Rubric gate, the write as a
      DRAFT with its confirm, what it never does (no `scheduled_at`, no `social_post_publish`),
      under 2,500 characters, so a dashboard or department-agent session runs the same play

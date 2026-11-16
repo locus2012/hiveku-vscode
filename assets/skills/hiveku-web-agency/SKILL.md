@@ -248,7 +248,7 @@ build as a pass: a truncated or empty log is a red flag, not a green light.
 
 ## Play 6 - Versions, rollback, checkpoints, and restore
 A version is NOT a deploy. Load
-`references/vcs-checkpoints-branch-previews.md` before branch previews, merges,
+`references/vcs-checkpoints-branch-previews.md` before temporary environments, branch previews, merges,
 rollbacks, checkpoints, or ANY restore. The invariants that cannot wait for the reference:
 - Saving is not a version. On Your site (`main`) a save is live in the preview and is what a
   deploy ships, but no version holds it until `project_vcs_commit({ project_id, message })`
@@ -277,6 +277,11 @@ rollbacks, checkpoints, or ANY restore. The invariants that cannot wait for the 
   but never approve: a person approves in the dashboard, and with the site's "Require an
   approval" rule on, a merge into Your site waits for that. A merged branch is archived
   (writes answer 409 `branch_archived`; `project_vcs_branch_restore` within 30 days).
+- To show a branch to someone, put it on a temporary environment (`project_vcs_temp_env_create`): its own link for 1, 3 or 7 days at 50 cents a day, which the person confirms. Nothing else changes. Give people the Hiveku link. Move Development or Staging only when they ask for that. Call it a temporary environment, never a preview.
+  Price first: a dry run (`dry_run: true`) answers `charge`; tell the person `charge.words`, and on their
+  yes send the same call without `dry_run` and with `accept_cents: <charge.total_cents>`. Extending, bringing one back, its
+  passcode, its settings and turning it off ask the person too. `/hiveku:branch share`, `extend` and
+  `stop`; the whole flow and its refusals are in the reference's "Temporary environments" section.
 - The working branch is a PARAMETER, not a switch: `project_vcs_checkout` is a read (it
   pages: `limit` up to 2000, then `cursor`) that changes nothing server-side, and no tool
   switches the project. Pass `branch` on every file,
@@ -313,7 +318,7 @@ otherwise) | `production` (slow full CodeBuild path; never pick it just to test 
 The trap the tool states in caps: **production and development DO NOT share code.** Every
 file change you want in production needs its own
 `deploy_site({ environment: 'production' })` call; there is no auto-promote. And file
-saves / `preview_sync` reach the Fly PREVIEW instantly and touch NO Lambda environment;
+saves / `preview_sync` reach the Live Preview at once and touch NO deployed environment;
 only `deploy_site` does.
 Two invariants govern WHICH TREE ships: (1) the environment BINDINGS decide, never the call
 - read `project_vcs_env_bindings` first; a bound development/staging tier ships its branch
@@ -561,7 +566,7 @@ incidents behind every rule. Read the relevant one BEFORE writing code, not afte
 | `references/cms-and-database.md` | Any CMS collection or entry; publish scheduling; deletion preflights and bulk purge; the project database, RLS, Supabase extras. |
 | `references/conventions.md` | Writing a page or section: the stack, server/client boundary, images, metadata/SEO, accessibility, design tokens, client-facing voice. |
 | `references/site-scaffolding.md` | Creating or cloning a site, laying in pages, or injecting prebuilt sections - modes, caps, and arg shapes. |
-| `references/vcs-checkpoints-branch-previews.md` | Working on a branch (the `branch` parameter model, promote, etag, per-file diff, revert), environment bindings, PRs (reviews, comments, the approval rule), branch previews, merges and resolving conflicts, archived branches, checkpoints, checkpoint/point-in-time/single-file restores, the GitHub source-of-truth axis. |
+| `references/vcs-checkpoints-branch-previews.md` | Working on a branch (the `branch` parameter model, promote, etag, per-file diff, revert), environment bindings, PRs (reviews, comments, the approval rule), temporary environments (showing a branch to someone), branch previews (being retired), merges and resolving conflicts, archived branches, checkpoints, checkpoint/point-in-time/single-file restores, the GitHub source-of-truth axis. |
 | `references/domains-dns-redirects.md` | Attaching, verifying, migrating, or removing a domain; apex/CAA/cert issues; creating or deploying redirects. |
 | `references/custom-code-cdn-secrets.md` | Injected scripts and GTM tags, CDN invalidation or config, scheduled functions (crons), project secrets. |
 | `references/framework-conversion-cdn-repair.md` | Any framework conversion; a live site 403ing/404ing on some routes while the app works; behavior sweep/prune; `project_site_orphan_sweep`. |

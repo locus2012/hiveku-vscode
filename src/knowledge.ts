@@ -735,6 +735,12 @@ const HIVEKU_ALLOW: string[] = [
   // purge (a permanent erase) match nothing here and keep prompting. The purge
   // is on HIVEKU_ASK too (wave S5a), so it asks in every mode.
   'mcp__hiveku__marketing_form_capture_preview',
+  // Who a social post is for and why (2026-11-14), by EXACT name: social_post_strategy_check is a POST that only
+  // reads (readOnlyHint; it never blocks a post, costs nothing and calls no AI), so the permission gate takes it as a
+  // read. Agents run it before every draft, schedule and send for approval; a prompt on each call would teach people
+  // to deny it. The Claude plugin's read-only list and a read-only key take it the same way. Its write,
+  // social_post_strategy_update, matches no rule here and keeps prompting.
+  'mcp__hiveku__social_post_strategy_check',
   // The PM assignee roster (a GET: GET /api/olympus/pm/projects/:id/team), by
   // EXACT name: no glob above matches it, and the work-tracking section tells
   // the agent to read it before assigning anyone or setting a default.
