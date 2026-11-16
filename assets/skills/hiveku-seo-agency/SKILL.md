@@ -176,7 +176,7 @@ target query serves. Check, criteria and ladder: `hiveku-orient/references/found
 |---|---|---|
 | google, bing, mobile | organic and device lanes from `seo_track_keyword` (check its schema for the device argument), checked at the lane's check frequency | none per lane: the keyword is billed once |
 | local | `ranking_type: 'local'` with `business_name`; reads back as `local_pack_position` | none per lane |
-| ai_overview, chatgpt, claude, gemini, perplexity | `seo_aeo_rankings_sync`, or `seo_track_keyword` with the engine as `search_engine`; citations, not positions | none per lane; a live sync uses the daily re-check limit |
+| ai_overview, chatgpt, claude, gemini, perplexity | `seo_aeo_rankings_sync`, or `seo_track_keyword` with the engine as `search_engine`; citations, not positions. chatgpt and perplexity now read the assistant's own answer (a reading from before the lanes began reading it shows as not checked until its next check), ai_overview reads Google's AI Overview with late ones included, and claude and gemini ask the model without web search. A sync queues the check and answers within about 45 seconds; a lane not done by then answers `pending: true` | none per lane; a live sync uses the daily re-check limit |
 
 **What rank tracking costs the account.** One tracked keyword (a keyword for one domain) is billed once,
 however many lanes, engines, devices or check frequencies it has: the plan includes 25 (Standard) or
@@ -230,7 +230,7 @@ check day. `check_frequency` defaults to weekly.
 | D per request | backlinks (`backlinks_bulk_*` for lists) | `backlinks_summary`, `backlinks_backlinks` |
 | E per URL | on-page instant | `on_page_instant_pages`, `on_page_content_parsing` |
 | F per page | crawl (`max_crawl_pages` default 50, clamp 500) | `seo_audit_start` |
-| G one live check per keyword x engine, against the daily re-check limit | LLM mentions | `seo_aeo_rankings_sync`, the AI lanes |
+| G one live check per keyword x engine, against the daily re-check limit | AI answer checks, queued for Hiveku's checker | `seo_aeo_rankings_sync`, the AI lanes |
 | H LLM-scored, budget-gated | sweeps | `seo_eeat_scores`, `seo_aeo_brand_audit` daily budget |
 | I one search, 24h cooldown | listings footprint | `seo_citations_audit` |
 

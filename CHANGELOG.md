@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.91.95
+- **Your assistant checks who a social post is for before it saves, schedules or sends it for approval.** It runs Hiveku's strategy check, fixes what the check says about the post's own words, and asks you what only you can answer: who the post is for, the journey stage and its step, and the before and after it shows. It changes who a published post was for only on your word, and the check itself only reads: it never blocks a post.
+- **Each journey stage now says which step it is.** The six steps are Doesn't see the problem yet, Feels the problem, Weighing kinds of fix, Weighing you, Ready to act and Already a customer, each marked as a template's, yours or Hiveku's guess.
+- **The guides your assistant reads for SEO and websites are up to date** with the Claude plugin's latest texts.
+
 ## 0.91.92
 - **The firewall guide names the price before an environment turns private.** Making one of a site's environments private adds a monthly charge to the account's bill. The guide your assistant reads now says to tell you the price Hiveku quotes before it asks, to turn private mode on only after your yes, and to offer to make an environment nobody uses any more public again, which stops its charge and still works while the account's billing is blocked.
 - **The integrations guide says how to read one Gmail label only.** It now says how an inbox's own person limits what Hiveku reads of a Gmail inbox to one label, that only they may change or remove that limit, and that an Outlook inbox cannot be limited yet.

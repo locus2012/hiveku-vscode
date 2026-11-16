@@ -57,7 +57,7 @@ class before you spend; batch to the documented maximum.
 | D | backlinks | per request; `backlinks_bulk_*` take 1,000 targets | `backlinks_*`, `seo_research` backlinks actions |
 | E | on-page instant | per URL | `on_page_instant_pages`, `on_page_content_parsing`, `seo_research` actions `instant-page`, `lighthouse` |
 | F | crawl | per page; `max_crawl_pages` default 50, clamped to 500 | `seo_audit_start`, `seo_run_audit` |
-| G | LLM mentions | one live check per keyword per engine, against the daily re-check limit | `seo_aeo_rankings_sync`, the AI rank lanes |
+| G | AI answer checks, queued for Hiveku's checker | one live check per keyword per engine, against the daily re-check limit | `seo_aeo_rankings_sync`, the AI rank lanes |
 | H | LLM-scored, budget-gated | per page or per day | `seo_eeat_scores` sweep, `seo_aeo_brand_audit` (one per-UTC-day budget) |
 | I | citations | one Business Listings search, 24h cooldown | `seo_citations_audit` (429 returns the stored audit) |
 
