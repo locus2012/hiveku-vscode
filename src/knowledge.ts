@@ -3183,7 +3183,7 @@ is in \`.hiveku/project.json\` (\`project_id\`).
 - **Fetching a Hiveku-hosted site from this machine (curl, WebFetch, a script): identify as Hiveku.**
   The edge firewall refuses automated clients that do not: use \`curl -I <url>\` (HEAD is never
   challenged or blocked as an automated client) or \`curl -A "Hiveku-Session/1.0" <url>\`, and do not
-  WebFetch a customer domain, a *.hiveku.com tier host or preview.hiveku.com. An automated client the
+  WebFetch a customer domain, a *.hiveku.com tier host, a *.hiveku.dev Development or Staging host or preview.hiveku.com. An automated client the
   firewall cannot identify gets a 202 challenge (empty body, \`x-amzn-waf-action: challenge\`) or a 403
   with \`x-hiveku-firewall: blocked\`; a request from a known bulk-scraper network gets a 403 with
   \`x-hiveku-firewall: blocked-network\`; a 403 without that header comes from the site itself. Decide
