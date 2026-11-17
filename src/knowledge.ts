@@ -741,6 +741,10 @@ const HIVEKU_ALLOW: string[] = [
   // to deny it. The Claude plugin's read-only list and a read-only key take it the same way. Its write,
   // social_post_strategy_update, matches no rule here and keeps prompting.
   'mcp__hiveku__social_post_strategy_check',
+  // The same check for a content piece (2026-11-17), by EXACT name: content_strategy_check is a POST that only reads
+  // (readOnlyHint; it never blocks a piece, costs nothing and calls no AI). Agents run it before they send a draft for
+  // review, publish or schedule it. Its write, content_strategy_update, matches no rule here and keeps prompting.
+  'mcp__hiveku__content_strategy_check',
   // The PM assignee roster (a GET: GET /api/olympus/pm/projects/:id/team), by
   // EXACT name: no glob above matches it, and the work-tracking section tells
   // the agent to read it before assigning anyone or setting a default.
