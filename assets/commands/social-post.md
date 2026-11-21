@@ -66,7 +66,9 @@ the schedule is `/hiveku:social-plan` step 4, its own confirm, one post at a tim
    anywhere in `content`, a first comment, an override, alt text or a hashtag (inflections
    count); a header you cannot fill; the competitor-swap test (a competitor's name in place
    of the brand and the post still reads true); a variance breach (a third use of the hook
-   in the last 10, a repeated opening, the same format three in a row). Write the line under
+   in the last 10, a repeated opening, the same format three in a row); a number, quote or
+   result no data file or tool result backs; alt text over 125 characters; a platform the
+   persona's `online_behavior.social_platforms` does not list. Write the line under
    the header exactly: `Rubric: 12/14 (specificity 2, one-idea 2, proof 1, voice 2, native 2,
    hook 2, cta 1)` with one reason per 1 or 0. Rewrite ONCE, re-hooking when that is the fix
    (the persona and the stage do not change); if it still fails, say what fails, keep the

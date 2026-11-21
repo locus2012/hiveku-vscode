@@ -62,7 +62,9 @@ who-and-why fixes of step 5 (h), which change only who a post was for.
    hashtag (inflections count; record the phrase and where it sits); a header you cannot fill; the
    competitor-swap test, run on the hook line alone and on the whole post; a variance breach against
    that platform's own list in published order (a third use of one hook pattern in the last 10, an
-   opening six words repeated inside 20, one format three in a row). Count the recycled-AI tells per
+   opening six words repeated inside 20, one format three in a row); a number, quote or result no
+   data file or tool result backs; alt text over 125 characters; a platform the persona's
+   `online_behavior.social_platforms` does not list. Count the recycled-AI tells per
    post; two or more is a rewrite candidate whatever the total. The histogram with numbers attached:
    `social_analytics_by_dimension({ group_by: "hook", from_date, to_date })`, then `"format"`, then
    `"persona"`, with `from_date` the oldest `published_at` in the set and `to_date` today (this route

@@ -88,7 +88,9 @@ the piece it came from, the set is persisted as DRAFTS, and no publish time is p
    <verb>` over each post, then `Rubric: N/14 (specificity, one-idea, proof, voice, native, hook,
    cta)` with the reason for every 1 or 0; the gate is 11 or more and zero hard fails (a banned
    phrase or one of `brand.ai_forbidden_phrases`, no header, a failed competitor swap, a variance
-   breach). One rewrite pass, then say what still fails and leave it out - the client reads drafts.
+   breach, a number, quote or result no data file or tool result backs, alt text over 125
+   characters, a platform the persona's `online_behavior.social_platforms` does not list). One
+   rewrite pass, then say what still fails and leave it out - the client reads drafts.
    Each platform gets its own version, not a trim: X is one line plus one payoff and the URL counts
    23; LinkedIn's fold is about 210 characters, Instagram and Facebook about 125, GBP about 100.
    Then `social_post_strategy_check` on every draft with what it is for (`avatar_id`, `journey_id`,

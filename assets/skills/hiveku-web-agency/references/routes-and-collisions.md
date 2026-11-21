@@ -18,7 +18,7 @@ Thirty-one rules. The mechanism behind each is in the sections below, so you can
 **The static-vs-dynamic sibling trap**
 6. DO NOT let two files be able to produce the same pathname. One concrete page plus one sibling dynamic route that generates the same slug is the single most damaging routing defect on this platform.
 7. DO NOT trust a green build as evidence that routing is healthy. An App Router collision builds clean: exit 0, no error, no warning.
-8. DO read `route_collisions` every time, not just the orphan count. `orphans: 0` does NOT mean routing is healthy.
+8. DO read `route_collisions` and `possible_route_collisions` every time, not just the orphan count. `orphans: 0` does NOT mean routing is healthy.
 9. DO remove a slug from the dynamic route's data source in the SAME change set in which you add a concrete page for it.
 10. DO NOT put a dynamic segment in the first position of the route tree. `app/[year]/[month]` matches any two-segment URL on the site.
 11. DO fix a collision by giving each URL exactly one owner, then re-verify with `project_route_owner`.
@@ -167,11 +167,11 @@ An inherited site is exactly where this lurks. When you take over a converted or
 
 ### How to detect it
 
-- `project_files_validate_orphan_routes` returns `route_collisions[]`. This is the array that matters.
-- `project_route_owner` answers a per-URL question: `served_by` plus `shadowed[]`. Use it to confirm a fix and to answer "which file is actually producing this page."
+- `project_files_validate_orphan_routes` returns `route_collisions[]`: pairs where the dynamic page's `generateStaticParams` certainly lists the URL, so the dedicated page is not served. Pairs the code cannot settle (the list comes from a database, an import or a layout) are in `possible_route_collisions[]` instead. Read both.
+- `project_route_owner` answers a per-URL question: `served_by` plus `shadowed[]`. When `served_by_certain` is false, `may_be_served_by` may serve the URL instead, and `may_be_shadowed` lists what it would push out: open the live URL before changing either file. Use it to confirm a fix and to answer "which file is actually producing this page."
 - A post-build prerender-manifest check.
 
-**The critical caveat, stated plainly: `orphans: 0` does NOT mean routing is healthy.** The orphan scan only asks whether a link resolves to a page. A `[slug]` route matches any single segment, so a URL owned by TWO files still resolves, and still counts as zero orphans. The scan that is most likely to be quoted in a status update is structurally incapable of seeing the worst defect it runs alongside. Always read `route_collisions` too, and quote that, not the orphan count.
+**The critical caveat, stated plainly: `orphans: 0` does NOT mean routing is healthy.** The orphan scan only asks whether a link resolves to a page. A `[slug]` route matches any single segment, so a URL owned by TWO files still resolves, and still counts as zero orphans. The scan that is most likely to be quoted in a status update is structurally incapable of seeing the worst defect it runs alongside. Always read `route_collisions` and `possible_route_collisions` too, and quote them, not the orphan count.
 
 Save-time warnings you will see in `project_files_bulk_save` results:
 
@@ -190,7 +190,7 @@ Give each URL exactly one owner. In practice that is one of:
 - Keep the concrete page and remove that slug from the dynamic route's data source, so `generateStaticParams()` stops emitting it. In the 3rd Degree Screening case this meant editing `lib/page-content.ts`, a file that contains no routes and would not appear in any route-focused search.
 - Narrow the dynamic route so it cannot produce the pathname at all.
 
-Then re-run `project_files_validate_orphan_routes` and confirm with `project_route_owner` that `shadowed[]` is empty for the URLs involved. If the fix removes a URL rather than reassigning it, consider a redirect for it (section 7) so inbound links do not die.
+Then re-run `project_files_validate_orphan_routes` and confirm with `project_route_owner` that `shadowed[]` is empty and `served_by_certain` is true for the URLs involved. When `served_by_certain` stays false (the sibling's list comes from a database, an import or a layout), open the live URL to confirm your page answers. If the fix removes a URL rather than reassigning it, consider a redirect for it (section 7) so inbound links do not die.
 
 ---
 
@@ -335,9 +335,9 @@ The restart cannot help, because the files it would serve have not arrived. It c
 | 403 AccessDenied on one section, rest of the site fine | Page route under a reserved CDN prefix, served straight from S3 | Is the first segment one of the 14, or an offloaded `public/` subdir for this project? Look for `reserved_cdn_prefix_page_collision` |
 | Whole sections died right after a framework conversion | Old static output directories became CloudFront behaviors and now shadow real routes | `project_cdn_behaviors_list` for the tier and read `backed_by`; `site_reanalyze` for `leftovers[]`; then clear backing -> deploy -> `project_cdn_behaviors_prune` (acquiremarketplace pattern) |
 | Every route 404s but `/_next/*` chunks load fine | A static-era viewer-request function is rewriting paths against a Lambda/SSR origin | `project_cdn_config_get` to confirm, then `project_cdn_repair({ action: 'clear_viewer_function' })`, then redeploy |
-| "A page changed back on its own", old template returned, no deploy, no edit | Sibling collision resolved the other way on an unrelated rebuild | `project_route_owner` on that URL: read `served_by` and `shadowed[]`. Then find the dynamic sibling's data source |
-| Your edit saved but does not appear on the site | Your file is the loser of a collision | The `route_collision_edit_not_visible` warning; `route_collisions[]`, not the orphan count |
-| Validator says `orphans: 0`, routing still broken | The orphan scan cannot see collisions; a `[slug]` route resolves any single segment | `route_collisions[]` in the same result |
+| "A page changed back on its own", old template returned, no deploy, no edit | Sibling collision resolved the other way on an unrelated rebuild | `project_route_owner` on that URL: read `served_by`, `shadowed[]`, `served_by_certain` and `may_be_served_by`. Then find the dynamic sibling's data source |
+| Your edit saved but does not appear on the site | Your file is the loser of a collision | The `route_collision_edit_not_visible` warning; `route_collisions[]` and `possible_route_collisions[]`, not the orphan count |
+| Validator says `orphans: 0`, routing still broken | The orphan scan cannot see collisions; a `[slug]` route resolves any single segment | `route_collisions[]` and `possible_route_collisions[]` in the same result |
 | A newly added page 404s after deploy | Wrong app dir, a `_` ancestor, a shadowing sibling, or a same-turn preview sync | `project_files_list` (or `ls app src/app` via `preview_exec`); check for `_private` ancestors; `project_route_owner`; if this turn, wait |
 | Build dies: "Conflicting page and metadata at /X" | A `page.tsx` sibling to a reserved metadata file | Rename the page (for example to `html-sitemap`), not the metadata file |
 | Authenticated `/api/...` call started returning a redirect or HTML | Middleware is matching `/api/*` and pre-empting a self-authenticating handler | The middleware matcher, before the handler |
@@ -358,8 +358,8 @@ Run this before you save, not after the customer calls.
 4. For every URL you are about to create: does a sibling dynamic route generate this slug? Find its `generateStaticParams` and read its data source, which is often a plain lib module with no routes in it.
 5. If you are moving a file, delete or `mv` the old path in the same change set, and consider a redirect for any URL that stops existing.
 6. Save the whole change set in one `project_files_bulk_save` call and read its warnings, especially `reserved_cdn_prefix_page_collision`, `route_collision_edit_not_visible`, and `route_collision_new_dynamic_shadows`.
-7. Run `project_files_validate_orphan_routes` and read `route_collisions[]`. Not the orphan count.
-8. Confirm ownership on the specific URLs you touched with `project_route_owner`: `shadowed[]` must be empty.
+7. Run `project_files_validate_orphan_routes` and read `route_collisions[]` and `possible_route_collisions[]`. Not the orphan count.
+8. Confirm ownership on the specific URLs you touched with `project_route_owner`: `shadowed[]` must be empty and `served_by_certain` true; when it is false, open the live URL.
 9. If a redirect is involved, `project_redirects_list` first, then `project_redirect_create`, then `project_redirects_deploy({ project_id, tier })` for the tier you are about to check, then verify the response headers against the DEPLOYED host (a local `curl -sI`; not a WebFetch - a non-browser GET is refused by the edge firewall with a 202 and an empty body, or a 403 with `x-hiveku-firewall: blocked`). `preview_http_get` cannot do this check: it hits localhost inside the preview container, so it never sees a CloudFront header.
 10. Do not restart the preview because a route you just created 404s.
 

@@ -83,7 +83,9 @@ understates the post. Nothing downstream is current until a sync runs:
   impressions and engagement rate grouped by `hook`, `format`, `pillar`, `persona`,
   `stage`, `platform` or `asset`: the `hook:` / `format:` / `persona:` / `stage:` tags,
   `pillar_id`, `avatar_id`, the platform, or `settings.media_asset_ids` ("which
-  creative earned"). Every group carries N (the posts that contributed) and the
+  creative earned"). A `stage` group is keyed by journey and stage (`stage:<journey_id>:<stage_id>`), so
+  journeys that share a stage name stay apart; its rows carry `journey_id` and `stage_id`. Every group
+  carries N (the posts that contributed) and the
   window; an unsynced post is never counted as zero, so an N below the number you
   published in the window means unsynced or stopped posts, and the report says so.
   Read it before the format bets in the audit and the monthly report. A group with N

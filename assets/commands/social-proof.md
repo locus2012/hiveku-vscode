@@ -96,8 +96,9 @@ DRAFTS. Nothing is scheduled and nothing is published here.
    the whole post - a proof post that still reads true has its number or quote uncited, and the
    fix is the citation, never an adjective); a variance breach (a third use of a hook in the last
    10, a repeated opening, the same format three in a row - checked across this set in its
-   planned order too, so two `before-after` formats never run back to back with a third). One
-   rewrite pass: re-hook when that is the fix (the persona, the stage and the source do not
+   planned order too, so two `before-after` formats never run back to back with a third); a
+   number, quote or result no data file or tool result backs; alt text over 125 characters; a
+   platform the persona's `online_behavior.social_platforms` does not list. One rewrite pass: re-hook when that is the fix (the persona, the stage and the source do not
    change), then re-score. A post that still fails, or whose source cannot be named, is not
    re-hooked as an opinion post here: it goes to the alternatives with the reason, and nothing
    under the gate is persisted - the client reads drafts. Then `social_post_strategy_check` per post
