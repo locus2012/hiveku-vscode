@@ -109,18 +109,22 @@ A metric quoted in a post follows the report rule: it names the call it came fro
 `synced_at` (the freshness lines in references/connection-health-and-syncs.md). "Our
 most-saved post" with no `social_post_analytics` behind it is proof 0.
 
-Hard fails (any one blocks the write, whatever the total):
-1. A banned phrase (section 2), including the account's own.
-2. No persona-and-stage header. The header is `For: | Stage: | Pillar: | Hook: | Format: |
-   CTA:` per references/audience-grounding.md; "general audience" is a missing header.
-3. The competitor-swap test fails (section 5).
-4. A variance breach (section 6).
+Hard fails (any one blocks the write, whatever the total). There are seven, and a report or
+a review names each by its id:
+1. `banned_phrase`: a banned phrase, including the account's own (section 2).
+2. `no_persona_and_stage`: no persona-and-stage header. The header is `For: | Stage: |
+   Pillar: | Hook: | Format: | CTA:` per references/audience-grounding.md; "general
+   audience" is a missing header.
+3. `competitor_swap`: the competitor-swap test fails (section 5).
+4. `variance_breach`: a variance breach (section 6).
+5. `unbacked_claim`: a number, quote or result no data file or tool result backs
+   (audience-grounding.md section 5).
+6. `alt_text_over_125`: alt text over 125 characters (hooks-and-formats.md section 6).
+7. `platform_not_used`: a platform the persona's `online_behavior.social_platforms` does not
+   list (audience-grounding.md section 2).
 
-The department agent applies three more, each already a rule elsewhere in this skill: a
-number, quote or result no data file or tool result backs (audience-grounding.md section
-5); alt text over 125 characters (hooks-and-formats.md section 6); a platform the persona's
-`online_behavior.social_platforms` does not list (audience-grounding.md section 2). Check
-them anyway on copy you did not ground yourself.
+Check all seven on copy you did not ground yourself too. Two CTAs are a score, not a hard
+fail: one-idea 0 and cta 0 in the table above.
 
 The native axis has two tools behind it: `social_post_validate` before the write (caps,
 media fit per platform, the X rule that every URL counts 23) and

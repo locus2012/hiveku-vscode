@@ -139,7 +139,7 @@ Diagnosis: "I edited it in the CMS and nothing changed on my site" almost never 
 
 **A collection changes when the site rebuilds, which is a routing hazard.** Scheduled CMS publishes are a listed rebuild trigger that detonates a latent Next.js route collision. 3rd Degree Screening, 2026-08-19: a concrete `app/industries/healthcare/page.tsx` was added while a sibling `app/industries/[slug]/page.tsx` still generated the same slug. "Nothing failed. The live site kept serving a pre-collision artifact for weeks. Then an unrelated rebuild was the first to resolve the collision the other way, and **TWO PAGES SILENTLY REVERTED TO AN OLDER TEMPLATE** with no deploy and no edit by the owner."
 
-That is your problem the moment a collection has a `routePattern`, because a collection-backed dynamic route is exactly the sibling that steals a concrete page's URL. Run `project_files_validate_orphan_routes` and **read `route_collisions`, not just the orphan count**: "`orphans: 0` does NOT mean routing is healthy... a `[slug]` route matches any single segment, so a URL owned by TWO files still resolves and still counts as zero orphans." `project_route_owner` names the owner of one URL.
+That is your problem the moment a collection has a `routePattern`, because a collection-backed dynamic route is exactly the sibling that steals a concrete page's URL. Run `project_files_validate_orphan_routes` and **read `route_collisions` and `possible_route_collisions`, not just the orphan count**: "`orphans: 0` does NOT mean routing is healthy... a `[slug]` route matches any single segment, so a URL owned by TWO files still resolves and still counts as zero orphans." `project_route_owner` names the owner of one URL.
 
 ---
 

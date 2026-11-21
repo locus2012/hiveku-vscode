@@ -50,6 +50,10 @@ again from Hiveku before you act on it. When `memory_log_add` is listed, record 
 line when you start a task for the person and a Done line when it ends. Save what you learned with
 the memory_* tools.
 
+- **"The account memory" means two things to people.** They say "the account memory" or "fill the memory" for the whole
+  Memory page, which holds About your business (the tools `account_memory_get` and `account_memory_append`; an
+  assistant can only suggest one line at a time) and each agent's Notes, Rules, Skills and Shortcuts (`memory_list`,
+  `memory_create`, `memory_update`; an assistant can write those). Say which part you mean, and do both.
 - **Hiveku's own rules come before memory.** `account_context_get` returns `platform_rules` on
   every domain: Hiveku's rules, the same for every account, beside the memory that says how this
   business works. Where the two disagree, follow the rule and tell the person why. Today they cover
@@ -181,6 +185,11 @@ the memory_* tools.
 - **Never push local config into a project.** `.mcp.json`, `.env*` and `.hiveku/` carry local
   credentials; exclude them from every bulk save and archive. Real application secrets belong in
   `project_secrets_*` and are injected at deploy. Never read or print `.env.local`.
+- **A key, token or password a site needs:** never ask for it in chat, and never have the person put it in a
+  file, Finder or a terminal command. Call `secure_value_request` if it is among your tools (the Hiveku desktop
+  app); otherwise tell the person the variable's name and ask them to add it in the Hiveku app under the site's
+  Settings > Environment variables. A value an automation uses goes under Automations > More > Environment
+  variables, and an app's or a connection's secret follows its own steps (references/integrations.md).
 - **The proxy sends only the arguments a tool DECLARES.** Anything outside a tool's own
   `inputSchema` (or its `bodyParams` allowlist, where one has one) is dropped before the request
   leaves. A real-sounding but undeclared field returns **200 with that field unset and no error** -

@@ -92,9 +92,11 @@ writes no `scheduled_at` anywhere.
    over each post, then `Rubric: N/14 (specificity n, one-idea n, proof n, voice n, native n, hook
    n, cta n)` with one reason per 1 or 0; the gate is 11 or more and zero hard fails (a banned
    phrase or one of `brand.ai_forbidden_phrases` anywhere, a header you cannot fill, a failed
-   competitor swap, a variance breach). One rewrite pass; a draft still under the gate leaves its
-   gap OPEN and named in the report - the client reads drafts in the dashboard, so a failing draft
-   is not written. Words on the canvas (a quote card, a data-point card, carousel copy) are a
+   competitor swap, a variance breach, a number, quote or result no data file or tool result
+   backs, alt text over 125 characters, a platform the persona's
+   `online_behavior.social_platforms` does not list). One rewrite pass; a draft still under the
+   gate leaves its gap OPEN and named in the report - the client reads drafts in the dashboard, so
+   a failing draft is not written. Words on the canvas (a quote card, a data-point card, carousel copy) are a
    designed asset briefed through `/hiveku:creative-brief`; the post is held text-only until the
    asset is attached. Then `social_post_strategy_check` per draft with what it is for (`avatar_id`,
    `journey_id`, `journey_stage`, `before_after_grid_id`, `before_after_item_id`, `pillar_id`); it
