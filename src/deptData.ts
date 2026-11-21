@@ -659,6 +659,9 @@ export const DEPARTMENTS: Department[] = [
       '`crm_contact_merge` (bulk: `crm_import_preflight` then `crm_contacts_bulk_create`). Resolve `owner_id` from ' +
       '`users.json` (`crm_list_users`), never hardcode. ' +
       'Companies: `crm_create_company` / `crm_update_company` / `crm_delete_company` + `crm_link_contact_company`. ' +
+      'One client\'s billing (a read, live per client, not a pulled file): `crm_record_billing_summary` with contact_id ' +
+      'or company_id, not both, gives the total paid per currency, the newest invoices and payments, subscriptions, ' +
+      'and on a company its deals and its linked people\'s rows; it needs invoice read permission (403 otherwise). ' +
       'Deals: `crm_create_deal` (name + pipeline_id + stage_id from `pipelines.json`) / `crm_update_deal` (stage moves, ' +
       'status, value) / `crm_delete_deal` + `crm_link_deal_contact` (bulk: `crm_deals_bulk_create`). ' +
       'Activities: `crm_create_activity` / `crm_update_activity` / `crm_delete_activity`. ' +
@@ -920,6 +923,9 @@ export const DEPARTMENTS: Department[] = [
     references: [
       { id: 'ap-aging', label: 'AP aging', tool: 'accounting_ap_aging' },
       { id: 'ar-aging', label: 'AR aging', tool: 'accounting_ar_aging' },
+      // Two lists and a per-currency summary in one object, so a reference (written whole), not a dataset: a dataset
+      // keeps only the first list. Suggestions only; linking a payment to an invoice is a separate confirmed write.
+      { id: 'payment-gaps', label: 'Payment gaps (paid invoices with no payment, payments with no invoice, suggested matches)', tool: 'accounting_payment_gaps', args: { limit: 100 } },
       { id: 'pnl-summary', label: 'P&L summary', tool: 'accounting_pnl_summary' },
     ],
     crud:

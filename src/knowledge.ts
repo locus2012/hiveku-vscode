@@ -716,6 +716,9 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__*_metrics',
   'mcp__hiveku__accounting_ap_aging',
   'mcp__hiveku__accounting_ar_aging',
+  // The payment gaps report (MCP #625, a GET): no glob above matches the name. Its sibling read,
+  // crm_record_billing_summary, already matches '*_summary'.
+  'mcp__hiveku__accounting_payment_gaps',
   'mcp__hiveku__mc_tasks_next',
   'mcp__hiveku__mc_sla_breached',
   'mcp__hiveku__mc_tasks_stalled',
