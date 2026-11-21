@@ -1,7 +1,7 @@
 # Publishing, scheduling, and approval mechanics
 
 Load this before any create/update/validate/schedule/publish/reject call, before the
-strategy check or the strategy write, before a bulk
+strategy check or the strategy write, before Review with AI, before a bulk
 draft, a duplicate or a retry, before touching the calendar or the recurring slots, and
 before answering "why didn't my post go out". Every state transition and failure mode
 in this rail is documented here, and the contract table below is the ONE place the
@@ -328,6 +328,63 @@ the failed versions and skips every target that already published. It publishes,
 is on the ask list and gets its own confirm, one post at a time. It refuses a held or
 rejected post and a post with nothing failed (state answers, not glitches - read the
 state, do not retry the retry). A retry of an X version still spends the X cap.
+
+## Review with AI: social_post_strategy_review (charged, the person asks for it)
+
+Review with AI is the post's button of the same name in the Hiveku app, and these are its
+tools. The Social team scores a saved post (its saved words, never a draft) per network on the
+7-axis rubric of references/anti-fluff.md (0 to 2 each, passing at 11 of 14 with no hard fail),
+names any of the seven hard fails by id, answers seven plain questions and suggests words to
+copy. It spends the account's AI credit in the name of the person behind the key (on a Mini plan
+it counts toward the plan's fair-use limit instead), and what it cost is known only once it has
+run. It needs a person's own key whose role may edit Social posts.
+
+Nothing a review says blocks a post. A post it fails can still be saved, scheduled or sent for
+approval, and its scores are a second opinion beside your own grade (anti-fluff.md section 1),
+never a gate on what the person chooses and never a reason to change their words for them.
+
+1. Read first: `social_post_strategy_review_get({ post_id })`, a free GET that runs nothing. It
+   answers `review` (`social_review.v1`, or null when the post was never reviewed), `fresh`,
+   `freshness` (`current`; `out_of_date` when the post's words, networks, ICP, stage, row,
+   pillar or brand voice changed since; `recipe_changed` when an older way of judging made it;
+   null with no review), `running` (the live run, or null) and `last_failure` (the last run that
+   made no review, with what it cost). A `fresh` review already answers: show it and run
+   nothing. A live run: follow it and start nothing.
+2. Ask the person first, every time: what it does, that it uses the account's AI credit, that the
+   cost shows once it has run, and what `last_failure` cost when there is one. Run it only on
+   their yes, for the post they named, and never on their behalf. "Review all our posts" is one
+   yes per post, never a loop.
+3. On the person's yes, `social_post_strategy_review({ post_id })`. Send `again: true` only when the
+   person asks for a new review of a post whose review is current; it is charged again. Without
+   it, a current review answers 200 `ran: false` with `data.review` and nothing runs or is
+   charged.
+4. It answers at once. 202 `{ data: { job_id, status, started_at, by, reused: false } }` is a
+   started run: follow it with `job_status_get({ job_id })` or with
+   `social_post_strategy_review_get({ post_id, only: 'run' })`, the cheap read, every few
+   seconds. 202 `reused: true` hands back the run already live for that post, and nothing is
+   charged again. A started review cannot be stopped: `job_cancel` answers 409.
+5. A 524, a timeout or a dropped answer reads as still running. Read
+   `social_post_strategy_review_get` before anything else, and never send the review again
+   blindly: the tool sends it once and does not retry a 5xx.
+6. Show the review as the person would weigh it: `passes`, each network's `rubric_line` with the
+   reason for every 1 or 0, each hard fail by id, the seven questions, the suggested words and
+   `cost`. A suggestion goes into the post only as the person chooses, through the normal edit
+   (`social_update_post` on an editable post, `social_post_duplicate` for a published one), and
+   the edited draft is checked again as any edit is.
+
+The refusals, in the order Hiveku decides them. 403 `person_key_required` (a key made for one of
+Hiveku's own assistants) or `unattributed_key` (a key with no recorded creator) is final for that
+key: nothing was charged; never call again with it and never move on to other posts; ask the
+person to press Review with AI on the post in the Hiveku app, or to ask for it from their own
+connected AI client. 403 `key_creator_lacks_access`: say so in its own words (an owner or admin
+can give the access). 400 `bad_id` or `bad_request`; 404 `not_found`; 409 `post_publishing` (the
+post is going out: try once it has gone out); 400 `empty_post` (no text); 402: the account may not
+run AI, so pass on Hiveku's sentence (nothing ran); 500 `could_not_start` or `review_failed`:
+nothing was charged.
+
+409 `needs_who`: the post has no ICP or no stage. Who it is for is the person's pick: ask the
+person, set what they choose with `social_post_strategy_update` on their word, then ask them
+again before the review runs.
 
 ## Path A - the schedule (the one that actually ships content)
 

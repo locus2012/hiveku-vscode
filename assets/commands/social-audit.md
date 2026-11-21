@@ -13,7 +13,9 @@ says how many of how many, and what was not looked at). Context: `account_contex
 Default scope: the 30 most recently published posts across every connected platform; the argument
 may narrow it to one platform slug (`linkedin`, `twitter`, `facebook`, `instagram`, `tiktok`,
 `google_business_profile`) or a window. This command is READ-ONLY: it grades, ranks and proposes. It
-edits no post's copy, deletes nothing, reschedules nothing and runs no `social_post_duplicate`; the
+edits no post's copy, deletes nothing, reschedules nothing and runs no `social_post_duplicate`. It
+runs no Review with AI either: `social_post_strategy_review` is charged and the person's to ask
+for, post by post, outside this audit (ask the person first; the social skill says how). The
 writes it can end with, each after its own yes in step 5, are the memory line in step 6 and the
 who-and-why fixes of step 5 (h), which change only who a post was for.
 1. **Sync, then the set, then its numbers.** `social_analytics_sync` (no args) refreshes only the
@@ -65,7 +67,13 @@ who-and-why fixes of step 5 (h), which change only who a post was for.
    opening six words repeated inside 20, one format three in a row); a number, quote or result no
    data file or tool result backs; alt text over 125 characters; a platform the persona's
    `online_behavior.social_platforms` does not list. Count the recycled-AI tells per
-   post; two or more is a rewrite candidate whatever the total. The histogram with numbers attached:
+   post; two or more is a rewrite candidate whatever the total. Then, and only after your own
+   score, the second opinion: `social_post_strategy_review_get({ post_id })` per post (a free GET
+   that runs nothing) reads any stored Review with AI. Set its `passes`, each network's
+   `rubric_line` and its hard fails beside your line, say whether it is current (`freshness`:
+   `out_of_date` judged other words or picks, `recipe_changed` an older way of judging), and where
+   the two differ, say both and why. It never replaces your score and never blocks a post, and a
+   post with no stored review is not a finding. The histogram with numbers attached:
    `social_analytics_by_dimension({ group_by: "hook", from_date, to_date })`, then `"format"`, then
    `"persona"`, with `from_date` the oldest `published_at` in the set and `to_date` today (this route
    filters `published_at`). Each row carries `key`, `label`, `posts`, `synced_posts`, `impressions`,
@@ -131,8 +139,9 @@ who-and-why fixes of step 5 (h), which change only who a post was for.
    /hiveku:social-calendar.
 5. **The deliverable, then STOP.** Open with the coverage sentence from step 1, then, in this order:
    (a) the audit table, one row per post - id, platform(s), `published_at`, persona, stage, pillar,
-   hook, format, CTA verb, the `Rubric: N/14` line, hard fails, banned hits, tells, and
-   `engagement_rate` or "unsynced" or "as of <synced_at>"; (b) the three histograms with N and
+   hook, format, CTA verb, the `Rubric: N/14` line, hard fails, banned hits, tells, the stored
+   review beside it (its total, hard fails and freshness, or "none"), and `engagement_rate` or
+   "unsynced" or "as of <synced_at>"; (b) the three histograms with N and
    window, the coverage counts (persona, stage, hook tag, format tag, pillar - each n of 30), the
    CTA mismatches and the repeated openings; (c) the winners and losers with the triage verdict on
    every row; (d) the hashtag tail and the series gaps; (e) the rewrite list - post id, the failing

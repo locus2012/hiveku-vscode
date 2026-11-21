@@ -58,6 +58,18 @@ invalid, and name the persona each post serves. Check, criteria and ladder:
   A published post's who-and-why (its ICP, journey and stage, grid and row, pillar and tags)
   changes only through `social_post_strategy_update`, on the person's word, and nothing else
   about the post moves. Load references/publishing-approval-mechanics.md for both.
+- Review with AI is the person's to ask for, and it is charged.
+  `social_post_strategy_review({ post_id })` is the post's Review with AI button in the Hiveku
+  app: the Social team scores a saved post (never a draft) per network on the rubric of
+  references/anti-fluff.md, names its hard fails by id and suggests words to copy. It spends the
+  account's AI credit in the name of the person behind the key, so read
+  `social_post_strategy_review_get({ post_id })` first: a `fresh` review already answers, so show
+  it and run nothing. For a missing or out-of-date review, ask the person first, say it uses the
+  account's AI credit and that the cost shows once it has run, and run it only on their yes, one
+  post per yes, never on their behalf. It answers at once with a run to follow; after a timeout or
+  a 524, read `social_post_strategy_review_get` and never send it twice. Nothing a review says
+  blocks a post: it is a second opinion beside your own grade, never a gate on what the person
+  chooses. Load references/publishing-approval-mechanics.md ("Review with AI") first.
 - `hiveku-data/social/*.json` (accounts, posts, pillars, calendar, comments, hashtags, slots,
   analytics-summary) is the local snapshot - read it for orientation, brand voice recall, and
   cheap counts; use live tools for anything current or decision-grade (a post's live status,
@@ -181,6 +193,12 @@ it, and references/audience-grounding.md, hooks-and-formats.md and anti-fluff.md
   `social_schedule_slot_next_open` openings, one confirm per post, or leave the month as drafts
   (`social_posts_bulk_create`, which rejects `scheduled_at`) plus a calendar the client
   releases week by week.
+- "Review all our posts with AI." -> Refuse the loop. Each review spends the account's AI credit
+  in the person's name. Read `social_post_strategy_review_get` for each post first (a current
+  review needs no run), then ask the person post by post and run `social_post_strategy_review`
+  only on each yes. A 403 `person_key_required` or `unattributed_key` is final for that key: ask
+  the person to press Review with AI on the post in the Hiveku app, and never move on to other
+  posts with it.
 - "Delete that nasty comment on LinkedIn." -> Not as a reflex. `social_linkedin_comment_delete`
   is permanent, platform-side moderation with no restore; quote the exact comment back, get a
   written yes, and check the escalation rubric first (references/engagement-inbox.md) -
@@ -428,8 +446,9 @@ Command: /hiveku:social-report.
 ## Reference files (load on demand - an unnamed reference is invisible)
 - references/publishing-approval-mechanics.md - load before any create, update, schedule,
   publish, reject, calendar, or slot call, before the strategy check or the strategy write,
-  and for the crisis-hold brake: the cron semantics, the approval state machine, every field
-  trap and edit lock, and how who a post is for is fixed on any post, published included.
+  before Review with AI, and for the crisis-hold brake: the cron semantics, the approval state
+  machine, every field trap and edit lock, how who a post is for is fixed on any post, published
+  included, and how a review is read, asked for and followed.
 - references/analytics-and-reporting.md - load before quoting any metric or building the
   baseline, weekly check, or monthly report: the metric-source map, sync discipline, LinkedIn
   live analytics, honesty states, the full report recipe.

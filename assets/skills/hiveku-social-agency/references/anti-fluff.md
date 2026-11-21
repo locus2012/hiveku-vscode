@@ -30,6 +30,13 @@ The order: ground (audience-grounding.md), write (hooks-and-formats.md), score h
 banned list is this list, word for word) and returns a `rubric` object per draft in its
 `social_drafts.v1` block, keyed `specificity, one_idea, proof, voice, native, hook, cta,
 total`. Re-score anyway: the agent grades its own work, and you are the second reader.
+The one exception to "nothing on the server scores copy" is Review with AI, and it waits for <!-- plugin-only -->
+the person: `social_post_strategy_review` has the Social team score a saved post on this <!-- plugin-only -->
+file's rubric and hard fails, by the same names, only when the person asks for it, and it is <!-- plugin-only -->
+charged (publishing-approval-mechanics.md, "Review with AI": ask the person first). Its stored <!-- plugin-only -->
+answer, read with `social_post_strategy_review_get`, is a second opinion, like the agent's <!-- plugin-only -->
+`rubric`: read it, then grade afresh anyway, and when the two differ, say both and why. <!-- plugin-only -->
+Nothing it says blocks a post, and it never stands in for this gate. <!-- plugin-only -->
 
 ## 2. The banned list
 

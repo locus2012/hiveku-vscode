@@ -93,6 +93,19 @@ understates the post. Nothing downstream is current until a sync runs:
   group of one, which is the fastest way to find a tagging slip. Its rate and the
   `avg_engagement_rate` on `social_account_analytics` rows are computed differently;
   name the denominator each time (the comparability gate below).
+- `social_analytics_who_for({ days, ahead_days })` - who the posts were for: what went out
+  in the last `days` days and what is coming up in the next `ahead_days` (each a whole number
+  from 1 to 90, default 30), by ICP (`icps`: every active ICP, zero included) and by journey
+  stage (`journeys` with their `stages`, and `steps` across journeys), each with `published`,
+  `upcoming` and `gap`. It answers "who are we posting for, and who are we missing". A stage,
+  or a step with stages, is a gap only when nothing went out and nothing is coming up. A post
+  counts where it is now (its ICP and stage today); coming up is scheduled in the window or
+  held for approval, and plain drafts are not counted; posts made outside Hiveku are only a
+  count (`elsewhere.published`). `no_icp`, `no_stage`, `stage_not_found` and
+  `stage_without_journey` list the posts it could not place: who-and-why fixes to put to the
+  person, never zeros. A `step_source` of `guess` is Hiveku's reading of the stage, a question
+  for the person. It counts posts, not results: how they did is the by-dimension read above,
+  which groups published posts only and counts `stage:` tags apart from the stage a post keeps.
 - Where the 90-day stop applies: the per-post ladder (`social-analytics-sync`, every
   30 minutes on day one, then 4-hourly, daily, weekly, and off at day 90) freezes a
   version 90 days after it published, so both reads above go stale per post and say so
