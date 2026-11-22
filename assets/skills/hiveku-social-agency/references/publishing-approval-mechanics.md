@@ -355,9 +355,12 @@ never a gate on what the person chooses and never a reason to change their words
    their yes, for the post they named, and never on their behalf. "Review all our posts" is one
    yes per post, never a loop.
 3. On the person's yes, `social_post_strategy_review({ post_id })`. Send `again: true` only when the
-   person asks for a new review of a post whose review is current; it is charged again. Without
-   it, a current review answers 200 `ran: false` with `data.review` and nothing runs or is
-   charged.
+   person asks for a new review of a post whose review is current; it is charged again. With
+   `again: true`, also send `expected_ran_at`: the `ran_at` of the stored review you read with
+   `social_post_strategy_review_get` (null when there was none). If the review changed since, the
+   answer is 409 `state_changed` and nothing is charged: read it again and ask the person before
+   running again; never resend it by itself. Without `again`, a current review answers 200
+   `ran: false` with `data.review` and nothing runs or is charged.
 4. It answers at once. 202 `{ data: { job_id, status, started_at, by, reused: false } }` is a
    started run: follow it with `job_status_get({ job_id })` or with
    `social_post_strategy_review_get({ post_id, only: 'run' })`, the cheap read, every few
@@ -382,7 +385,8 @@ or admin can give the access). 400 `bad_id` or `bad_request`; 404 `not_found`; 4
 409 `needs_who` (the next paragraph); 202 `reused: true` (step 4) and 200 `ran: false` (step 3),
 where nothing is charged again; 402: the account may not run AI, so pass on Hiveku's sentence
 (nothing ran). A run that could not start or did not finish answers 500 `could_not_start` or
-`review_failed`: nothing was charged.
+`review_failed`: nothing was charged. A send with `again: true` can also answer 409
+`state_changed` (step 3): nothing was charged.
 
 409 `needs_who`: the post has no ICP or no stage. Who it is for is the person's pick: ask the
 person, set what they choose with `social_post_strategy_update` on their word, then ask them

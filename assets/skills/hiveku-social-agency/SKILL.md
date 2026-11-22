@@ -66,7 +66,10 @@ invalid, and name the persona each post serves. Check, criteria and ladder:
   `social_post_strategy_review_get({ post_id })` first: a `fresh` review already answers, so show
   it and run nothing. For a missing review, or one that is not `fresh`, ask the person first, say
   it uses the account's AI credit and that the cost shows once it has run, and run it only on
-  their yes, one post per yes, never on their behalf. It answers at once with a run to follow;
+  their yes, one post per yes, never on their behalf. A new review of a post whose review is
+  current (`again: true`) runs only on the person's word and carries `expected_ran_at`, the
+  `ran_at` of the review you read; a 409 `state_changed` means it changed since: read it again
+  and ask the person again, never resend it by itself. It answers at once with a run to follow;
   after a timeout or a 524, read `social_post_strategy_review_get` and never send it twice. Nothing
   a review says blocks a post: it is a second opinion beside your own grade, never a gate on what
   the person chooses. Load references/publishing-approval-mechanics.md ("Review with AI") first.
