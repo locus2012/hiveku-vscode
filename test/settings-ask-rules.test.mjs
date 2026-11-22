@@ -1364,8 +1364,8 @@ describe('ensureSpendAskRules: a folder scaffolded before the ask rules', () => 
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), [], 'a second run added something');
   });
 
-  test('a folder that holds the 0.91.97 rules gets only the Review with AI ask, appended last', async () => {
-    const dir = await tmp('hk-ensure-09197-');
+  test('a folder that holds the 0.91.98 rules gets only the Review with AI ask, appended last', async () => {
+    const dir = await tmp('hk-ensure-09198-');
     const before = { ...OLD, permissions: { ...OLD.permissions, ask: without(...SOCIAL_REVIEW) } };
     await seedSettings(dir, before);
     assert.deepEqual(await knowledge.ensureSpendAskRules(dir), SOCIAL_REVIEW);
