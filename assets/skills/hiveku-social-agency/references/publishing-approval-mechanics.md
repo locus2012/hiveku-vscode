@@ -382,11 +382,12 @@ posts; ask the person to press Review with AI on the post in the Hiveku app, or 
 their own connected AI client. 403 `key_creator_lacks_access`: say so in its own words (an owner
 or admin can give the access). 400 `bad_id` or `bad_request`; 404 `not_found`; 409
 `post_publishing` (the post is going out: try once it has gone out); 400 `empty_post` (no text);
-409 `needs_who` (the next paragraph); 202 `reused: true` (step 4) and 200 `ran: false` (step 3),
-where nothing is charged again; 402: the account may not run AI, so pass on Hiveku's sentence
-(nothing ran). A run that could not start or did not finish answers 500 `could_not_start` or
-`review_failed`: nothing was charged. A send with `again: true` can also answer 409
-`state_changed` (step 3): nothing was charged.
+409 `needs_who` (the next paragraph); 202 `reused: true` (step 4); 409 `state_changed` (step 3: a
+send with `again: true` whose stored review changed since); 200 `ran: false` (step 3); none of
+these three is charged; 402: the account may not run AI, so pass on Hiveku's sentence (nothing
+ran). A review that could not be started answers 500 `could_not_start` or `review_failed`:
+nothing was charged. A run that started and then made no review is `last_failure` (step 1), with
+what it cost.
 
 409 `needs_who`: the post has no ICP or no stage. Who it is for is the person's pick: ask the
 person, set what they choose with `social_post_strategy_update` on their word, then ask them
