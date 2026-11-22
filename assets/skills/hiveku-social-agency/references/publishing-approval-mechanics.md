@@ -372,15 +372,17 @@ never a gate on what the person chooses and never a reason to change their words
    (`social_update_post` on an editable post, `social_post_duplicate` for a published one), and
    the edited draft is checked again as any edit is.
 
-The refusals, in the order Hiveku decides them. 403 `person_key_required` (a key made for one of
-Hiveku's own assistants) or `unattributed_key` (a key with no recorded creator) is final for that
-key: nothing was charged; never call again with it and never move on to other posts; ask the
-person to press Review with AI on the post in the Hiveku app, or to ask for it from their own
-connected AI client. 403 `key_creator_lacks_access`: say so in its own words (an owner or admin
-can give the access). 400 `bad_id` or `bad_request`; 404 `not_found`; 409 `post_publishing` (the
-post is going out: try once it has gone out); 400 `empty_post` (no text); 402: the account may not
-run AI, so pass on Hiveku's sentence (nothing ran); 500 `could_not_start` or `review_failed`:
-nothing was charged.
+The answers that start no run, in the order Hiveku decides them. 403 `person_key_required` (a key
+made for one of Hiveku's own assistants) or `unattributed_key` (a key with no recorded creator) is
+final for that key: nothing was charged; never call again with it and never move on to other
+posts; ask the person to press Review with AI on the post in the Hiveku app, or to ask for it from
+their own connected AI client. 403 `key_creator_lacks_access`: say so in its own words (an owner
+or admin can give the access). 400 `bad_id` or `bad_request`; 404 `not_found`; 409
+`post_publishing` (the post is going out: try once it has gone out); 400 `empty_post` (no text);
+409 `needs_who` (the next paragraph); 202 `reused: true` (step 4) and 200 `ran: false` (step 3),
+where nothing is charged again; 402: the account may not run AI, so pass on Hiveku's sentence
+(nothing ran). A run that could not start or did not finish answers 500 `could_not_start` or
+`review_failed`: nothing was charged.
 
 409 `needs_who`: the post has no ICP or no stage. Who it is for is the person's pick: ask the
 person, set what they choose with `social_post_strategy_update` on their word, then ask them

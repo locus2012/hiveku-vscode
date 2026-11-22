@@ -64,12 +64,12 @@ invalid, and name the persona each post serves. Check, criteria and ladder:
   references/anti-fluff.md, names its hard fails by id and suggests words to copy. It spends the
   account's AI credit in the name of the person behind the key, so read
   `social_post_strategy_review_get({ post_id })` first: a `fresh` review already answers, so show
-  it and run nothing. For a missing or out-of-date review, ask the person first, say it uses the
-  account's AI credit and that the cost shows once it has run, and run it only on their yes, one
-  post per yes, never on their behalf. It answers at once with a run to follow; after a timeout or
-  a 524, read `social_post_strategy_review_get` and never send it twice. Nothing a review says
-  blocks a post: it is a second opinion beside your own grade, never a gate on what the person
-  chooses. Load references/publishing-approval-mechanics.md ("Review with AI") first.
+  it and run nothing. For a missing review, or one that is not `fresh`, ask the person first, say
+  it uses the account's AI credit and that the cost shows once it has run, and run it only on
+  their yes, one post per yes, never on their behalf. It answers at once with a run to follow;
+  after a timeout or a 524, read `social_post_strategy_review_get` and never send it twice. Nothing
+  a review says blocks a post: it is a second opinion beside your own grade, never a gate on what
+  the person chooses. Load references/publishing-approval-mechanics.md ("Review with AI") first.
 - `hiveku-data/social/*.json` (accounts, posts, pillars, calendar, comments, hashtags, slots,
   analytics-summary) is the local snapshot - read it for orientation, brand voice recall, and
   cheap counts; use live tools for anything current or decision-grade (a post's live status,

@@ -96,9 +96,10 @@ understates the post. Nothing downstream is current until a sync runs:
 - `social_analytics_who_for({ days, ahead_days })` - who the posts were for: what went out
   in the last `days` days and what is coming up in the next `ahead_days` (each a whole number
   from 1 to 90, default 30), by ICP (`icps`: every active ICP, zero included) and by journey
-  stage (`journeys` with their `stages`, and `steps` across journeys), each with `published`,
-  `upcoming` and `gap`. It answers "who are we posting for, and who are we missing". A stage,
-  or a step with stages, is a gap only when nothing went out and nothing is coming up. A post
+  stage (`journeys` with their `stages`, and `steps` across journeys), each with `published`
+  and `upcoming`; stages and steps also carry `gap`. An ICP with nothing out and nothing coming
+  up shows 0 and 0. It answers "who are we posting for, and who are we missing". A stage, or a
+  step with stages, is a gap only when nothing went out and nothing is coming up. A post
   counts where it is now (its ICP and stage today); coming up is scheduled in the window or
   held for approval, and plain drafts are not counted; posts made outside Hiveku are only a
   count (`elsewhere.published`). `no_icp`, `no_stage`, `stage_not_found` and
