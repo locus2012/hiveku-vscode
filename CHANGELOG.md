@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.99
+- **Review with AI of a social post always asks.** Claude Code in your project folders asks before social_post_strategy_review, which has the Social team score a saved post and uses the account's AI credit in your name, in every permission mode, as the Claude Code and Codex plugins do. Reading a stored review and who your posts were for needs no ask.
+
 ## 0.91.95
 - **Your assistant checks who a social post is for before it saves, schedules or sends it for approval.** It runs Hiveku's strategy check, fixes what the check says about the post's own words, and asks you what only you can answer: who the post is for, the journey stage and its step, and the before and after it shows. It changes who a published post was for only on your word, and the check itself only reads: it never blocks a post.
 - **Each journey stage now says which step it is.** The six steps are Doesn't see the problem yet, Feels the problem, Weighing kinds of fix, Weighing you, Ready to act and Already a customer, each marked as a template's, yours or Hiveku's guess.
