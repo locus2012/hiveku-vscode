@@ -748,6 +748,11 @@ const HIVEKU_ALLOW: string[] = [
   // (readOnlyHint; it never blocks a piece, costs nothing and calls no AI). Agents run it before they send a draft for
   // review, publish or schedule it. Its write, content_strategy_update, matches no rule here and keeps prompting.
   'mcp__hiveku__content_strategy_check',
+  // Who the social posts were for (2026-11-21), by EXACT name: social_analytics_who_for is a GET (readOnlyHint) that
+  // counts posts by ICP and by journey stage, published and coming up, with the gaps, and writes nothing. No glob above
+  // matches its name. The stored Review with AI, social_post_strategy_review_get, already matches *_get; the review
+  // itself, social_post_strategy_review, matches no rule here and is on HIVEKU_ASK.
+  'mcp__hiveku__social_analytics_who_for',
   // The PM assignee roster (a GET: GET /api/olympus/pm/projects/:id/team), by
   // EXACT name: no glob above matches it, and the work-tracking section tells
   // the agent to read it before assigning anyone or setting a default.
@@ -1656,6 +1661,13 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__project_vcs_temp_env_delete',
   'mcp__hiveku__project_vcs_temp_env_request_dismiss',
   'mcp__hiveku__project_vcs_temp_env_open',
+  // Review with AI of a social post (2026-11-21, MCP feature/social-review-tools): social_post_strategy_review has the
+  // Social team score a saved post and spends the account's AI credit in the name of the person behind the key, so
+  // every call asks, as on the Claude Code plugin's ask list and in the Codex plugin. Written before the tool server
+  // serves it. Its name ends in neither _get nor _list and holds no _list_, so no read glob approves it; its read,
+  // social_post_strategy_review_get, is a GET the *_get glob approves, and social_analytics_who_for is on HIVEKU_ALLOW
+  // by name. Appended last.
+  'mcp__hiveku__social_post_strategy_review',
 ];
 
 /**

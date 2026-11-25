@@ -1024,8 +1024,8 @@ describe('what the extension writes and wires', () => {
       'the temporary environment writes are listed together, in the Claude Code plugin\'s ask list order',
     );
     assert.ok(
-      ask.trimEnd().endsWith("  'mcp__hiveku__project_vcs_temp_env_open',"),
-      'the newest ask rules, the temporary environment writes, go at the END',
+      ask.trimEnd().endsWith("  'mcp__hiveku__social_post_strategy_review',"),
+      'the newest ask rule, Review with AI of a social post, goes at the END',
     );
   });
 
