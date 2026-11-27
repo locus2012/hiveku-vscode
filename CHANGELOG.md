@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.100
+- **Creative and social guides say designs are exported in the Hiveku desktop app.** The extension's Creative and Social guides, role commands, setup playbooks and department registry now point to opening designs in Creative Studio in the Hiveku desktop app and choosing Download (PNG, JPG, WEBP, SVG, PDF or MP4) instead of the retired server export tools, and no longer say GIF export is missing.
+
 ## 0.91.99
 - **Review with AI of a social post always asks.** Claude Code in your project folders asks before social_post_strategy_review, which has the Social team score a saved post and uses the account's AI credit in your name, in every permission mode, as the Claude Code and Codex plugins do. Reading a stored review and who your posts were for needs no ask.
 
