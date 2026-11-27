@@ -107,26 +107,25 @@ size a platform needs, whether an existing design is stalled on client comments.
 renders, registers and deletes nothing, and it does not file the task; you do.
 
 (C) A full-profile or `marketing-design` session runs `/hiveku:design` (an editable,
-layered design project) or `/hiveku:media` (images, designs, video): the only lane that
-renders today. On the social key the design surface is read-and-publish, not create:
-`design_list` (most-recently-edited first, with `featuredImageUrl` and tags),
-`design_get` (the full canvas), `design_state_get` (the element summary; pass `page_id`
-on a multi-page carousel or you read page one), `design_templates_list`, and
-`design_publish_to_library`. No canvas write, no export, no comment write.
+layered design project) or `/hiveku:media` (images, designs, video). No server draws or
+exports a design: designs are exported in the Hiveku desktop app (Creative Studio,
+Download; Save to Media library keeps the file). On the social key the design surface
+is read only: `design_list` (most-recently-edited first, with `featuredImageUrl` and
+tags), `design_get` (the full canvas), `design_state_get` (the element summary; pass
+`page_id` on a multi-page carousel or you read page one), and `design_templates_list`.
+No canvas write, no export, no comment write.
 
 ## 4. Pickup: from the library into the post
 
 The asset reaches you one of two ways, and both end in a `media_assets` row:
-- The designer published it. `design_publish_to_library({ id, set_as_featured: true })`
-  renders one settled frame from the saved canvas (send no canvas), uploads the PNG and
-  creates a row tagged `creative-studio` + `published`, titled with the design's title
-  unless `title` was passed, returning `{ success, fileUrl, mediaAssetId, width, height }`.
-  When the design was left unpublished you may call it yourself from the social key,
-  once: it is CREATE, never sync, nothing dedupes, and a 504 after 90s carries no job
-  handle while the render may still land, so never retry or loop it. `set_as_featured`
-  must be a JSON boolean. The route takes `page_id`, `title` and `set_as_featured` only,
-  no tags and no task id, so the `social:<slug>` marker arrives in the title (ask for it
-  in the brief) or you stamp it after pickup.
+- The designer saved it from the desktop app. Designs are exported in the Hiveku desktop
+  app, never on Hiveku's servers: in Creative Studio, Download makes the file and Save to
+  Media library keeps it as a row tagged `creative-studio` and `export`, named after its
+  design. When the design was left unsaved, ask for it to be saved that way:
+  `design_publish_to_library` answers 410 `export_in_desktop_app` every time and draws
+  nothing, so never call, retry or loop it. The save takes no slug tag, so the
+  `social:<slug>` marker arrives in the design's title (ask for it in the brief) or you
+  stamp it after pickup.
 - It is already in the library. `media_library_list({ tags: 'creative-studio', limit: 20
   })` returns newest first (`created_at` descending, default 20, max 100); match the
   `social:<slug>` tag or the title. `search` matches title and original filename only,
@@ -156,8 +155,7 @@ Then, in order:
    composition per platform after overrides. Then `pm_tasks_comment` with the asset id
    and the post id, and `pm_tasks_complete`.
 
-Exports are not a pickup. `design_export_image` returns an S3 PNG URL and
-`design_export_mp4` an MP4 URL; neither returns a library id, so treat the URL as
+A URL is not a pickup. A file URL you are handed has no library id, so treat it as
 unregistered: `media_library_register_external_url({ file_url, title, tags, alt_text,
 width, height })` first, then attach by the returned id. A bare URL pasted into
 `media_urls` publishes once and is invisible to `usage_count`, to the asset dimension of
@@ -206,9 +204,10 @@ the only before that exists, and a generated or stock one is a fabricated result
 - Naming a `creative` domain. The call is rejected; the fifteen are in section 1.
 - Treating a chat turn as delivery. The deliverable is a library row with an id.
 - Marking the PM task done at brief time, or at chat time. Done means attached.
-- Retrying `design_publish_to_library` after a 504. Two renders, two rows.
-- Expecting `media_library_list({ tags })` to find the slug when the publish route
-  received no tags. Match the title, then stamp the tag with `media_update`.
+- Calling `design_publish_to_library` at all. It answers 410 `export_in_desktop_app`;
+  the designer saves the file from the desktop app.
+- Expecting `media_library_list({ tags })` to find the slug when the save carried no
+  slug tag. Match the title, then stamp the tag with `media_update`.
 - `media_update({ tags: ['social:x'] })` wiping `creative-studio`. Send the union.
 - Attaching an export URL by pasting it into `media_urls`. Register it, attach by id.
 - Reading `media_library_get` dimensions and skipping `social_post_validate`. The cap and

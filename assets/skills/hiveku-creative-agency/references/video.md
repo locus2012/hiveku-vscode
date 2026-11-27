@@ -24,8 +24,8 @@ Ask these in order. Stop at the first yes.
 
 **Q1. Is it type, layout, logo, brand card, price list, quote, stat, or countdown - anything typographic or
 geometric, where the value is that the client can edit it later?**
-**LANE 1, motion design.** Build it on the design canvas, render with `design_export_mp4`. No generation
-cost, and it stays layered and editable. This is the right lane far more often than people expect: most
+**LANE 1, motion design.** Build it on the design canvas; the person makes the MP4 with Download in the
+Hiveku desktop app's Creative Studio (2.5). No generation cost, and it stays layered and editable. This is the right lane far more often than people expect: most
 "social video" a retainer ships is text on brand color with a logo sting, not footage.
 
 **Q2. Does it need more than one shot - a sequence with a hook, a body, and a CTA?**
@@ -54,7 +54,7 @@ for products, team, premises, and location, are already on brand, and cost nothi
 
 | Lane | Tool that produces the file | Cost | Human approval | Editable after |
 |---|---|---|---|---|
-| 1. Motion design | `design_export_mp4` | none beyond render time | no (confirm the block) | yes, fully layered |
+| 1. Motion design | the person, with Download in the desktop app | none | no | yes, fully layered |
 | 2. Storyboard | approval itself starts the run | priced at create, billed on approval | YES, and the agent cannot give it | scene-level via the board |
 | 3. One clip | `marketing_generate_video` | metered, ~$0.10 per second (2-10s, ~$1 at the 10s default) | no, but confirm the spend | no, it is a flat file |
 
@@ -122,95 +122,50 @@ dashboard editor reads from the same column, so a blind overwrite silently destr
 changed since you last looked. Title, description, status, tags, featuredImageUrl, and artboard update
 independently. The body is capped at 10MB, so reference images by URL from the media library rather than
 inlining base64. `previewVideoUrl` sets the autoplay thumbnail and ONLY fires when `canvasData` is omitted,
-which makes it a second, separate call after the render, never a field tacked onto the canvas save.
+which makes it a second, separate call once the MP4 is in the library, never a field tacked onto the canvas save.
 
 Before any large or destructive edit, snapshot with `design_version_create({ id, versionName, changeSummary,
 isMilestone })`, using `isMilestone` for named save points such as "client-approved v1". The client can then
 roll back from the dashboard's Version History panel; `design_versions_list` shows every snapshot and
 `design_version_get` returns one snapshot in full, frozen canvas included. It costs nothing.
 
-### 2.4 Check frames before you render the movie
+### 2.4 Check the timeline before the person makes the movie
 
-`design_export_image({ id, canvas_json, width, height, frame })` flattens one frame to PNG through the
-same CanvasComposition the MP4 path uses, so `frame=0` matches what the dashboard editor would produce;
-set `frame` to capture a moment (at fps 30, `frame: 60` is two seconds in). `canvas_json`, `width` and
-`height` are REQUIRED - it does not render a stored design from its id alone, so pass the canvas you just
-wrote and the artboard's dimensions. Three single-frame exports - opening, midpoint, last frame - catch a
-mistimed entrance, a text overflow, or a layer stuck off-artboard in seconds instead of after a
-four-minute block. It is the cheap dry run for lane 1, and the frames are for LOOKING at: download each
-`imageUrl` and view it against the checklist in `references/self-review.md`.
+There is no server preview of a design any more, for agents either. Read the timing back with
+`design_state_get({ id })` - the root's `canvasAnimation` and each layer's `animation` - and check it the
+way `references/self-review.md` says: at fps 30, `frame: 60` is two seconds in, so work out where each
+entrance starts and lands, that nothing important waits behind another entrance, and that the last one
+lands by about 60 percent of `duration_ms` with the CTA held long enough to read. That catches a
+mistimed entrance or a layer stuck off-artboard before the person spends time on it. Then hand back the
+`dashboardUrl` and ask the person to play it in Creative Studio.
 
-### 2.5 The render, what to say while it blocks, and what to do when it dies
+### 2.5 The MP4 comes from the desktop app
 
-`design_export_mp4({ id, canvas_json, width, height, duration_seconds })` renders the design to MP4 (or GIF)
-via the Remotion worker. Pass the full canvas snapshot the user has been editing - layered Fabric JSON with
-the per-layer `animation` metadata. Three hard behaviors:
+Designs are exported in the Hiveku desktop app, never on Hiveku's servers. `design_export_mp4`,
+`design_export_image`, `design_publish_to_library` and `design_video_rerender` answer 410
+`export_in_desktop_app` every time and draw, store and charge nothing: tell the person what the error
+says, and never retry or loop them. The person opens the design in Creative Studio in the latest desktop
+app and chooses Download, which makes the MP4 on their computer from the design open there (have them
+reopen it after your changes):
 
-- **SYNCHRONOUS, blocks up to 280 seconds** (the route polls 180s, re-arms once for 60s if the worker
-  restarted, and stops at 270s; the tool waits 280s). Nothing else happens in the session while it runs.
-  No progress percentage mid-call and no cancel tool (`marketing_video_pipeline_status` and
-  `marketing_video_pipeline_cancel` are lane 2 only and do nothing here).
-- **Refuses early if the canvas has no objects.** Usually a symptom, not the bug: you passed the wrong
-  design id, or a `canvas_json` you built in memory and never saved. Run `design_state_get` and confirm the
-  canvas holds the layers you think it does.
-- **Renders the brand's custom fonts, and confesses when one did not load.** The account's
-  `brand_custom_fonts` rows with a `css_font_face` are attached to the job automatically; a font the
-  worker cannot use degrades that layer to the fallback stack and is reported as a line in the
-  response's `warnings`, never as a failed render. A 200 with a font warning is a brand-wrong video:
-  fix the font row (brand-and-assets reference, Part 3) and re-render.
-- **Returns `{ success, mp4Url, jobId, warnings? }`, and the job outlives the call.** A 504 or a dropped connection loses
-  the RESPONSE, not the render. `design_render_job_get({ job_id })` polls that job and returns `{ status,
-  progress, progressMessage, url, assetId, warnings, error, ... }` - and calling it ADVANCES the job (the
-  same pollAndAdvance the reconcile cron runs), so the clip can finish and register through the poll
-  itself. That makes it a WRITE in read clothing: it is no longer plugin-pre-approved, so the call may
-  prompt for permission. A refused or skipped poll loses nothing - the reconcile cron still finishes the
-  job on its own; the poll only tells you sooner. Only `completed`, `failed`, and `abandoned` are
-  terminal; keep checking in on anything else. Lost the id entirely? `design_render_jobs_list` lists the
-  account's render jobs - rows of `{ jobId, kind, status, progress, url, assetId, designProjectId,
-  billable, error }`, filterable by status / kind / design_project_id - and it is a plain read that
-  advances nothing.
+- by default every visible page of a multi-page design in one video (This page or Pick pages choose
+  fewer), with Cut, Fade, Slide left or Slide up between pages, each page for its own length;
+- the canvas's audio layers play in it at their start and volume (a muted one stays silent);
+  `design_audio_set` puts a voiceover or any other Media Library audio on the canvas first;
+- there is no GIF.
 
-Because it blocks, tell the user before you start, not after. Four things, one short message:
+Save to Media library then keeps the MP4 in the library as an upload titled after the design, with no
+tags; pick it up with `media_library_list({ media_type: 'video', search: '<design title>' })`. So prepare the design
+(`design_update`, the layer tools, `design_audio_set`), check it, and hand the export to the person. Keep
+the design inside a sensible window: past roughly 20 seconds or 1080p, shorten it, drop to 24 fps, or
+split it into two designs.
 
-1. What you are rendering and where it lands - design title, its `dashboardUrl`, destination platform and
-   aspect ratio.
-2. The exact spec: width, height, fps, duration in seconds.
-3. That the render is synchronous and can block for close to five minutes, during which the session can
-   do nothing else, with no progress readout to report partway.
-4. What happens next: register the file, set it as the design's preview, hand back both URLs.
+### 2.6 Template clips inside a design
 
-Then get a yes. It is not billable, but four minutes of a dead session earns a confirmation, and it is the
-last cheap moment to catch "actually make it square, not vertical".
-
-Keep the render inside the window. Frames are `fps x duration_seconds`; 30 seconds at 30 fps is 900 frames
-and is where timeouts start. Past roughly 20 seconds or 1080p, shorten it, drop to 24 fps, or split it into
-two designs.
-
-**The failure playbook - do not improvise at minute four.**
-
-1. On a timeout or dropped call, poll `design_render_job_get` with the `jobId` FIRST (no jobId in hand:
-   find it with `design_render_jobs_list`). A job still running, or already `completed` with a `url`,
-   means re-rendering now would duplicate work; ride the poll out. Read `warnings` on the finished job -
-   the worker's post-render notes are the closest thing to a review you get without viewing the file.
-2. Only when the job reads `failed` or `abandoned` (or no jobId ever came back) do you get ONE re-render,
-   and only after changing something: shorter duration, 24 fps, smaller artboard, or a split.
-3. A second failure ends the session's retry budget. Stop, `pm_tasks_create` with the design id, the spec
-   attempted, and both failures, and tell the client the render is escalated - not "rendering".
-
-### 2.6 Re-rendering a template clip inside a design
-
-`design_video_rerender({ id, template_id, props })` re-renders a single Remotion-template video clip with
-new prop values. It applies when a design contains a video element backed by a Remotion template: someone
-edits a slot, this re-runs the render, and the resulting MP4 swaps in place. It blocks up to 240 seconds
-(the tool waits 290s), and the same pre-render message and failure playbook apply. It is the one render
-that carries NO custom brand fonts - the worker's template lane takes no font manifest - so a template
-clip set in an uploaded family comes back in the fallback stack; say so rather than re-rendering.
-
-The trap: canvas position, scale, and rotation are preserved by the caller on update, not by the tool. Read
-`left`, `top`, `scaleX`, `scaleY`, and `angle` with `design_state_get` before the rerender and write them
-back in the `design_update` afterwards, or the clip returns at default position and size and the layout
-reads as broken. Use it for a one-slot change - new headline, new price, swapped product name - rather than
-rebuilding a working design.
+A motion-graphic template clip already on the canvas plays in the desktop's MP4 as it is. New slot
+values (a new headline, a new price) need a new clip, and no tool makes one for now:
+`design_video_rerender` answers 410 `export_in_desktop_app`. Say so rather than calling it; a working
+design is edited with its text and shape layers instead.
 
 ### 2.7 Voiceover on a design
 
@@ -367,8 +322,8 @@ the runs that died unwatched; `agent_inbox_get` reads one in full; `agent_inbox_
 once the result is registered or the retry is filed, and never does anything else. A canceled run files
 nothing (the person who canceled it was there). The item is visible on full and `marketing` keys; the
 `marketing-design` profile does not grant `agent_inbox_`, so on that key `marketing_video_pipeline_list`
-filtered by status is the equivalent sweep. The final render job's `warnings` (font degrades from the
-storyboard's own canvases included) live on `design_render_job_get` for the pipeline's `renderJobId`.
+filtered by status is the equivalent sweep. The final render job's `warnings` live on
+`design_render_job_get` for the pipeline's `renderJobId`.
 
 ---
 
@@ -433,30 +388,28 @@ why lane 2 exists.
 
 ## 5. Registering and attaching the finished asset
 
-Generated images and video clips auto-register. **Design exports and stock-photo URLs do NOT** - register
-those explicitly before attaching them anywhere.
+Generated images and video clips auto-register. **A design reaches the library only when the person saves
+it from the desktop app, and stock-photo URLs only when registered** - never attach one that is not there.
 
 **Lane 3** output auto-registers and returns a `media_asset_id`; nothing more is needed to make it
 attachable. `generate_image` and `generate_image_set` behave the same for stills. So does
 `design_voiceover_create` for narration MP3s - except the null-asset_id trap in 2.7.
 
-**Lane 1** output does NOT auto-register. An unregistered `design_export_mp4` file cannot be attached by id,
-so it cannot go on a post, into a collection, or into a report. Register it with
-`media_library_register_external_url` (or `marketing_media_register_external_url`), then `media_update` for
-a real name and tags, `media_folders_list` / `media_folder_create` to file it, and `media_collections_list`
-/ `media_collection_create` / `media_collection_add_item` to group a campaign's assets.
-`media_library_register_external_url_batch` covers several variants from one session. (A static PNG can
-skip the dance: `design_publish_to_library` renders and registers in one call - but it is CREATE, never
-sync, so a retry duplicates; see the canvas reference.)
+**Lane 1** output is made in the Hiveku desktop app: the person downloads it, and Save to Media library
+keeps it as a library row titled after its design (an MP4 carries no tags). Find it with
+`media_library_list({ media_type: 'video', search: '<design title>' })`; until it is there it cannot go on a
+post, into a collection, or into a report. Then `media_update` for a real name and tags,
+`media_folders_list` / `media_folder_create` to file it, and `media_collections_list` /
+`media_collection_create` / `media_collection_add_item` to group a campaign's assets.
 
-Then close the loop on the design: call `design_update` a second time with `previewVideoUrl` set and
-`canvasData` omitted, so the design autoplays in the gallery instead of showing a still. A
-`design_export_image` PNG makes a good `featuredImageUrl` and post cover, and needs registering too.
+Then close the loop on the design: call `design_update` a second time with `previewVideoUrl` set to the
+saved MP4's URL and `canvasData` omitted, so the design autoplays in the gallery instead of showing a
+still. A still the person saved the same way makes a good post cover.
 
 **Lane 2** output comes out of the pipeline as video clips, which the rule above says auto-register - but
 verify rather than assume: run `media_library_list` (or `marketing_media_list`) after the pipeline completes
 and confirm the asset is there before telling anyone it is. If it is not, register it the same way as
-lane 1.
+a hosted file (below).
 
 **Imported footage** comes in through `media_library_register_external_url`, `media_upload`, or
 `marketing_media_upload_base64`. Import is never a production credit.
@@ -468,8 +421,8 @@ accounts from `social_list_accounts`, or onto a post that already exists or is s
 trust the declared type over the URL extension, so always send them together; and on the update the
 lists REPLACE the post's media wholesale - send every URL the post should carry, not a delta, and
 replacing `media_urls` without `media_types` leaves the old types in place. A published or publishing
-post is edit-locked (400). The URL is the asset's `mp4_url` / `file_url` from the library, or a design
-export URL. The social lane's rules still apply - setting `scheduled_at` is publishing on a timer, and
+post is edit-locked (400). The URL is the asset's `mp4_url` / `file_url` from the library. The social
+lane's rules still apply - setting `scheduled_at` is publishing on a timer, and
 no tool can approve a post; cross-channel via `content_create`.
 Keep only what a person decided, in their words: the aspect ratio they chose or the animation style they
 signed off goes to the branding memory document quoted, with the design or storyboard id and the date
@@ -479,8 +432,9 @@ go to `pm_tasks_create`. `media_usage_get` says where an asset is
 used; `media_delete` refuses 409 `in_use` while it knows of a use - never force past it (see the
 brand-and-assets reference).
 
-Naming caution: `marketing_design_*` runs parallel to `design_*` (list, get, export_image, export_mp4,
-read-and-export only) and `marketing_media_*` parallel to `media_library_*`. Which set a session sees is a
+Naming caution: `marketing_design_*` runs parallel to `design_*` (list and get; its export_image and
+export_mp4 answer 410 like the `design_*` pair) and `marketing_media_*` parallel to `media_library_*`.
+Which set a session sees is a
 KEY-PROFILE question, not an account setting - the `marketing-design` profile grants both prefixes. Prefer
 `design_*` and `media_library_*`; a missing name means check the key's profile, and `list_departments` says
 which departments the ACCOUNT has enabled.
@@ -490,6 +444,8 @@ which departments the ACCOUNT has enabled.
 ## 6. The testimonial polish play (approved clip -> branded clip, live everywhere)
 
 The one lane-1 play that ships straight to a PUBLIC surface, so it carries the sharpest warning here.
+Testimonial videos are no longer made on Hiveku's servers, and the Hiveku desktop app makes them in a
+later update, so a NEW branded clip cannot be promoted from here today (step 3).
 
 1. `marketing_testimonials_list` - the moderation queue, and the ONLY way to obtain a testimonial id.
    NO MEDIA URL FOR ANYTHING UNAPPROVED, EVER: only approved rows expose playable media.
@@ -497,8 +453,11 @@ The one lane-1 play that ships straight to a PUBLIC surface, so it carries the s
    motion_graphic design whose canvas is one video layer, the recording registered by URL (no bytes
    copied, nothing billed, no render queued). Idempotent - `created: false` means the draft already
    existed and came back untouched. Hand back its `dashboard_url`.
-3. Trim, caption, and brand it on the canvas under the normal round-trip rules, then render with
-   `design_export_mp4` and keep the `jobId`.
+3. Trim, caption, and brand it on the canvas under the normal round-trip rules. Step 5 takes only a
+   COMPLETED server render job (`render_job_id`), and no server renders a design any more
+   (`design_export_mp4` answers 410 `export_in_desktop_app`): stop at the draft, hand back its
+   `dashboard_url`, and say the branded clip waits for the desktop app's testimonial video. Steps 4 and 5
+   apply only to a render job that completed before then.
 4. Confirm the render finished: `design_render_job_get` must read `completed`. An unfinished job, a still,
    a non-mp4, or another account's job is a 400 `render_job_invalid` at the next step.
 5. `marketing_testimonial_media_replace({ testimonial_id, render_job_id })` is **OUTWARD FACING AND
@@ -524,19 +483,18 @@ The one lane-1 play that ships straight to a PUBLIC surface, so it carries the s
   usable as exits), 6 ambient loops, and 6 easings, with per-layer delay, duration, distance, and exit
   timing. Rich, but fixed: a bezier path, a bespoke keyframe curve, or a scroll-driven effect still has
   no tool.
-- **No cancel and no mid-call progress for `design_export_mp4` or `design_video_rerender`** - but the
-  returned `jobId` plus `design_render_job_get` is the after-the-fact status and recovery path (2.5,
-  remembering the poll ADVANCES the job and may prompt), and `design_render_jobs_list` finds jobs whose
-  ids were lost. Lane 2 has its own `marketing_video_pipeline_status` and
-  `marketing_video_pipeline_cancel`.
+- **No server render of a design at all.** `design_export_mp4`, `design_export_image`,
+  `design_publish_to_library` and `design_video_rerender` answer 410 `export_in_desktop_app` every time:
+  the person makes the file with Download in the desktop app (2.5). Never retry or loop them. Lane 2 has
+  its own `marketing_video_pipeline_status` and `marketing_video_pipeline_cancel`, and
+  `design_render_job_get` / `design_render_jobs_list` follow AI video jobs.
 - **Storyboards are listable only as summaries.** `marketing_video_pipeline_list` returns status rows,
   never the storyboard document, and `marketing_storyboard_get` is by-id only - so the WHY of each board
   still lives in the memory ledger recorded at submit time (3.3, `references/memory-protocol.md`).
 - **No burned-in captions outside a storyboard.** `captions.style` is a storyboard field; animating your own
   text layers in a lane 1 design is not the same thing.
-- **No custom brand fonts in a template re-render.** `design_export_mp4`, `design_export_image`,
-  `design_publish_to_library` and the storyboard's final cut all carry the brand kit;
-  `design_video_rerender` submits a template job with no font manifest, so its clip falls back.
+- **No new template clip.** A motion-graphic template clip on the canvas plays as it is; new slot values
+  need a new clip, and no tool makes one for now (2.6).
 - **No `creative` domain.** `branding` is the visual lane on both `account_context_get` and
   `talk_to_department`; `customer_avatar`, `before_after_grid`, and `website_design` are the other valid
   visual-adjacent domains.
@@ -550,9 +508,10 @@ The one lane-1 play that ships straight to a PUBLIC surface, so it carries the s
 
 **Lane 1 (motion design):** `design_templates_list`, `design_create`, `design_state_get`, `design_get`,
 `design_update` (CAS via `expectedSectionsVersion` - canvas reference, Part 4), `design_version_create`,
-`design_export_image` (REQUIRES `id, canvas_json, width, height`), `design_export_mp4`,
-`design_video_rerender`, `design_from_testimonial`, `marketing_testimonial_media_replace`
-(outward-facing, irreversible).
+`design_audio_set`, `design_from_testimonial`, `marketing_testimonial_media_replace` (outward-facing,
+irreversible; a completed render job only). The MP4 itself: Download in the Hiveku desktop app. Retired
+on the server (410 `export_in_desktop_app`): `design_export_image`, `design_export_mp4`,
+`design_publish_to_library`, `design_video_rerender`.
 
 **Render jobs:** `design_render_job_get` (the poll ADVANCES the job and may prompt; a skipped poll loses
 nothing), `design_render_jobs_list` (plain read: `{ jobId, kind, status, progress, url, assetId,
@@ -579,7 +538,7 @@ links the spend).
 
 **Sourcing, registration and delivery:** `media_stock_video_search`, `media_library_list`,
 `media_folders_list`, `media_library_register_external_url` / `_batch`, `media_upload`, `media_update`,
-`design_publish_to_library` (PNG only; settled frame; never dedupes), `social_create_post` and
+`social_create_post` and
 `social_update_post` (`media_urls` + index-aligned `media_types`; the update replaces the whole list).
 
 **Persist and escalate:** memory write-back per `references/memory-protocol.md` (`memory_list` -> merge

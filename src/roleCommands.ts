@@ -373,9 +373,9 @@ VIDEO: EXPENSIVE, generate deliberately:
 - 429 \`video_quota_exhausted\` = platform capacity, resets overnight: schedule and move on, don't spin.
   A 504 loses the response, not the paid job: \`design_render_job_get({ job_id })\` with the returned
   \`render_job_id\` before any second spend.
-- Animated DESIGNS (text/layout/branded cards) are a different lane: \`design_export_mp4\` renders an
-  existing Creative Studio design, no generation cost. Prefer it for text-heavy promos. Brand custom
-  fonts render in exports; read \`warnings\` on the response for any font that degraded.
+- Animated DESIGNS (text/layout/branded cards) are a different lane: the person downloads a Creative
+  Studio design as MP4 in the Hiveku desktop app, no generation cost. Prefer it for text-heavy promos.
+  No server exports a design: \`design_export_mp4\` answers 410 export_in_desktop_app every time.
 
 USE THE RESULT:
 - Social post: \`social_create_post\` takes \`media_urls\` + \`media_types\` (index-aligned, one MIME per
@@ -916,15 +916,16 @@ ${DESIGN_RULES_POINTER}
    story. Start from an earlier design (\`design_list\`) only when the person names it. Then
    \`design_create({ title, designType, artboard, initialCanvasData })\` per artboard / variant. Text and
    logos are canvas LAYERS; never generate them into an image.
-4. Self-judge before hand-off: \`design_export_image({ id, canvas_json, width, height })\` → read
-   \`warnings\` (a font that degraded makes the PNG brand-wrong) → download the PNG → look at it → fix the
-   canvas with \`design_update({ id, canvasData, expectedSectionsVersion })\` (the token from
-   \`design_state_get\`; a 409 \`sections_version_conflict\` means re-read and re-apply your intent onto
-   \`serverCanvasData\`, never resend the same body) → export again. Two or three passes, then hand off.
-5. Finish: \`design_publish_to_library({ id, set_as_featured: true })\` once per finished design (the
-   thumbnail path; never retried blind), hand off every \`dashboardUrl\` (the client edits there), and
-   register exports the client will reuse with \`media_library_register_external_url({ file_url, title,
-   tags })\`.
+4. Check before hand-off: there is no server preview of a design. Read it back with
+   \`design_state_get\` → check hierarchy, margins, text that cannot fit its box, contrast and brand
+   tokens → fix the canvas with \`design_update({ id, canvasData, expectedSectionsVersion })\` (the token
+   from \`design_state_get\`; a 409 \`sections_version_conflict\` means re-read and re-apply your intent
+   onto \`serverCanvasData\`, never resend the same body) → read again. Two or three passes, then hand off.
+5. Finish in the desktop app: designs are exported in the Hiveku desktop app, never on Hiveku's servers.
+   Hand off every \`dashboardUrl\` and ask the person to open the design in Creative Studio in the latest
+   desktop app and choose Download (PNG, JPG, WEBP, SVG, PDF or MP4); Save to Media library then keeps
+   the file in the library. \`design_export_image\` and \`design_publish_to_library\` answer 410
+   export_in_desktop_app every time: never retry them.
 6. Attach: a finished creative goes onto the post with \`social_update_post({ post_id, media_urls,
    media_types })\` (index-aligned, one MIME per entry, replaces the post's whole media list; a
    published post is edit-locked) or on \`social_create_post\` at create time, under the social lane's own

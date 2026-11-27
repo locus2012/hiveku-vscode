@@ -90,8 +90,8 @@ references/creative-and-video.md, and in full in the creative skill
   before spending. `aspect_ratio` defaults to 9:16, which is the short-form frame; the
   clip auto-registers in the Media Library. Never retry a generation that succeeded.
 - **Motion graphics** (type, branded cards, stats, countdowns - a large share of what
-  retainers actually ship as "video"): a design project rendered with
-  `design_export_mp4`. No generation cost.
+  retainers actually ship as "video"): a design project the person downloads as MP4 from
+  the Hiveku desktop app's Creative Studio. No generation cost.
 - **Cover frames and companions**: `generate_image_set` batches up to 10 brand-aligned
   images in one call - per-prompt failures land in `errors[]` rather than failing the
   batch, successes auto-register as media assets, and the image quota is debited per

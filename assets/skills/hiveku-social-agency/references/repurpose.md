@@ -247,8 +247,8 @@ The batch is drafts; scheduling remains one post, one confirm (SKILL.md invarian
   before regenerating (the list route filters on `ai_generated`; a `source_type` filter is
   ignored), or every timeout is a double spend. Text on the image (the `quote-card`, the
   `data-point` card, carousel slides) is designed, not generated: brief it per
-  references/creative-handoff.md and pick it up from the library (`design_publish_to_library`,
-  or `media_library_list` by the `social:<slug>` tag).
+  references/creative-handoff.md and pick it up from the library once the designer has saved
+  it from the desktop app (`media_library_list` by the `social:<slug>` marker).
 - **The asset manifest.** Record each crop on the source item with
   `content_media_attach({ content_id, filename, file_url, alt_text, media_type: 'image' })`
   so the next repurpose pass finds them with `content_media_list` instead of rendering again.

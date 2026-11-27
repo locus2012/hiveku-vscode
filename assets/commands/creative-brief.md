@@ -79,7 +79,8 @@ lanes that render are `/hiveku:design` and `/hiveku:media` on a full-profile or
    without a library id is a claim, not an asset. Rendering happens in `/hiveku:design` (an
    editable, layered design) or `/hiveku:media` (images, designs, video) on a full-profile or
    `marketing-design` key; from the social key the surface is `design_list`, `design_get`,
-   `design_state_get`, `design_templates_list` and `design_publish_to_library`, no canvas write.
+   `design_state_get` and `design_templates_list`, no canvas write. No server draws or exports a
+   design: that happens in the Hiveku desktop app.
 4. STOP - show the header, the fenced brief, the task title and the exact create call, and get
    a yes: the board is read by the client's team and the Graphic Design persona hydrates from
    it. Then `pm_projects_list` (no name filter, and `project_type` is dropped by the proxy, so
@@ -100,15 +101,13 @@ lanes that render are `/hiveku:design` and `/hiveku:media` on a full-profile or
    (a) `design_list` (most-recently-edited first, with `featuredImageUrl` and tags; no tag
    filter, match the title or the slug yourself), then `design_get({ id })` or
    `design_state_get({ id, page_id })` to read the work (a multi-page carousel describes page
-   one unless `page_id` is passed). When the designer left it unpublished: STOP - one paid
-   render, one permanent S3 object, one row, nothing dedupes - then, once,
-   `design_publish_to_library({ id, set_as_featured: true, title })` with `set_as_featured` a
-   JSON boolean and `title` carrying the `social:<slug>` marker (the route takes `page_id`,
-   `title` and `set_as_featured` only, no tags); read `mediaAssetId`, `fileUrl`, `width`,
-   `height`. A 504 after 90s carries no job handle while the render may still land: never retry
-   or loop it - check the library first. (b) `media_library_list({ tags: "creative-studio",
-   limit: 20 })` newest first; match the `social:<slug>` tag or the title. An export is not a
-   pickup: `design_export_image` returns a URL and no library id, so a URL you are handed is
+   one unless `page_id` is passed). When the designer has not saved it to the library yet: ask
+   for it to be opened in Creative Studio in the latest Hiveku desktop app and saved with Save to
+   Media library. Designs are exported in the Hiveku desktop app, never on Hiveku's servers, and
+   `design_publish_to_library` answers 410 `export_in_desktop_app` every time: never call, retry
+   or loop it. (b) `media_library_list({ tags: "creative-studio", limit: 20 })` newest first; a
+   desktop save is named after its design and also tagged `export`, so match the `social:<slug>`
+   marker in the title or a tag. A URL you are handed is not a pickup: it is
    `media_library_register_external_url({ file_url, title, tags, alt_text, width, height })`
    first, then attach by the returned id, never pasted into `media_urls`. Then, in order:
    `media_library_get({ asset_id })` and check `width` and `height` against the brief's `size`;

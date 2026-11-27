@@ -119,8 +119,9 @@ the piece it came from, the set is persisted as DRAFTS, and no publish time is p
    <the fenced json brief: title, brief, job, key_message, channel, cta, format, owner, platform,
    size, persona with the avatar id, stage, hook_line, copy_on_image verbatim, media_role,
    deliver_to, tag "social:<slug>">, task_type: "design", priority: "high" })`. The card comes back
-   as a library row (`design_publish_to_library` by the designer, or `media_library_list({ tags:
-   "creative-studio" })` matched on the `social:<slug>` title or tag), read with `media_library_get`,
+   as a library row (the designer saves it with Save to Media library in the Hiveku desktop app;
+   find it with `media_library_list({ tags: "creative-studio" })` matched on the `social:<slug>`
+   title or tag), read with `media_library_get`,
    attached with `social_update_post({ post_id, media_asset_ids, media_alt_texts })` (the ids REPLACE
    the post's media list), and the task is `pm_tasks_complete` only then, never at brief time. Alt
    text on every item, 125 characters or fewer with any rendered text verbatim, on the post and on

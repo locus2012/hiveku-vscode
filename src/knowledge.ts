@@ -3662,7 +3662,7 @@ Generated media registers in the Media Library and attaches to posts/ads via its
   (9:16 or 16:9). **Always \`dry_run: true\` first** — it returns \`{ allowed, used, limit }\` (every paid
   plan: 1, 8 or 20 clips/month on Starter, Standard and Premium, ~$1/clip). Never re-generate a clip that succeeded. Image-to-video: pass a
   library still as \`reference_media_asset_id\` ("animate this"). Text-heavy/branded promo motion is the
-  FREE lane instead: \`marketing_design_export_mp4\` renders an existing Creative Studio design.
+  FREE lane instead: a Creative Studio design the person downloads as MP4 in the Hiveku desktop app.
 - The marketing Media Library and website-project assets (\`assets_upload\`) are SEPARATE stores —
   move files between them explicitly.
 - **Brand first:** \`account_context_get({ domain: "branding" })\` + \`brand_guide_get\` before ANY visual
@@ -3673,7 +3673,12 @@ Generated media registers in the Media Library and attaches to posts/ads via its
   and \`design_version_create\` before destructive edits.
 - **Video approval is a human dashboard gate:** \`marketing_storyboard_submit_for_approval\` then STOP. No
   tool approves, and assembling single clips around the gate is refused.
-- **Self-judge:** \`design_export_image\` → fetch the PNG → look at it → iterate before handing off.
+- **Designs are exported in the Hiveku desktop app, never on Hiveku's servers:** the person opens the
+  design in Creative Studio in the latest desktop app and chooses Download (PNG, JPG, WEBP, SVG, PDF or
+  MP4); Save to Media library then keeps the file in the library. \`design_export_image\`,
+  \`design_export_mp4\` and \`design_publish_to_library\` answer 410 export_in_desktop_app every time:
+  never retry them. Check a design by reading it back with \`design_state_get\`, then ask the person
+  to look at it in Creative Studio.
 
 ## Work tracking — PM tasks are REQUIRED, attributed to YOU (the authenticated user)
 **If the work isn't documented in a PM task, it didn't happen.** This applies to EVERY department you

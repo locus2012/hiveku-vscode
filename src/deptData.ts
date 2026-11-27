@@ -1025,10 +1025,14 @@ export const DEPARTMENTS: Department[] = [
       '(avatars, journeys, grids — NOT brand guides); relate with `*_link_to_avatar` (journeys + grids only). ' +
       'Brand guide: delete is SOFT (`brand_guide_delete`) then `brand_guide_purge` for hard; logo via `brand_guide_set_logo`. ' +
       'Designs: READ the canvas FIRST via `design_get` / `design_state_get` (design_update REPLACES the whole canvasData — ' +
-      'a blind overwrite otherwise); snapshot with `design_version_create` BEFORE destructive edits; export via ' +
-      '`design_export_image` / `design_export_mp4`. `design_update` takes `expectedSectionsVersion` (a 409 ' +
+      'a blind overwrite otherwise); snapshot with `design_version_create` BEFORE destructive edits. Designs are ' +
+      "exported in the Hiveku desktop app, never on Hiveku's servers: tell the person to open the design in Creative " +
+      'Studio in the latest desktop app and choose Download (PNG, JPG, WEBP, SVG, PDF or MP4); Save to Media library ' +
+      'then keeps the file in the library (`design_export_image`, `design_export_mp4` and `design_publish_to_library` ' +
+      'answer 410 export_in_desktop_app every time: never retry them). `design_update` takes `expectedSectionsVersion` (a 409 ' +
       'sections_version_conflict means re-read and re-apply); a `data:` thumbnail reads as `featuredImageUrl` null + ' +
-      '`featured_image_inline` true (a real one is `design_publish_to_library` with set_as_featured); client comments and ' +
+      '`featured_image_inline` true (a real thumbnail: Creative Studio in the Hiveku desktop app keeps one with ' +
+      '`design_thumbnail_set`); client comments and ' +
       'finished/failed video runs arrive as agent-ops inbox items (`agent_inbox_list` category design.comment / ' +
       'design.video_completed / design.video_failed). ' +
       'The four marketing entities (avatars/journeys/brand-guides/grids) are dumped full to `<dataset>/<item>.json`; ' +
