@@ -316,8 +316,11 @@ included number before adding it.
 
 ### 2.8 GBP fields: public immediately
 
-All ten `seo_gbp_*` writes preview first and publish on the identical call with
-`confirm: true`, straight onto the live listing. `seo_gbp_location_update` changes only the fields
+All ten served `seo_gbp_*` writes preview first and publish on the identical call with
+`confirm: true`, straight onto the live listing. The eleventh, `seo_gbp_google_updates_resolve`
+(keep or undo Google's own changes to the listing, not served until its MCP release), also previews
+first, and its confirm call repeats the identical call with `confirm: true` and the preview's
+`preview_hash`: a 409 `preview_changed` means the listing moved since the preview, so preview again. `seo_gbp_location_update` changes only the fields
 in `updates`, but a name, address, category or service-area edit (business type, cities served, address
 visibility) can trigger Google re-verification, which can
 pull the listing from Maps for days. `seo_gbp_services_update` REPLACES the whole menu: an item
@@ -380,7 +383,6 @@ wrong.
 | Coverage cap | `seo_gsc_index_coverage` | 50 URLs per call; report it as a sample |
 | Batch validation + checkpoint | `project_files_bulk_save` | Whole batch validated before any write; tree-replace checkpoints first or aborts with `checkpoint_failed` |
 | CMS validation gate | `cms_write_entry` | Live writes reject bad select values and dangling references with 422; drafts skip it |
-| Deploy smoke check | `deploy_site` | Requests the live URLs after the build; fails the deploy on 403, 404 or 5xx |
 | Container pinning | `seo_gtm_publish`, `seo_gtm_status` | The first container used on a connection is pinned; a different one 403s |
 | Fetch safety | `fetch_url` | Refuses private hosts, 5 hops maximum, 200KB body cap |
 
@@ -390,7 +392,8 @@ prompt the operator before these run, when the ask block is installed: `deploy_s
 `project_files_bulk_save`, `project_vcs_commit`, `marketing_report_send`, `seo_task_implement`,
 `seo_report_clear`, `seo_deliverable_delete`, `seo_connection_delete`, `seo_gsc_delete_sitemap`,
 `seo_gtm_install`, `seo_gtm_publish`, `seo_ga4_key_event_delete`,
-`seo_ga4_event_create_rule_delete` and all ten `seo_gbp_*` writes. It is a harness prompt, not
+`seo_ga4_event_create_rule_delete` and all eleven `seo_gbp_*` writes (`seo_gbp_google_updates_resolve`
+included, before its MCP release serves it). It is a harness prompt, not
 a server rail: it does not exist inside a workflow or another host, and `pages_update`,
 `cms_write_entry`, `project_redirects_deploy`, `seo_tracked_keyword_delete`,
 `seo_project_update`, `seo_track_keyword`, `seo_aeo_rankings_sync`, `seo_citations_audit` and

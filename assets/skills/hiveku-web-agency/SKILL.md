@@ -488,7 +488,7 @@ staged-versus-live model, what the Data API cannot do, and the Availability tabl
    the live domain - a 200 with the right content, verified, not assumed (from a terminal, send
    `-A 'Hiveku-Session/1.0'`; a 202 with an empty body, or a 403 with `x-hiveku-firewall`, is the
    edge firewall, not the site). A green build says nothing about what CloudFront serves
-   (`references/build-and-deploy.md`, post-deploy smoke verification).
+   (`references/build-and-deploy.md`, post-deploy smoke check: it only logs, and never fails a deploy).
 5. Domains and certs: `project_domains_list` + `project_domain_verify` on any recently
    attached domain - catch a cert or DNS issue before the client does.
 6. Redirects and routes: `project_files_validate_orphan_routes` after any page changes;
