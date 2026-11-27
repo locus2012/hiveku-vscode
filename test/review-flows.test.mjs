@@ -1028,13 +1028,29 @@ describe('what the extension writes and wires', () => {
       'the four held writes come after Review with AI of a social post',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__seo_gbp_google_updates_resolve',\n" +
           "  'mcp__hiveku__accounting_invoice_delete',\n" +
           "  'mcp__hiveku__accounting_invoice_void',\n" +
-          "  'mcp__hiveku__helpdesk_ticket_delete',",
+          "  'mcp__hiveku__helpdesk_ticket_delete',\n",
       ),
-      'the newest ask rules, the four held writes (HK-2194, HK-2177, HK-2179), go at the END',
+      'the four held writes (HK-2194, HK-2177, HK-2179) are listed together',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__helpdesk_ticket_delete'") < ask.indexOf("'mcp__hiveku__marketing_template_test_send'"),
+      'the seven catch-up asks come after the four held writes',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__marketing_template_test_send',\n" +
+          "  'mcp__hiveku__email_send_test',\n" +
+          "  'mcp__hiveku__accounting_invoice_send',\n" +
+          "  'mcp__hiveku__survey_send',\n" +
+          "  'mcp__hiveku__social_comment_reply_delete',\n" +
+          "  'mcp__hiveku__social_comment_reply_edit',\n" +
+          "  'mcp__hiveku__crm_contacts_import_file',",
+      ),
+      'the newest ask rules, the seven the other clients already ask before (HK-2031, HK-2293, HK-2143), go at the END',
     );
   });
 

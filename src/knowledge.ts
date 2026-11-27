@@ -1673,11 +1673,24 @@ const HIVEKU_ASK: string[] = [
   // draft invoice and voiding an invoice, neither of which can be undone (HK-2177), and deleting a done help desk ticket,
   // which no screen brings back (HK-2179). Each MCP description says ASK THE PERSON FIRST, so every call asks in every
   // mode, as on the Claude Code plugin's ask list and in the Codex plugin. Written before the tool server serves them.
-  // No read glob matches any of the four names. Appended last.
+  // No read glob matches any of the four names. Appended after Review with AI.
   'mcp__hiveku__seo_gbp_google_updates_resolve',
   'mcp__hiveku__accounting_invoice_delete',
   'mcp__hiveku__accounting_invoice_void',
   'mcp__hiveku__helpdesk_ticket_delete',
+  // Seven asks the Claude Code plugin, the Codex plugin and hiveku-sync already have (2026-11-27): the four sends of
+  // HK-2031 (a real test of a marketing template, a test email with the call's own words, an invoice and its pay link,
+  // and a survey or review request to up to 200 people), taking back or rewriting a public reply Hiveku sent to a
+  // Facebook or Instagram comment (HK-2293), and the contact file import of up to 100,000 contacts (HK-2143). Each is
+  // on one of the Claude Code plugin's hook maps, so its hook asks where it is installed; this rule asks in a folder
+  // without it and in every mode. No read glob matches any of the seven. Appended last.
+  'mcp__hiveku__marketing_template_test_send',
+  'mcp__hiveku__email_send_test',
+  'mcp__hiveku__accounting_invoice_send',
+  'mcp__hiveku__survey_send',
+  'mcp__hiveku__social_comment_reply_delete',
+  'mcp__hiveku__social_comment_reply_edit',
+  'mcp__hiveku__crm_contacts_import_file',
 ];
 
 /**
