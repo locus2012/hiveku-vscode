@@ -35,7 +35,7 @@ EXACT and an unknown key is ignored in silence: a design saved with the retired 
 
 **There is no server preview or export of a design any more.** Designs are drawn and exported in the
 Hiveku desktop app, never on Hiveku's servers: the person opens the design in Creative Studio in the
-latest desktop app and chooses Download (PNG, JPG, WEBP, SVG, PDF or MP4; there is no GIF), and Save to
+latest desktop app and chooses Download (PNG, JPG, WEBP, SVG, PDF or MP4), and Save to
 Media library then keeps the file in the library. `design_export_image`, `design_export_mp4`,
 `design_publish_to_library` and `design_video_rerender` answer 410 `export_in_desktop_app` every time and
 draw, store and charge nothing: never call, retry or loop them. Reason about a design from
@@ -121,7 +121,7 @@ design whose `canvasData` is `{ pages: [{ id, name, canvasData }] }`, read per p
 **4. Motion design.** Branded cards, type, and layout that move: same design project plus the section 1
 per-layer `animation` and the root `animation` block. No generation cost: the person makes the MP4 with
 Download in Creative Studio in the desktop app, on their own computer (every visible page in one video by
-default; there is no GIF), so prepare the design and hand the export to them. `design_voiceover_estimate`
+default), so prepare the design and hand the export to them. `design_voiceover_estimate`
 prices free; `design_voiceover_create` SPENDS MONEY (`references/video.md`).
 
 **5. Multi-scene video.** Reel, TikTok, promo, explainer, testimonial, listing tour - anything with more

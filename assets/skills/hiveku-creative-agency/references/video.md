@@ -151,8 +151,7 @@ reopen it after your changes):
 - by default every visible page of a multi-page design in one video (This page or Pick pages choose
   fewer), with Cut, Fade, Slide left or Slide up between pages, each page for its own length;
 - the canvas's audio layers play in it at their start and volume (a muted one stays silent);
-  `design_audio_set` puts a voiceover or any other Media Library audio on the canvas first;
-- there is no GIF.
+  `design_audio_set` puts a voiceover or any other Media Library audio on the canvas first.
 
 Save to Media library then keeps the MP4 in the library as an upload titled after the design, with no
 tags; pick it up with `media_library_list({ media_type: 'video', search: '<design title>' })`. So prepare the design

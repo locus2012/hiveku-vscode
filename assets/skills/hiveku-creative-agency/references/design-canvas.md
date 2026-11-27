@@ -295,7 +295,7 @@ hand the export to the person.
 Studio (have them reopen it after your changes): by default every visible page of a multi-page design in
 one video (This page or Pick pages choose fewer), with Cut, Fade, Slide left or Slide up between pages,
 each page for its own length. The canvas's audio layers play in it at their start and volume (a muted
-one stays silent). There is no GIF. A motion-graphic template clip already on the canvas plays as it
+one stays silent). A motion-graphic template clip already on the canvas plays as it
 is; new slot values need a new clip, and no tool makes one for now.
 
 **The library pickup.** A file the person saves with Save to Media library lands as a library row
