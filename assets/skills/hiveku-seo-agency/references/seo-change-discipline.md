@@ -380,7 +380,6 @@ wrong.
 | Coverage cap | `seo_gsc_index_coverage` | 50 URLs per call; report it as a sample |
 | Batch validation + checkpoint | `project_files_bulk_save` | Whole batch validated before any write; tree-replace checkpoints first or aborts with `checkpoint_failed` |
 | CMS validation gate | `cms_write_entry` | Live writes reject bad select values and dangling references with 422; drafts skip it |
-| Deploy smoke check | `deploy_site` | Requests the live URLs after the build; fails the deploy on 403, 404 or 5xx |
 | Container pinning | `seo_gtm_publish`, `seo_gtm_status` | The first container used on a connection is pinned; a different one 403s |
 | Fetch safety | `fetch_url` | Refuses private hosts, 5 hops maximum, 200KB body cap |
 

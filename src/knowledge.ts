@@ -1668,6 +1668,16 @@ const HIVEKU_ASK: string[] = [
   // social_post_strategy_review_get, is a GET the *_get glob approves, and social_analytics_who_for is on HIVEKU_ALLOW
   // by name. Appended last.
   'mcp__hiveku__social_post_strategy_review',
+  // The four writes held on MCP branches until the apps' ask lists name them (2026-11-27): keeping or undoing Google's
+  // own changes to a live Business Profile listing (HK-2194, seo_gbp_google_updates_resolve), deleting a never sent
+  // draft invoice and voiding an invoice, neither of which can be undone (HK-2177), and deleting a done help desk ticket,
+  // which no screen brings back (HK-2179). Each MCP description says ASK THE PERSON FIRST, so every call asks in every
+  // mode, as on the Claude Code plugin's ask list and in the Codex plugin. Written before the tool server serves them.
+  // No read glob matches any of the four names. Appended last.
+  'mcp__hiveku__seo_gbp_google_updates_resolve',
+  'mcp__hiveku__accounting_invoice_delete',
+  'mcp__hiveku__accounting_invoice_void',
+  'mcp__hiveku__helpdesk_ticket_delete',
 ];
 
 /**
@@ -3190,15 +3200,16 @@ is in \`.hiveku/project.json\` (\`project_id\`).
   with \`project_vcs_branch_restore\` within 30 days).
 - **A version is not live.** Deploy with \`deploy_site({ project_id, environment: "development" | "staging" | "production" })\`.
   Saving/committing reaches the instant Fly preview, but the Lambda environments update ONLY on \`deploy_site\`.
-- **Deploys are VERIFIED SERVING, and \`deploy_doctor\` is your diagnosis tool.** Every deploy ends
-  with a post-deploy smoke check: the pipeline requests the live URL through the CDN and FAILS the
-  deploy if real routes return 403/404/5xx — so a deploy that reports success was verified actually
-  serving. If a deploy fails with **"live site FAILS verification"**, the artifacts shipped but the
-  serving path is broken: run \`deploy_doctor({ project_id, environment })\` and relay its CRITICAL
-  findings' fix text verbatim — do NOT blindly retry (a retry reproduces the same result). Same rule
-  any time a deployed URL misbehaves (403/404/blank while "deploy said ready"): \`deploy_doctor\`
-  FIRST — it sees the CloudFront wiring, edge functions, and CDN-vs-origin diff that you cannot —
-  and NEVER propose deleting/recreating a Lambda or distribution without running it.
+- **A deploy that reports ready is not proof the site serves, and \`deploy_doctor\` is your diagnosis
+  tool.** After a deploy is ready, the homepage and a few routes are checked through the CDN in the
+  background, and that check only logs: it does not fail or undo the deploy, and it does not check
+  the images or files a page links. So load the pages and files you changed yourself (\`fetch_url\`).
+  When real routes on the live URL answer 403/404/5xx, the artifacts shipped but the serving path is
+  broken: run \`deploy_doctor({ project_id, environment })\` and relay its CRITICAL findings' fix
+  text verbatim — do NOT blindly retry (a retry reproduces the same result). Same rule any time a
+  deployed URL misbehaves (403/404/blank while "deploy said ready"): \`deploy_doctor\` FIRST — it
+  sees the CloudFront wiring, edge functions, and CDN-vs-origin diff that you cannot — and NEVER
+  propose deleting/recreating a Lambda or distribution without running it.
 - **Fetching a Hiveku-hosted site from this machine (curl, WebFetch, a script): identify as Hiveku.**
   The edge firewall refuses automated clients that do not: use \`curl -I <url>\` (HEAD is never
   challenged or blocked as an automated client) or \`curl -A "Hiveku-Session/1.0" <url>\`, and do not

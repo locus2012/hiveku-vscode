@@ -271,12 +271,15 @@ the route's `generateStaticParams` is wrong: fix the route. Otherwise:
    stored slug, a hidden order number). Write it yourself.
 
 
-## 6. Post-deploy smoke verification
+## 6. Post-deploy smoke check (it only logs)
 
-**Rule 30. The pipeline requests the deployed URLs through the CDN and REFUSES to report success when
-real routes do not serve.** Shipping artifacts is not serving pages. It catches 403-from-S3,
-404-everything, and 5xx, follows redirects, and retries with spacing because the CDN propagates for
-minutes.
+**Rule 30. A deploy that reports ready is not proof the site serves.** After it, the homepage and a
+few routes are checked through the CDN in the background, and that check only logs: it does not fail
+or undo the deploy, and it does not check the images or files a page links. Shipping artifacts is not
+serving pages, so load the pages and files you changed yourself (`fetch_url`, or a browser) before you
+call a deploy done. The check itself looks for 403-from-S3, 404-everything and 5xx, follows
+redirects, and retries with spacing because the CDN propagates for minutes; its result is in the
+server's logs, not in the deploy's answer.
 
 **Rule 31. A 401 counts as PASS.** An intentional auth gate is a served response. Do not "fix" a
 passing gated route.
@@ -297,11 +300,11 @@ allowed by its product token in Site > Hosting > Firewall (`references/firewall.
 that with a redeploy.
 
 **Rule 33. Page routes under reserved CDN prefixes are excluded from smoke** - they 403 by design, and
-counting them would fail every deploy that has one.
+counting them would flag every deploy that has one.
 
-**Rule 34. "Deployed, but the live site FAILS verification" means the artifacts shipped and the
-SERVING PATH is broken. Run `deploy_doctor`. Do NOT blindly retry the deploy** - a retry re-ships the
-same artifacts down the same broken path and costs another propagation window.
+**Rule 34. A ready deploy whose live URL answers 403/404/5xx on real routes means the artifacts
+shipped and the SERVING PATH is broken. Run `deploy_doctor`. Do NOT blindly retry the deploy** - a
+retry re-ships the same artifacts down the same broken path and costs another propagation window.
 
 
 ## 7. What is excluded from deployment

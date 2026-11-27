@@ -1024,8 +1024,17 @@ describe('what the extension writes and wires', () => {
       'the temporary environment writes are listed together, in the Claude Code plugin\'s ask list order',
     );
     assert.ok(
-      ask.trimEnd().endsWith("  'mcp__hiveku__social_post_strategy_review',"),
-      'the newest ask rule, Review with AI of a social post, goes at the END',
+      ask.indexOf("'mcp__hiveku__social_post_strategy_review'") < ask.indexOf("'mcp__hiveku__seo_gbp_google_updates_resolve'"),
+      'the four held writes come after Review with AI of a social post',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__seo_gbp_google_updates_resolve',\n" +
+          "  'mcp__hiveku__accounting_invoice_delete',\n" +
+          "  'mcp__hiveku__accounting_invoice_void',\n" +
+          "  'mcp__hiveku__helpdesk_ticket_delete',",
+      ),
+      'the newest ask rules, the four held writes (HK-2194, HK-2177, HK-2179), go at the END',
     );
   });
 
