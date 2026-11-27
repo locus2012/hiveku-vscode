@@ -392,11 +392,8 @@ approved by the human in the dashboard), then upload the exported file here.
 Standard families: \`brand_guide_update({ guide_id, font_heading_family, font_body_family })\`. Self-hosted
 fonts: \`brand_guide_font_create({ guide_id, font_family, display_name, weight?, style?, css_font_face })\` -
 \`css_font_face\` is the ONLY field the generated brand CSS emits; file URLs alone register a font no page
-ever loads. Uploaded fonts render in server exports (\`design_export_image\` / \`design_export_mp4\` /
-\`design_publish_to_library\` / the storyboard final render): a font that fails to load degrades to the
-fallback stack with a line in the export's \`warnings\`, never a failed render, so prove a new font with one
-export and read \`warnings\`. \`css_font_face\` is screened at the worker: only \`@font-face\` blocks with
-http(s) or \`data:\` font URLs survive. Written voice: \`brand_guide_update({ guide_id, brand_voice,
+ever loads. Designs are drawn and exported in the Hiveku desktop app, never on Hiveku's servers, so to
+prove a new font the person opens a design that uses it in Creative Studio there. Written voice: \`brand_guide_update({ guide_id, brand_voice,
 brand_personality })\`. Approved video narrators are read-only here:
 \`brand_guide_voiceovers_get({ brand_id? })\`.
 

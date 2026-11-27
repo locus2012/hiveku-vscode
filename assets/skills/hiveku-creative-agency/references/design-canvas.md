@@ -3,7 +3,7 @@
 This is the manual behind the creative skill's one-line advice about designs. It covers the Fabric.js
 object model a Hiveku design is made of, composing an artboard that reads at thumbnail size, the
 read-then-write round-trip that keeps a human's edits alive, versioning before destructive work, starting
-from the template library, artboard sizing per platform, exporting frames and MP4s, and the failure modes
+from the template library, artboard sizing per platform, exporting in the desktop app, and the failure modes
 that make a design silently wrong. Load it before you create, edit, restyle, animate, or export ANY
 design, and before you promise a client a carousel, a Reel, or a branded graphic.
 
@@ -22,11 +22,13 @@ Why it needs a manual: this is the one place where Claude and the human write to
   templates come back brand-substituted with the account's active brand guide. A blank artboard means you
   pick the colors and fonts, which means off-brand. An earlier design is the start only when the person
   names it.
-- **D5. Generated images and video clips auto-register. Design exports and stock-photo URLs do NOT -
-  register those explicitly before attaching them anywhere.**
-- **D6. Confirm before anything billable or blocking.** `design_export_mp4` blocks up to 280s and
-  `design_video_rerender` 240s; `generate_image`, `generate_image_set` and `media_upscale` cost money
-  (`media_image_quota` is the free quote first).
+- **D5. Generated images and video clips auto-register. A design reaches the library only when the
+  person saves it from the desktop app, and stock-photo URLs only when registered - never attach one
+  that is not there.** Designs are exported in the Hiveku desktop app, never on Hiveku's servers:
+  `design_export_image`, `design_export_mp4`, `design_publish_to_library` and `design_video_rerender`
+  answer 410 `export_in_desktop_app` every time (Part 6).
+- **D6. Confirm before anything billable.** `generate_image`, `generate_image_set` and `media_upscale`
+  cost money (`media_image_quota` is the free quote first).
 - **D7. THE AGENT CANNOT APPROVE: after creating, submit for approval and stop.** A multi-scene video is
   `marketing_storyboard_create`, not this lane, and it stops at the human gate.
 - **D8. One write path, one token.** `design_update` with `canvasData` REPLACES the canvas wholesale.
@@ -115,8 +117,8 @@ emphasis is a LATE ENTRANCE instead: `enter: 'pop'` (or `scale-in` with `easing:
 **Canvas-level motion** sits on the root: `"animation": { "duration_ms": 6000, "fps": 30, "loop": true }`.
 An old design may hold it as `_animation`, which design_state_get still reads as `canvasAnimation`;
 a save moves it to `animation`, the key the editor and the render read.
-This is what `design_export_mp4` renders and what `design_export_image`'s `frame` indexes into, via
-`frame = seconds * fps`: at `fps: 30`, frame 60 is 2.0s. **Every entrance and exit must land inside
+This is the timeline the desktop app's MP4 plays, at `frame = seconds * fps`: at `fps: 30`, frame 60
+is 2.0s. **Every entrance and exit must land inside
 `duration_ms`.** The last-firing layer's `enter_delay_ms + enter_duration_ms` should land by roughly 60
 percent of the runtime so the held frame can be read, and any `exit_at_ms + exit_duration_ms` must finish
 before the cut. A headline still fading in when the loop restarts is never read.
@@ -146,13 +148,9 @@ on a 1080 artboard) and make every gap a multiple of it.
 Tighten `lineHeight` as `fontSize` rises. Small positive `charSpacing` on all-caps labels, never on body.
 Two type sizes reads as deliberate; five reads as a document. Take `fontFamily` from a template or the
 brand guide. Google-hosted families ride the canvas's `fonts` list, and the account's CUSTOM brand fonts
-(`brand_custom_fonts` rows with a `css_font_face`) are attached to every server render automatically,
-matched on `font_family`, so an uploaded family renders in exports, MP4s and publishes. A family the
-worker cannot load - not on Google, no usable `css_font_face` - falls back to the default stack and is
-reported as a line in the export's `warnings`, never as a failed render. Check any new family with
-`design_export_image({ id, canvas_json, width, height, frame: 0 })` before shipping, and read
-`warnings` on that response: the fix for a font warning is the font row (`brand_guide_font_update`
-`css_font_face`, brand-and-assets Part 3), not the canvas.
+are the brand guide's font rows (brand-and-assets Part 3). Designs are drawn in the Hiveku desktop app,
+never on Hiveku's servers, so a new family is proven by the person opening a design that uses it in
+Creative Studio; a family that does not draw there is fixed on the font row, not the canvas.
 
 **Contrast.** 4.5:1 for body text against what is directly behind it; 3:1 for large text (roughly 24px+
 bold or 30px+ regular at these scales). Text over a photograph fails by default, because a photo is not
@@ -178,7 +176,8 @@ putting a logo on an artboard means setting an image layer's `src`, registered f
    `[embedded image]`, and a `data:` thumbnail comes back as `featuredImageUrl` null with
    `featured_image_inline: true` (`design_list` and `design_get` screen the thumbnail the same way, and
    the lists flag an inline `previewVideoUrl` as `preview_video_inline: true`). Null plus the flag means
-   a thumbnail exists only inline; the real URL is `design_publish_to_library` with `set_as_featured`.
+   a thumbnail exists only inline; Creative Studio in the Hiveku desktop app keeps a real one with
+   `design_thumbnail_set`.
    `design_get`'s `canvasData` is deliberately unscreened, because it is the blob you PATCH back.
 2. **Diff in your head.** Name every layer you will change, every layer you will keep, and every layer a
    HUMAN put there. Those are the ones you risk deleting.
@@ -276,70 +275,40 @@ The Part 3 margin is the floor; the safe area sits INSIDE it, never instead of i
 `canvasData` is usually one Fabric canvas - but the column also legally holds a multi-page shape:
 `{ pages: [{ id, name, canvasData }] }`, each page carrying its own full Fabric canvas while every page
 shares the design's artboard. Read one page with `design_state_get({ id, page_id })` - the response also
-carries the `pages` roster and `activePageId`, and an unknown `page_id` is a 400 naming the real pages -
-and publish one page with `design_publish_to_library({ id, page_id })`. `design_export_image` renders
-whatever `canvas_json` you pass, so for a pages-shaped design pass ONE page's inner `canvasData` (the
-object holding `objects[]`), never the pages wrapper. A five-slide carousel is therefore either one
+carries the `pages` roster and `activePageId`, and an unknown `page_id` is a 400 naming the real pages.
+The person picks the pages to export in the desktop app's Download. A five-slide carousel is therefore either one
 five-page design (slides share the artboard) or five sibling designs (independent version histories) -
 and a pages-shaped `canvasData` write follows the same round-trip and CAS rules as any canvas write.
 
-## Part 6: Exporting
+## Part 6: Exporting (in the desktop app)
 
-`design_export_image({ id, canvas_json, width, height, frame? })` flattens a design to a PNG through the
-Remotion worker, using the same CanvasComposition the MP4 path uses, so `frame: 0` matches what
-`canvas.toDataURL` produces in the dashboard editor. **`canvas_json`, `width` and `height` are REQUIRED -
-it does not render a stored design from its id alone.** Pass the canvas you just wrote (or `design_get`'s
-`canvasData`) plus the artboard's dimensions; the `id` is for audit and tenancy. It returns `imageUrl`
-(an S3 PNG URL) plus `jobId`, runs ~5-15s with a 90s budget, and refuses early on an empty canvas. For a
-motion design, `frame` captures a moment: at `fps: 30`, `frame: 60` is 2s in. **That makes `frame` your
-cheap preview:** before an MP4, export two or three frames across the timeline (0, 45, 120) and check
-that the stagger reads and nothing is occluded mid-flight. Then LOOK at the PNG - download it, view it,
-and judge it against the checklist in `references/self-review.md` before anything ships. The full
-response is `{ success, imageUrl, jobId, warnings? }`: `warnings` carries the worker's notes, and since
-2026-09-02 that includes every custom brand font that could not load and fell back (brand-and-assets
-Part 3). A success with a font warning is a brand-wrong PNG; fix the font row and re-export. Budgets:
-the route polls 60s and re-arms once for 25s inside a 95s ceiling, and the tool waits 100s.
+Designs are exported in the Hiveku desktop app, never on Hiveku's servers. The person opens the design
+in Creative Studio in the latest desktop app and chooses Download (PNG, JPG, WEBP, SVG, PDF or MP4); Save
+to Media library then keeps the file in the library. Nothing here takes the canvas any more:
+`design_export_image`, `design_export_mp4`, `design_publish_to_library` and `design_video_rerender` (and
+the `marketing_design_export_*` pair) answer 410 `export_in_desktop_app` every time and draw, store and
+charge nothing. Tell the person what the error says, and never retry or loop them. So prepare the design
+(`design_update`, the layer tools, `design_audio_set`), check it against `references/self-review.md`, and
+hand the export to the person.
 
-`design_export_mp4` renders a motion design to MP4 or GIF. Pass the full `canvas_json` snapshot the user
-has been editing, with per-layer `animation` metadata; the worker uses the same animation vocabulary as
-the editor, so the output matches the in-browser preview exactly. It is SYNCHRONOUS (the route polls
-180s and re-arms once for 60s inside a 270s ceiling; the tool waits 280s) and refuses early if the
-canvas has no objects. The social lane's call shape is
-`design_export_mp4({ id, canvas_json, width, height, duration_seconds })`. Confirm first and say it can
-take close to five minutes. It returns `{ success, mp4Url, jobId, warnings? }` - read `warnings` for
-font degrades here too - and the job outlives the call: on a timeout or
-dropped connection, poll `design_render_job_get({ job_id })` before re-rendering - the poll itself
-ADVANCES the job (a write in read clothing, so it can prompt for permission; a refused poll loses
-nothing, the reconcile cron finishes jobs on its own), and only `completed`, `failed`, and `abandoned`
-are terminal. A job id you lost is findable with `design_render_jobs_list`, a plain read that advances
-nothing (full failure playbook in the video reference).
-`design_video_rerender({ id, template_id, props })` re-renders one Remotion-template
-clip inside a design and swaps the MP4 in place; it blocks up to 240s (the tool waits 290s), and it is
-the one render that does NOT carry custom brand fonts - the worker's template lane takes no font
-manifest, so a template clip set in an uploaded family renders in the fallback stack.
+**The desktop's MP4.** Download makes it on the person's computer from the design open in Creative
+Studio (have them reopen it after your changes): by default every visible page of a multi-page design in
+one video (This page or Pick pages choose fewer), with Cut, Fade, Slide left or Slide up between pages,
+each page for its own length. The canvas's audio layers play in it at their start and volume (a muted
+one stays silent). A motion-graphic template clip already on the canvas plays as it
+is; new slot values need a new clip, and no tool makes one for now.
 
-**Then register the output.** Generated images and video clips auto-register. Design exports and
-stock-photo URLs do NOT - register those explicitly before attaching them anywhere. Use
-`media_library_register_external_url` for one file or `media_library_register_external_url_batch` for a
-carousel's worth in one call. An unregistered export has no media asset id, cannot be attached by id
-downstream, and the URL in your hand is its only handle.
+**The library pickup.** A file the person saves with Save to Media library lands as a library row
+titled after its design. A picture is tagged `creative-studio` and `export`, with the design, the page
+and the saved version in its `ai_metadata` (`design_export_save` is that door): find it with
+`media_library_list({ tags: 'export', search: '<design title>' })`. An MP4 is an upload with no tags:
+find it with `media_library_list({ media_type: 'video', search: '<design title>' })`. Its id and `file_url` are what a
+post, an email or a page attaches. Each save is a new row, so check the library before asking for
+another. Stock-photo URLs still need `media_library_register_external_url` (or `_batch` for a
+carousel's worth) before they can be attached by id.
 
-**For a static PNG there is a one-call alternative:** `design_publish_to_library` reads the design's
-canvas STRAIGHT FROM THE DB (send no canvas_json), renders THE SETTLED FRAME - after enter animations
-finish, which is frame 0 only for a design with no animation - uploads the PNG to the account's S3 media
-path, and creates the library row (tagged creative-studio + published), returning `fileUrl` and
-`mediaAssetId` in one shot. For a multi-page design, `page_id` picks the page (omitted = first page).
-**`set_as_featured: true` is THE thumbnail path:** nothing sets `featuredImageUrl` automatically, so an
-agent-created design has NO gallery thumbnail until this flag points it at the published PNG (or a
-metadata `design_update` sets one by hand). The render can succeed while that one extra write fails: a
-`featured_image_error` on the success payload means the PNG and library row are real and only the
-thumbnail write is not - report it, never re-publish for it. TREAT THE TOOL AS CREATE, NEVER AS SYNC:
-nothing dedupes, so publishing the same design twice leaves two S3 objects and two library entries, and
-a retry after its 504 timeout duplicates the same way (the worker may still finish and orphan a still).
-One publish per finished design, and check `media_library_list` before retrying a timeout (the route's
-ceiling is 120s and the tool waits 130s). It renders with the brand's custom fonts like the exports do
-and reports a degrade the same way, on `warnings`. It does not cover MP4s - a motion render still goes
-through export-then-register.
+**The list picture.** `featuredImageUrl` is not set automatically by your writes: Creative Studio in
+the Hiveku desktop app keeps a design's list picture with `design_thumbnail_set`.
 
 ## Part 7: Failure modes
 
@@ -352,27 +321,22 @@ through export-then-register.
   design renders static while every call reports success. Rewrite into the Part 2 shape on sight - and
   remember the whole `animation` object is silent-on-error: an unknown key or enum value is a no-motion,
   not a 400.
-- **A `design_export_image` call without `canvas_json`, `width` and `height` is a refusal, not a render.**
-  The tool never renders a stored design from its id alone; `design_publish_to_library` is the call that
-  reads the DB.
-- **`featuredImageUrl` is never set automatically.** An agent-created design shows no gallery thumbnail
-  until `design_publish_to_library({ id, set_as_featured: true })` or a metadata `design_update` sets one.
+- **`featuredImageUrl` is never set automatically by your writes.** Creative Studio in the Hiveku
+  desktop app keeps a design's list picture with `design_thumbnail_set`.
 - **Null plus `featured_image_inline: true` is not a missing thumbnail.** The dashboard editor stores a
   multi-MB `data:` snapshot in `featured_image_url`; the reads screen it whole. A metadata `design_update`
-  echoing that null back would clear the editor's snapshot - the honest move is the publish with
-  `set_as_featured`, which replaces it with a real URL.
-- **A font warning on a 200 is a brand-wrong render.** Custom fonts degrade to the fallback stack and
-  say so only in `warnings`; nothing about the status changes. Read it on every export and publish.
+  echoing that null back would clear the editor's snapshot - leave it.
 - **A 409 `sections_version_conflict` is a save, not a failure.** The CAS token did its job: someone else
   wrote first. Merge onto the returned `serverCanvasData` and resend with the returned `serverVersion` -
   resending the original payload is the data loss the 409 prevented.
-- **Exports do not auto-register** (Part 6). The most common way a finished asset becomes unattachable.
+- **A 410 `export_in_desktop_app` is the answer, not an outage** (Part 6). The server export tools
+  answer it every time; hand the export to the person and never retry or loop them.
 - **`design_*` versus `marketing_design_*`.** A parallel naming exists (`marketing_design_list`,
   `marketing_design_get`, `marketing_design_export_image`, `marketing_design_export_mp4`, and
   `marketing_media_list` / `_get` / `_folders` / `_register_external_url` / `_upload_base64`). Which set a
   session sees is a KEY-PROFILE question, not an account setting - the `marketing-design` profile grants
   both the `design_` and `marketing_` prefixes, so a missing name means check the key's profile. Prefer
-  `design_*`; the parallel design set is read and export only.
+  `design_*`; the parallel design set is read only (its export tools answer 410 too).
 - **`stock_photos_download` is the WEBSITE-PROJECT lane only** (`{ url, project_id, save_path }`, into that
   project's S3 assets, NOT the Media Library), so it cannot get a photo onto a canvas. `stock_photos_search`
   SAVES NOTHING. The canvas path is search, `media_library_register_external_url` on the returned `url`,
@@ -394,13 +358,13 @@ through export-then-register.
 5. Keep slide-invariant layers byte-identical across all five (same margin, `fontSize`, logo `left`/`top`,
    background): a carousel reads as a set only if the frame does not move. Slide 1 carries the hook alone
    and earns the swipe, slides 2 to 4 one idea each, slide 5 one CTA.
-6. `design_export_image({ id, canvas_json, width: 1080, height: 1350, frame: 0 })` per slide, each with
-   that slide's own canvas as `canvas_json`, look at all five together at thumbnail size, then
-   `media_library_register_external_url_batch` in slide order (or one `design_publish_to_library` per
-   finished slide - once each, it never dedupes).
-7. Hand back the five `dashboardUrl`s in slide order. Handoff to the social lane is `social_create_post`
-   with the published `fileUrl`s as `media_urls` in that order plus an index-aligned `media_types`
-   (`image/png` each), under that lane's confirm rules; onto a post that is already drafted or
+6. Read each slide back with `design_state_get` and check it against `references/self-review.md`; the
+   slide-invariant layers must match across all five.
+7. Hand back the five `dashboardUrl`s in slide order and ask the person to look at them together in
+   Creative Studio, then to Download them or Save them to the Media library from the desktop app. Pick
+   saved slides up with `media_library_list({ tags: 'export', search: '<carousel title>' })`. Handoff to
+   the social lane is `social_create_post` with the saved files' URLs as `media_urls` in slide order plus
+   an index-aligned `media_types`, under that lane's confirm rules; onto a post that is already drafted or
    scheduled, `social_update_post({ post_id, media_urls, media_types })` - it replaces the post's whole
    media list, so send every URL, and a published post is edit-locked (400).
 
@@ -419,9 +383,9 @@ through export-then-register.
    `media_library_register_external_url` or `media_upload` first if needed, and recompute `scaleX`/`scaleY`
    for its new intrinsic size.
 6. **Re-check contrast.** The new palette will have broken at least one pairing. Fix it, then
-   `design_update({ id, canvasData, expectedSectionsVersion })`,
-   `design_export_image({ id, canvas_json, width, height, frame: 0 })` with the canvas you just wrote,
-   and hand back the `dashboardUrl` with the before and after.
+   `design_update({ id, canvasData, expectedSectionsVersion })`, read it back with `design_state_get`,
+   and hand back the `dashboardUrl` with the before and after (the `Pre-rebrand` version is the before)
+   for the person to look at in Creative Studio.
 
 ### Play C: animate a static design for a Reel
 
@@ -441,14 +405,15 @@ through export-then-register.
 4. Root: `animation: { duration_ms: 6000, fps: 30, loop: true }`. Verify the last layer's
    `enter_delay_ms + enter_duration_ms` lands by about 3.5s so the finished frame holds before the loop
    restarts.
-5. Preview cheaply with `design_export_image({ id, canvas_json, width: 1080, height: 1920, frame: 45 })`
-   (1.5s at 30fps) and the same call at `frame: 120` (4s), then
-   `design_update({ id, canvasData, expectedSectionsVersion })`.
-6. **Confirm, then render.** `design_export_mp4({ id, canvas_json, width: 1080, height: 1920,
-   duration_seconds: 6 })`. Say it blocks up to 240s before you start.
-7. `media_library_register_external_url` on the MP4. It did not auto-register. Optional autoplay
-   thumbnail: a SECOND `design_update({ id, previewVideoUrl })` with NO `canvasData`. Hand back the
-   `dashboardUrl`.
+5. `design_update({ id, canvasData, expectedSectionsVersion })`, then read the timing back with
+   `design_state_get` (`canvasAnimation` and each layer's `animation`) and check it as
+   `references/self-review.md` says: at 30fps, 1.5s is frame 45 and 4s is frame 120.
+6. **Hand the MP4 to the person.** Hand back the `dashboardUrl`: they play it in Creative Studio in the
+   desktop app and make the MP4 with Download, on their own computer; Save to Media library keeps it in
+   the library. Pick it up with `media_library_list({ media_type: 'video', search: '<design title>' })`
+   (a saved MP4 carries no tags).
+7. Optional autoplay thumbnail, once the MP4 is in the library: a SECOND
+   `design_update({ id, previewVideoUrl })` with NO `canvasData`.
 8. If the client described a multi-shot Reel with voiceover, b-roll, and scene transitions, this is the
    wrong lane: `marketing_storyboard_create` (exactly one of `template_id` plus `substitutions`, or a
    hand-authored `storyboard`), read back with `marketing_storyboard_get`, fixed with
@@ -469,12 +434,11 @@ there is no design_delete), `design_create`, `design_list`, `design_templates_li
 `design_comments_list`, `design_comment_resolve`, `agent_inbox_list` (category `design.comment` is the
 ears; full and `marketing` keys only), `agent_inbox_resolve` (closes the row, nothing more).
 
-**Export and publish:** `design_export_image` (REQUIRES `id, canvas_json, width, height`; optional
-`frame`, `fps`, `duration_frames`; returns `imageUrl` + `jobId` + `warnings?`), `design_export_mp4`
-(`mp4Url` + `jobId` + `warnings?`), `design_video_rerender` (no custom fonts), `design_render_job_get`
-(polling ADVANCES the job - video reference), `design_render_jobs_list` (plain read of render jobs;
-advances nothing), `design_publish_to_library` (`page_id`, `set_as_featured`; settled frame; never
-dedupes; `warnings?`).
+**Export:** in the Hiveku desktop app (Creative Studio, Download; Save to Media library), never here.
+Retired on the server, 410 `export_in_desktop_app` every time: `design_export_image`, `design_export_mp4`,
+`design_publish_to_library`, `design_video_rerender`. The library door the desktop uses is
+`design_export_save`; the list picture is `design_thumbnail_set`. AI video jobs: `design_render_job_get`
+(polling ADVANCES the job - video reference), `design_render_jobs_list` (plain read; advances nothing).
 
 **Registration, libraries and delivery:** `media_library_register_external_url` / `_batch`,
 `media_upload`, `media_import_url`, `media_library_list`, `media_update`, `social_create_post` and
@@ -487,5 +451,5 @@ dedupes; `warnings?`).
 `marketing_storyboard_update`, `marketing_storyboard_set_look`,
 `marketing_storyboard_submit_for_approval` (then STOP - the agent cannot approve).
 
-**Companion protocols:** the see-and-judge loop is `references/self-review.md`; memory write-back is
+**Companion protocols:** the check-and-hand-off loop is `references/self-review.md`; memory write-back is
 `references/memory-protocol.md`.

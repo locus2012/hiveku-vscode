@@ -384,9 +384,10 @@ tag: 'social:<slug>' }` travels on one of three carriers: (A) `pm_tasks_create({
 title: 'CREATIVE: <platform> <format> - <title>', description: <the fenced brief>, task_type:
 'design' })`, the default - the board sees it, the Graphic Design persona on its next hydration;
 (B) the read-only `hiveku-creative-analyst` sub-agent for the questions before a brief; (C) a
-full-profile or marketing-design session running /hiveku:design or /hiveku:media, the only lane
-that renders. Pickup: `design_publish_to_library({ id })` or `media_library_list({ tags:
-'creative-studio' })` -> `media_library_get` -> `media_asset_ids` on create or
+full-profile or marketing-design session running /hiveku:design or /hiveku:media; the design
+itself is exported in the Hiveku desktop app, never on a server. Pickup, once the designer has
+saved it there: `media_library_list({ tags: 'creative-studio' })` -> `media_library_get` ->
+`media_asset_ids` on create or
 `social_update_post`, then `media_update` the alt text and `pm_tasks_complete`. Depth:
 references/creative-handoff.md. Command: /hiveku:creative-brief.
 

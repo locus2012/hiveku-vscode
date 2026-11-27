@@ -95,7 +95,8 @@ to 100 at once. `stock_photos_download` is the website-project lane and needs `{
 save_path }`; it does not touch the media library. Verify with `media_library_list` and reference
 library assets - never hotlink inline external URLs. For text-heavy or branded graphics (quote
 cards, carousels, promo tiles) use the Creative Studio lane instead - `design_templates_list` →
-`design_create` → `design_export_image` - it has no per-image generation cost. Full media
+`design_create`, then the person exports it with Download in the Hiveku desktop app's Creative
+Studio (designs are never exported on Hiveku's servers) - it has no per-image generation cost. Full media
 procedure: `/hiveku:media`.
 
 ## Deleting and auditing assets

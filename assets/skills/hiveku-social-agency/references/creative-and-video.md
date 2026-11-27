@@ -16,8 +16,9 @@ name, the brand guide by name (`brand_guide_list`, `brand_guide_get`,
 `brand_guide_create`, `brand_guide_update` and the logo, font and voiceover reads;
 never `brand_guide_delete` or `brand_guide_purge`), and five design tools by name:
 `design_list`, `design_get`, `design_state_get`, `design_templates_list`,
-`design_publish_to_library`. It does NOT grant the `marketing_` prefix, the rest of
-`design_`, or any render. So on a social-scoped key:
+`design_publish_to_library` (which answers 410 `export_in_desktop_app` every time: designs
+are exported in the Hiveku desktop app, never on Hiveku's servers). It does NOT grant the
+`marketing_` prefix, the rest of `design_`, or any render. So on a social-scoped key:
 - Library reads/writes use the `media_` names: `media_library_list` (filters:
   media_type, tags, folder_id, collection_id, source_type, ai_generated, search),
   `media_folders_list` (hierarchy + asset count per folder), `media_library_get` (one
@@ -33,16 +34,17 @@ never `brand_guide_delete` or `brand_guide_purge`), and five design tools by nam
   Use whichever family the session's tool list actually shows; on a full-profile key
   both work.
 - The design pickup is real and read-only: `design_list` and `design_get` show what the
-  designer has made, `design_state_get` its current canvas state,
-  `design_templates_list` the template library, and
-  `design_publish_to_library({ id, set_as_featured })` lands a finished design as a
-  `media_assets` row you can attach. You cannot create, edit, version, or export a
-  design from this key.
+  designer has made, `design_state_get` its current canvas state, and
+  `design_templates_list` the template library. A finished design becomes a
+  `media_assets` row you can attach when the designer saves it from the desktop app's
+  Creative Studio (Save to Media library: a picture is tagged `creative-studio` and
+  `export`; an MP4 has no tags, so search it by the design's title). You
+  cannot create, edit, version, or export a design from this key, and no key exports one
+  on a server any more.
 - The video pipeline (`marketing_storyboard_*`, `marketing_generate_video`,
-  `marketing_video_pipeline_status`) and the design exports (`design_export_image`,
-  `design_export_mp4`) are NOT reachable from a social-scoped key, by decision:
-  exports are paid renders that register nothing in the library, and the designer
-  department owns rendering. When a lane below is invisible in this session, that is
+  `marketing_video_pipeline_status`) is NOT reachable from a social-scoped key, by
+  decision, and the server design exports (`design_export_image`, `design_export_mp4`)
+  answer 410 `export_in_desktop_app` on every key. When a lane below is invisible in this session, that is
   why. The route is the handoff in references/creative-handoff.md: file the brief with
   `pm_tasks_create` (titled `CREATIVE: <platform> <format> - <title>`; the designer
   agent reads it on its next turn and humans see it on the board), ask the read-only
@@ -61,9 +63,9 @@ never `brand_guide_delete` or `brand_guide_purge`), and five design tools by nam
   consistent and respects the brand kit.
 - Designed cards (quote cards, data-point cards, carousels with text on the slides)
   are the designer's: `generate_image` cannot render reliable text. Brief them per
-  references/creative-handoff.md and pick the result up with
-  `design_publish_to_library` or by polling `media_library_list({ tags:
-  'creative-studio' })` for the `social:<slug>` tag the brief asked for.
+  references/creative-handoff.md and pick the result up, once the designer has saved it
+  from the desktop app, with `media_library_list({ tags: 'creative-studio' })` matched on
+  the `social:<slug>` marker the brief asked for.
 - Stock, when the library has nothing: `stock_photos_search` searches Unsplash +
   Pexels and returns { url, thumbnail, photographer, source, attribution }; pull the
   chosen one in with `stock_photos_download`. Keep the attribution when the license
@@ -91,8 +93,7 @@ never `brand_guide_delete` or `brand_guide_purge`), and five design tools by nam
 Two ways to put media on a post, and both work on `social_create_post` AND
 `social_update_post`:
 - `media_asset_ids`: Media Library ids from `media_library_list` / `media_library_get`
-  (or the id `generate_image`, `generate_image_set` and `design_publish_to_library`
-  return). The server resolves each id into URL, type, alt text and dimensions and
+  (or the id `generate_image` and `generate_image_set` return). The server resolves each id into URL, type, alt text and dimensions and
   keeps the ids on the row (read back as `media_asset_ids` on `social_get_post`).
   Prefer this: the alt text written with `media_update` rides along, the asset's usage
   is recorded when the post publishes, and a wrong id is a 400 instead of a post with a
@@ -153,10 +154,10 @@ social key never sees them; the handoff is references/creative-handoff.md.)
   an existing still by passing it as `reference_media_asset_id`. The clip
   auto-registers, so its asset id attaches through `media_asset_ids`.
 - MOTION GRAPHICS (text/layout/branded cards, no generation cost): built in Creative
-  Studio and rendered with `design_export_mp4({ id, canvas_json, width, height,
-  duration_seconds })` by the designer or a full-profile session. An export registers
-  nothing: the social session picks it up only after `design_publish_to_library` or,
-  for a raw export URL, `media_library_register_external_url`.
+  Studio by the designer or a full-profile session; the MP4 is made with Download in the
+  Hiveku desktop app, never on a server. The social session picks it up once it is
+  saved to the Media library, or, for a raw file URL, after
+  `media_library_register_external_url`.
 
 Client-supplied or agency-produced footage still comes in through
 `media_library_register_external_url` - that is the import path, not the only video
