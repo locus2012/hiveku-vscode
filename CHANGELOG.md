@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.91.101
+- **Four more Hiveku writes always ask, and seven more catch up with the other apps.** Claude Code in your project folders now asks before keeping or undoing Google's own changes to a Business Profile listing (seo_gbp_google_updates_resolve), deleting or voiding an invoice (accounting_invoice_delete, accounting_invoice_void) and deleting a help desk ticket (helpdesk_ticket_delete). It also asks before the seven the Claude Code plugin, the Codex plugin and hiveku-sync already ask before: a marketing template test send, a test email, sending an invoice, sending a survey, deleting or editing a public reply to a comment, and importing a contact file. Folders set up earlier get the new rules on the next start.
+- **The deploy guides say the post-deploy check only logs.** A deploy that reports ready is not proof the site serves; load the pages you changed.
+
 ## 0.91.100
 - **Creative and social guides say designs are exported in the Hiveku desktop app.** The extension's Creative and Social guides, role commands, setup playbooks and department registry now point to opening designs in Creative Studio in the Hiveku desktop app and choosing Download (PNG, JPG, WEBP, SVG, PDF or MP4) instead of the retired server export tools, and no longer say GIF export is missing.
 
