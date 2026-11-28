@@ -85,10 +85,10 @@ export function copiesNotUpdatedLine(rels: string[], elsewhere?: string): string
   if (!rels.length) return '';
   if (rels.length === 1) {
     const what = elsewhere ? '1 Claude Code copy' : rels[0];
-    return `Did not update ${what}: Hiveku sent its entry without its text${elsewhere ? ` (${elsewhere})` : ''}. Nothing in Hiveku changed, and any copy here is as it was. Pull again to get it.`;
+    return `Did not update ${what}: Hiveku sent its entry without its text${elsewhere ? ` (${elsewhere})` : ''}. Nothing in Hiveku changed, and any copy here is as it was. Sync again to get it.`;
   }
   const shown = rels.length <= 10 ? rels.join(', ') : `${rels.slice(0, 10).join(', ')} and ${rels.length - 10} more`;
-  return `Did not update ${rels.length} Claude Code copies: Hiveku sent their entries without their text (${elsewhere ?? shown}). Nothing in Hiveku changed, and any copies here are as they were. Pull again to get them.`;
+  return `Did not update ${rels.length} Claude Code copies: Hiveku sent their entries without their text (${elsewhere ?? shown}). Nothing in Hiveku changed, and any copies here are as they were. Sync again to get them.`;
 }
 
 function sha(text: string): string {

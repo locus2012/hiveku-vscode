@@ -398,9 +398,9 @@ export function notUpdatedLine(names: string[], elsewhere?: string): string {
   const quoted = names.map((name) => JSON.stringify(name));
   if (names.length === 1) {
     const what = elsewhere ? '1 entry' : quoted[0];
-    return `Did not update ${what}: Hiveku sent it without its text${elsewhere ? ` (${elsewhere})` : ''}. Nothing in Hiveku changed, and any copy here is as it was. Pull again to get it.`;
+    return `Did not update ${what}: Hiveku sent it without its text${elsewhere ? ` (${elsewhere})` : ''}. Nothing in Hiveku changed, and any copy here is as it was. Download again to get it.`;
   }
-  return `Did not update ${names.length} entries: Hiveku sent them without their text (${elsewhere ?? tenNamesShown(quoted)}). Nothing in Hiveku changed, and any copies here are as they were. Pull again to get them.`;
+  return `Did not update ${names.length} entries: Hiveku sent them without their text (${elsewhere ?? tenNamesShown(quoted)}). Nothing in Hiveku changed, and any copies here are as they were. Download again to get them.`;
 }
 
 /**

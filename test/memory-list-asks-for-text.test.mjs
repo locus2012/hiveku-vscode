@@ -220,19 +220,19 @@ describe('the words for entries Hiveku sent without their text', () => {
     assert.equal(knowledge.notUpdatedLine([]), '');
     assert.equal(
       knowledge.notUpdatedLine(['tone']),
-      'Did not update "tone": Hiveku sent it without its text. Nothing in Hiveku changed, and any copy here is as it was. Pull again to get it.',
+      'Did not update "tone": Hiveku sent it without its text. Nothing in Hiveku changed, and any copy here is as it was. Download again to get it.',
     );
     assert.equal(
       knowledge.notUpdatedLine(['tone', 'sales', 'seo']),
-      'Did not update 3 entries: Hiveku sent them without their text ("tone", "sales", "seo"). Nothing in Hiveku changed, and any copies here are as they were. Pull again to get them.',
+      'Did not update 3 entries: Hiveku sent them without their text ("tone", "sales", "seo"). Nothing in Hiveku changed, and any copies here are as they were. Download again to get them.',
     );
     assert.equal(
       knowledge.notUpdatedLine(['tone'], 'named in the Hiveku output'),
-      'Did not update 1 entry: Hiveku sent it without its text (named in the Hiveku output). Nothing in Hiveku changed, and any copy here is as it was. Pull again to get it.',
+      'Did not update 1 entry: Hiveku sent it without its text (named in the Hiveku output). Nothing in Hiveku changed, and any copy here is as it was. Download again to get it.',
     );
     assert.equal(
       knowledge.notUpdatedLine(['a', 'b'], 'named in the Hiveku output'),
-      'Did not update 2 entries: Hiveku sent them without their text (named in the Hiveku output). Nothing in Hiveku changed, and any copies here are as they were. Pull again to get them.',
+      'Did not update 2 entries: Hiveku sent them without their text (named in the Hiveku output). Nothing in Hiveku changed, and any copies here are as they were. Download again to get them.',
     );
     const many = Array.from({ length: 12 }, (_, i) => `r${i + 1}`);
     assert.match(knowledge.notUpdatedLine(many), /^Did not update 12 entries: .*\("r1", .*, "r10" and 2 more\)\. Nothing in Hiveku changed/);
@@ -243,11 +243,11 @@ describe('the words for entries Hiveku sent without their text', () => {
     assert.equal(commandSync.copiesNotUpdatedLine([]), '');
     assert.equal(
       commandSync.copiesNotUpdatedLine([rel]),
-      `Did not update ${rel}: Hiveku sent its entry without its text. Nothing in Hiveku changed, and any copy here is as it was. Pull again to get it.`,
+      `Did not update ${rel}: Hiveku sent its entry without its text. Nothing in Hiveku changed, and any copy here is as it was. Sync again to get it.`,
     );
     assert.equal(
       commandSync.copiesNotUpdatedLine([rel, rel], 'named in the Hiveku output'),
-      'Did not update 2 Claude Code copies: Hiveku sent their entries without their text (named in the Hiveku output). Nothing in Hiveku changed, and any copies here are as they were. Pull again to get them.',
+      'Did not update 2 Claude Code copies: Hiveku sent their entries without their text (named in the Hiveku output). Nothing in Hiveku changed, and any copies here are as they were. Sync again to get them.',
     );
   });
 });
