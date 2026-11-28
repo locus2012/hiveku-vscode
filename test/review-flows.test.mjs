@@ -1041,16 +1041,31 @@ describe('what the extension writes and wires', () => {
       'the seven catch-up asks come after the four held writes',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__marketing_template_test_send',\n" +
           "  'mcp__hiveku__email_send_test',\n" +
           "  'mcp__hiveku__accounting_invoice_send',\n" +
           "  'mcp__hiveku__survey_send',\n" +
           "  'mcp__hiveku__social_comment_reply_delete',\n" +
           "  'mcp__hiveku__social_comment_reply_edit',\n" +
-          "  'mcp__hiveku__crm_contacts_import_file',",
+          "  'mcp__hiveku__crm_contacts_import_file',\n",
       ),
-      'the newest ask rules, the seven the other clients already ask before (HK-2031, HK-2293, HK-2143), go at the END',
+      'the seven the other clients already ask before (HK-2031, HK-2293, HK-2143) are listed together',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__crm_contacts_import_file'") < ask.indexOf("'mcp__hiveku__ppc_bing_automated_extensions_set'") &&
+        ask.indexOf("'mcp__hiveku__ppc_bing_automated_extensions_set'") < ask.indexOf("'mcp__hiveku__ppc_google_auto_apply_set'"),
+      'the HK-2106 ask comes after the seven catch-up asks and before the plugin-forced asks',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__helpdesk_contact_data_erase',\n" +
+          "  'mcp__hiveku__helpdesk_chat_retention_set',\n" +
+          "  'mcp__hiveku__crm_activity_recording_finalize',\n" +
+          "  'mcp__hiveku__accounting_subscription_create',\n" +
+          "  'mcp__hiveku__account_memory_draft_propose',",
+      ),
+      'the newest ask rules, the writes the Claude Code plugin\'s hook asks before that this list lacked (0.91.102), go at the END',
     );
   });
 
