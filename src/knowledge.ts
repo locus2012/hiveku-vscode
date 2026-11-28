@@ -382,6 +382,27 @@ export function entryLabel(entry: { name?: string; domain?: string; type: string
   return (typeof entry.name === 'string' && entry.name.trim()) || keyOf(entry);
 }
 
+/** At most ten names, then how many more. */
+function tenNamesShown(names: string[]): string {
+  return names.length <= 10 ? names.join(', ') : `${names.slice(0, 10).join(', ')} and ${names.length - 10} more`;
+}
+
+/**
+ * What a download says about the entries Hiveku sent without their text (HK-2244), in the words hiveku-sync and the
+ * Claude Code plugin use: true whether or not a copy is here, and that nothing in Hiveku changed. Empty when there
+ * were none. The names are stored account data, so each is JSON-quoted; `elsewhere` stands in for them, as the
+ * notification does ("named in the Hiveku output").
+ */
+export function notUpdatedLine(names: string[], elsewhere?: string): string {
+  if (!names.length) return '';
+  const quoted = names.map((name) => JSON.stringify(name));
+  if (names.length === 1) {
+    const what = elsewhere ? '1 entry' : quoted[0];
+    return `Did not update ${what}: Hiveku sent it without its text${elsewhere ? ` (${elsewhere})` : ''}. Nothing in Hiveku changed, and any copy here is as it was. Pull again to get it.`;
+  }
+  return `Did not update ${names.length} entries: Hiveku sent them without their text (${elsewhere ?? tenNamesShown(quoted)}). Nothing in Hiveku changed, and any copies here are as they were. Pull again to get them.`;
+}
+
 /**
  * Write entries to <type-folder>/<department>/<name>.md and update the sync
  * manifest. Returns how many were written. A row the disk refuses (a folder or
@@ -3899,6 +3920,8 @@ It reports, per knowledge item:
 - \`locally_modified\` — you edited the local file (to persist, merge it into the current Hiveku copy
   from \`memory_list\` and send the whole document with \`memory_update\`, after checking
   \`memory_log_list\` for what changed on Hiveku since you pulled, and with a one-line \`reason\`)
+- \`left_without_text\` (a pull writes it): Hiveku sent these without their text, so the local copy
+  was not updated; they are in \`changed_remote\` too, so read each one live before relying on it
 If that file is missing or old, re-run the sync check or re-download from the sidebar.
 Local memory files are read-only as far as Hiveku is concerned — persist changes with
 \`memory_create\` / \`memory_update\` / \`memory_delete\` (each with a one-line \`reason\`), then re-download.
@@ -4124,6 +4147,8 @@ allowed-tools: Read, mcp__hiveku__memory_list, mcp__hiveku__memory_log_summary, 
 Report knowledge sync status for this account workspace.
 First read \`.hiveku/knowledge-status.json\` (written by the "Check Knowledge Sync" command) and
 summarize \`changed_remote\` / \`new_remote\` / \`deleted_remote\` / \`locally_modified\`.
+A pull may also list \`left_without_text\`: entries Hiveku sent without their text, so their local
+copies were not updated. Say so, and compare them with \`memory_list\`.
 
 If that file is MISSING or STALE, do not stop and ask me to click something — you can answer this
 yourself. Call \`memory_list\` and compare it against the local \`memory/\` files: entries present

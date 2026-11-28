@@ -12,7 +12,10 @@
  *     deleted);
  *   - the Claude Code copy (.claude/skills, commands, agents) the last sync
  *     wrote stays as it was, owned: never rewritten, never removed as gone,
- *     and never taken by another entry.
+ *     and never taken by another entry: an entry with its text that wants
+ *     that name gets its hashed name, so it is never left without a copy;
+ *   - the words say what was not updated, that nothing in Hiveku changed, and
+ *     are true with or without a copy here.
  * A row whose text is "" is a real empty entry and is written as before.
  * Nothing here writes a listed row's text back to Hiveku: an edit in VS Code
  * reads its entry again with memory_get first (platformFs.ts).
@@ -158,5 +161,93 @@ describe('a row Hiveku sent without its text is never kept', () => {
     // An entry that is really gone is still removed as before.
     const gone = await commandSync.syncAccountCommands(await knowledge.fetchKnowledge(listing({})), dir);
     assert.deepEqual(gone.removed, [skill]);
+  });
+
+  test('a skill sent without its text keeps the plain name it holds, and the skill that had the hashed name keeps it and is updated', async () => {
+    const dir = await tmp();
+    const other = { id: 's2', name: 'Discovery Call', domain: '_skill:Discovery Call', department: 'sales', content: '# Another\n\nSteps.', version: 1 };
+    // Both reduce to hiveku-sales-discovery-call: the one listed first takes it, the other its hashed name.
+    await commandSync.syncAccountCommands(await knowledge.fetchKnowledge(listing({ skill: [PLAYBOOK, other] })), dir);
+    const plain = path.join('.claude', 'skills', 'hiveku-sales-discovery-call', 'SKILL.md');
+    const owned = JSON.parse(await read(dir, path.join('.hiveku', 'synced-commands.json')));
+    const hashed = Object.keys(owned.files).find((rel) => owned.files[rel].domain === other.domain);
+    assert.equal(owned.files[plain].domain, PLAYBOOK.domain, 'the first skill has the plain name');
+    assert.match(hashed, /hiveku-sales-discovery-call-[0-9a-f]{6}/, 'the other has its hashed name');
+    const plainBefore = await read(dir, plain);
+
+    // The first now files under SEO and comes without its text; the other changed upstream.
+    const index = await knowledge.fetchKnowledge(
+      listing({ skill: [withoutText({ ...PLAYBOOK, department: 'seo' }), { ...other, content: '# Another\n\nNew steps.', version: 2 }] }),
+    );
+    const result = await commandSync.syncAccountCommands(index, dir);
+    assert.equal(await read(dir, plain), plainBefore, 'the held copy is as it was');
+    assert.match(await read(dir, hashed), /New steps\.\n$/, 'the other skill keeps its copy, brought up to date');
+    assert.deepEqual(result.written, [hashed]);
+    assert.deepEqual(result.removed, []);
+    assert.deepEqual(result.leftWithoutText, [plain]);
+    const after = JSON.parse(await read(dir, path.join('.hiveku', 'synced-commands.json')));
+    assert.deepEqual(after.files[plain], owned.files[plain], 'the held copy is still owned, as it was');
+    assert.equal(after.files[hashed].domain, other.domain);
+  });
+
+  test('an entry whose copy at its new name cannot be written keeps its earlier copy until it can', async () => {
+    const dir = await tmp();
+    const oldCopy = path.join('.claude', 'skills', 'hiveku-sales-discovery-call', 'SKILL.md');
+    const newCopy = path.join('.claude', 'skills', 'hiveku-seo-discovery-call', 'SKILL.md');
+    await commandSync.syncAccountCommands(await knowledge.fetchKnowledge(listing({ skill: [PLAYBOOK] })), dir);
+    const before = await read(dir, oldCopy);
+    // A file this sync did not write is where the moved skill's copy would go.
+    await fs.mkdir(path.join(dir, path.dirname(newCopy)), { recursive: true });
+    await fs.writeFile(path.join(dir, newCopy), 'Written by hand.\n', 'utf8');
+
+    const moved = await knowledge.fetchKnowledge(listing({ skill: [{ ...PLAYBOOK, department: 'seo', version: 3 }] }));
+    const result = await commandSync.syncAccountCommands(moved, dir);
+    assert.deepEqual(result.skippedLocalEdits, [newCopy]);
+    assert.deepEqual(result.removed, [], 'the only copy it has is not removed');
+    assert.equal(await read(dir, oldCopy), before);
+    assert.equal(await read(dir, newCopy), 'Written by hand.\n', 'a file this sync did not write is never touched');
+
+    // Once the new name is free, the copy is written there and the earlier one goes.
+    await fs.rm(path.join(dir, newCopy));
+    const again = await commandSync.syncAccountCommands(moved, dir);
+    assert.deepEqual(again.written, [newCopy]);
+    assert.deepEqual(again.removed, [oldCopy]);
+  });
+});
+
+describe('the words for entries Hiveku sent without their text', () => {
+  test('the knowledge download: by name in the output, by count in the notification', () => {
+    assert.equal(knowledge.notUpdatedLine([]), '');
+    assert.equal(
+      knowledge.notUpdatedLine(['tone']),
+      'Did not update "tone": Hiveku sent it without its text. Nothing in Hiveku changed, and any copy here is as it was. Pull again to get it.',
+    );
+    assert.equal(
+      knowledge.notUpdatedLine(['tone', 'sales', 'seo']),
+      'Did not update 3 entries: Hiveku sent them without their text ("tone", "sales", "seo"). Nothing in Hiveku changed, and any copies here are as they were. Pull again to get them.',
+    );
+    assert.equal(
+      knowledge.notUpdatedLine(['tone'], 'named in the Hiveku output'),
+      'Did not update 1 entry: Hiveku sent it without its text (named in the Hiveku output). Nothing in Hiveku changed, and any copy here is as it was. Pull again to get it.',
+    );
+    assert.equal(
+      knowledge.notUpdatedLine(['a', 'b'], 'named in the Hiveku output'),
+      'Did not update 2 entries: Hiveku sent them without their text (named in the Hiveku output). Nothing in Hiveku changed, and any copies here are as they were. Pull again to get them.',
+    );
+    const many = Array.from({ length: 12 }, (_, i) => `r${i + 1}`);
+    assert.match(knowledge.notUpdatedLine(many), /^Did not update 12 entries: .*\("r1", .*, "r10" and 2 more\)\. Nothing in Hiveku changed/);
+  });
+
+  test('command sync: the Claude Code copies it did not update', () => {
+    const rel = path.join('.claude', 'skills', 'hiveku-sales-x', 'SKILL.md');
+    assert.equal(commandSync.copiesNotUpdatedLine([]), '');
+    assert.equal(
+      commandSync.copiesNotUpdatedLine([rel]),
+      `Did not update ${rel}: Hiveku sent its entry without its text. Nothing in Hiveku changed, and any copy here is as it was. Pull again to get it.`,
+    );
+    assert.equal(
+      commandSync.copiesNotUpdatedLine([rel, rel], 'named in the Hiveku output'),
+      'Did not update 2 Claude Code copies: Hiveku sent their entries without their text (named in the Hiveku output). Nothing in Hiveku changed, and any copies here are as they were. Pull again to get them.',
+    );
   });
 });

@@ -30,7 +30,12 @@
  *   - an entry Hiveku sent without its text (HK-2244, knowledge.ts
  *     cameWithoutText) is not written, and every file the manifest gives it
  *     stays as it was, owned: never rewritten, never deleted as gone upstream,
- *     and never taken by another entry.
+ *     and never taken by another entry. Its names are held before any entry
+ *     is given one, so an entry with its text that wants one of them gets a
+ *     hashed name instead, as hiveku-sync and the plugin do,
+ *   - an owned copy of an entry that is still listed with its text is removed
+ *     only once that entry's copy at its new name is written or already
+ *     current, so the entry never goes without a Claude Code copy.
  *
  * A synced file never gives Claude Code a setting that runs or approves
  * anything (PR #30 review, F1): see COMMAND_KEYS and inertShellPlaceholders.
@@ -69,6 +74,21 @@ export interface CommandSyncResult {
   skippedLocalEdits: string[];
   /** Copies of entries Hiveku sent without their text: left as they were (HK-2244). */
   leftWithoutText: string[];
+}
+
+/**
+ * What a sync says about the Claude Code copies it did not update because Hiveku sent their entries without their
+ * text (CommandSyncResult.leftWithoutText), in the words of knowledge.ts notUpdatedLine. Empty when there were none.
+ * `elsewhere` stands in for the paths, as the notification does.
+ */
+export function copiesNotUpdatedLine(rels: string[], elsewhere?: string): string {
+  if (!rels.length) return '';
+  if (rels.length === 1) {
+    const what = elsewhere ? '1 Claude Code copy' : rels[0];
+    return `Did not update ${what}: Hiveku sent its entry without its text${elsewhere ? ` (${elsewhere})` : ''}. Nothing in Hiveku changed, and any copy here is as it was. Pull again to get it.`;
+  }
+  const shown = rels.length <= 10 ? rels.join(', ') : `${rels.slice(0, 10).join(', ')} and ${rels.length - 10} more`;
+  return `Did not update ${rels.length} Claude Code copies: Hiveku sent their entries without their text (${elsewhere ?? shown}). Nothing in Hiveku changed, and any copies here are as they were. Pull again to get them.`;
 }
 
 function sha(text: string): string {
@@ -299,14 +319,23 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
       if (cameWithoutText(entry) && entry.domain) heldDomains.add(entry.domain);
     }
   }
+  // Those files' names, held before any entry is given one (lowercase path -> domain), so no other entry is given
+  // one: an entry that wants a held name takes its hashed name instead.
+  const reserved = new Map<string, string>();
+  for (const [rel, row] of Object.entries(manifest.files)) {
+    if (heldDomains.has(row.domain)) reserved.set(rel.toLowerCase(), row.domain);
+  }
+  const taken = (rel: string, domain: string): boolean =>
+    remote.has(rel) || (reserved.has(rel.toLowerCase()) && reserved.get(rel.toLowerCase()) !== domain);
 
   for (const entry of selectEntries(index, { type: 'command' })) {
     const slug = slugFromDomain(entry, '_command:');
     const dept = entry.department || 'general';
+    const domain = entry.domain || `_command:${slug}`;
     let rel = claudeFile('commands', `hiveku-${dept}-${slug}`);
-    // Slug collision after normalization: suffix by domain hash.
-    if (remote.has(rel)) rel = claudeFile('commands', `hiveku-${dept}-${slug}-${sha(entry.domain || slug).slice(0, 6)}`);
-    remote.set(rel, { domain: entry.domain || `_command:${slug}`, body: bodyOf(entry, () => renderCommand(entry)) });
+    // Slug collision after normalization, or a name held for an entry sent without its text: suffix by domain hash.
+    if (taken(rel, domain)) rel = claudeFile('commands', `hiveku-${dept}-${slug}-${sha(entry.domain || slug).slice(0, 6)}`);
+    remote.set(rel, { domain, body: bodyOf(entry, () => renderCommand(entry)) });
   }
   for (const entry of selectEntries(index, { type: 'skill' })) {
     const slug = slugFromDomain(entry, '_skill:');
@@ -314,7 +343,7 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
     const domain = entry.domain || `_skill:${slug}`;
     let name = skillName(dept, slug, domain);
     let rel = claudeSkillFile(name);
-    if (remote.has(rel)) {
+    if (taken(rel, domain)) {
       name = skillName(dept, `${slug}-${sha(domain).slice(0, 6)}`, `${domain}#2`);
       rel = claudeSkillFile(name);
     }
@@ -322,9 +351,10 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
   }
   for (const entry of selectEntries(index, { type: 'agent' })) {
     const slug = slugFromDomain(entry, '_agent:');
+    const domain = entry.domain || `_agent:${slug}`;
     let rel = claudeFile('agents', `hiveku-${slug}`);
-    if (remote.has(rel)) rel = claudeFile('agents', `hiveku-${slug}-${sha(entry.domain || slug).slice(0, 6)}`);
-    remote.set(rel, { domain: entry.domain || `_agent:${slug}`, body: bodyOf(entry, () => renderAgent(entry, slug)) });
+    if (taken(rel, domain)) rel = claudeFile('agents', `hiveku-${slug}-${sha(entry.domain || slug).slice(0, 6)}`);
+    remote.set(rel, { domain, body: bodyOf(entry, () => renderAgent(entry, slug)) });
   }
 
   // Remote paths by lowercase spelling, for the two case checks below.
@@ -346,7 +376,9 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
   }
 
   // 1) Write/update remote entries. The department in a file name is shaped by
-  // departmentOf; the containment check is the backstop.
+  // departmentOf; the containment check is the backstop. `landed`: the domains
+  // whose copy at its remote path is now current (written, or already so).
+  const landed = new Set<string>();
   for (const [rel, { domain, body }] of remote) {
     const abs = path.join(baseDir, rel);
     if (!isInsideRoot(baseDir, abs)) continue;
@@ -366,6 +398,7 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
       if (current === body) {
         // In sync (or an identical locally-authored file) — adopt/refresh manifest.
         manifest.files[rel] = { domain, content_sha: sha(body), synced_at: owned?.synced_at ?? now };
+        landed.add(domain);
         continue;
       }
       if (owned && sha(current) !== owned.content_sha) {
@@ -382,8 +415,11 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
     await fs.mkdir(path.dirname(abs), { recursive: true });
     await fs.writeFile(abs, body, 'utf8');
     manifest.files[rel] = { domain, content_sha: sha(body), synced_at: now };
+    landed.add(domain);
     result.written.push(rel);
   }
+  // The entries listed with their text: an owned copy of one is kept until its copy at its remote path has landed.
+  const listedWithText = new Set([...remote.values()].filter(({ body }) => body !== null).map(({ domain }) => domain));
 
   // 2) Remove owned files whose remote entry vanished. An entry sent without its
   // text has not vanished: its files stay, owned, wherever the manifest has them.
@@ -408,6 +444,9 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
       delete manifest.files[rel];
       continue;
     }
+    // Still listed, with its text, but its copy at its new path could not be written this sync: this earlier copy
+    // stays, owned, until that one lands.
+    if (listedWithText.has(manifest.files[rel].domain) && !landed.has(manifest.files[rel].domain)) continue;
     try {
       const current = await fs.readFile(abs, 'utf8');
       if (sha(current) === manifest.files[rel].content_sha) {

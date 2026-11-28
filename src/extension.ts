@@ -63,10 +63,11 @@ import {
   updateLocalDeclaration,
   declaredClaudeCodeClient,
   pointClaudeCodeAt,
+  notUpdatedLine,
   type PermissionMode,
 } from './knowledge';
 import { hasLocalHivekuServer, hasUserHivekuServer, claudeConfigUnreadable } from './claudeMcp';
-import { syncAccountCommands } from './commandSync';
+import { copiesNotUpdatedLine, syncAccountCommands } from './commandSync';
 import { DataRefresher } from './dataRefresh';
 import { ROLES, effectiveDepartments } from './roles';
 import { departmentById, DEPARTMENTS } from './deptData';
@@ -1836,22 +1837,17 @@ function knowledgeFailedNote(failed: string[]): string {
  * A count-only note for knowledge rows Hiveku sent without their text
  * (HK-2244): writeEntries writes none of them and leaves their files as they
  * were. The names are stored account data, so they go to the output channel
- * JSON-quoted, not into the notification.
+ * JSON-quoted, not into the notification. The words are notUpdatedLine's.
  */
 function knowledgeWithoutTextNote(names: string[]): string {
   if (!names.length) return '';
-  const one = names.length === 1;
-  log.appendLine(
-    `[knowledge] left ${one ? 'one entry as it was' : `${names.length} entries as they were`}: Hiveku sent ${one ? 'it without its' : 'them without their'} text: ${JSON.stringify(names)}`,
-  );
-  return one
-    ? ' Left 1 entry as it was: Hiveku sent it without its text (named in the Hiveku output).'
-    : ` Left ${names.length} entries as they were: Hiveku sent them without their text (named in the Hiveku output).`;
+  log.appendLine(`[knowledge] ${notUpdatedLine(names)}`);
+  return ` ${notUpdatedLine(names, 'named in the Hiveku output')}`;
 }
 
-/** The output line for Claude Code copies command sync left as they were because their entry came without its text. */
+/** The output line for Claude Code copies command sync did not update because their entry came without its text. */
 function logCommandsLeftWithoutText(rels: string[]): void {
-  if (rels.length) log.appendLine(`[commands] left as they were (Hiveku sent their entries without text): ${rels.join(', ')}`);
+  if (rels.length) log.appendLine(`[commands] ${copiesNotUpdatedLine(rels)}`);
 }
 
 /** Download one knowledge type for a department. */
@@ -2792,9 +2788,10 @@ async function syncCommands(node: { record: AccountRecord } | undefined): Promis
     const res = await syncAccountCommands(index, folder);
     const bits = [`${res.written.length} written`, `${res.removed.length} removed`];
     if (res.skippedLocalEdits.length) bits.push(`${res.skippedLocalEdits.length} skipped (local edits — Hiveku entry is the source of truth)`);
-    if (res.leftWithoutText.length) bits.push(`${res.leftWithoutText.length} left as they were (Hiveku sent their entries without text)`);
+    if (res.leftWithoutText.length) bits.push(`${res.leftWithoutText.length} not updated`);
     logCommandsLeftWithoutText(res.leftWithoutText);
-    vscode.window.showInformationMessage(`Account commands, skills and agents synced: ${bits.join(', ')}.`);
+    const notUpdated = res.leftWithoutText.length ? ` ${copiesNotUpdatedLine(res.leftWithoutText, 'named in the Hiveku output')}` : '';
+    vscode.window.showInformationMessage(`Account commands, skills and agents synced: ${bits.join(', ')}.${notUpdated}`);
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
   }
