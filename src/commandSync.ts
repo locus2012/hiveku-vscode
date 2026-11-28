@@ -26,7 +26,11 @@
  *     adopted into the manifest,
  *   - an owned path that differs from a remote path only in case is, on a
  *     case-insensitive disk, the same file: it keeps its ownership and is never
- *     deleted as gone upstream.
+ *     deleted as gone upstream,
+ *   - an entry Hiveku sent without its text (HK-2244, knowledge.ts
+ *     cameWithoutText) is not written, and every file the manifest gives it
+ *     stays as it was, owned: never rewritten, never deleted as gone upstream,
+ *     and never taken by another entry.
  *
  * A synced file never gives Claude Code a setting that runs or approves
  * anything (PR #30 review, F1): see COMMAND_KEYS and inertShellPlaceholders.
@@ -35,7 +39,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { type KnowledgeEntry, type KnowledgeIndex, departmentLabel, isInsideRoot, safeFileStem, selectEntries, SHARED_FOLDER } from './knowledge';
+import { type KnowledgeEntry, type KnowledgeIndex, cameWithoutText, departmentLabel, isInsideRoot, safeFileStem, selectEntries, SHARED_FOLDER } from './knowledge';
 import { VENDORED_SKILL_NAMES } from './agencySkills';
 
 const MANIFEST = path.join('.hiveku', 'synced-commands.json');
@@ -63,6 +67,8 @@ export interface CommandSyncResult {
   removed: string[];
   /** Owned files with local edits — left alone, surfaced to the user. */
   skippedLocalEdits: string[];
+  /** Copies of entries Hiveku sent without their text: left as they were (HK-2244). */
+  leftWithoutText: string[];
 }
 
 function sha(text: string): string {
@@ -281,9 +287,18 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
     /* first sync */
   }
 
-  const result: CommandSyncResult = { written: [], removed: [], skippedLocalEdits: [] };
+  const result: CommandSyncResult = { written: [], removed: [], skippedLocalEdits: [], leftWithoutText: [] };
   const now = new Date().toISOString();
-  const remote = new Map<string, { domain: string; body: string }>(); // relPath → content
+  // relPath → content; null for an entry Hiveku sent without its text, whose path is held but never written.
+  const remote = new Map<string, { domain: string; body: string | null }>();
+  const bodyOf = (entry: KnowledgeEntry, render: () => string): string | null => (cameWithoutText(entry) ? null : render());
+  // The entries sent without their text: every file the manifest gives one of them stays its own.
+  const heldDomains = new Set<string>();
+  for (const type of ['command', 'skill', 'agent']) {
+    for (const entry of selectEntries(index, { type })) {
+      if (cameWithoutText(entry) && entry.domain) heldDomains.add(entry.domain);
+    }
+  }
 
   for (const entry of selectEntries(index, { type: 'command' })) {
     const slug = slugFromDomain(entry, '_command:');
@@ -291,7 +306,7 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
     let rel = claudeFile('commands', `hiveku-${dept}-${slug}`);
     // Slug collision after normalization: suffix by domain hash.
     if (remote.has(rel)) rel = claudeFile('commands', `hiveku-${dept}-${slug}-${sha(entry.domain || slug).slice(0, 6)}`);
-    remote.set(rel, { domain: entry.domain || `_command:${slug}`, body: renderCommand(entry) });
+    remote.set(rel, { domain: entry.domain || `_command:${slug}`, body: bodyOf(entry, () => renderCommand(entry)) });
   }
   for (const entry of selectEntries(index, { type: 'skill' })) {
     const slug = slugFromDomain(entry, '_skill:');
@@ -303,13 +318,13 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
       name = skillName(dept, `${slug}-${sha(domain).slice(0, 6)}`, `${domain}#2`);
       rel = claudeSkillFile(name);
     }
-    remote.set(rel, { domain, body: renderSkill(entry, name, dept, slug) });
+    remote.set(rel, { domain, body: bodyOf(entry, () => renderSkill(entry, name, dept, slug)) });
   }
   for (const entry of selectEntries(index, { type: 'agent' })) {
     const slug = slugFromDomain(entry, '_agent:');
     let rel = claudeFile('agents', `hiveku-${slug}`);
     if (remote.has(rel)) rel = claudeFile('agents', `hiveku-${slug}-${sha(entry.domain || slug).slice(0, 6)}`);
-    remote.set(rel, { domain: entry.domain || `_agent:${slug}`, body: renderAgent(entry, slug) });
+    remote.set(rel, { domain: entry.domain || `_agent:${slug}`, body: bodyOf(entry, () => renderAgent(entry, slug)) });
   }
 
   // Remote paths by lowercase spelling, for the two case checks below.
@@ -336,6 +351,11 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
     const abs = path.join(baseDir, rel);
     if (!isInsideRoot(baseDir, abs)) continue;
     const owned = manifest.files[rel];
+    // Sent without its text, or the file another entry sent without its text holds: left exactly as it is.
+    if (body === null || (owned && owned.domain !== domain && heldDomains.has(owned.domain))) {
+      if (owned) result.leftWithoutText.push(rel);
+      continue;
+    }
     let current: string | undefined;
     try {
       current = await fs.readFile(abs, 'utf8');
@@ -365,9 +385,14 @@ export async function syncAccountCommands(index: KnowledgeIndex, baseDir: string
     result.written.push(rel);
   }
 
-  // 2) Remove owned files whose remote entry vanished.
+  // 2) Remove owned files whose remote entry vanished. An entry sent without its
+  // text has not vanished: its files stay, owned, wherever the manifest has them.
   for (const rel of Object.keys(manifest.files)) {
     if (remote.has(rel)) continue;
+    if (heldDomains.has(manifest.files[rel].domain)) {
+      result.leftWithoutText.push(rel);
+      continue;
+    }
     const abs = path.join(baseDir, rel);
     // The manifest is a file in the folder (cloned, synced, or written by an
     // older build): it never directs a delete outside baseDir. Drop the row.

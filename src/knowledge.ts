@@ -367,18 +367,45 @@ async function removeMovedCopy(baseDir: string, before: ManifestRow, nowAbs: str
 }
 
 /**
+ * A row memory_list sent without its text (HK-2244): its `content` is not a
+ * string. The builder leaves `content` out (and sends `content_chars`) when a
+ * list is made without text. Such a row is never written to a file or a
+ * Claude Code copy, and what the last download recorded for it stays as it
+ * was. `content: ""` is a real empty entry and is written as before.
+ */
+export function cameWithoutText(entry: { content?: unknown }): boolean {
+  return typeof entry.content !== 'string';
+}
+
+/** The name a note gives an entry: its name, else its stored domain. */
+export function entryLabel(entry: { name?: string; domain?: string; type: string }): string {
+  return (typeof entry.name === 'string' && entry.name.trim()) || keyOf(entry);
+}
+
+/**
  * Write entries to <type-folder>/<department>/<name>.md and update the sync
  * manifest. Returns how many were written. A row the disk refuses (a folder or
  * file in the way, a permission error) is skipped and its key is pushed onto
  * `failed`; the other rows are still written, and the manifest keeps what the
  * last download recorded for that row, since its file on disk is the old one.
- * An entry that moved folders has its old, unedited copy removed.
+ * A row that came without its text (cameWithoutText) is not written either: its
+ * name is pushed onto `withoutText`, and its file and manifest row stay as they
+ * were. An entry that moved folders has its old, unedited copy removed.
  */
-export async function writeEntries(baseDir: string, entries: KnowledgeEntry[], failed: string[] = []): Promise<number> {
+export async function writeEntries(
+  baseDir: string,
+  entries: KnowledgeEntry[],
+  failed: string[] = [],
+  withoutText: string[] = [],
+): Promise<number> {
   const manifest = (await readManifest(baseDir)) ?? { synced_at: '', entries: {} };
   const now = new Date().toISOString();
   let written = 0;
   for (const entry of entries) {
+    if (cameWithoutText(entry)) {
+      withoutText.push(entryLabel(entry));
+      continue;
+    }
     const folder = TYPE_TO_FOLDER[entry.type] ?? entry.type;
     const rel = path.join(folder, entry.department, `${safeFileStem(safeSlug(entry.name))}.md`);
     // Entries reach here from fetchKnowledge (department already shaped) or

@@ -1030,6 +1030,9 @@
           "id": "memory",
           "label": "AI memory (skills/rules/facts)",
           "tool": "memory_list",
+          "args": {
+            "include_content": true
+          },
           "detail": {
             "detailTool": "memory_get",
             "argKey": "memory_id",
