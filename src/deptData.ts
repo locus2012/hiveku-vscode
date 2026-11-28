@@ -1193,7 +1193,8 @@ export const DEPARTMENTS: Department[] = [
     label: 'Knowledge & Memory',
     gate: 'marketing_knowledge_base',
     datasets: [
-      { id: 'memory', label: 'AI memory (skills/rules/facts)', tool: 'memory_list', detail: { detailTool: 'memory_get', argKey: 'memory_id', nameKey: 'domain', dir: 'memory-detail' }, columns: [{ key: 'domain' }, { key: 'type' }, { key: 'version' }] },
+      // include_content by name (HK-2244): a list with no filter may one day come without each row's text.
+      { id: 'memory', label: 'AI memory (skills/rules/facts)', tool: 'memory_list', args: { include_content: true }, detail: { detailTool: 'memory_get', argKey: 'memory_id', nameKey: 'domain', dir: 'memory-detail' }, columns: [{ key: 'domain' }, { key: 'type' }, { key: 'version' }] },
       // Who is on the AI team and who is working now (MCP #174, read-only): one row per agent,
       // counts and names only, never an entry's text. working_until is set while it has work going.
       { id: 'team', label: 'AI team (who is working now)', tool: 'memory_team_get', columns: [{ key: 'name' }, { key: 'job' }, { key: ['status_label', 'status'], label: 'status' }, { key: 'working_until', label: 'working until', date: true }, { key: 'last_changed_at', label: 'changed', date: true }] },

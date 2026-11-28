@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.91.104
+- **Downloads ask Hiveku for each memory entry's text by name, and never keep an entry that arrives without it.** The knowledge download, the Knowledge tab, the new-entry check and the department data download now ask for the full text of every memory entry they list. If an entry still comes without its text, nothing is written for it: its file, its Claude Code copy and the download's record of it stay exactly as they were, and the download says how many it left. An entry whose text is empty is still written.
+
 ## 0.91.103
 - **Using only some of an environment group's variables on a site always asks.** Claude Code in your project folders now asks before env_group_pick, which gives a site only the variables you choose from an account's environment group, and env_group_unpick, which takes them away again. Each changes what the site's live functions read at once, as linking or unlinking the whole group does, so it asks in every permission mode, as the Claude Code and Codex plugins do. A folder set up earlier gains the two ask rules on its next start, after the others.
 - **The AEO guide your assistant reads covers the AI answer check.** It says how your assistant checks what AI assistants answer for a prompt, and which sites they cite, without a tracked keyword, and that each prompt checked on each assistant uses one SEO research lookup. The vendored skills are copied from Claude Code plugin 0.27.325.

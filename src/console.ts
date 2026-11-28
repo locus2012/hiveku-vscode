@@ -769,7 +769,8 @@ export async function startNewMemoryEntry(
   // One entry per name: an existing one opens instead of a second draft that
   // could never be created.
   try {
-    const res = await client.callToolJson<unknown>('memory_list', { domain });
+    // The text by name (HK-2244): where the row is shown reads it, and `domain` may be empty, a list with no filter.
+    const res = await client.callToolJson<unknown>('memory_list', { domain, include_content: true });
     const data = res && typeof res === 'object' && 'data' in (res as Record<string, unknown>) ? (res as { data: unknown }).data : res;
     const existing = Array.isArray(data) ? (data as api.MemoryEntry[]).find((m) => m.domain === domain && !m.project_id) : undefined;
     if (existing?.id) {

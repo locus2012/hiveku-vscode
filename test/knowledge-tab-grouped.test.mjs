@@ -244,7 +244,8 @@ describe('+ New entry: who it is for first (G7)', () => {
     assert.equal(start.open, 'editor');
     assert.equal(start.uri.path, `/memory-new/${ACCOUNT}/helpdesk/_rule__refund-policy.md`);
     assert.deepEqual([start.department, start.domain, start.kind], ['helpdesk', '_rule:refund-policy', 'rule']);
-    assert.deepEqual(client.seen, [{ name: 'memory_list', args: { domain: '_rule:refund-policy' } }], 'only a check; nothing created');
+    // The text by name (HK-2244): where the found row is shown reads it.
+    assert.deepEqual(client.seen, [{ name: 'memory_list', args: { domain: '_rule:refund-policy', include_content: true } }], 'only a check; nothing created');
     // The name is checked as the builder checks it.
     assert.ok(calls.inputs[0][0].validateInput('Refund_Policy'));
     assert.equal(calls.inputs[0][0].validateInput('refund-policy'), undefined);

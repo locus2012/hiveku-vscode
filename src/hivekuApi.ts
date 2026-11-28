@@ -2787,16 +2787,22 @@ export interface MemoryEntry {
   type?: string;
 }
 
-/** List account knowledge entries of one type (memory|rule|skill|command|agent|identity). */
+/**
+ * List account knowledge entries of one type (memory|rule|skill|command|agent|identity), each with its whole text,
+ * asked for by name (HK-2244): a list may one day come without it, and the knowledge download writes the text to files.
+ */
 export async function listMemory(client: HivekuMcpClient, type: string): Promise<MemoryEntry[]> {
-  const res = await client.callToolJson<unknown>('memory_list', { type });
+  const res = await client.callToolJson<unknown>('memory_list', { type, include_content: true });
   const list = unwrap<MemoryEntry[]>(res);
   return Array.isArray(list) ? list : [];
 }
 
-/** Every memory row regardless of type, tagged with its type (domain-prefix decode). */
+/**
+ * Every memory row regardless of type, tagged with its type (domain-prefix decode), each with its whole text by name
+ * (HK-2244): where a row is shown reads it (memoryOwner.ts placeRow), and a list with no filter may one day come without it.
+ */
 export async function listMemoryAll(client: HivekuMcpClient): Promise<MemoryEntry[]> {
-  const res = await client.callToolJson<unknown>('memory_list', {});
+  const res = await client.callToolJson<unknown>('memory_list', { include_content: true });
   const list = unwrap<MemoryEntry[]>(res);
   if (!Array.isArray(list)) return [];
   return list.map((m) => ({

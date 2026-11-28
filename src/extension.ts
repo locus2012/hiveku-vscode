@@ -63,10 +63,11 @@ import {
   updateLocalDeclaration,
   declaredClaudeCodeClient,
   pointClaudeCodeAt,
+  notUpdatedLine,
   type PermissionMode,
 } from './knowledge';
 import { hasLocalHivekuServer, hasUserHivekuServer, claudeConfigUnreadable } from './claudeMcp';
-import { syncAccountCommands } from './commandSync';
+import { copiesNotUpdatedLine, syncAccountCommands } from './commandSync';
 import { DataRefresher } from './dataRefresh';
 import { ROLES, effectiveDepartments } from './roles';
 import { departmentById, DEPARTMENTS } from './deptData';
@@ -1832,6 +1833,23 @@ function knowledgeFailedNote(failed: string[]): string {
   return ` ${failed.length} knowledge file(s) could not be written; they are listed in the Hiveku output.`;
 }
 
+/**
+ * A count-only note for knowledge rows Hiveku sent without their text
+ * (HK-2244): writeEntries writes none of them and leaves their files as they
+ * were. The names are stored account data, so they go to the output channel
+ * JSON-quoted, not into the notification. The words are notUpdatedLine's.
+ */
+function knowledgeWithoutTextNote(names: string[]): string {
+  if (!names.length) return '';
+  log.appendLine(`[knowledge] ${notUpdatedLine(names)}`);
+  return ` ${notUpdatedLine(names, 'named in the Hiveku output')}`;
+}
+
+/** The output line for Claude Code copies command sync did not update because their entry came without its text. */
+function logCommandsLeftWithoutText(rels: string[]): void {
+  if (rels.length) log.appendLine(`[commands] ${copiesNotUpdatedLine(rels)}`);
+}
+
 /** Download one knowledge type for a department. */
 async function downloadType(node: {
   record: AccountRecord;
@@ -1845,9 +1863,10 @@ async function downloadType(node: {
     const index = await tree.indexFor(node.record.accountId);
     const entries = selectEntries(index, { department: node.department, type: node.type });
     const failed: string[] = [];
-    const n = await writeEntries(dir, entries, failed);
-    const note = `Downloaded ${n} ${TYPE_LABEL[node.type] ?? node.type} file(s) for ${departmentLabel(node.department)}.${knowledgeFailedNote(failed)}`;
-    if (failed.length) vscode.window.showWarningMessage(note);
+    const withoutText: string[] = [];
+    const n = await writeEntries(dir, entries, failed, withoutText);
+    const note = `Downloaded ${n} ${TYPE_LABEL[node.type] ?? node.type} file(s) for ${departmentLabel(node.department)}.${knowledgeFailedNote(failed)}${knowledgeWithoutTextNote(withoutText)}`;
+    if (failed.length || withoutText.length) vscode.window.showWarningMessage(note);
     else vscode.window.showInformationMessage(note);
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
@@ -1869,11 +1888,12 @@ async function downloadDepartment(node: { record: AccountRecord; department: str
       return;
     }
     const failed: string[] = [];
-    const n = await writeEntries(dir, entries, failed);
+    const withoutText: string[] = [];
+    const n = await writeEntries(dir, entries, failed, withoutText);
     await offerOpenFolder(
       dir,
-      `Downloaded ${n} ${departmentLabel(node.department)} file(s).${knowledgeFailedNote(failed)}`,
-      failed.length > 0,
+      `Downloaded ${n} ${departmentLabel(node.department)} file(s).${knowledgeFailedNote(failed)}${knowledgeWithoutTextNote(withoutText)}`,
+      failed.length > 0 || withoutText.length > 0,
     );
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
@@ -1917,14 +1937,16 @@ async function downloadEverything(node?: { record?: AccountRecord }): Promise<vo
         progress.report({ message: 'knowledge' });
         const index = await tree.indexFor(record.accountId);
         const knowledgeFailed: string[] = [];
-        count = await writeEntries(dir, selectEntries(index), knowledgeFailed);
+        const knowledgeWithoutText: string[] = [];
+        count = await writeEntries(dir, selectEntries(index), knowledgeFailed, knowledgeWithoutText);
         // Logged now, so the list survives a later step failing.
-        knowledgeNote = knowledgeFailedNote(knowledgeFailed);
+        knowledgeNote = knowledgeFailedNote(knowledgeFailed) + knowledgeWithoutTextNote(knowledgeWithoutText);
         progress.report({ message: 'account commands' });
         const sync = await syncAccountCommands(index, dir);
         if (sync.skippedLocalEdits.length) {
           log.appendLine(`[commands] skipped locally-edited synced files: ${sync.skippedLocalEdits.join(', ')}`);
         }
+        logCommandsLeftWithoutText(sync.leftWithoutText);
 
         // "Everything" means everything: all site projects + department data too
         // (this is the one-button account bootstrap).
@@ -2766,7 +2788,10 @@ async function syncCommands(node: { record: AccountRecord } | undefined): Promis
     const res = await syncAccountCommands(index, folder);
     const bits = [`${res.written.length} written`, `${res.removed.length} removed`];
     if (res.skippedLocalEdits.length) bits.push(`${res.skippedLocalEdits.length} skipped (local edits — Hiveku entry is the source of truth)`);
-    vscode.window.showInformationMessage(`Account commands, skills and agents synced: ${bits.join(', ')}.`);
+    if (res.leftWithoutText.length) bits.push(`${res.leftWithoutText.length} not updated`);
+    logCommandsLeftWithoutText(res.leftWithoutText);
+    const notUpdated = res.leftWithoutText.length ? ` ${copiesNotUpdatedLine(res.leftWithoutText, 'named in the Hiveku output')}` : '';
+    vscode.window.showInformationMessage(`Account commands, skills and agents synced: ${bits.join(', ')}.${notUpdated}`);
   } catch (err) {
     vscode.window.showErrorMessage(`Hiveku: ${errMsg(err)}`);
   }
