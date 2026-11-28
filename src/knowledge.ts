@@ -1794,12 +1794,19 @@ const HIVEKU_ASK: string[] = [
   // moves a live campaign onto or off a shared budget, which changes what it can spend at once; and
   // ppc_bing_shared_budget_update changes a shared budget's daily amount for every campaign on it. A person decides each,
   // as in the other clients; a user's ppc_* allow, auto mode or bypassPermissions would otherwise run them unasked.
-  // No read glob above matches any of the five. Appended last, in this order.
+  // No read glob above matches any of the five. Appended after the other plugin-forced asks, in this order.
   'mcp__hiveku__ppc_experiment_promote',
   'mcp__hiveku__ppc_experiment_graduate',
   'mcp__hiveku__ppc_bing_experiment_update',
   'mcp__hiveku__ppc_bing_campaign_budget_move',
   'mcp__hiveku__ppc_bing_shared_budget_update',
+  // Using only some of an environment group's variables on a site, and stopping that (2026-11-28, MCP #707, builder
+  // #2526): env_group_pick adds the chosen variables' values to the site's live functions at once and env_group_unpick
+  // takes them away, as a link or an unlink of the whole group does above. Every call asks, in auto mode too, as on the
+  // Claude Code plugin's ask list (LIVE_CHANGE_WRITES, 0.27.326) and in the Codex plugin (0.3.118) and hiveku-sync
+  // (0.5.74). Written before the tool server serves them. No read glob matches either name. Appended last.
+  'mcp__hiveku__env_group_pick',
+  'mcp__hiveku__env_group_unpick',
 ];
 
 /**
