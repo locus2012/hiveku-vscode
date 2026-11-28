@@ -839,12 +839,19 @@ const HIVEKU_ALLOW: string[] = [
 // prompt, and in a run with nobody to answer (claude -p, a scheduled cadence)
 // they are refused. The vendored PPC skills (plugin 0.26.36) note the prompt
 // where those reads are taught.
-// NOT here: budget and bid edits (the plugin's ask list gates those), single
-// pauses, pure reads, the creates that land PAUSED or DRAFT, experiment
-// promote/graduate (they change a campaign that is already serving),
-// ppc_bing_experiment_update, and keyword adds (ppc_keyword_add,
+// NOT here: the generic budget and bid edits (ppc_budget_update,
+// ppc_keyword_bid_update and the like: only the plugin's INSTALL ask list
+// names those, its hook does not force them), single pauses, pure reads, the
+// creates that land PAUSED or DRAFT, and keyword adds (ppc_keyword_add,
 // ppc_platform_keyword_add: the skills teach the owner's yes for those, and the
-// plugins leave them unasked too). check-permission-rules.mjs scrapes this
+// plugins leave them unasked too). The two Microsoft shared budget writes
+// (ppc_bing_campaign_budget_move, ppc_bing_shared_budget_update) are the
+// exception: the plugin's hook forces them, so from 0.91.102 they are on this
+// list, as are experiment promote and graduate and ppc_bing_experiment_update
+// (a graduate starts a new campaign on its own daily budget, and a promote
+// moves all of a campaign's traffic onto the treatment). Until 0.91.102 this
+// note left those three out as changes to a campaign already serving.
+// check-permission-rules.mjs scrapes this
 // array by name. New names go at the END: ensureSpendAskRules appends in this
 // order to folders that already hold the earlier ones.
 const HIVEKU_ASK: string[] = [
@@ -1718,11 +1725,12 @@ const HIVEKU_ASK: string[] = [
   // and a department memory entry deleted, put back to an older version or written many at once, which its agents
   // read from their next conversation. Each is on the plugin's ask list (data/permission-critical-tools.json) too.
   // None ends in _get or _list or holds _list_, and no read glob above matches one.
-  // Left out on purpose, though the plugin asks: experiment promote and graduate, ppc_bing_experiment_update and the
-  // two Microsoft shared budget writes (ppc_bing_campaign_budget_move, ppc_bing_shared_budget_update), per the NOT-here
-  // note above the list; and memory_update, which /hiveku-remember's allowed-tools approves (it is how a session writes
-  // its work back to a department's memory), and no generated command may approve a tool the folder asks for
-  // (test/generated-commands-ask.test.mjs). It keeps prompting outside that command, since no allow rule matches it.
+  // Left out on purpose, though the plugin asks: memory_update, how a session writes its work back to a department's
+  // memory. /hiveku-remember's allowed-tools approves it, and so does /hiveku-daily's (with memory_create), which the
+  // scheduled daily brief runs headless (claude -p "/hiveku-daily"); /hiveku-weekly's pass, also scheduled, closes by
+  // writing its note with it. No generated command may approve a tool the folder asks for
+  // (test/generated-commands-ask.test.mjs), and an ask would refuse the call in those headless runs. It is versioned and
+  // can be restored, and it keeps prompting outside those commands, since no allow rule matches it.
   // Appended last, in this order.
   'mcp__hiveku__ppc_google_auto_apply_set',
   'mcp__hiveku__ppc_google_campaign_settings_set',
@@ -1776,6 +1784,22 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__memory_delete',
   'mcp__hiveku__memory_restore_version',
   'mcp__hiveku__memory_bulk_create',
+  // The experiment and Microsoft shared budget writes the plugin's hook forces (LIVE_CHANGE_WRITES), which the NOT-here
+  // note above the list left out until 0.91.102. Codex prompts for each and hiveku-sync lists each. ppc_experiment_promote
+  // adopts an experiment's treatment into the base campaign, which then serves all traffic on the treatment's bidding and
+  // URLs (on Microsoft, changes made to the base during the test are deleted); ppc_experiment_graduate turns a Google
+  // test copy into a permanent campaign on a new daily budget while the original keeps running, so account spend rises
+  // by that budget every day; ppc_bing_experiment_update changes a Microsoft experiment's dates or status (graduated adds
+  // the base campaign's daily budget to account spend, and ended cannot be restarted); ppc_bing_campaign_budget_move
+  // moves a live campaign onto or off a shared budget, which changes what it can spend at once; and
+  // ppc_bing_shared_budget_update changes a shared budget's daily amount for every campaign on it. A person decides each,
+  // as in the other clients; a user's ppc_* allow, auto mode or bypassPermissions would otherwise run them unasked.
+  // No read glob above matches any of the five. Appended last, in this order.
+  'mcp__hiveku__ppc_experiment_promote',
+  'mcp__hiveku__ppc_experiment_graduate',
+  'mcp__hiveku__ppc_bing_experiment_update',
+  'mcp__hiveku__ppc_bing_campaign_budget_move',
+  'mcp__hiveku__ppc_bing_shared_budget_update',
 ];
 
 /**

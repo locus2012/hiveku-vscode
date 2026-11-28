@@ -1058,15 +1058,29 @@ describe('what the extension writes and wires', () => {
       'the HK-2106 ask comes after the seven catch-up asks and before the plugin-forced asks',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__accounting_subscription_create',\n" +
           "  'mcp__hiveku__account_memory_draft_propose',\n" +
           "  'mcp__hiveku__account_memory_append',\n" +
           "  'mcp__hiveku__memory_delete',\n" +
           "  'mcp__hiveku__memory_restore_version',\n" +
-          "  'mcp__hiveku__memory_bulk_create',",
+          "  'mcp__hiveku__memory_bulk_create',\n",
       ),
-      'the newest ask rules, the writes the Claude Code plugin\'s hook asks before that this list lacked (0.91.102), go at the END',
+      'the writes the Claude Code plugin\'s hook asks before that this list lacked (0.91.102) end with the memory writes',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__memory_bulk_create'") < ask.indexOf("'mcp__hiveku__ppc_experiment_promote'"),
+      'the experiment and shared budget writes come after the other plugin-forced asks',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__ppc_experiment_promote',\n" +
+          "  'mcp__hiveku__ppc_experiment_graduate',\n" +
+          "  'mcp__hiveku__ppc_bing_experiment_update',\n" +
+          "  'mcp__hiveku__ppc_bing_campaign_budget_move',\n" +
+          "  'mcp__hiveku__ppc_bing_shared_budget_update',",
+      ),
+      'the newest ask rules, the experiment and Microsoft shared budget writes the NOT-here note left out until 0.91.102, go at the END',
     );
   });
 

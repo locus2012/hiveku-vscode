@@ -929,18 +929,16 @@ const PLUGIN_FORCED_ASKS = [
   'mcp__hiveku__memory_delete',
   'mcp__hiveku__memory_restore_version',
   'mcp__hiveku__memory_bulk_create',
-];
-const PLUGIN_FORCED_NOT_PPC = PLUGIN_FORCED_ASKS.filter((name) => !name.startsWith('mcp__hiveku__ppc_'));
-const PLUGIN_FORCED_NOT_PPC_OR_WORKFLOW = PLUGIN_FORCED_NOT_PPC.filter((name) => !name.startsWith('mcp__hiveku__workflow_'));
-/** The plugin-forced writes this list still leaves out, each for a reason knowledge.ts gives above HIVEKU_ASK's end. */
-const PLUGIN_FORCED_LEFT_OUT = [
   'mcp__hiveku__ppc_experiment_promote',
   'mcp__hiveku__ppc_experiment_graduate',
   'mcp__hiveku__ppc_bing_experiment_update',
   'mcp__hiveku__ppc_bing_campaign_budget_move',
   'mcp__hiveku__ppc_bing_shared_budget_update',
-  'mcp__hiveku__memory_update',
 ];
+const PLUGIN_FORCED_NOT_PPC = PLUGIN_FORCED_ASKS.filter((name) => !name.startsWith('mcp__hiveku__ppc_'));
+const PLUGIN_FORCED_NOT_PPC_OR_WORKFLOW = PLUGIN_FORCED_NOT_PPC.filter((name) => !name.startsWith('mcp__hiveku__workflow_'));
+/** The plugin-forced write this list still leaves out, for the reason knowledge.ts gives above HIVEKU_ASK's end. */
+const PLUGIN_FORCED_LEFT_OUT = ['mcp__hiveku__memory_update'];
 /** The three of them that ask only in ask mode in the Hiveku app. The plugin's hook leaves a direct call to the person's
  * settings; an ask rule cannot tell the modes apart, so here they ask every time, as in the Codex plugin. */
 const TEMP_ENV_ASK_MODE_ONLY = [
@@ -1131,7 +1129,7 @@ describe('Scaffolded settings: ask rules for the tools that switch ads or workfl
       // A user who keeps every CRM tool from Claude Code: the deny covers the contract recipient and signer writes and the email cancel, so they are not also asked.
       [['mcp__hiveku__crm_*'], without(...CONTRACT_RECIPIENTS, ...CONTRACT_SIGNERS, ...EMAIL_CANCEL, 'mcp__hiveku__crm_contact_booking_link_send', ...CONTACT_RESTORE, ...DEPARTMENT_APPROVALS.filter((name) => name.startsWith('mcp__hiveku__crm_')), ...CATCH_UP_ASKS.filter((name) => name.startsWith('mcp__hiveku__crm_')), ...PLUGIN_FORCED_ASKS.filter((name) => name.startsWith('mcp__hiveku__crm_')))],
       [['mcp__hiveku__ppc_*enable_resource'], without('mcp__hiveku__ppc_enable_resource', 'mcp__hiveku__ppc_platform_enable_resource')],
-      [['mcp__hiveku__*_experiment_*'], without('mcp__hiveku__ppc_experiment_schedule', 'mcp__hiveku__ppc_bing_experiment_create', 'mcp__hiveku__ppc_experiment_treatment_set')],
+      [['mcp__hiveku__*_experiment_*'], without('mcp__hiveku__ppc_experiment_schedule', 'mcp__hiveku__ppc_bing_experiment_create', 'mcp__hiveku__ppc_experiment_treatment_set', 'mcp__hiveku__ppc_experiment_promote', 'mcp__hiveku__ppc_experiment_graduate', 'mcp__hiveku__ppc_bing_experiment_update')],
       [['mcp__hiveku__ppc_linkedin_*'], without('mcp__hiveku__ppc_linkedin_creatives', 'mcp__hiveku__ppc_linkedin_campaign_update', 'mcp__hiveku__ppc_linkedin_campaign_group_update')],
       // Not a cover: another server, a name prefix with no glob, a Bash rule.
       [['mcp__hiveku_old', 'mcp__hiveku__ppc', 'mcp__other__*', 'Bash(*)'], EXPECTED_ASK],
@@ -1521,7 +1519,7 @@ describe('ensureSpendAskRules: a folder scaffolded before the ask rules', () => 
     );
   });
 
-  test('the plugin-forced asks ask and no read glob approves them, and the ones left out on purpose stay unasked', async () => {
+  test('the plugin-forced asks ask and no read glob approves them, and the one left out on purpose stays unasked', async () => {
     const dir = await tmp('hk-ask-plugin-forced-');
     await scaffoldAccount(dir);
     const { permissions } = await readSettings(dir);
@@ -1529,9 +1527,9 @@ describe('ensureSpendAskRules: a folder scaffolded before the ask rules', () => 
       assert.ok(permissions.ask.includes(name), `${name} must ask`);
       assert.deepEqual(permissions.allow.filter((rule) => globMatches(rule, name)), [], `${name} is approved by a read glob`);
     }
-    // knowledge.ts gives the reason for each: experiment promote/graduate, ppc_bing_experiment_update and the shared
-    // budget writes are in the NOT-here note above HIVEKU_ASK, and /hiveku-remember's allowed-tools approves memory_update
-    // (generated-commands-ask.test.mjs). None is allowed either, so each still prompts in default mode.
+    // knowledge.ts gives the reason: /hiveku-remember's and /hiveku-daily's allowed-tools approve memory_update
+    // (generated-commands-ask.test.mjs), the scheduled daily brief runs /hiveku-daily headless, and the weekly pass
+    // closes with it. No allow rule matches it, so it still prompts in default mode outside those commands.
     for (const name of PLUGIN_FORCED_LEFT_OUT) {
       assert.equal(permissions.ask.includes(name), false, `${name} is left out on purpose; take it out of PLUGIN_FORCED_LEFT_OUT first`);
       assert.deepEqual(permissions.allow.filter((rule) => globMatches(rule, name)), [], `${name} is approved by a read glob`);
