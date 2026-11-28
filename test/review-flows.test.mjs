@@ -1041,16 +1041,46 @@ describe('what the extension writes and wires', () => {
       'the seven catch-up asks come after the four held writes',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__marketing_template_test_send',\n" +
           "  'mcp__hiveku__email_send_test',\n" +
           "  'mcp__hiveku__accounting_invoice_send',\n" +
           "  'mcp__hiveku__survey_send',\n" +
           "  'mcp__hiveku__social_comment_reply_delete',\n" +
           "  'mcp__hiveku__social_comment_reply_edit',\n" +
-          "  'mcp__hiveku__crm_contacts_import_file',",
+          "  'mcp__hiveku__crm_contacts_import_file',\n",
       ),
-      'the newest ask rules, the seven the other clients already ask before (HK-2031, HK-2293, HK-2143), go at the END',
+      'the seven the other clients already ask before (HK-2031, HK-2293, HK-2143) are listed together',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__crm_contacts_import_file'") < ask.indexOf("'mcp__hiveku__ppc_bing_automated_extensions_set'") &&
+        ask.indexOf("'mcp__hiveku__ppc_bing_automated_extensions_set'") < ask.indexOf("'mcp__hiveku__ppc_google_auto_apply_set'"),
+      'the HK-2106 ask comes after the seven catch-up asks and before the plugin-forced asks',
+    );
+    assert.ok(
+      ask.includes(
+        "  'mcp__hiveku__accounting_subscription_create',\n" +
+          "  'mcp__hiveku__account_memory_draft_propose',\n" +
+          "  'mcp__hiveku__account_memory_append',\n" +
+          "  'mcp__hiveku__memory_delete',\n" +
+          "  'mcp__hiveku__memory_restore_version',\n" +
+          "  'mcp__hiveku__memory_bulk_create',\n",
+      ),
+      'the writes the Claude Code plugin\'s hook asks before that this list lacked (0.91.102) end with the memory writes',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__memory_bulk_create'") < ask.indexOf("'mcp__hiveku__ppc_experiment_promote'"),
+      'the experiment and shared budget writes come after the other plugin-forced asks',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith(
+        "  'mcp__hiveku__ppc_experiment_promote',\n" +
+          "  'mcp__hiveku__ppc_experiment_graduate',\n" +
+          "  'mcp__hiveku__ppc_bing_experiment_update',\n" +
+          "  'mcp__hiveku__ppc_bing_campaign_budget_move',\n" +
+          "  'mcp__hiveku__ppc_bing_shared_budget_update',",
+      ),
+      'the newest ask rules, the experiment and Microsoft shared budget writes the NOT-here note left out until 0.91.102, go at the END',
     );
   });
 

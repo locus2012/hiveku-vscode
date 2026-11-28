@@ -614,12 +614,14 @@ const HIVEKU_ALLOW: string[] = [
   // account_memory_get is already a read under '*_get'; named so the pair is
   // explicit. account_memory_append is NOT listed and matches no glob here:
   // it suggests a line every department agent reads until an owner reviews
-  // it, so it keeps prompting (it is on the plugin's ask list too).
+  // it, so it keeps prompting (it is on the plugin's ask list too, and on
+  // HIVEKU_ASK from 0.91.102, so it asks in every mode).
   'mcp__hiveku__account_memory_get',
   // The memory event log (plan 14.3): memory_log_list is already a read under
   // '*_list'; memory_log_summary (GET, readOnlyHint) matches no glob, so it is
   // named. The memory writes (memory_update / _delete / _restore_version /
-  // _bulk_create) are not listed and keep prompting.
+  // _bulk_create) are not listed and keep prompting. From 0.91.102 all but
+  // memory_update are on HIVEKU_ASK too (see the note there on why it is not).
   'mcp__hiveku__memory_log_summary',
   // Who is on the AI team and who is working now (MCP #174; GET, readOnlyHint). Already
   // a read under '*_get'; named so the memory reads are explicit, like account_memory_get.
@@ -695,7 +697,8 @@ const HIVEKU_ALLOW: string[] = [
   'mcp__hiveku__project_annotation_screenshot',
   // The analytics READS, by name: a glob over analytics_* also approved
   // analytics_visitor_intelligence_start (2026-10-26, HK-727), which turns
-  // Visitor Intelligence on and must ask. The three POSTs are reads
+  // Visitor Intelligence on and must ask (it is on HIVEKU_ASK from 0.91.102,
+  // so it asks in every mode). The three POSTs are reads
   // (POST_READS in scripts/check-permission-rules.mjs).
   'mcp__hiveku__analytics_overview',
   'mcp__hiveku__analytics_pages',
@@ -736,7 +739,8 @@ const HIVEKU_ALLOW: string[] = [
   // are taught to preview a path rule before excluding it. The settings _get
   // and the _list already match the globs above; the settings update and the
   // purge (a permanent erase) match nothing here and keep prompting. The purge
-  // is on HIVEKU_ASK too (wave S5a), so it asks in every mode.
+  // is on HIVEKU_ASK too (wave S5a), and the settings update from 0.91.102, so
+  // both ask in every mode.
   'mcp__hiveku__marketing_form_capture_preview',
   // Who a social post is for and why (2026-11-14), by EXACT name: social_post_strategy_check is a POST that only
   // reads (readOnlyHint; it never blocks a post, costs nothing and calls no AI), so the permission gate takes it as a
@@ -835,12 +839,19 @@ const HIVEKU_ALLOW: string[] = [
 // prompt, and in a run with nobody to answer (claude -p, a scheduled cadence)
 // they are refused. The vendored PPC skills (plugin 0.26.36) note the prompt
 // where those reads are taught.
-// NOT here: budget and bid edits (the plugin's ask list gates those), single
-// pauses, pure reads, the creates that land PAUSED or DRAFT, experiment
-// promote/graduate (they change a campaign that is already serving),
-// ppc_bing_experiment_update, and keyword adds (ppc_keyword_add,
+// NOT here: the generic budget and bid edits (ppc_budget_update,
+// ppc_keyword_bid_update and the like: only the plugin's INSTALL ask list
+// names those, its hook does not force them), single pauses, pure reads, the
+// creates that land PAUSED or DRAFT, and keyword adds (ppc_keyword_add,
 // ppc_platform_keyword_add: the skills teach the owner's yes for those, and the
-// plugins leave them unasked too). check-permission-rules.mjs scrapes this
+// plugins leave them unasked too). The two Microsoft shared budget writes
+// (ppc_bing_campaign_budget_move, ppc_bing_shared_budget_update) are the
+// exception: the plugin's hook forces them, so from 0.91.102 they are on this
+// list, as are experiment promote and graduate and ppc_bing_experiment_update
+// (a graduate starts a new campaign on its own daily budget, and a promote
+// moves all of a campaign's traffic onto the treatment). Until 0.91.102 this
+// note left those three out as changes to a campaign already serving.
+// check-permission-rules.mjs scrapes this
 // array by name. New names go at the END: ensureSpendAskRules appends in this
 // order to folders that already hold the earlier ones.
 const HIVEKU_ASK: string[] = [
@@ -1595,8 +1606,9 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__helpdesk_ticket_field_delete',
   'mcp__hiveku__project_vcs_ai_review_set',
   // Changing a customer subscription in place (2026-11-12, HK-1566, 0.91.84): its price, quantity, tax rate or next
-  // billing date, so what the client is charged from the next renewal, as accounting_subscription_create asks above.
-  // Its name ends in neither _get nor _list and holds no _list_, so no read glob approves it. Appended last.
+  // billing date, so what the client is charged from the next renewal. accounting_subscription_create, which starts one,
+  // asks too, from 0.91.102 (until then this comment said it already did, and it did not). Its name ends in neither _get
+  // nor _list and holds no _list_, so no read glob approves it. Appended last.
   'mcp__hiveku__accounting_subscription_update',
   // Deciding an Accounting money card (2026-11-12, 0.91.85): accounting_approval_decide approves a card the Accounting
   // assistant staged, which pays, sends or runs payroll at once, or cancels it. Hiveku takes it only from the Hiveku
@@ -1683,7 +1695,7 @@ const HIVEKU_ASK: string[] = [
   // and a survey or review request to up to 200 people), taking back or rewriting a public reply Hiveku sent to a
   // Facebook or Instagram comment (HK-2293), and the contact file import of up to 100,000 contacts (HK-2143). Each is
   // on one of the Claude Code plugin's hook maps, so its hook asks where it is installed; this rule asks in a folder
-  // without it and in every mode. No read glob matches any of the seven. Appended last.
+  // without it and in every mode. No read glob matches any of the seven. Appended after the four held writes.
   'mcp__hiveku__marketing_template_test_send',
   'mcp__hiveku__email_send_test',
   'mcp__hiveku__accounting_invoice_send',
@@ -1691,6 +1703,103 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__social_comment_reply_delete',
   'mcp__hiveku__social_comment_reply_edit',
   'mcp__hiveku__crm_contacts_import_file',
+  // Microsoft Ads automated extensions (2026-11-28, HK-2106, MCP 1463160bcff5): ppc_bing_automated_extensions_set
+  // switches the callouts, snippets, sitelinks and the other extensions Microsoft writes from the site off or back on
+  // for every live ad on the ad account at once. Its first call previews; the confirm call is the model's, so the yes
+  // must be a person's. Every call asks, in every mode, as the Claude Code plugin (LIVE_CHANGE_WRITES, 0.27.317), the
+  // Codex plugin (0.3.116) and hiveku-sync (0.5.73) do. A user's allow of every ppc_ tool (a ppc_* glob) would
+  // otherwise run it unasked; an ask beats an allow. No read glob above matches it, and its read,
+  // ppc_bing_automated_extensions_get, gets no rule (it follows the folder's settings). Appended after the seven
+  // catch-up asks.
+  'mcp__hiveku__ppc_bing_automated_extensions_set',
+  // The other writes the Claude Code plugin's hook asks before on every direct call and in a batch (its
+  // LIVE_CHANGE_WRITES and ALWAYS_ASK_WRITES, plugin 0.27.323), which this list lacked until 0.91.102: live Google,
+  // Microsoft and Meta ad settings, ad text, sitelinks, extensions, negatives removed and an experiment's treatment;
+  // the conversions, adjustments, customer lists and Meta test events the ad platforms learn from and cannot take back;
+  // the budget target and connection settings the spend guardrail and auto-pause are measured against; workflow
+  // variables, switching email marketing on, an approved coder-agent deploy or push, and holding a post for approval;
+  // a live site's indexing, form capture, firewall, server copies, page cache, builds, backups, sending DNS and visitor
+  // identification; GA4 key events, event rules and custom definitions; a person's chats erased and how long chats are
+  // kept; a call recording kept on an activity; a new customer subscription, which can charge the saved card at once;
+  // a proposed About your business and a suggested line for it, which every agent reads until an owner reviews it;
+  // and a department memory entry deleted, put back to an older version or written many at once, which its agents
+  // read from their next conversation. Each is on the plugin's ask list (data/permission-critical-tools.json) too.
+  // None ends in _get or _list or holds _list_, and no read glob above matches one.
+  // Left out on purpose, though the plugin asks: memory_update, how a session writes its work back to a department's
+  // memory. /hiveku-remember's allowed-tools approves it, and so does /hiveku-daily's (with memory_create), which the
+  // scheduled daily brief runs headless (claude -p "/hiveku-daily"); /hiveku-weekly's pass, also scheduled, closes by
+  // writing its note with it. No generated command may approve a tool the folder asks for
+  // (test/generated-commands-ask.test.mjs), and an ask would refuse the call in those headless runs. It is versioned and
+  // can be restored, and it keeps prompting outside those commands, since no allow rule matches it.
+  // Appended last, in this order.
+  'mcp__hiveku__ppc_google_auto_apply_set',
+  'mcp__hiveku__ppc_google_campaign_settings_set',
+  'mcp__hiveku__ppc_google_ad_schedule_set',
+  'mcp__hiveku__ppc_google_audience_exclusions_set',
+  'mcp__hiveku__ppc_google_call_settings_set',
+  'mcp__hiveku__ppc_google_campaign_ai_settings_set',
+  'mcp__hiveku__ppc_google_campaign_conversion_goals_set',
+  'mcp__hiveku__ppc_bing_campaign_ai_settings_set',
+  'mcp__hiveku__ppc_bing_url_tracking_set',
+  'mcp__hiveku__ppc_google_ad_text_update',
+  'mcp__hiveku__ppc_google_ads_text_replace',
+  'mcp__hiveku__ppc_bing_rsa_text_update',
+  'mcp__hiveku__ppc_meta_ad_text_update',
+  'mcp__hiveku__ppc_google_sitelink_update',
+  'mcp__hiveku__ppc_bing_ad_extension_update',
+  'mcp__hiveku__ppc_bing_ad_extension_remove',
+  'mcp__hiveku__ppc_negatives_remove',
+  'mcp__hiveku__ppc_experiment_treatment_set',
+  'mcp__hiveku__ppc_conversion_adjustments_run',
+  'mcp__hiveku__ppc_conversion_adjustments_set',
+  'mcp__hiveku__ppc_offline_conversion_upload',
+  'mcp__hiveku__ppc_customer_match_upload',
+  'mcp__hiveku__ppc_meta_lead_quality_test',
+  'mcp__hiveku__ppc_goals_set',
+  'mcp__hiveku__ppc_budget_target_set',
+  'mcp__hiveku__ppc_connection_update',
+  'mcp__hiveku__workflow_env_set',
+  'mcp__hiveku__workflow_env_delete',
+  'mcp__hiveku__marketing_activate',
+  'mcp__hiveku__agent_approval_approve',
+  'mcp__hiveku__social_post_send_for_approval',
+  'mcp__hiveku__project_indexing_set',
+  'mcp__hiveku__marketing_form_capture_settings_update',
+  'mcp__hiveku__site_firewall_trust_range',
+  'mcp__hiveku__project_concurrency_set',
+  'mcp__hiveku__project_page_cache_set',
+  'mcp__hiveku__deploy_build_cancel',
+  'mcp__hiveku__project_backup_create',
+  'mcp__hiveku__email_domain_auto_configure',
+  'mcp__hiveku__analytics_visitor_intelligence_start',
+  'mcp__hiveku__seo_ga4_key_event_update',
+  'mcp__hiveku__seo_ga4_event_create_rule_update',
+  'mcp__hiveku__seo_ga4_custom_definition_archive',
+  'mcp__hiveku__helpdesk_contact_data_erase',
+  'mcp__hiveku__helpdesk_chat_retention_set',
+  'mcp__hiveku__crm_activity_recording_finalize',
+  'mcp__hiveku__accounting_subscription_create',
+  'mcp__hiveku__account_memory_draft_propose',
+  'mcp__hiveku__account_memory_append',
+  'mcp__hiveku__memory_delete',
+  'mcp__hiveku__memory_restore_version',
+  'mcp__hiveku__memory_bulk_create',
+  // The experiment and Microsoft shared budget writes the plugin's hook forces (LIVE_CHANGE_WRITES), which the NOT-here
+  // note above the list left out until 0.91.102. Codex prompts for each and hiveku-sync lists each. ppc_experiment_promote
+  // adopts an experiment's treatment into the base campaign, which then serves all traffic on the treatment's bidding and
+  // URLs (on Microsoft, changes made to the base during the test are deleted); ppc_experiment_graduate turns a Google
+  // test copy into a permanent campaign on a new daily budget while the original keeps running, so account spend rises
+  // by that budget every day; ppc_bing_experiment_update changes a Microsoft experiment's dates or status (graduated adds
+  // the base campaign's daily budget to account spend, and ended cannot be restarted); ppc_bing_campaign_budget_move
+  // moves a live campaign onto or off a shared budget, which changes what it can spend at once; and
+  // ppc_bing_shared_budget_update changes a shared budget's daily amount for every campaign on it. A person decides each,
+  // as in the other clients; a user's ppc_* allow, auto mode or bypassPermissions would otherwise run them unasked.
+  // No read glob above matches any of the five. Appended last, in this order.
+  'mcp__hiveku__ppc_experiment_promote',
+  'mcp__hiveku__ppc_experiment_graduate',
+  'mcp__hiveku__ppc_bing_experiment_update',
+  'mcp__hiveku__ppc_bing_campaign_budget_move',
+  'mcp__hiveku__ppc_bing_shared_budget_update',
 ];
 
 /**

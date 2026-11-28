@@ -316,9 +316,9 @@ included number before adding it.
 
 ### 2.8 GBP fields: public immediately
 
-All ten served `seo_gbp_*` writes preview first and publish on the identical call with
+Ten of the eleven `seo_gbp_*` writes preview first and publish on the identical call with
 `confirm: true`, straight onto the live listing. The eleventh, `seo_gbp_google_updates_resolve`
-(keep or undo Google's own changes to the listing, not served until its MCP release), also previews
+(keep or undo Google's own changes to the listing), also previews
 first, and its confirm call repeats the identical call with `confirm: true` and the preview's
 `preview_hash`: a 409 `preview_changed` means the listing moved since the preview, so preview again. `seo_gbp_location_update` changes only the fields
 in `updates`, but a name, address, category or service-area edit (business type, cities served, address
@@ -393,7 +393,7 @@ prompt the operator before these run, when the ask block is installed: `deploy_s
 `seo_report_clear`, `seo_deliverable_delete`, `seo_connection_delete`, `seo_gsc_delete_sitemap`,
 `seo_gtm_install`, `seo_gtm_publish`, `seo_ga4_key_event_delete`,
 `seo_ga4_event_create_rule_delete` and all eleven `seo_gbp_*` writes (`seo_gbp_google_updates_resolve`
-included, before its MCP release serves it). It is a harness prompt, not
+included). It is a harness prompt, not
 a server rail: it does not exist inside a workflow or another host, and `pages_update`,
 `cms_write_entry`, `project_redirects_deploy`, `seo_tracked_keyword_delete`,
 `seo_project_update`, `seo_track_keyword`, `seo_aeo_rankings_sync`, `seo_citations_audit` and
