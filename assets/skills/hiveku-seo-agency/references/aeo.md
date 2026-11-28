@@ -15,7 +15,8 @@ outside the Availability table is a handoff, named as such.
 
 Cost classes: A = free DB read; write = free, confirm-gated; C = live SERP per keyword; G = an
 AI-lane check, one per keyword per engine, queued for Hiveku's checker, against the account's daily
-re-check limit (not billed per check); H = LLM-scored against a shared per-UTC-day budget.
+re-check limit (not billed per check); H = LLM-scored against a shared per-UTC-day budget;
+R = one paid research lookup per prompt per assistant, against the monthly SEO research cap.
 A 402 on a metered call is 402 `seo_research_limit`: this month's research lookups are used up;
 they start again next month, and the next plan has more (`account_usage_get`).
 
@@ -25,6 +26,7 @@ they start again next month, and the next plan has more (`account_usage_get`).
 | `seo_entity_check` | LIVE | free | Knowledge Graph lookup, `query` required |
 | `seo_aeo_audit_get` | LIVE | A | stored SERP-side results; `since` for incremental re-reads |
 | `seo_aeo_audit_run` | LIVE | C | one SERP call per keyword, cap 25; `location_code` is a NUMBER |
+| `seo_ai_answer_probe` | LIVE | R | read-only: up to 10 prompts on `chatgpt`, `perplexity`, `ai_overview` (default) and `gemini`, at most 20 checks a call; per answer the excerpt, `cited_urls`, `cited_domains`, `mentioned_brands`, `target_mentioned`, `target_cited`; `answer_kind` says app answer, API with search, or results page, and an AI Overview that did not show is `no_answer`. Gemini's answers are not yet checked against a live answer, so treat a Gemini read as provisional; Claude is not offered yet |
 | `seo_aeo_rankings_sync` | LIVE | G | one check per keyword x engine, queued for Hiveku's checker; the call answers within about 45 seconds and a lane not done by then answers `pending: true`; `location_code` is a STRING; `skip_sync: true` creates rows without spending |
 | `seo_rankings_list` (= `seo_list_rankings`) | LIVE | A | reads the synced AI lanes back: `search_engine` `ai_overview`, `chatgpt`, `perplexity`, `claude`, `gemini`; `group_by_keyword: true` |
 | `seo_aeo_brand_profile_get`, `seo_aeo_brand_profile_upsert` | LIVE | A / write | upsert is a FULL REPLACE (5.1) |
@@ -66,7 +68,8 @@ they start again next month, and the next plan has more (`account_usage_get`).
    `seo_featured_snippets`, Play E.
 4. **Presence.** Is the brand cited? `seo_aeo_audit_run` / `seo_aeo_audit_get` for Google's answer
    surfaces, `seo_aeo_brand_audit` for what LLMs say unprompted, `seo_aeo_rankings_sync` for tracked
-   AI positions.
+   AI positions, `seo_ai_answer_probe` for what the assistants answer and cite for a prompt today,
+   with no tracked keyword or brand profile.
 
 Never schedule gate-4 work while gate 1 fails: a client paying for AI Overview citations while
 robots.txt blocks GPTBot is billed for nothing.

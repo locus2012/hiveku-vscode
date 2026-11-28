@@ -2,6 +2,7 @@
 
 ## 0.91.103
 - **Using only some of an environment group's variables on a site always asks.** Claude Code in your project folders now asks before env_group_pick, which gives a site only the variables you choose from an account's environment group, and env_group_unpick, which takes them away again. Each changes what the site's live functions read at once, as linking or unlinking the whole group does, so it asks in every permission mode, as the Claude Code and Codex plugins do. A folder set up earlier gains the two ask rules on its next start, after the others.
+- **The AEO guide your assistant reads covers the AI answer check.** It says how your assistant checks what AI assistants answer for a prompt, and which sites they cite, without a tracked keyword, and that each prompt checked on each assistant uses one SEO research lookup. The vendored skills are copied from Claude Code plugin 0.27.325.
 
 ## 0.91.102
 - **Switching Microsoft Ads automated extensions on or off always asks.** Claude Code in your project folders now asks before ppc_bing_automated_extensions_set, which switches the callouts, snippets, sitelinks and other extensions Microsoft writes from your site off or back on for every ad on the ad account. It asks in every permission mode, and even if you allowed every ads tool, as the Claude Code and Codex plugins and hiveku-sync do.
