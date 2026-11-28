@@ -1073,14 +1073,22 @@ describe('what the extension writes and wires', () => {
       'the experiment and shared budget writes come after the other plugin-forced asks',
     );
     assert.ok(
-      ask.trimEnd().endsWith(
+      ask.includes(
         "  'mcp__hiveku__ppc_experiment_promote',\n" +
           "  'mcp__hiveku__ppc_experiment_graduate',\n" +
           "  'mcp__hiveku__ppc_bing_experiment_update',\n" +
           "  'mcp__hiveku__ppc_bing_campaign_budget_move',\n" +
-          "  'mcp__hiveku__ppc_bing_shared_budget_update',",
+          "  'mcp__hiveku__ppc_bing_shared_budget_update',\n",
       ),
-      'the newest ask rules, the experiment and Microsoft shared budget writes the NOT-here note left out until 0.91.102, go at the END',
+      'the experiment and Microsoft shared budget writes the NOT-here note left out until 0.91.102 are listed together',
+    );
+    assert.ok(
+      ask.indexOf("'mcp__hiveku__ppc_bing_shared_budget_update'") < ask.indexOf("'mcp__hiveku__env_group_pick'"),
+      'the two environment group pick asks come after the experiment and shared budget writes',
+    );
+    assert.ok(
+      ask.trimEnd().endsWith("  'mcp__hiveku__env_group_pick',\n" + "  'mcp__hiveku__env_group_unpick',"),
+      'the newest ask rules, picking and unpicking an environment group\'s variables (MCP #707), go at the END',
     );
   });
 
