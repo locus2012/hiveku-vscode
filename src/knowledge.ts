@@ -614,12 +614,14 @@ const HIVEKU_ALLOW: string[] = [
   // account_memory_get is already a read under '*_get'; named so the pair is
   // explicit. account_memory_append is NOT listed and matches no glob here:
   // it suggests a line every department agent reads until an owner reviews
-  // it, so it keeps prompting (it is on the plugin's ask list too).
+  // it, so it keeps prompting (it is on the plugin's ask list too, and on
+  // HIVEKU_ASK from 0.91.102, so it asks in every mode).
   'mcp__hiveku__account_memory_get',
   // The memory event log (plan 14.3): memory_log_list is already a read under
   // '*_list'; memory_log_summary (GET, readOnlyHint) matches no glob, so it is
   // named. The memory writes (memory_update / _delete / _restore_version /
-  // _bulk_create) are not listed and keep prompting.
+  // _bulk_create) are not listed and keep prompting. From 0.91.102 all but
+  // memory_update are on HIVEKU_ASK too (see the note there on why it is not).
   'mcp__hiveku__memory_log_summary',
   // Who is on the AI team and who is working now (MCP #174; GET, readOnlyHint). Already
   // a read under '*_get'; named so the memory reads are explicit, like account_memory_get.
@@ -1712,13 +1714,15 @@ const HIVEKU_ASK: string[] = [
   // a live site's indexing, form capture, firewall, server copies, page cache, builds, backups, sending DNS and visitor
   // identification; GA4 key events, event rules and custom definitions; a person's chats erased and how long chats are
   // kept; a call recording kept on an activity; a new customer subscription, which can charge the saved card at once;
-  // and a proposed About your business. Each is on the plugin's ask list (data/permission-critical-tools.json) too.
+  // a proposed About your business and a suggested line for it, which every agent reads until an owner reviews it;
+  // and a department memory entry deleted, put back to an older version or written many at once, which its agents
+  // read from their next conversation. Each is on the plugin's ask list (data/permission-critical-tools.json) too.
   // None ends in _get or _list or holds _list_, and no read glob above matches one.
-  // Left out on purpose, as the plugin still asks: experiment promote and graduate, ppc_bing_experiment_update and
-  // the two Microsoft shared budget writes (ppc_bing_campaign_budget_move, ppc_bing_shared_budget_update), per the
-  // NOT-here note above the list; and the memory writes (memory_update, memory_delete, memory_restore_version,
-  // memory_bulk_create, account_memory_append), which keep prompting by not being allowed (see HIVEKU_ALLOW) and which
-  // /hiveku-remember's allowed-tools approves for memory_update, since every session writes its work back through them.
+  // Left out on purpose, though the plugin asks: experiment promote and graduate, ppc_bing_experiment_update and the
+  // two Microsoft shared budget writes (ppc_bing_campaign_budget_move, ppc_bing_shared_budget_update), per the NOT-here
+  // note above the list; and memory_update, which /hiveku-remember's allowed-tools approves (it is how a session writes
+  // its work back to a department's memory), and no generated command may approve a tool the folder asks for
+  // (test/generated-commands-ask.test.mjs). It keeps prompting outside that command, since no allow rule matches it.
   // Appended last, in this order.
   'mcp__hiveku__ppc_google_auto_apply_set',
   'mcp__hiveku__ppc_google_campaign_settings_set',
@@ -1768,6 +1772,10 @@ const HIVEKU_ASK: string[] = [
   'mcp__hiveku__crm_activity_recording_finalize',
   'mcp__hiveku__accounting_subscription_create',
   'mcp__hiveku__account_memory_draft_propose',
+  'mcp__hiveku__account_memory_append',
+  'mcp__hiveku__memory_delete',
+  'mcp__hiveku__memory_restore_version',
+  'mcp__hiveku__memory_bulk_create',
 ];
 
 /**

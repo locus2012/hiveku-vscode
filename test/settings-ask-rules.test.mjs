@@ -925,6 +925,10 @@ const PLUGIN_FORCED_ASKS = [
   'mcp__hiveku__crm_activity_recording_finalize',
   'mcp__hiveku__accounting_subscription_create',
   'mcp__hiveku__account_memory_draft_propose',
+  'mcp__hiveku__account_memory_append',
+  'mcp__hiveku__memory_delete',
+  'mcp__hiveku__memory_restore_version',
+  'mcp__hiveku__memory_bulk_create',
 ];
 const PLUGIN_FORCED_NOT_PPC = PLUGIN_FORCED_ASKS.filter((name) => !name.startsWith('mcp__hiveku__ppc_'));
 const PLUGIN_FORCED_NOT_PPC_OR_WORKFLOW = PLUGIN_FORCED_NOT_PPC.filter((name) => !name.startsWith('mcp__hiveku__workflow_'));
@@ -936,10 +940,6 @@ const PLUGIN_FORCED_LEFT_OUT = [
   'mcp__hiveku__ppc_bing_campaign_budget_move',
   'mcp__hiveku__ppc_bing_shared_budget_update',
   'mcp__hiveku__memory_update',
-  'mcp__hiveku__memory_delete',
-  'mcp__hiveku__memory_restore_version',
-  'mcp__hiveku__memory_bulk_create',
-  'mcp__hiveku__account_memory_append',
 ];
 /** The three of them that ask only in ask mode in the Hiveku app. The plugin's hook leaves a direct call to the person's
  * settings; an ask rule cannot tell the modes apart, so here they ask every time, as in the Codex plugin. */
@@ -1530,8 +1530,8 @@ describe('ensureSpendAskRules: a folder scaffolded before the ask rules', () => 
       assert.deepEqual(permissions.allow.filter((rule) => globMatches(rule, name)), [], `${name} is approved by a read glob`);
     }
     // knowledge.ts gives the reason for each: experiment promote/graduate, ppc_bing_experiment_update and the shared
-    // budget writes are in the NOT-here note above HIVEKU_ASK, and the memory writes keep prompting by not being allowed
-    // (/hiveku-remember approves memory_update). None is allowed either, so each still prompts in default mode.
+    // budget writes are in the NOT-here note above HIVEKU_ASK, and /hiveku-remember's allowed-tools approves memory_update
+    // (generated-commands-ask.test.mjs). None is allowed either, so each still prompts in default mode.
     for (const name of PLUGIN_FORCED_LEFT_OUT) {
       assert.equal(permissions.ask.includes(name), false, `${name} is left out on purpose; take it out of PLUGIN_FORCED_LEFT_OUT first`);
       assert.deepEqual(permissions.allow.filter((rule) => globMatches(rule, name)), [], `${name} is approved by a read glob`);

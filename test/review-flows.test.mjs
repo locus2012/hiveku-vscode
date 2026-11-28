@@ -1059,11 +1059,12 @@ describe('what the extension writes and wires', () => {
     );
     assert.ok(
       ask.trimEnd().endsWith(
-        "  'mcp__hiveku__helpdesk_contact_data_erase',\n" +
-          "  'mcp__hiveku__helpdesk_chat_retention_set',\n" +
-          "  'mcp__hiveku__crm_activity_recording_finalize',\n" +
-          "  'mcp__hiveku__accounting_subscription_create',\n" +
-          "  'mcp__hiveku__account_memory_draft_propose',",
+        "  'mcp__hiveku__accounting_subscription_create',\n" +
+          "  'mcp__hiveku__account_memory_draft_propose',\n" +
+          "  'mcp__hiveku__account_memory_append',\n" +
+          "  'mcp__hiveku__memory_delete',\n" +
+          "  'mcp__hiveku__memory_restore_version',\n" +
+          "  'mcp__hiveku__memory_bulk_create',",
       ),
       'the newest ask rules, the writes the Claude Code plugin\'s hook asks before that this list lacked (0.91.102), go at the END',
     );
